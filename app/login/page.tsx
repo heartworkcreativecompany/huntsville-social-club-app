@@ -1,8 +1,14 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import {
+  buttonPrimaryClassName,
+  buttonSecondaryClassName,
+  inputClassName,
+} from '@/lib/event-labels'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -40,47 +46,70 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/members')
+    router.push('/home')
     router.refresh()
   }
 
   return (
-    <main style={{ maxWidth: '420px', margin: '80px auto', padding: '24px' }}>
-      <h1 style={{ marginBottom: '16px' }}>Login or Sign Up</h1>
+    <div className="min-h-full bg-background">
+      <header className="border-b border-border bg-surface">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
+          <Link
+            href="/"
+            className="text-display text-xl font-medium text-foreground"
+          >
+            Huntsville Social Club
+          </Link>
+        </div>
+      </header>
 
-      <div style={{ display: 'grid', gap: '12px' }}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
-        />
+      <main className="mx-auto max-w-md px-5 py-16 sm:px-8">
+        <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Members
+        </p>
+        <h1 className="text-display mt-2 text-3xl font-medium text-foreground">
+          Sign in
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Access your profile, club events, and verified member tools.
+        </p>
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
-        />
+        <div className="mt-8 grid gap-3">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={inputClassName}
+          />
 
-        <button
-          onClick={handleSignUp}
-          style={{ padding: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
-        >
-          Sign Up
-        </button>
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={inputClassName}
+          />
 
-        <button
-          onClick={handleSignIn}
-          style={{ padding: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
-        >
-          Sign In
-        </button>
+          <button type="button" onClick={handleSignUp} className={buttonSecondaryClassName}>
+            Sign up
+          </button>
 
-        {message ? <p style={{ marginTop: '8px' }}>{message}</p> : null}
-      </div>
-    </main>
+          <button type="button" onClick={handleSignIn} className={buttonPrimaryClassName}>
+            Sign in
+          </button>
+
+          {message ? (
+            <p className="text-sm text-muted-foreground">{message}</p>
+          ) : null}
+        </div>
+
+        <p className="mt-8 text-sm text-muted-foreground">
+          <Link href="/" className="font-medium text-accent underline">
+            ← Back to public home
+          </Link>
+        </p>
+      </main>
+    </div>
   )
 }

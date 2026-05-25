@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { buttonSecondaryClassName } from '@/lib/event-labels'
 
 type RsvpStatus = 'going' | 'maybe' | 'not_going'
 
@@ -43,7 +44,7 @@ export default function EventRsvp({
 
   if (status !== 'published') {
     return (
-      <p style={{ marginTop: '12px', fontSize: '14px', color: '#555' }}>
+      <p className="text-sm text-muted-foreground">
         RSVP is only available for published events.
       </p>
     )
@@ -105,33 +106,33 @@ export default function EventRsvp({
   }
 
   return (
-    <div style={{ marginTop: '12px' }}>
-      <p style={{ margin: '0 0 8px', fontSize: '14px' }}>
-        {hasExistingRsvp ? 'Your RSVP:' : 'RSVP to this event:'}
+    <div>
+      <p className="mb-3 text-sm text-muted-foreground">
+        {hasExistingRsvp ? 'Your RSVP' : 'RSVP to this event'}
       </p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+      <div className="flex flex-wrap gap-2">
         {RSVP_OPTIONS.map((option) => {
           const isActive = currentStatus === option.value
 
           return (
             <button
               key={option.value}
+              type="button"
               onClick={() => handleRsvp(option.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: isActive ? '2px solid #333' : '1px solid #ccc',
-                cursor: 'pointer',
-                fontWeight: isActive ? 600 : 400,
-                background: isActive ? '#eee' : 'transparent',
-              }}
+              className={`${buttonSecondaryClassName} ${
+                isActive
+                  ? 'border-accent bg-accent text-accent-foreground'
+                  : ''
+              }`}
             >
               {option.label}
             </button>
           )
         })}
       </div>
-      {message ? <p style={{ margin: '8px 0 0', fontSize: '14px' }}>{message}</p> : null}
+      {message ? (
+        <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+      ) : null}
     </div>
   )
 }

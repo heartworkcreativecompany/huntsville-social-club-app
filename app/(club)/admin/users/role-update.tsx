@@ -3,6 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import {
+  buttonPrimaryClassName,
+  inputClassName,
+} from '@/lib/event-labels'
 
 type RoleUpdateProps = {
   userId: string
@@ -36,23 +40,22 @@ export default function RoleUpdate({ userId, currentRole }: RoleUpdateProps) {
   }
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+    <div className="flex flex-wrap items-center gap-2">
       <select
         value={role}
         onChange={(e) => setRole(e.target.value)}
-        style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '8px' }}
+        className={inputClassName}
       >
-        <option value="member">member</option>
-        <option value="host">host</option>
-        <option value="admin">admin</option>
+        <option value="member">Member</option>
+        <option value="host">Host</option>
+        <option value="admin">Admin</option>
       </select>
-      <button
-        onClick={handleSave}
-        style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
-      >
-        Save
+      <button type="button" onClick={handleSave} className={buttonPrimaryClassName}>
+        Save role
       </button>
-      {message ? <span style={{ fontSize: '14px' }}>{message}</span> : null}
+      {message ? (
+        <span className="text-sm text-muted-foreground">{message}</span>
+      ) : null}
     </div>
   )
 }

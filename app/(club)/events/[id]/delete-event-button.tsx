@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { buttonSecondaryClassName } from '@/lib/event-labels'
 
 type DeleteEventButtonProps = {
   eventId: string
@@ -35,20 +36,17 @@ export default function DeleteEventButton({ eventId }: DeleteEventButtonProps) {
   }
 
   return (
-    <div style={{ marginTop: '16px' }}>
+    <div>
       <button
+        type="button"
         onClick={handleDelete}
-        style={{
-          padding: '12px',
-          borderRadius: '8px',
-          border: 'none',
-          cursor: 'pointer',
-          background: '#f5d5d5',
-        }}
+        className={`${buttonSecondaryClassName} border-danger/30 text-danger hover:bg-danger-soft`}
       >
-        Delete Event
+        Delete event
       </button>
-      {message ? <p style={{ margin: '8px 0 0', fontSize: '14px' }}>{message}</p> : null}
+      {message ? (
+        <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+      ) : null}
     </div>
   )
 }

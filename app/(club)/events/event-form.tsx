@@ -3,6 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Card from '@/components/ui/card'
+import {
+  buttonPrimaryClassName,
+  inputClassName,
+} from '@/lib/event-labels'
 
 type EventFormProps = {
   userId: string
@@ -92,14 +97,14 @@ export default function EventForm({ userId }: EventFormProps) {
   }
 
   return (
-    <section>
-      <div style={{ display: 'grid', gap: '12px', maxWidth: '480px' }}>
+    <Card>
+      <div className="grid gap-4">
         <input
           type="text"
           placeholder="Event title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         />
 
         <input
@@ -107,64 +112,56 @@ export default function EventForm({ userId }: EventFormProps) {
           placeholder="Location"
           value={location}
           onChange={(e) => setLocation(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         />
 
         <textarea
           placeholder="Event description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          style={{
-            padding: '12px',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            minHeight: '120px',
-          }}
+          className={`${inputClassName} min-h-[120px] resize-y`}
         />
 
         <input
           type="datetime-local"
           value={startsAt}
           onChange={(e) => setStartsAt(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         />
 
         <input
           type="datetime-local"
           value={endsAt}
           onChange={(e) => setEndsAt(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         />
 
         <select
           value={visibility}
           onChange={(e) => setVisibility(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         >
-          <option value="private">private</option>
-          <option value="members">members</option>
-          <option value="public">public</option>
+          <option value="private">Private</option>
+          <option value="members">Members</option>
+          <option value="public">Public</option>
         </select>
 
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         >
-          <option value="draft">draft</option>
-          <option value="published">published</option>
-          <option value="cancelled">cancelled</option>
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+          <option value="cancelled">Cancelled</option>
         </select>
 
-        <button
-          onClick={handleSave}
-          style={{ padding: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
-        >
-          Save Event
+        <button type="button" onClick={handleSave} className={buttonPrimaryClassName}>
+          Save event
         </button>
 
-        {message ? <p>{message}</p> : null}
+        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </div>
-    </section>
+    </Card>
   )
 }

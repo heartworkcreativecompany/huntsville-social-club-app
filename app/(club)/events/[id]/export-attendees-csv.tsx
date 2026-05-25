@@ -1,5 +1,7 @@
 'use client'
 
+import { buttonSecondaryClassName } from '@/lib/event-labels'
+
 export type AttendeeExportRow = {
   eventTitle: string
   eventDate: string
@@ -63,14 +65,9 @@ export default function ExportAttendeesCsv({
 
   return (
     <button
+      type="button"
       onClick={handleExport}
-      style={{
-        padding: '8px 12px',
-        borderRadius: '8px',
-        border: '1px solid #ccc',
-        cursor: 'pointer',
-        background: 'transparent',
-      }}
+      className={buttonSecondaryClassName}
     >
       Export CSV
     </button>

@@ -3,6 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import {
+  buttonPrimaryClassName,
+  buttonSecondaryClassName,
+  inputClassName,
+} from '@/lib/event-labels'
 
 function toDatetimeLocalValue(iso: string | null): string {
   if (!iso) return ''
@@ -113,40 +118,24 @@ export default function EventInlineEdit({
 
   if (!isEditing) {
     return (
-      <div style={{ marginTop: '12px' }}>
-        <button
-          onClick={() => setIsEditing(true)}
-          style={{
-            padding: '8px 12px',
-            borderRadius: '8px',
-            border: '1px solid #ccc',
-            cursor: 'pointer',
-            background: 'transparent',
-          }}
-        >
-          Edit
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => setIsEditing(true)}
+        className={buttonSecondaryClassName}
+      >
+        Edit
+      </button>
     )
   }
 
   return (
-    <div
-      style={{
-        marginTop: '12px',
-        padding: '12px',
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        display: 'grid',
-        gap: '12px',
-      }}
-    >
+    <div className="mt-3 grid gap-3 rounded-lg border border-border bg-surface p-4">
       <input
         type="text"
         placeholder="Event title"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+        className={inputClassName}
       />
 
       <input
@@ -154,77 +143,60 @@ export default function EventInlineEdit({
         placeholder="Location"
         value={location}
         onChange={(e) => setLocation(e.target.value)}
-        style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+        className={inputClassName}
       />
 
       <textarea
         placeholder="Event description"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        style={{
-          padding: '12px',
-          border: '1px solid #ccc',
-          borderRadius: '8px',
-          minHeight: '120px',
-        }}
+        className={`${inputClassName} min-h-[100px] resize-y`}
       />
 
       <input
         type="datetime-local"
         value={startsAt}
         onChange={(e) => setStartsAt(e.target.value)}
-        style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+        className={inputClassName}
       />
 
       <input
         type="datetime-local"
         value={endsAt}
         onChange={(e) => setEndsAt(e.target.value)}
-        style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+        className={inputClassName}
       />
 
       <select
         value={visibility}
         onChange={(e) => setVisibility(e.target.value)}
-        style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+        className={inputClassName}
       >
-        <option value="private">private</option>
-        <option value="members">members</option>
-        <option value="public">public</option>
+        <option value="private">Private</option>
+        <option value="members">Members</option>
+        <option value="public">Public</option>
       </select>
 
       <select
         value={status}
         onChange={(e) => setStatus(e.target.value)}
-        style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+        className={inputClassName}
       >
-        <option value="draft">draft</option>
-        <option value="published">published</option>
-        <option value="cancelled">cancelled</option>
+        <option value="draft">Draft</option>
+        <option value="published">Published</option>
+        <option value="cancelled">Cancelled</option>
       </select>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-        <button
-          onClick={handleSave}
-          style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
-        >
-          Save Changes
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={handleSave} className={buttonPrimaryClassName}>
+          Save changes
         </button>
-        <button
-          onClick={handleCancel}
-          style={{
-            padding: '8px 12px',
-            borderRadius: '8px',
-            border: '1px solid #ccc',
-            cursor: 'pointer',
-            background: 'transparent',
-          }}
-        >
+        <button type="button" onClick={handleCancel} className={buttonSecondaryClassName}>
           Cancel
         </button>
       </div>
 
-      {message ? <p style={{ margin: 0, fontSize: '14px' }}>{message}</p> : null}
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
     </div>
   )
 }
