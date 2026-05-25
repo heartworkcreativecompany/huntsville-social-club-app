@@ -18,6 +18,7 @@ export interface Database {
           id: string
           email: string | null
           full_name: string | null
+          role: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -25,6 +26,7 @@ export interface Database {
           id: string
           email?: string | null
           full_name?: string | null
+          role?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -32,8 +34,72 @@ export interface Database {
           id?: string
           email?: string | null
           full_name?: string | null
+          role?: string | null
           created_at?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      events: {
+        Row: {
+          id: string
+          owner_id: string
+          title: string
+          description: string | null
+          location: string | null
+          starts_at: string
+          ends_at: string | null
+          visibility: string
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          owner_id: string
+          title: string
+          description?: string | null
+          location?: string | null
+          starts_at: string
+          ends_at?: string | null
+          visibility?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          owner_id?: string
+          title?: string
+          description?: string | null
+          location?: string | null
+          starts_at?: string
+          ends_at?: string | null
+          visibility?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      event_attendees: {
+        Row: {
+          event_id: string
+          user_id: string
+          status: string
+          created_at: string | null
+        }
+        Insert: {
+          event_id: string
+          user_id: string
+          status?: string
+          created_at?: string | null
+        }
+        Update: {
+          event_id?: string
+          user_id?: string
+          status?: string
+          created_at?: string | null
         }
         Relationships: []
       }

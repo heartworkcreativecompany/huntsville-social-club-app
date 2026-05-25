@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { signOut } from '../login/actions'
@@ -15,7 +16,7 @@ export default async function MembersPage() {
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, created_at')
+    .select('id, email, full_name, role, created_at')
     .eq('id', user.id)
     .single()
 
@@ -36,6 +37,12 @@ export default async function MembersPage() {
         <div style={{ marginBottom: '16px', display: 'grid', gap: '8px' }}>
           <p>Profile email: {profile.email ?? 'Not set yet'}</p>
           <p>Full name: {profile.full_name ?? 'Not set yet'}</p>
+          <p>Role: {profile.role ?? 'member'}</p>
+          {profile.role === 'admin' ? (
+            <p style={{ marginTop: '8px' }}>
+              <Link href="/admin/users">Manage Users</Link>
+            </p>
+          ) : null}
         </div>
       )}
 
