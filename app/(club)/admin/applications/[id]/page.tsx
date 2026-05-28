@@ -4,9 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
+import { APPLICATION_PROMPTS } from '@/lib/application-form-content'
+import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
 import {
   applicationStatusLabel,
-  parseApplicationDraft,
   type ApplicationStatus,
 } from '@/lib/application'
 import { getViewer } from '@/lib/viewer'
@@ -14,6 +15,12 @@ import ApplicationReviewActions from '../application-review-actions'
 
 type PageProps = {
   params: Promise<{ id: string }>
+}
+
+function formatBool(value: boolean | null): string {
+  if (value === true) return 'Yes'
+  if (value === false) return 'No'
+  return '—'
 }
 
 export default async function AdminApplicationDetailPage({ params }: PageProps) {
@@ -33,7 +40,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
   const { data: applicant, error } = await supabase
     .from('profiles')
     .select(
-      'id, email, full_name, role, application_status, membership_intent, location_area, referral_source, application_draft, application_submitted_at, application_reviewed_at, verified_at, admin_review_notes, created_at'
+      'id, email, full_name, role, application_status, membership_intent, location_area, application_draft, application_submitted_at, application_reviewed_at, verified_at, admin_review_notes, created_at'
     )
     .eq('id', id)
     .single()
@@ -56,7 +63,10 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
   }
 
   const status = (applicant.application_status ?? 'draft') as ApplicationStatus
-  const draft = parseApplicationDraft(applicant.application_draft)
+  const draft = mergeProfileIntoDraft(applicant)
+  const legalName = [draft.profile.firstName, draft.profile.lastName]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <>
@@ -70,7 +80,10 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-display text-3xl font-medium text-foreground">
-            {applicant.full_name ?? applicant.email ?? 'Applicant'}
+            {draft.profile.displayName ||
+              applicant.full_name ||
+              applicant.email ||
+              'Applicant'}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {applicant.email ?? 'No email on file'}
@@ -82,7 +95,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
       <div className="mb-8 grid gap-4 lg:grid-cols-2">
         <Card>
           <h2 className="text-display text-lg font-medium text-foreground">
-            Application
+            Profile basics
           </h2>
           <dl className="mt-4 grid gap-3 text-sm">
             <div>
@@ -92,28 +105,76 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Intent</dt>
-              <dd className="leading-relaxed text-foreground">
-                {(applicant.membership_intent ?? draft.membershipIntent) || '—'}
+              <dt className="text-muted-foreground">Legal name (private)</dt>
+              <dd className="font-medium text-foreground">
+                {legalName || '—'}
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Area</dt>
+              <dt className="text-muted-foreground">Display name</dt>
               <dd className="font-medium text-foreground">
-                {applicant.location_area ?? draft.locationArea ?? '—'}
+                {draft.profile.displayName || '—'}
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Referral</dt>
+              <dt className="text-muted-foreground">Date of birth (private)</dt>
               <dd className="font-medium text-foreground">
-                {applicant.referral_source ?? draft.referralSource ?? '—'}
+                {draft.profile.dateOfBirth || '—'}
               </dd>
             </div>
-            {applicant.application_submitted_at ? (
+            <div>
+              <dt className="text-muted-foreground">Gender</dt>
+              <dd className="font-medium text-foreground">
+                {draft.profile.gender || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Pronouns</dt>
+              <dd className="font-medium text-foreground">
+                {draft.profile.pronouns || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Looking for</dt>
+              <dd className="font-medium text-foreground">
+                {draft.profile.lookingFor || '—'}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card>
+          <h2 className="text-display text-lg font-medium text-foreground">
+            Location
+          </h2>
+          <dl className="mt-4 grid gap-3 text-sm">
+            <div>
+              <dt className="text-muted-foreground">City / state / ZIP (private)</dt>
+              <dd className="font-medium text-foreground">
+                {[draft.location.city, draft.location.state, draft.location.zipCode]
+                  .filter(Boolean)
+                  .join(', ') || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Public area</dt>
+              <dd className="font-medium text-foreground">
+                {draft.location.neighborhoodOrArea ||
+                  applicant.location_area ||
+                  '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Lives in Huntsville area</dt>
+              <dd className="font-medium text-foreground">
+                {formatBool(draft.location.livesInHuntsvilleArea)}
+              </dd>
+            </div>
+            {draft.location.livesInHuntsvilleArea === false ? (
               <div>
-                <dt className="text-muted-foreground">Submitted</dt>
-                <dd className="font-medium text-foreground">
-                  {new Date(applicant.application_submitted_at).toLocaleString()}
+                <dt className="text-muted-foreground">Area connection (private)</dt>
+                <dd className="leading-relaxed text-foreground">
+                  {draft.location.localConnection || '—'}
                 </dd>
               </div>
             ) : null}
@@ -121,6 +182,76 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card>
+          <h2 className="text-display text-lg font-medium text-foreground">
+            Work & interests
+          </h2>
+          <dl className="mt-4 grid gap-3 text-sm">
+            <div>
+              <dt className="text-muted-foreground">Occupation</dt>
+              <dd className="font-medium text-foreground">
+                {draft.workAndInterests.occupation || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Industry</dt>
+              <dd className="font-medium text-foreground">
+                {draft.workAndInterests.industry || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Employer (private)</dt>
+              <dd className="font-medium text-foreground">
+                {draft.workAndInterests.employerCompany || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Education</dt>
+              <dd className="font-medium text-foreground">
+                {draft.workAndInterests.education || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Interests</dt>
+              <dd className="font-medium text-foreground">
+                {draft.workAndInterests.interests.join(', ') || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Lifestyle tags</dt>
+              <dd className="font-medium text-foreground">
+                {draft.workAndInterests.lifestyleTags.join(', ') || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Event interests</dt>
+              <dd className="font-medium text-foreground">
+                {draft.workAndInterests.eventInterests.join(', ') || '—'}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card>
+          <h2 className="text-display text-lg font-medium text-foreground">
+            Short prompts
+          </h2>
+          <dl className="mt-4 grid gap-3 text-sm">
+            {APPLICATION_PROMPTS.map((prompt) => (
+              <div key={prompt.key}>
+                <dt className="text-muted-foreground">{prompt.label}</dt>
+                <dd className="leading-relaxed text-foreground">
+                  {draft.prompts[prompt.key]?.trim() || '—'}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-4 text-xs text-muted-foreground">
+            {draft.photos.length} photo{draft.photos.length === 1 ? '' : 's'}{' '}
+            on file (view in storage).
+          </p>
+        </Card>
+
+        <Card className="lg:col-span-2">
           <h2 className="text-display text-lg font-medium text-foreground">
             Review actions
           </h2>
@@ -134,6 +265,12 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
             <p className="mt-4 text-sm text-muted-foreground">
               <span className="font-medium text-foreground">Previous notes: </span>
               {applicant.admin_review_notes}
+            </p>
+          ) : null}
+          {applicant.application_submitted_at ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Submitted{' '}
+              {new Date(applicant.application_submitted_at).toLocaleString()}
             </p>
           ) : null}
         </Card>

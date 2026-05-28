@@ -19,9 +19,15 @@ export default async function MemberDetailPage({ params }: PageProps) {
 
   const isAdmin = viewer.role === 'admin'
   const isSelf = id === viewer.userId
-  const { member, error } = await loadMemberProfile(id, viewer.userId, isAdmin)
+  const canBrowseDiscovery = viewer.canAccessApp
+  const { member, error } = await loadMemberProfile(
+    id,
+    viewer.userId,
+    canBrowseDiscovery,
+    isAdmin
+  )
 
-  if (!isAdmin && !isSelf) {
+  if (!canBrowseDiscovery && !isSelf) {
     return (
       <>
         <Link
@@ -32,13 +38,13 @@ export default async function MemberDetailPage({ params }: PageProps) {
         </Link>
         <EmptyState
           title="Profile not available"
-          description="Member details are shared selectively. Connect at club events or ask an administrator for an introduction."
+          description="Member profiles are available after your membership application is approved."
           action={
             <Link
-              href="/events"
+              href="/application"
               className="text-sm font-medium text-accent underline"
             >
-              View events
+              Continue application
             </Link>
           }
         />

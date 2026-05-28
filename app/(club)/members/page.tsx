@@ -34,14 +34,13 @@ export default async function MembersPage() {
 
   const profile = viewer.profile
   const isAdmin = viewer.role === 'admin'
+  const canBrowseDiscovery = viewer.canAccessApp
   const { members: directoryMembers, error: directoryError } =
-    await loadDirectoryProfiles(viewer.userId, isAdmin)
+    await loadDirectoryProfiles(viewer.userId, canBrowseDiscovery, isAdmin)
 
   const currentMember = profile
     ? toDirectoryMember(profile, viewer.email)
     : null
-
-  const canBrowseDiscovery = viewer.canAccessApp
 
   return (
     <>
@@ -115,25 +114,30 @@ export default async function MembersPage() {
         <p className="mb-6 max-w-2xl text-sm leading-relaxed text-muted-foreground">
           {isAdmin
             ? 'Search and filter the verified roster. Contact details and intent are visible to administrators only.'
-            : 'Meet members through club events. Full directory browsing is limited while we expand privacy-safe discovery policies.'}
+            : canBrowseDiscovery
+              ? 'Browse verified members who have completed membership approval. Contact details and intent are visible to administrators only.'
+              : 'Discovery unlocks after your membership application is approved.'}
         </p>
 
         {directoryError ? (
           <p className="text-sm text-danger">
             Could not load directory: {directoryError}
           </p>
-        ) : isAdmin && canBrowseDiscovery ? (
-          <MemberDiscoveryGrid members={directoryMembers} limited={false} />
+        ) : canBrowseDiscovery ? (
+          <MemberDiscoveryGrid
+            members={directoryMembers}
+            limited={!isAdmin}
+          />
         ) : (
           <EmptyState
-            title="Directory opens for administrators"
-            description="Approved members appear here for admins. Complete your application to join the verified roster."
+            title="Membership approval required"
+            description="Complete your application and receive approval to browse the verified member directory."
             action={
               <Link
                 href="/application"
                 className="text-sm font-medium text-accent underline"
               >
-                View application
+                Continue application
               </Link>
             }
           />

@@ -3,30 +3,20 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
+  mergeProfileIntoDraft,
+  profileColumnsFromDraft,
+} from '@/lib/application-draft-sync'
+import {
   canSubmitApplication,
   emptyDraft,
   parseApplicationDraft,
   type ApplicationDraft,
 } from '@/lib/application'
 import { resolveApplicationStatus } from '@/lib/application'
+import { validateApplicationForSubmit } from '@/lib/application-validation'
+import { APPLICATION_TOTAL_STEPS } from '@/lib/application-form-content'
 
-function draftFromProfile(profile: {
-  full_name: string | null
-  membership_intent: string | null
-  location_area: string | null
-  referral_source: string | null
-  application_draft: unknown
-}): ApplicationDraft {
-  const parsed = parseApplicationDraft(profile.application_draft)
-  return {
-    ...parsed,
-    fullName: parsed.fullName || profile.full_name || '',
-    membershipIntent:
-      parsed.membershipIntent || profile.membership_intent || '',
-    locationArea: parsed.locationArea || profile.location_area || '',
-    referralSource: parsed.referralSource || profile.referral_source || '',
-  }
-}
+const APPLICATION_PHOTOS_BUCKET = 'application-photos'
 
 export async function saveApplicationDraft(draft: ApplicationDraft) {
   const supabase = await createClient()
@@ -51,16 +41,13 @@ export async function saveApplicationDraft(draft: ApplicationDraft) {
   }
 
   const nextStatus = status === 'rejected' ? 'draft' : status
+  const columns = profileColumnsFromDraft(draft)
 
   const { error } = await supabase
     .from('profiles')
     .update({
       application_status: nextStatus,
-      full_name: draft.fullName.trim() || null,
-      membership_intent: draft.membershipIntent.trim() || null,
-      location_area: draft.locationArea.trim() || null,
-      referral_source: draft.referralSource.trim() || null,
-      application_draft: draft,
+      ...columns,
       updated_at: new Date().toISOString(),
     })
     .eq('id', user.id)
@@ -89,7 +76,7 @@ export async function submitApplication() {
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'application_status, full_name, membership_intent, location_area, referral_source, application_draft'
+      'application_status, full_name, membership_intent, location_area, application_draft'
     )
     .eq('id', user.id)
     .single()
@@ -104,31 +91,23 @@ export async function submitApplication() {
     return { error: 'This application cannot be submitted right now.' }
   }
 
-  const draft = draftFromProfile(profile)
+  const draft = mergeProfileIntoDraft(profile)
+  const validationError = validateApplicationForSubmit(draft)
 
-  if (!draft.fullName.trim()) {
-    return { error: 'Please provide your full name before submitting.' }
+  if (validationError) {
+    return { error: validationError }
   }
 
-  if (!draft.membershipIntent.trim()) {
-    return { error: 'Please share your membership intent before submitting.' }
-  }
-
-  if (!draft.acknowledgements) {
-    return {
-      error: 'Please confirm the membership acknowledgements before submitting.',
-    }
-  }
+  const columns = profileColumnsFromDraft({
+    ...draft,
+    step: APPLICATION_TOTAL_STEPS,
+  })
 
   const { error } = await supabase
     .from('profiles')
     .update({
       application_status: 'submitted',
-      full_name: draft.fullName.trim(),
-      membership_intent: draft.membershipIntent.trim(),
-      location_area: draft.locationArea.trim() || null,
-      referral_source: draft.referralSource.trim() || null,
-      application_draft: { ...draft, step: 3 },
+      ...columns,
       application_submitted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -155,12 +134,112 @@ export async function getApplicationDraftForUser(): Promise<ApplicationDraft> {
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'full_name, membership_intent, location_area, referral_source, application_draft'
+      'full_name, membership_intent, location_area, application_draft'
     )
     .eq('id', user.id)
     .single()
 
   if (!profile) return emptyDraft()
 
-  return draftFromProfile(profile)
+  return mergeProfileIntoDraft(profile)
+}
+
+export async function uploadApplicationPhoto(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'You must be signed in.' }
+  }
+
+  const file = formData.get('file')
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: 'Please choose a photo to upload.' }
+  }
+
+  const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+  if (!allowed.includes(file.type)) {
+    return { error: 'Photos must be JPEG, PNG, or WebP.' }
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    return { error: 'Each photo must be 5 MB or smaller.' }
+  }
+
+  const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+  const photoId = crypto.randomUUID()
+  const storagePath = `${user.id}/${photoId}.${extension}`
+
+  const { error } = await supabase.storage
+    .from(APPLICATION_PHOTOS_BUCKET)
+    .upload(storagePath, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type,
+    })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return {
+    photo: {
+      id: photoId,
+      storagePath,
+      isPrimary: false,
+      facePhotoConfirmed: false,
+    },
+  }
+}
+
+export async function deleteApplicationPhoto(storagePath: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'You must be signed in.' }
+  }
+
+  if (!storagePath.startsWith(`${user.id}/`)) {
+    return { error: 'Invalid photo path.' }
+  }
+
+  const { error } = await supabase.storage
+    .from(APPLICATION_PHOTOS_BUCKET)
+    .remove([storagePath])
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return { success: true as const }
+}
+
+export async function getApplicationPhotoSignedUrl(storagePath: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { url: null }
+  }
+
+  if (!storagePath.startsWith(`${user.id}/`)) {
+    return { url: null }
+  }
+
+  const { data, error } = await supabase.storage
+    .from(APPLICATION_PHOTOS_BUCKET)
+    .createSignedUrl(storagePath, 3600)
+
+  if (error || !data?.signedUrl) {
+    return { url: null }
+  }
+
+  return { url: data.signedUrl }
 }

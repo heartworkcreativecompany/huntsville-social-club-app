@@ -35,9 +35,10 @@ function stripForLimitedView(profile: DirectoryMember): DirectoryMember {
 
 export async function loadDirectoryProfiles(
   viewerId: string,
+  canBrowseDiscovery: boolean,
   isAdmin: boolean
 ): Promise<{ members: DirectoryMember[]; error: string | null }> {
-  if (!isAdmin) {
+  if (!canBrowseDiscovery) {
     return { members: [], error: null }
   }
 
@@ -57,7 +58,10 @@ export async function loadDirectoryProfiles(
   }
 
   return {
-    members: (data ?? []).map(toDirectoryMember),
+    members: (data ?? []).map((profile) => {
+      const member = toDirectoryMember(profile)
+      return isAdmin ? member : stripForLimitedView(member)
+    }),
     error: null,
   }
 }
@@ -65,6 +69,7 @@ export async function loadDirectoryProfiles(
 export async function loadMemberProfile(
   memberId: string,
   viewerId: string,
+  canBrowseDiscovery: boolean,
   isAdmin: boolean
 ): Promise<{ member: DirectoryMember | null; error: string | null }> {
   const supabase = await createClient()
@@ -84,15 +89,15 @@ export async function loadMemberProfile(
   const isSelf = memberId === viewerId
   const isApproved = data.application_status === 'approved'
 
-  if (!isAdmin && !isSelf) {
+  if (!canBrowseDiscovery && !isSelf) {
     return { member: null, error: null }
   }
 
-  if (!isAdmin && isSelf) {
+  if (isSelf) {
     return { member: toDirectoryMember(data), error: null }
   }
 
-  if (isAdmin && !isApproved && !isSelf) {
+  if (!isApproved) {
     return { member: null, error: null }
   }
 

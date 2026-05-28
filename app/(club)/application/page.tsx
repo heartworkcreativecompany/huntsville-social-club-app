@@ -6,29 +6,12 @@ import PageHeader from '@/components/ui/page-header'
 import {
   applicationStatusLabel,
   canEditApplication,
-  emptyDraft,
   nextActionForApplicant,
-  parseApplicationDraft,
 } from '@/lib/application'
-import type { ApplicationDraft } from '@/lib/application'
-import { getViewer, type ViewerProfile } from '@/lib/viewer'
+import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
+import { getViewer } from '@/lib/viewer'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
 import ApplicationForm from './application-form'
-
-function buildInitialDraft(profile: ViewerProfile | null): ApplicationDraft {
-  const parsed = profile?.application_draft
-    ? parseApplicationDraft(profile.application_draft)
-    : emptyDraft()
-
-  return {
-    ...parsed,
-    fullName: parsed.fullName || profile?.full_name || '',
-    membershipIntent:
-      parsed.membershipIntent || profile?.membership_intent || '',
-    locationArea: parsed.locationArea || profile?.location_area || '',
-    referralSource: parsed.referralSource || profile?.referral_source || '',
-  }
-}
 
 export default async function ApplicationPage() {
   const viewer = await getViewer()
@@ -40,7 +23,7 @@ export default async function ApplicationPage() {
   const profile = viewer.profile
   const status = viewer.applicationStatus
   const next = nextActionForApplicant(status)
-  const draft = buildInitialDraft(profile)
+  const draft = mergeProfileIntoDraft(profile)
 
   return (
     <>
@@ -57,7 +40,7 @@ export default async function ApplicationPage() {
       <PageHeader
         eyebrow="Membership"
         title="Your application"
-        description="A verified, trust-gated path into Huntsville Social Club. Save progress anytime and submit when ready."
+        description="A selective path into Huntsville Social Club—save progress anytime and submit when you're ready."
         actions={<ApplicationStatusBadge status={status} />}
       />
 
@@ -69,15 +52,11 @@ export default async function ApplicationPage() {
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             {next.description}
           </p>
-          {canEditApplication(status) ? (
+          {status === 'draft' || status === 'needs_info' ? (
             <a href={next.href} className={`${buttonSecondaryClassName} mt-4`}>
               {next.cta}
             </a>
-          ) : (
-            <Link href={next.href} className={`${buttonSecondaryClassName} mt-4`}>
-              {next.cta}
-            </Link>
-          )}
+          ) : null}
         </Card>
 
         <Card>

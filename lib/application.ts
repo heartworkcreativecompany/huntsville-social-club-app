@@ -1,3 +1,5 @@
+import { APPLICATION_TOTAL_STEPS } from '@/lib/application-form-content'
+
 export type ApplicationStatus =
   | 'draft'
   | 'submitted'
@@ -6,13 +8,64 @@ export type ApplicationStatus =
   | 'approved'
   | 'rejected'
 
+export type ApplicationPhoto = {
+  id: string
+  storagePath: string
+  isPrimary: boolean
+  facePhotoConfirmed: boolean
+}
+
 export type ApplicationDraft = {
+  version: 2
   step: number
-  fullName: string
-  membershipIntent: string
-  locationArea: string
-  referralSource: string
-  acknowledgements: boolean
+  profile: {
+    firstName: string
+    lastName: string
+    displayName: string
+    dateOfBirth: string
+    gender: string
+    pronouns: string
+    lookingFor: string
+  }
+  location: {
+    city: string
+    state: string
+    zipCode: string
+    neighborhoodOrArea: string
+    livesInHuntsvilleArea: boolean | null
+    localConnection: string
+  }
+  workAndInterests: {
+    occupation: string
+    industry: string
+    employerCompany: string
+    education: string
+    interests: string[]
+    lifestyleTags: string[]
+    eventInterests: string[]
+  }
+  prompts: {
+    perfectWeekend: string
+    hopingToMeet: string
+    intoLately: string
+    valueInCommunity: string
+  }
+  photos: ApplicationPhoto[]
+  agreements: {
+    codeOfConduct: boolean
+    informationAccurate: boolean
+    approvalRequired: boolean
+    verificationConsent: boolean
+  }
+}
+
+type LegacyApplicationDraft = {
+  step?: number
+  fullName?: string
+  membershipIntent?: string
+  locationArea?: string
+  referralSource?: string
+  acknowledgements?: boolean
 }
 
 export const APPLICATION_STATUSES: ApplicationStatus[] = [
@@ -99,10 +152,7 @@ export function canEditApplication(status: ApplicationStatus): boolean {
 }
 
 export function canSubmitApplication(status: ApplicationStatus): boolean {
-  return (
-    status === 'draft' ||
-    status === 'needs_info'
-  )
+  return status === 'draft' || status === 'needs_info'
 }
 
 export function nextActionForApplicant(status: ApplicationStatus): {
@@ -192,33 +242,180 @@ export function queueSortRank(status: ApplicationStatus): number {
 
 export function emptyDraft(): ApplicationDraft {
   return {
+    version: 2,
     step: 1,
-    fullName: '',
-    membershipIntent: '',
-    locationArea: '',
-    referralSource: '',
-    acknowledgements: false,
+    profile: {
+      firstName: '',
+      lastName: '',
+      displayName: '',
+      dateOfBirth: '',
+      gender: '',
+      pronouns: '',
+      lookingFor: '',
+    },
+    location: {
+      city: '',
+      state: 'AL',
+      zipCode: '',
+      neighborhoodOrArea: '',
+      livesInHuntsvilleArea: null,
+      localConnection: '',
+    },
+    workAndInterests: {
+      occupation: '',
+      industry: '',
+      employerCompany: '',
+      education: '',
+      interests: [],
+      lifestyleTags: [],
+      eventInterests: [],
+    },
+    prompts: {
+      perfectWeekend: '',
+      hopingToMeet: '',
+      intoLately: '',
+      valueInCommunity: '',
+    },
+    photos: [],
+    agreements: {
+      codeOfConduct: false,
+      informationAccurate: false,
+      approvalRequired: false,
+      verificationConsent: false,
+    },
   }
+}
+
+function clampStep(step: number): number {
+  if (!Number.isFinite(step)) return 1
+  return Math.min(Math.max(1, Math.floor(step)), APPLICATION_TOTAL_STEPS)
+}
+
+function migrateLegacyDraft(legacy: LegacyApplicationDraft): ApplicationDraft {
+  const base = emptyDraft()
+  const fullName = (legacy.fullName ?? '').trim()
+  const parts = fullName.split(/\s+/).filter(Boolean)
+
+  base.step = clampStep(legacy.step ?? 1)
+  base.profile.firstName = parts[0] ?? ''
+  base.profile.lastName = parts.slice(1).join(' ')
+  base.profile.displayName = fullName
+  base.location.neighborhoodOrArea = legacy.locationArea ?? ''
+  base.location.localConnection = legacy.referralSource ?? ''
+  base.prompts.hopingToMeet = legacy.membershipIntent ?? ''
+  base.agreements.informationAccurate = Boolean(legacy.acknowledgements)
+  base.agreements.approvalRequired = Boolean(legacy.acknowledgements)
+
+  return base
+}
+
+function parseString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string')
+}
+
+function parseBooleanOrNull(value: unknown): boolean | null {
+  if (value === true) return true
+  if (value === false) return false
+  return null
+}
+
+function parsePhotos(value: unknown): ApplicationPhoto[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const photo = item as Partial<ApplicationPhoto>
+      if (
+        typeof photo.id !== 'string' ||
+        typeof photo.storagePath !== 'string'
+      ) {
+        return null
+      }
+      return {
+        id: photo.id,
+        storagePath: photo.storagePath,
+        isPrimary: Boolean(photo.isPrimary),
+        facePhotoConfirmed: Boolean(photo.facePhotoConfirmed),
+      }
+    })
+    .filter((photo): photo is ApplicationPhoto => photo !== null)
 }
 
 export function parseApplicationDraft(value: unknown): ApplicationDraft {
-  const base = emptyDraft()
-  if (!value || typeof value !== 'object') return base
+  if (!value || typeof value !== 'object') {
+    return emptyDraft()
+  }
 
-  const draft = value as Partial<ApplicationDraft>
+  const raw = value as Record<string, unknown>
+
+  if (raw.version !== 2) {
+    return migrateLegacyDraft(raw as LegacyApplicationDraft)
+  }
+
+  const base = emptyDraft()
+  const profile = (raw.profile as Record<string, unknown>) ?? {}
+  const location = (raw.location as Record<string, unknown>) ?? {}
+  const work = (raw.workAndInterests as Record<string, unknown>) ?? {}
+  const prompts = (raw.prompts as Record<string, unknown>) ?? {}
+  const agreements = (raw.agreements as Record<string, unknown>) ?? {}
+
   return {
-    step: typeof draft.step === 'number' ? draft.step : base.step,
-    fullName: typeof draft.fullName === 'string' ? draft.fullName : base.fullName,
-    membershipIntent:
-      typeof draft.membershipIntent === 'string'
-        ? draft.membershipIntent
-        : base.membershipIntent,
-    locationArea:
-      typeof draft.locationArea === 'string' ? draft.locationArea : base.locationArea,
-    referralSource:
-      typeof draft.referralSource === 'string'
-        ? draft.referralSource
-        : base.referralSource,
-    acknowledgements: Boolean(draft.acknowledgements),
+    version: 2,
+    step: clampStep(typeof raw.step === 'number' ? raw.step : base.step),
+    profile: {
+      firstName: parseString(profile.firstName),
+      lastName: parseString(profile.lastName),
+      displayName: parseString(profile.displayName),
+      dateOfBirth: parseString(profile.dateOfBirth),
+      gender: parseString(profile.gender),
+      pronouns: parseString(profile.pronouns),
+      lookingFor: parseString(profile.lookingFor),
+    },
+    location: {
+      city: parseString(location.city),
+      state: parseString(location.state, 'AL'),
+      zipCode: parseString(location.zipCode),
+      neighborhoodOrArea: parseString(location.neighborhoodOrArea),
+      livesInHuntsvilleArea: parseBooleanOrNull(location.livesInHuntsvilleArea),
+      localConnection: parseString(location.localConnection),
+    },
+    workAndInterests: {
+      occupation: parseString(work.occupation),
+      industry: parseString(work.industry),
+      employerCompany: parseString(work.employerCompany),
+      education: parseString(work.education),
+      interests: parseStringArray(work.interests),
+      lifestyleTags: parseStringArray(work.lifestyleTags),
+      eventInterests: parseStringArray(work.eventInterests),
+    },
+    prompts: {
+      perfectWeekend: parseString(prompts.perfectWeekend),
+      hopingToMeet: parseString(prompts.hopingToMeet),
+      intoLately: parseString(prompts.intoLately),
+      valueInCommunity: parseString(prompts.valueInCommunity),
+    },
+    photos: parsePhotos(raw.photos),
+    agreements: {
+      codeOfConduct: Boolean(agreements.codeOfConduct),
+      informationAccurate: Boolean(agreements.informationAccurate),
+      approvalRequired: Boolean(agreements.approvalRequired),
+      verificationConsent: Boolean(agreements.verificationConsent),
+    },
   }
 }
+
+/** Fields that must never appear on public member cards. */
+export const APPLICATION_PRIVATE_FIELD_KEYS = [
+  'lastName',
+  'dateOfBirth',
+  'city',
+  'state',
+  'zipCode',
+  'employerCompany',
+] as const
