@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from '@/app/login/actions'
 import { roleLabel } from '@/lib/event-labels'
+import type { ApplicationStatus } from '@/lib/application'
 
 type NavItem = {
   href: string
@@ -21,12 +22,17 @@ function navLinkClass(active: boolean): string {
 
 export default function ClubNav({
   role,
-  showAdmin,
+  canAccessApp,
+  applicationStatus,
 }: {
   role: string
-  showAdmin: boolean
+  canAccessApp: boolean
+  applicationStatus: ApplicationStatus
 }) {
   const pathname = usePathname()
+  const showAdmin = role === 'admin'
+  const showApplicationNav =
+    !canAccessApp || applicationStatus === 'needs_info'
 
   const items: NavItem[] = [
     {
@@ -34,21 +40,34 @@ export default function ClubNav({
       label: 'Home',
       match: (p) => p === '/home',
     },
-    {
-      href: '/events',
-      label: 'Events',
-      match: (p) => p === '/events' || p.startsWith('/events/'),
-    },
-    {
-      href: '/members',
-      label: 'Members',
-      match: (p) => p === '/members' || p.startsWith('/members/'),
-    },
   ]
+
+  if (showApplicationNav) {
+    items.push({
+      href: '/application',
+      label: 'Application',
+      match: (p) => p === '/application',
+    })
+  }
+
+  if (canAccessApp) {
+    items.push(
+      {
+        href: '/events',
+        label: 'Events',
+        match: (p) => p === '/events' || p.startsWith('/events/'),
+      },
+      {
+        href: '/members',
+        label: 'Members',
+        match: (p) => p === '/members' || p.startsWith('/members/'),
+      }
+    )
+  }
 
   if (showAdmin) {
     items.push({
-      href: '/admin/users',
+      href: '/admin/applications',
       label: 'Admin',
       match: (p) => p.startsWith('/admin'),
     })

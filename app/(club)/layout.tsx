@@ -13,5 +13,13 @@ export default async function ClubLayout({
     redirect('/login')
   }
 
-  return <ClubShell role={viewer.role}>{children}</ClubShell>
+  return (
+    <ClubShell
+      role={viewer.role}
+      canAccessApp={viewer.canAccessApp}
+      applicationStatus={viewer.applicationStatus}
+    >
+      {children}
+    </ClubShell>
+  )
 }

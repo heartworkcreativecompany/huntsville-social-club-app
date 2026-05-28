@@ -6,7 +6,7 @@ import EventStatusBadge from '@/components/events/event-status-badge'
 import EventTierBadge from '@/components/events/event-tier-badge'
 import { formatEventDate } from '@/lib/event-labels'
 import { resolveEventEligibility } from '@/lib/event-eligibility'
-import type { MembershipStatus } from '@/lib/membership'
+import type { ApplicationStatus } from '@/lib/application'
 import EventInlineEdit from '@/app/(club)/events/event-inline-edit'
 import DeleteEventButton from '@/app/(club)/events/delete-event-button'
 import EventRsvp from '@/app/(club)/events/event-rsvp'
@@ -35,7 +35,7 @@ export default function EventListCard({
   currentUserStatus,
   userId,
   userRole,
-  membershipStatus,
+  applicationStatus,
   canModerate,
 }: {
   event: EventRow
@@ -44,12 +44,12 @@ export default function EventListCard({
   currentUserStatus: string | null
   userId: string
   userRole: string
-  membershipStatus: MembershipStatus
+  applicationStatus: ApplicationStatus
   canModerate: boolean
 }) {
   const eligibility = resolveEventEligibility(
     { status: event.status, visibility: event.visibility },
-    { membershipStatus, role: userRole }
+    { applicationStatus, role: userRole }
   )
 
   return (

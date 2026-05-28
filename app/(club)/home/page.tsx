@@ -1,9 +1,10 @@
 import Link from 'next/link'
+import ApplicationStatusBadge from '@/components/application/application-status-badge'
 import Badge from '@/components/ui/badge'
 import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import { buttonPrimaryClassName, buttonSecondaryClassName, roleLabel } from '@/lib/event-labels'
-import { membershipStatusLabel } from '@/lib/membership'
+import { nextActionForApplicant } from '@/lib/application'
 import { getViewer } from '@/lib/viewer'
 
 export default async function HomePage() {
@@ -13,11 +14,10 @@ export default async function HomePage() {
     return null
   }
 
-  const { role, membershipStatus, canAccessApp, profile } = viewer
+  const { role, applicationStatus, canAccessApp, profile } = viewer
   const isAdmin = role === 'admin'
   const isHost = role === 'host' || isAdmin
-  const isPending =
-    membershipStatus === 'applicant' || membershipStatus === 'pending'
+  const next = nextActionForApplicant(applicationStatus)
 
   return (
     <>
@@ -28,65 +28,72 @@ export default async function HomePage() {
             ? `Welcome back, ${profile.full_name.split(' ')[0]}`
             : 'Welcome'
         }
-        description="Your club hub for gatherings, profile, and trusted community access."
-        actions={
-          <Badge variant={membershipStatus === 'approved' ? 'success' : 'warning'}>
-            {membershipStatusLabel(membershipStatus)}
-          </Badge>
-        }
+        description="Your club hub for verified membership, gatherings, and trusted community access."
+        actions={<ApplicationStatusBadge status={applicationStatus} />}
       />
 
-      {isPending ? (
+      {!canAccessApp ? (
         <Card className="mb-8 border-warning/30 bg-warning-soft/40">
           <h2 className="text-display text-lg font-medium text-foreground">
-            Application in progress
+            {next.title}
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Your membership is being reviewed. Complete your profile with a full
-            name so the team can verify you. You will receive full calendar access
-            once approved.
+            {next.description}
           </p>
-          <Link href="/members" className={`${buttonSecondaryClassName} mt-4`}>
-            Complete profile
+          <Link href="/application" className={`${buttonPrimaryClassName} mt-4`}>
+            {next.cta}
           </Link>
         </Card>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <h2 className="text-display text-lg font-medium text-foreground">
-            Events
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Browse upcoming gatherings, RSVP, and view details for hosts you trust.
-          </p>
-          {canAccessApp ? (
+        {canAccessApp ? (
+          <Card>
+            <h2 className="text-display text-lg font-medium text-foreground">
+              Events
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Browse upcoming gatherings, RSVP, and view details for hosts you trust.
+            </p>
             <Link href="/events" className={`${buttonPrimaryClassName} mt-4`}>
               View calendar
             </Link>
-          ) : (
-            <p className="mt-4 text-sm text-muted-foreground">
-              Available after membership approval.
+          </Card>
+        ) : (
+          <Card>
+            <h2 className="text-display text-lg font-medium text-foreground">
+              Events
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Unlocks after membership approval.
             </p>
-          )}
-        </Card>
+            <div className="mt-4">
+              <Badge variant="muted">Gated</Badge>
+            </div>
+          </Card>
+        )}
 
         <Card>
           <h2 className="text-display text-lg font-medium text-foreground">
-            Your profile
+            {canAccessApp ? 'Your profile' : 'Application'}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Keep your name and contact details current for hosts and club operations.
+            {canAccessApp
+              ? 'Keep your presence current for hosts and club operations.'
+              : 'Track status and complete your membership application.'}
           </p>
           <p className="mt-3 text-xs text-muted-foreground">
             Role: {roleLabel(role)}
           </p>
-          <Link href="/members" className={`${buttonSecondaryClassName} mt-4`}>
-            Edit profile
+          <Link
+            href={canAccessApp ? '/members' : '/application'}
+            className={`${buttonSecondaryClassName} mt-4`}
+          >
+            {canAccessApp ? 'View profile' : 'Open application'}
           </Link>
         </Card>
 
-        {isHost ? (
+        {isHost && canAccessApp ? (
           <Card>
             <h2 className="text-display text-lg font-medium text-foreground">
               Host tools
@@ -95,11 +102,9 @@ export default async function HomePage() {
               Create and manage events you host. Attendee names and exports live on
               each event page.
             </p>
-            {canAccessApp ? (
-              <Link href="/events" className={`${buttonSecondaryClassName} mt-4`}>
-                Manage events
-              </Link>
-            ) : null}
+            <Link href="/events" className={`${buttonSecondaryClassName} mt-4`}>
+              Manage events
+            </Link>
           </Card>
         ) : null}
 
@@ -109,14 +114,14 @@ export default async function HomePage() {
               Admin shortcuts
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Review members, assign roles, and oversee club programming.
+              Review applications, assign roles, and oversee programming.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link href="/admin/users" className={buttonPrimaryClassName}>
-                Manage users
+              <Link href="/admin/applications" className={buttonPrimaryClassName}>
+                Application queue
               </Link>
-              <Link href="/events" className={buttonSecondaryClassName}>
-                All events
+              <Link href="/admin/users" className={buttonSecondaryClassName}>
+                Manage users
               </Link>
             </div>
           </Card>

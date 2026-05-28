@@ -1,4 +1,5 @@
-import type { MembershipStatus } from '@/lib/membership'
+import type { ApplicationStatus } from '@/lib/application'
+import { isApprovedMember } from '@/lib/application'
 import { eventStatusLabel } from '@/lib/event-labels'
 
 export type EventTier = 'standard' | 'members' | 'hosts' | 'invite'
@@ -24,7 +25,7 @@ type EventLike = {
 }
 
 type ViewerLike = {
-  membershipStatus: MembershipStatus
+  applicationStatus: ApplicationStatus
   role: string
 }
 
@@ -55,10 +56,7 @@ export function resolveEventEligibility(
 ): EventEligibility {
   const tier = resolveEventTier(event.visibility)
   const status = event.status ?? 'published'
-  const isApproved =
-    viewer.membershipStatus === 'approved' ||
-    viewer.role === 'admin' ||
-    viewer.role === 'host'
+  const isApproved = isApprovedMember(viewer.applicationStatus, viewer.role)
 
   const base = {
     tier,

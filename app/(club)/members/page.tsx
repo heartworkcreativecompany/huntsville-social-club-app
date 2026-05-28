@@ -7,7 +7,8 @@ import MemberDiscoveryGrid from '@/components/members/member-discovery-grid'
 import MemberProfileCard from '@/components/members/member-profile-card'
 import type { DirectoryMember } from '@/lib/members-discovery'
 import { loadDirectoryProfiles } from '@/lib/load-directory-profiles'
-import { membershipStatusLabel } from '@/lib/membership'
+import { applicationStatusLabel } from '@/lib/application'
+import ApplicationStatusBadge from '@/components/application/application-status-badge'
 import { getViewer, type ViewerProfile } from '@/lib/viewer'
 import ProfileForm from './profile-form'
 
@@ -20,7 +21,7 @@ function toDirectoryMember(profile: ViewerProfile, email: string): DirectoryMemb
     created_at: profile.created_at,
     membership_intent: profile.membership_intent ?? null,
     verified_at: profile.verified_at ?? null,
-    membership_status: profile.membership_status ?? null,
+    membership_status: profile.application_status ?? null,
   }
 }
 
@@ -33,10 +34,6 @@ export default async function MembersPage() {
 
   const profile = viewer.profile
   const isAdmin = viewer.role === 'admin'
-  const showPending =
-    viewer.membershipStatus === 'applicant' ||
-    viewer.membershipStatus === 'pending'
-
   const { members: directoryMembers, error: directoryError } =
     await loadDirectoryProfiles(viewer.userId, isAdmin)
 
@@ -44,10 +41,7 @@ export default async function MembersPage() {
     ? toDirectoryMember(profile, viewer.email)
     : null
 
-  const canBrowseDiscovery =
-    viewer.membershipStatus === 'approved' ||
-    isAdmin ||
-    viewer.role === 'host'
+  const canBrowseDiscovery = viewer.canAccessApp
 
   return (
     <>
@@ -55,20 +49,17 @@ export default async function MembersPage() {
         eyebrow="Discovery"
         title="Members"
         description="A curated directory for verified connections—intent and trust first, not a public social graph."
-        actions={
-          <Badge
-            variant={viewer.membershipStatus === 'approved' ? 'success' : 'warning'}
-          >
-            {membershipStatusLabel(viewer.membershipStatus)}
-          </Badge>
-        }
+        actions={<ApplicationStatusBadge status={viewer.applicationStatus} />}
       />
 
-      {showPending ? (
+      {!viewer.canAccessApp ? (
         <Card className="mb-6 border-warning/30 bg-warning-soft/40" padding="sm">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Your application is on file. Complete your profile so the membership
-            team can verify you for full discovery access.
+            Discovery and member experiences unlock after approval. Continue your{' '}
+            <Link href="/application" className="font-medium text-accent underline">
+              membership application
+            </Link>
+            .
           </p>
         </Card>
       ) : null}
@@ -133,29 +124,16 @@ export default async function MembersPage() {
           </p>
         ) : isAdmin && canBrowseDiscovery ? (
           <MemberDiscoveryGrid members={directoryMembers} limited={false} />
-        ) : canBrowseDiscovery ? (
-          <EmptyState
-            title="Directory opens for administrators"
-            description="You can still build trust at events and keep your profile current. Hosts and admins may share introductions when appropriate."
-            action={
-              <Link
-                href="/events"
-                className="text-sm font-medium text-accent underline"
-              >
-                Browse events
-              </Link>
-            }
-          />
         ) : (
           <EmptyState
-            title="Discovery unlocks after approval"
-            description="Once verified, you can participate in the full member experience and event calendar."
+            title="Directory opens for administrators"
+            description="Approved members appear here for admins. Complete your application to join the verified roster."
             action={
               <Link
-                href="/members"
+                href="/application"
                 className="text-sm font-medium text-accent underline"
               >
-                Complete your profile
+                View application
               </Link>
             }
           />

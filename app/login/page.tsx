@@ -5,6 +5,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
+  isApprovedMember,
+  resolveApplicationStatus,
+} from '@/lib/application'
+import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
   inputClassName,
@@ -46,7 +50,42 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/home')
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      let profile: {
+        application_status?: string | null
+        role?: string | null
+        full_name?: string | null
+      } | null = null
+
+      const extended = await supabase
+        .from('profiles')
+        .select('application_status, role, full_name')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (!extended.error) {
+        profile = extended.data
+      } else {
+        const basic = await supabase
+          .from('profiles')
+          .select('role, full_name')
+          .eq('id', user.id)
+          .maybeSingle()
+        profile = basic.data
+      }
+
+      const status = resolveApplicationStatus(profile)
+      const role = profile?.role ?? 'member'
+
+      router.push(isApprovedMember(status, role) ? '/home' : '/application')
+    } else {
+      router.push('/home')
+    }
+
     router.refresh()
   }
 

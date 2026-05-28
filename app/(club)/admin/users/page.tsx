@@ -5,10 +5,8 @@ import Badge from '@/components/ui/badge'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
-import {
-  membershipStatusLabel,
-  resolveMembershipStatus,
-} from '@/lib/membership'
+import ApplicationStatusBadge from '@/components/application/application-status-badge'
+import { resolveApplicationStatus, type ApplicationStatus } from '@/lib/application'
 import { getViewer } from '@/lib/viewer'
 import RoleUpdate from './role-update'
 
@@ -35,25 +33,18 @@ export default async function AdminUsersPage() {
 
   const supabase = await createClient()
 
-  const { data: profileRows, error } = await supabase
+  const { data: users, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, created_at')
+    .select(
+      'id, email, full_name, role, created_at, application_status, membership_intent, verified_at'
+    )
     .order('email', { ascending: true })
 
-  const users =
-    profileRows?.map((profile) => ({
-      ...profile,
-      membership_status: null as string | null,
-      membership_intent: null as string | null,
-      verified_at: null as string | null,
-    })) ?? null
-
   const pendingCount =
-    users?.filter(
-      (p) =>
-        resolveMembershipStatus(p) === 'pending' ||
-        resolveMembershipStatus(p) === 'applicant'
-    ).length ?? 0
+    users?.filter((p) => {
+      const status = resolveApplicationStatus(p) as ApplicationStatus
+      return status !== 'approved'
+    }).length ?? 0
 
   return (
     <>
@@ -72,8 +63,11 @@ export default async function AdminUsersPage() {
 
       <Card className="mb-6" padding="sm">
         <p className="text-sm text-muted-foreground">
-          Admins cannot change their own role here. Approve members by setting
-          membership status to approved and optionally recording verification.
+          Admins cannot change their own role here. Use the{' '}
+          <Link href="/admin/applications" className="font-medium text-accent underline">
+            application queue
+          </Link>{' '}
+          to approve, reject, or request more information.
         </p>
       </Card>
 
@@ -96,9 +90,11 @@ export default async function AdminUsersPage() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="muted">
-                      {membershipStatusLabel(resolveMembershipStatus(profile))}
-                    </Badge>
+                    <ApplicationStatusBadge
+                      status={
+                        resolveApplicationStatus(profile) as ApplicationStatus
+                      }
+                    />
                     <Badge variant="accent">{profile.role ?? 'member'}</Badge>
                   </div>
                 </div>

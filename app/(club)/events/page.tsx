@@ -4,7 +4,7 @@ import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
 import EventListCard from '@/components/events/event-list-card'
-import { membershipStatusLabel } from '@/lib/membership'
+import { applicationStatusLabel } from '@/lib/application'
 import EventForm from './event-form'
 import { getViewer } from '@/lib/viewer'
 
@@ -66,6 +66,10 @@ export default async function EventsPage() {
 
   if (!viewer) {
     redirect('/login')
+  }
+
+  if (!viewer.canAccessApp) {
+    redirect('/application')
   }
 
   const supabase = await createClient()
@@ -147,7 +151,7 @@ export default async function EventsPage() {
           are labeled below and will enforce in a future release.
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
-          Your status: {membershipStatusLabel(viewer.membershipStatus)}
+          Your status: {applicationStatusLabel(viewer.applicationStatus)}
           {canCreateEvents ? ' · You can host events' : ''}
         </p>
       </Card>
@@ -201,7 +205,7 @@ export default async function EventsPage() {
                       }
                       userId={user.id}
                       userRole={userRole}
-                      membershipStatus={viewer.membershipStatus}
+                      applicationStatus={viewer.applicationStatus}
                       canModerate
                     />
                   </li>
@@ -246,7 +250,7 @@ export default async function EventsPage() {
                       }
                       userId={user.id}
                       userRole={userRole}
-                      membershipStatus={viewer.membershipStatus}
+                      applicationStatus={viewer.applicationStatus}
                       canModerate={
                         user.id === event.owner_id || userRole === 'admin'
                       }

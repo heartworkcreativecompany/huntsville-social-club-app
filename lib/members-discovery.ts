@@ -1,4 +1,8 @@
 import {
+  resolveApplicationStatus,
+  type ApplicationStatus,
+} from '@/lib/application'
+import {
   membershipStatusLabel,
   resolveMembershipStatus,
   type MembershipStatus,
@@ -87,7 +91,20 @@ export function memberSinceLabel(createdAt: string | null | undefined): string |
 }
 
 export function membershipStatusForMember(member: DirectoryMember): MembershipStatus {
-  return resolveMembershipStatus(member)
+  return resolveMembershipStatus({
+    application_status: member.membership_status,
+    role: member.role,
+    full_name: member.full_name,
+  })
+}
+
+export function applicationStatusForMember(
+  member: DirectoryMember
+): ApplicationStatus {
+  return resolveApplicationStatus({
+    application_status: member.membership_status,
+    role: member.role,
+  })
 }
 
 export function membershipBadgeLabel(member: DirectoryMember): string {

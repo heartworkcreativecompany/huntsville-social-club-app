@@ -2,7 +2,24 @@
 
 This repo includes Supabase CLI scaffolding so database schema changes can be tracked as migrations. **No remote schema changes have been applied from this setup yet.**
 
-## 1. Install the Supabase CLI (if needed)
+## 1. Local Next.js environment variables
+
+Create `.env.local` in the **project root** (not `public/`). Next.js does not load env files from `public/`.
+
+Required names (must match `lib/supabase/*.ts`):
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```
+
+Copy `.env.example` to `.env.local` and paste values from [Supabase Dashboard → Project Settings → API](https://supabase.com/dashboard/project/_/settings/api): **Project URL** and **anon public** key (JWT).
+
+Do not use `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` for this app unless you also add the anon JWT as `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+Restart the dev server after changing env files: `npm run dev`.
+
+## 2. Install the Supabase CLI (if needed)
 
 Pick one:
 
@@ -16,7 +33,7 @@ npx supabase --version
 
 Docs: https://supabase.com/docs/guides/cli
 
-## 2. Initialize the local Supabase folder (already done in this repo)
+## 3. Initialize the local Supabase folder (already done in this repo)
 
 If you clone this repo on a new machine and `supabase/` is missing, run:
 
@@ -26,7 +43,7 @@ npx supabase init
 
 This repo already has `supabase/config.toml` and `supabase/migrations/` from a prior init.
 
-## 3. Log in to Supabase
+## 4. Log in to Supabase
 
 ```bash
 npx supabase login
@@ -34,7 +51,7 @@ npx supabase login
 
 This opens a browser flow and stores credentials for CLI commands.
 
-## 4. Find your project ref
+## 5. Find your project ref
 
 In the [Supabase dashboard](https://supabase.com/dashboard), open your project. The project ref is the ID in the URL:
 
@@ -46,7 +63,7 @@ Example: if the URL is `https://supabase.com/dashboard/project/abcdefghijklmnop/
 
 You can also find it under **Project Settings → General → Reference ID**.
 
-## 5. Link this repo to your remote project
+## 6. Link this repo to your remote project
 
 From the project root:
 
@@ -58,7 +75,7 @@ Replace `YOUR_PROJECT_REF` with your actual ref. You will be prompted for your d
 
 This creates `supabase/.temp/` metadata locally (gitignored). It does **not** change your remote database.
 
-## 6. Pull the current remote schema into migrations
+## 7. Pull the current remote schema into migrations
 
 After linking, capture schema that already exists in the dashboard (tables, RLS, triggers, etc.):
 
@@ -70,7 +87,7 @@ npx supabase db pull
 
 **What it does not do:** It does not run `db reset` or wipe data. Review the generated migration files before committing.
 
-## 7. Day-to-day workflow (future schema changes)
+## 8. Day-to-day workflow (future schema changes)
 
 1. Create a new migration file:
 
@@ -88,17 +105,17 @@ npx supabase db pull
 
 Prefer migrations + `db push` over one-off dashboard edits once this workflow is in place, so schema stays in Git.
 
-## 8. Commands to avoid unless you mean it
+## 9. Commands to avoid unless you mean it
 
 - `npx supabase db reset` — resets **local** dev database; destructive for local data.
 - `npx supabase migration repair` — fixes migration history; only use when you understand drift.
 - Do not run `db push` until you have reviewed migration files.
 
-## 9. Commit to Git
+## 10. Commit to Git
 
 Commit the `supabase/` folder (especially `config.toml` and `supabase/migrations/*.sql` after `db pull` or new migrations). Do **not** commit secrets, `.env.local`, or `supabase/.temp/`.
 
-## 10. Optional: regenerate TypeScript types
+## 11. Optional: regenerate TypeScript types
 
 After schema is in sync:
 
@@ -107,3 +124,15 @@ npx supabase gen types typescript --project-id YOUR_PROJECT_REF > lib/database.t
 ```
 
 Replace the temporary manual types in `lib/database.types.ts` when ready.
+
+## 12. Member application workflow migration
+
+Apply the membership application columns and policies:
+
+```bash
+npx supabase db push
+```
+
+Migration file: `supabase/migrations/20260522140000_member_application_workflow.sql`
+
+This adds `application_status` (`draft`, `submitted`, `in_review`, `needs_info`, `approved`, `rejected`), draft JSON, review timestamps, and RLS/trigger guards. Existing hosts/admins and members with a full name are backfilled to `approved`.

@@ -43,6 +43,10 @@ export default async function EventDetailPage({ params }: PageProps) {
     redirect('/login')
   }
 
+  if (!viewer.canAccessApp) {
+    redirect('/application')
+  }
+
   const supabase = await createClient()
   const user = { id: viewer.userId }
 
@@ -109,7 +113,7 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   const eligibility = resolveEventEligibility(
     { status: event.status, visibility: event.visibility },
-    { membershipStatus: viewer.membershipStatus, role: userRole }
+    { applicationStatus: viewer.applicationStatus, role: userRole }
   )
 
   const rsvpCounts = {

@@ -1,23 +1,32 @@
+import {
+  applicationStatusLabel,
+  isApprovedMember,
+  resolveApplicationStatus,
+  type ApplicationStatus,
+} from '@/lib/application'
+
+/** @deprecated Use ApplicationStatus — kept for gradual UI migration */
 export type MembershipStatus = 'approved' | 'applicant' | 'pending'
 
 type ProfileLike = {
+  application_status?: string | null
   membership_status?: string | null
   full_name?: string | null
   role?: string | null
 } | null
 
 export function resolveMembershipStatus(profile: ProfileLike): MembershipStatus {
-  const raw = profile?.membership_status
-  if (raw === 'approved' || raw === 'pending' || raw === 'applicant') {
-    return raw
-  }
+  const applicationStatus = resolveApplicationStatus(profile)
 
-  if (profile?.role === 'admin' || profile?.role === 'host') {
+  if (isApprovedMember(applicationStatus, profile?.role ?? 'member')) {
     return 'approved'
   }
 
-  if (profile?.full_name?.trim()) {
-    return 'approved'
+  if (
+    applicationStatus === 'submitted' ||
+    applicationStatus === 'in_review'
+  ) {
+    return 'pending'
   }
 
   return 'applicant'
@@ -29,11 +38,16 @@ export function membershipStatusLabel(status: MembershipStatus): string {
   return 'Applicant'
 }
 
-/** Full app access for events and directory (preserves existing member flows). */
 export function canAccessMemberFeatures(
-  status: MembershipStatus,
+  profile: ProfileLike,
   role: string
 ): boolean {
-  if (role === 'admin' || role === 'host') return true
-  return status === 'approved'
+  const applicationStatus = resolveApplicationStatus(profile)
+  return isApprovedMember(applicationStatus, role)
 }
+
+export function getApplicationStatus(profile: ProfileLike): ApplicationStatus {
+  return resolveApplicationStatus(profile)
+}
+
+export { applicationStatusLabel, type ApplicationStatus }

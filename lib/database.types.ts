@@ -21,6 +21,15 @@ export interface Database {
           role: string | null
           created_at: string | null
           updated_at: string | null
+          application_status: string
+          membership_intent: string | null
+          application_draft: Json | null
+          application_submitted_at: string | null
+          application_reviewed_at: string | null
+          verified_at: string | null
+          admin_review_notes: string | null
+          location_area: string | null
+          referral_source: string | null
         }
         Insert: {
           id: string
@@ -29,6 +38,15 @@ export interface Database {
           role?: string | null
           created_at?: string | null
           updated_at?: string | null
+          application_status?: string
+          membership_intent?: string | null
+          application_draft?: Json | null
+          application_submitted_at?: string | null
+          application_reviewed_at?: string | null
+          verified_at?: string | null
+          admin_review_notes?: string | null
+          location_area?: string | null
+          referral_source?: string | null
         }
         Update: {
           id?: string
@@ -37,6 +55,15 @@ export interface Database {
           role?: string | null
           created_at?: string | null
           updated_at?: string | null
+          application_status?: string
+          membership_intent?: string | null
+          application_draft?: Json | null
+          application_submitted_at?: string | null
+          application_reviewed_at?: string | null
+          verified_at?: string | null
+          admin_review_notes?: string | null
+          location_area?: string | null
+          referral_source?: string | null
         }
         Relationships: []
       }
