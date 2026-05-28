@@ -16,8 +16,6 @@ import { resolveApplicationStatus } from '@/lib/application'
 import { validateApplicationForSubmit } from '@/lib/application-validation'
 import { APPLICATION_TOTAL_STEPS } from '@/lib/application-form-content'
 
-const APPLICATION_PHOTOS_BUCKET = 'application-photos'
-
 export async function saveApplicationDraft(draft: ApplicationDraft) {
   const supabase = await createClient()
   const {
@@ -142,104 +140,4 @@ export async function getApplicationDraftForUser(): Promise<ApplicationDraft> {
   if (!profile) return emptyDraft()
 
   return mergeProfileIntoDraft(profile)
-}
-
-export async function uploadApplicationPhoto(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'You must be signed in.' }
-  }
-
-  const file = formData.get('file')
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: 'Please choose a photo to upload.' }
-  }
-
-  const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-  if (!allowed.includes(file.type)) {
-    return { error: 'Photos must be JPEG, PNG, or WebP.' }
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    return { error: 'Each photo must be 5 MB or smaller.' }
-  }
-
-  const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-  const photoId = crypto.randomUUID()
-  const storagePath = `${user.id}/${photoId}.${extension}`
-
-  const { error } = await supabase.storage
-    .from(APPLICATION_PHOTOS_BUCKET)
-    .upload(storagePath, file, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType: file.type,
-    })
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  return {
-    photo: {
-      id: photoId,
-      storagePath,
-      isPrimary: false,
-      facePhotoConfirmed: false,
-    },
-  }
-}
-
-export async function deleteApplicationPhoto(storagePath: string) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'You must be signed in.' }
-  }
-
-  if (!storagePath.startsWith(`${user.id}/`)) {
-    return { error: 'Invalid photo path.' }
-  }
-
-  const { error } = await supabase.storage
-    .from(APPLICATION_PHOTOS_BUCKET)
-    .remove([storagePath])
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  return { success: true as const }
-}
-
-export async function getApplicationPhotoSignedUrl(storagePath: string) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { url: null }
-  }
-
-  if (!storagePath.startsWith(`${user.id}/`)) {
-    return { url: null }
-  }
-
-  const { data, error } = await supabase.storage
-    .from(APPLICATION_PHOTOS_BUCKET)
-    .createSignedUrl(storagePath, 3600)
-
-  if (error || !data?.signedUrl) {
-    return { url: null }
-  }
-
-  return { url: data.signedUrl }
 }

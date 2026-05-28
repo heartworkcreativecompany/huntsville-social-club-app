@@ -136,3 +136,28 @@ npx supabase db push
 Migration file: `supabase/migrations/20260522140000_member_application_workflow.sql`
 
 This adds `application_status` (`draft`, `submitted`, `in_review`, `needs_info`, `approved`, `rejected`), draft JSON, review timestamps, and RLS/trigger guards. Existing hosts/admins and members with a full name are backfilled to `approved`.
+
+## 13. Application photo storage (`application-photos` bucket)
+
+Membership application photos upload **directly from the browser** to Supabase Storage (not through Next.js Server Actions). The app expects a **private** bucket named:
+
+```text
+application-photos
+```
+
+Paths are user-scoped: `{auth_user_id}/{photo_id}.jpg`
+
+Migrations that create the bucket and RLS policies:
+
+- `supabase/migrations/20260528210000_application_intake_v2.sql`
+- `supabase/migrations/20260528220000_fix_application_photos_storage.sql` (idempotent repair)
+
+Apply to your linked project:
+
+```bash
+npx supabase db push
+```
+
+For **local** `supabase start`, the same bucket is declared in `supabase/config.toml` under `[storage.buckets.application-photos]`.
+
+If uploads fail with a bucket or permissions error, confirm `.env.local` points at the same project you migrated, then re-run `db push`.

@@ -1,16 +1,18 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
-import {
-  deleteApplicationPhoto,
-  getApplicationPhotoSignedUrl,
-  uploadApplicationPhoto,
-} from '@/app/(club)/application/actions'
+import { useEffect, useState } from 'react'
 import type { ApplicationPhoto } from '@/lib/application'
 import {
   PHOTO_MAX_COUNT,
   PHOTO_MIN_COUNT,
 } from '@/lib/application-form-content'
+import {
+  deleteApplicationPhotoFromStorage,
+  getApplicationPhotoSignedUrlClient,
+  PHOTO_ALLOWED_MIME_TYPES,
+  uploadApplicationPhotoToStorage,
+  validateApplicationPhotoFile,
+} from '@/lib/application-photo-storage'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
 
 function PhotoPreview({
@@ -18,19 +20,30 @@ function PhotoPreview({
   onRemove,
   onSetPrimary,
   onConfirmFace,
+  removing,
 }: {
   photo: ApplicationPhoto
   onRemove: () => void
   onSetPrimary: () => void
   onConfirmFace: (confirmed: boolean) => void
+  removing: boolean
 }) {
   const [url, setUrl] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    getApplicationPhotoSignedUrl(photo.storagePath).then((result) => {
-      if (!cancelled) setUrl(result.url)
+    setPreviewError(false)
+
+    getApplicationPhotoSignedUrlClient(photo.storagePath).then((signedUrl) => {
+      if (cancelled) return
+      if (signedUrl) {
+        setUrl(signedUrl)
+      } else {
+        setPreviewError(true)
+      }
     })
+
     return () => {
       cancelled = true
     }
@@ -46,6 +59,10 @@ function PhotoPreview({
             alt=""
             className="h-full w-full object-cover"
           />
+        ) : previewError ? (
+          <div className="flex h-full items-center justify-center px-3 text-center text-xs text-muted-foreground">
+            Preview unavailable
+          </div>
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             Loading…
@@ -61,15 +78,17 @@ function PhotoPreview({
               : 'bg-accent-soft text-muted-foreground'
           }`}
           onClick={onSetPrimary}
+          disabled={removing}
         >
           {photo.isPrimary ? 'Primary' : 'Set primary'}
         </button>
         <button
           type="button"
-          className="text-xs text-muted-foreground underline"
+          className="text-xs text-muted-foreground underline disabled:opacity-50"
           onClick={onRemove}
+          disabled={removing}
         >
-          Remove
+          {removing ? 'Removing…' : 'Remove'}
         </button>
       </div>
       {photo.isPrimary ? (
@@ -79,6 +98,7 @@ function PhotoPreview({
             checked={photo.facePhotoConfirmed}
             onChange={(e) => onConfirmFace(e.target.checked)}
             className="mt-0.5"
+            disabled={removing}
           />
           <span>
             This is a clear face photo (not a group shot, not sunglasses-only,
@@ -100,7 +120,8 @@ export default function ApplicationPhotosField({
   disabled?: boolean
 }) {
   const [message, setMessage] = useState('')
-  const [isPending, startTransition] = useTransition()
+  const [isUploading, setIsUploading] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   const setPrimary = (id: string) => {
     onChange(
@@ -121,50 +142,77 @@ export default function ApplicationPhotosField({
     )
   }
 
-  const handleUpload = (fileList: FileList | null) => {
+  const handleUpload = async (fileList: FileList | null) => {
     if (!fileList?.length) return
-    if (photos.length >= PHOTO_MAX_COUNT) {
-      setMessage(`You can upload up to ${PHOTO_MAX_COUNT} photos.`)
+
+    const file = fileList[0]
+    const validationError = validateApplicationPhotoFile(file, photos.length)
+
+    if (validationError) {
+      setMessage(validationError)
       return
     }
 
-    const file = fileList[0]
-    const formData = new FormData()
-    formData.set('file', file)
-
     setMessage('')
-    startTransition(async () => {
-      const result = await uploadApplicationPhoto(formData)
+    setIsUploading(true)
+
+    try {
+      const result = await uploadApplicationPhotoToStorage(file, photos.length)
+
       if (result.error) {
         setMessage(result.error)
         return
       }
-      if (!result.photo) return
+
+      if (!result.photo) {
+        setMessage('Upload did not complete. Please try again.')
+        return
+      }
 
       const next = [...photos, result.photo]
       if (next.length === 1) {
         next[0] = { ...next[0], isPrimary: true }
       }
       onChange(next)
-    })
+    } catch {
+      setMessage('Something went wrong while uploading. Please try again.')
+    } finally {
+      setIsUploading(false)
+    }
   }
 
-  const handleRemove = (photo: ApplicationPhoto) => {
-    startTransition(async () => {
-      await deleteApplicationPhoto(photo.storagePath)
+  const handleRemove = async (photo: ApplicationPhoto) => {
+    setMessage('')
+    setRemovingId(photo.id)
+
+    try {
+      const result = await deleteApplicationPhotoFromStorage(photo.storagePath)
+
+      if (result.error) {
+        setMessage(result.error)
+        return
+      }
+
       const remaining = photos.filter((item) => item.id !== photo.id)
       if (remaining.length > 0 && !remaining.some((item) => item.isPrimary)) {
         remaining[0] = { ...remaining[0], isPrimary: true }
       }
       onChange(remaining)
-    })
+    } catch {
+      setMessage('Could not remove that photo. Please try again.')
+    } finally {
+      setRemovingId(null)
+    }
   }
+
+  const busy = disabled || isUploading || removingId !== null
 
   return (
     <div className="grid gap-4">
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Upload {PHOTO_MIN_COUNT}–{PHOTO_MAX_COUNT} photos. Choose one clear face
-        photo as primary—no group shots or sunglasses-only images as primary.
+        Upload {PHOTO_MIN_COUNT}–{PHOTO_MAX_COUNT} photos (JPEG, PNG, or WebP, max
+        5 MB each). Choose one clear face photo as primary—no group shots or
+        sunglasses-only images as primary.
       </p>
 
       <ul className="grid gap-4 sm:grid-cols-2">
@@ -177,22 +225,25 @@ export default function ApplicationPhotosField({
             onConfirmFace={(confirmed) =>
               updatePhoto(photo.id, { facePhotoConfirmed: confirmed })
             }
+            removing={removingId === photo.id}
           />
         ))}
       </ul>
 
       {photos.length < PHOTO_MAX_COUNT ? (
         <label
-          className={`${buttonSecondaryClassName} inline-flex cursor-pointer items-center justify-center`}
+          className={`${buttonSecondaryClassName} inline-flex cursor-pointer items-center justify-center ${
+            busy ? 'pointer-events-none opacity-60' : ''
+          }`}
         >
-          {isPending ? 'Uploading…' : 'Add photo'}
+          {isUploading ? 'Uploading…' : 'Add photo'}
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept={PHOTO_ALLOWED_MIME_TYPES.join(',')}
             className="sr-only"
-            disabled={disabled || isPending}
+            disabled={busy}
             onChange={(e) => {
-              handleUpload(e.target.files)
+              void handleUpload(e.target.files)
               e.target.value = ''
             }}
           />
@@ -200,7 +251,9 @@ export default function ApplicationPhotosField({
       ) : null}
 
       {message ? (
-        <p className="text-sm text-muted-foreground">{message}</p>
+        <p className="text-sm text-danger" role="alert">
+          {message}
+        </p>
       ) : null}
     </div>
   )
