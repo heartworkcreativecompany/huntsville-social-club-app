@@ -11,6 +11,7 @@ import {
   type ApplicationStatus,
 } from '@/lib/application'
 import { getViewer } from '@/lib/viewer'
+import AdminApplicationPhotoGallery from '@/components/admin/admin-application-photo-gallery'
 import ApplicationReviewActions from '../application-review-actions'
 
 type PageProps = {
@@ -245,10 +246,22 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
               </div>
             ))}
           </dl>
-          <p className="mt-4 text-xs text-muted-foreground">
-            {draft.photos.length} photo{draft.photos.length === 1 ? '' : 's'}{' '}
-            on file (view in storage).
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <h2 className="text-display text-lg font-medium text-foreground">
+            Application photos
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Private storage — previews use short-lived signed URLs for admins
+            only.
           </p>
+          <div className="mt-4">
+            <AdminApplicationPhotoGallery
+              applicantId={applicant.id}
+              photos={draft.photos}
+            />
+          </div>
         </Card>
 
         <Card className="lg:col-span-2">

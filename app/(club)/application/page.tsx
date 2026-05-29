@@ -11,6 +11,7 @@ import {
 import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
 import { getViewer } from '@/lib/viewer'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
+import ApplicationProfilePreview from '@/components/application/application-profile-preview'
 import ApplicationForm from './application-form'
 
 export default async function ApplicationPage() {
@@ -24,6 +25,8 @@ export default async function ApplicationPage() {
   const status = viewer.applicationStatus
   const next = nextActionForApplicant(status)
   const draft = mergeProfileIntoDraft(profile)
+  const showReadOnlyPreview =
+    !canEditApplication(status) && status !== 'approved'
 
   return (
     <>
@@ -104,6 +107,21 @@ export default async function ApplicationPage() {
         </Card>
       </div>
 
+      {showReadOnlyPreview ? (
+        <section className="mb-10">
+          <h2 className="text-display mb-4 text-xl font-medium text-foreground">
+            Your profile preview
+          </h2>
+          <ApplicationProfilePreview
+            draft={draft}
+            userId={viewer.userId}
+            email={viewer.email}
+            applicationStatus={status}
+            variant="submitted"
+          />
+        </section>
+      ) : null}
+
       {canEditApplication(status) ? (
         <section>
           <h2 className="text-display mb-4 text-xl font-medium text-foreground">
@@ -113,6 +131,8 @@ export default async function ApplicationPage() {
             initialDraft={draft}
             applicationStatus={status}
             adminNotes={profile?.admin_review_notes ?? null}
+            userId={viewer.userId}
+            email={viewer.email}
           />
         </section>
       ) : viewer.canAccessApp ? (

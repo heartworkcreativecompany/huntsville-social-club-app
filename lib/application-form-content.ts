@@ -9,7 +9,7 @@ export const APPLICATION_FORM_STEPS = [
   { id: 3, title: 'Work & interests' },
   { id: 4, title: 'Short prompts' },
   { id: 5, title: 'Photos' },
-  { id: 6, title: 'Agreements' },
+  { id: 6, title: 'Review' },
 ] as const
 
 export const APPLICATION_TOTAL_STEPS = APPLICATION_FORM_STEPS.length

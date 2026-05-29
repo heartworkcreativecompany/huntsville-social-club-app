@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import ApplicationPhotosField from '@/components/application/application-photos-field'
+import ApplicationProfilePreview from '@/components/application/application-profile-preview'
 import ApplicationStepProgress from '@/components/application/application-step-progress'
 import ChipMultiSelect from '@/components/application/chip-multi-select'
 import Card from '@/components/ui/card'
@@ -63,10 +64,14 @@ export default function ApplicationForm({
   initialDraft,
   applicationStatus,
   adminNotes,
+  userId,
+  email,
 }: {
   initialDraft: ApplicationDraft
   applicationStatus: ApplicationStatus
   adminNotes: string | null
+  userId: string
+  email?: string | null
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState(initialDraft)
@@ -510,12 +515,21 @@ export default function ApplicationForm({
           <section className="grid gap-5 text-sm">
             <div>
               <h3 className="text-display text-base font-medium text-foreground">
-                Agreements
+                Review & agreements
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Confirm the standards below, then submit for membership review.
+                Preview your public profile, confirm the summary, then submit for
+                membership review.
               </p>
             </div>
+
+            <ApplicationProfilePreview
+              draft={draft}
+              userId={userId}
+              email={email}
+              applicationStatus={applicationStatus}
+            />
+
             <dl className="grid gap-3 rounded-lg border border-border bg-background/50 p-4 text-sm">
               <div>
                 <dt className="text-muted-foreground">Display name</dt>
