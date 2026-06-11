@@ -82,7 +82,7 @@ export default async function AdminUsersPage() {
               <Card>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-display text-lg font-medium text-foreground">
+                    <p className="text-display text-lg font-semibold">
                       {profile.full_name ?? profile.email ?? 'Unknown member'}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">

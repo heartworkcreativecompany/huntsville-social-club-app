@@ -26,7 +26,7 @@ export default function MemberVouchSummary({
     return (
       <div className="flex flex-wrap gap-2">
         {items.map((item) => (
-          <Badge key={item.key} variant="muted">
+          <Badge key={item.key} variant="premium">
             {item.label} ({item.count})
           </Badge>
         ))}
@@ -36,12 +36,10 @@ export default function MemberVouchSummary({
 
   return (
     <div className="grid gap-2">
-      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-        Member vouches
-      </p>
+      <p className="eyebrow">Member vouches</p>
       <div className="flex flex-wrap gap-2">
         {items.map((item) => (
-          <Badge key={item.key} variant="muted">
+          <Badge key={item.key} variant="premium">
             {item.label} ({item.count})
           </Badge>
         ))}

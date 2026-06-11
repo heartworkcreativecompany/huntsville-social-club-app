@@ -37,12 +37,12 @@ export default function ApplicationStepProgress({
           return (
             <li
               key={step.id}
-              className={`rounded-lg border px-3 py-2 text-xs ${
+              className={`rounded-full border px-3 py-2 text-xs ${
                 active
-                  ? 'border-accent/40 bg-accent-soft/50 text-foreground'
+                  ? 'border-accent/35 bg-accent-soft font-brand text-foreground'
                   : done
-                    ? 'border-border bg-background/50 text-muted-foreground'
-                    : 'border-border/60 text-muted-foreground'
+                    ? 'border-border bg-surface text-muted-foreground'
+                    : 'border-border/80 text-muted-foreground'
               }`}
             >
               <span className="font-medium">{step.id}.</span> {step.title}

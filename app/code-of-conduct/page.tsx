@@ -9,7 +9,7 @@ export default function CodeOfConductPage() {
         well. Every member agrees to these expectations.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Be respectful
       </h2>
       <p>
@@ -17,7 +17,7 @@ export default function CodeOfConductPage() {
         discrimination, or aggressive behavior is not tolerated.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Be honest
       </h2>
       <p>
@@ -25,7 +25,7 @@ export default function CodeOfConductPage() {
         authentically in your profile and at events.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Protect privacy
       </h2>
       <p>
@@ -33,7 +33,7 @@ export default function CodeOfConductPage() {
         personal information outside the club without consent.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Report concerns
       </h2>
       <p>

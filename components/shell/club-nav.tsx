@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from '@/app/login/actions'
+import BrandLogo from '@/components/brand/brand-logo'
 import { roleLabel } from '@/lib/event-labels'
 import type { ApplicationStatus } from '@/lib/application'
 
@@ -13,10 +14,10 @@ type NavItem = {
 }
 
 function navLinkClass(active: boolean): string {
-  return `rounded-lg px-3 py-2 text-sm font-medium transition ${
+  return `rounded-full px-3.5 py-2 font-brand text-sm font-medium transition ${
     active
       ? 'bg-accent text-accent-foreground'
-      : 'text-muted-foreground hover:bg-accent-soft hover:text-foreground'
+      : 'text-muted-foreground hover:bg-accent-soft hover:text-accent'
   }`
 }
 
@@ -81,15 +82,10 @@ export default function ClubNav({
   }
 
   return (
-    <header className="border-b border-border bg-surface">
+    <header className="border-b border-border bg-surface shadow-sm">
       <div className="mx-auto flex max-w-5xl flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
         <div className="flex flex-wrap items-center gap-6">
-          <Link
-            href="/home"
-            className="text-display text-lg font-medium text-foreground"
-          >
-            Huntsville Social Club
-          </Link>
+          <BrandLogo href="/home" variant="wordmark" size="sm" />
           <nav className="flex flex-wrap gap-1">
             {items.map((item) => {
               const active = item.match

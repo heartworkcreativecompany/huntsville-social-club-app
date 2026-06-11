@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import BrandLogo from '@/components/brand/brand-logo'
 import SiteFooter from '@/components/shell/site-footer'
 
 export default function LegalPageShell({
@@ -10,14 +11,9 @@ export default function LegalPageShell({
 }) {
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <header className="border-b border-border bg-surface">
+      <header className="border-b border-border bg-surface shadow-sm">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-5 sm:px-8">
-          <Link
-            href="/"
-            className="text-display text-xl font-medium text-foreground"
-          >
-            Huntsville Social Club
-          </Link>
+          <BrandLogo href="/" variant="wordmark" size="md" />
         </div>
       </header>
 
@@ -29,7 +25,7 @@ export default function LegalPageShell({
           {children}
         </div>
         <p className="mt-10">
-          <Link href="/" className="font-medium text-accent underline">
+          <Link href="/" className="link-brand font-medium underline">
             ← Back to home
           </Link>
         </p>

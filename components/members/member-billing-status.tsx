@@ -15,7 +15,7 @@ export default function MemberBillingStatus({
 
   return (
     <Card padding="sm">
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Membership status
       </h2>
       <div className="mt-3 flex flex-wrap items-center gap-2">

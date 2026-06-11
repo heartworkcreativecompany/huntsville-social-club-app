@@ -251,7 +251,7 @@ export default async function EventDetailPage({ params }: PageProps) {
 
       {isMine ? (
         <Card className="mb-8">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Host dashboard
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">

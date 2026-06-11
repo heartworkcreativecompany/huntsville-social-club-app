@@ -62,7 +62,7 @@ export default function EventListCard({
           </div>
           <Link
             href={`/events/${event.id}`}
-            className="text-display text-lg font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-accent"
+            className="text-display text-lg font-semibold underline decoration-border underline-offset-4 hover:decoration-accent"
           >
             {event.title}
           </Link>
@@ -74,18 +74,14 @@ export default function EventListCard({
 
       <dl className="mt-4 grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-2">
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            When
-          </dt>
+          <dt className="eyebrow">When</dt>
           <dd className="mt-1 font-medium text-foreground">
             {formatEventDate(event.starts_at)}
           </dd>
         </div>
         {event.location ? (
           <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Location
-            </dt>
+            <dt className="eyebrow">Location</dt>
             <dd className="mt-1 font-medium text-foreground">{event.location}</dd>
           </div>
         ) : null}
@@ -100,9 +96,7 @@ export default function EventListCard({
       </div>
 
       <div className="mt-4 border-t border-border pt-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Your RSVP
-        </p>
+        <p className="eyebrow mb-2">Your RSVP</p>
         <EventRsvp
           eventId={event.id}
           userId={userId}

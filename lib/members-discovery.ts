@@ -96,7 +96,7 @@ export function directoryCardBadges(member: DirectoryMember): DisplayBadge[] {
     badges.push({
       key: 'vendor_reviewed',
       label: 'Vendor reviewed',
-      variant: 'accent',
+      variant: 'premium',
     })
   }
   return badges.slice(0, 4)
@@ -112,7 +112,7 @@ export function profilePageBadges(member: DirectoryMember): {
     tier: membershipTierBadge(member.membership_tier),
     verification: publicVerificationBadges(member.verification_state),
     premium: member.vendor_reviewed_badge
-      ? { key: 'vendor_reviewed', label: 'Vendor reviewed', variant: 'accent' }
+      ? { key: 'vendor_reviewed', label: 'Vendor reviewed', variant: 'premium' }
       : null,
   }
 }

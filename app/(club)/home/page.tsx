@@ -28,15 +28,13 @@ export default async function HomePage() {
             ? `Welcome back, ${profile.full_name.split(' ')[0]}`
             : 'Welcome'
         }
-        description="Your club hub for verified membership, gatherings, and trusted community access."
+        description="Your home for upcoming nights out, member discovery, and everything happening in the club."
         actions={<ApplicationStatusBadge status={applicationStatus} />}
       />
 
       {!canAccessApp ? (
         <Card className="mb-8 border-warning/30 bg-warning-soft/40">
-          <h2 className="text-display text-lg font-medium text-foreground">
-            {next.title}
-          </h2>
+          <h2 className="text-display text-lg font-semibold">{next.title}</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             {next.description}
           </p>
@@ -49,11 +47,10 @@ export default async function HomePage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {canAccessApp ? (
           <Card>
-            <h2 className="text-display text-lg font-medium text-foreground">
-              Events
-            </h2>
+            <h2 className="text-display text-lg font-semibold">Events</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Browse upcoming gatherings, RSVP, and view details for hosts you trust.
+              See what&apos;s on — mixers, speed dating, and curated socials worth
+              showing up for.
             </p>
             <Link href="/events" className={`${buttonPrimaryClassName} mt-4`}>
               View calendar
@@ -61,7 +58,7 @@ export default async function HomePage() {
           </Card>
         ) : (
           <Card>
-            <h2 className="text-display text-lg font-medium text-foreground">
+            <h2 className="text-display text-lg font-semibold">
               Events
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -74,7 +71,7 @@ export default async function HomePage() {
         )}
 
         <Card>
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             {canAccessApp ? 'Your profile' : 'Application'}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -95,7 +92,7 @@ export default async function HomePage() {
 
         {isHost && canAccessApp ? (
           <Card>
-            <h2 className="text-display text-lg font-medium text-foreground">
+            <h2 className="text-display text-lg font-semibold">
               Host tools
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -110,7 +107,7 @@ export default async function HomePage() {
 
         {isAdmin ? (
           <Card className="sm:col-span-2 lg:col-span-1">
-            <h2 className="text-display text-lg font-medium text-foreground">
+            <h2 className="text-display text-lg font-semibold">
               Admin shortcuts
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">

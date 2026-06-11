@@ -113,7 +113,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
 
       <div className="mb-8 grid gap-4 lg:grid-cols-2">
         <Card>
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Profile basics
           </h2>
           <dl className="mt-4 grid gap-3 text-sm">
@@ -171,7 +171,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card>
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Location
           </h2>
           <dl className="mt-4 grid gap-3 text-sm">
@@ -209,7 +209,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card>
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Work & interests
           </h2>
           <dl className="mt-4 grid gap-3 text-sm">
@@ -273,7 +273,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card>
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             About you
           </h2>
           <dl className="mt-4 grid gap-3 text-sm">
@@ -289,7 +289,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card className="lg:col-span-2">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Application photos
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -305,7 +305,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card className="lg:col-span-2">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Approval requirements
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -317,7 +317,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card className="lg:col-span-2">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Locality confirmation
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -330,7 +330,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card className="lg:col-span-2">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Member vouches
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -343,7 +343,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card className="lg:col-span-2">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Premium / vendor verification
           </h2>
           <div className="mt-4">
@@ -355,7 +355,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card className="lg:col-span-2">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Billing & plan status
           </h2>
           <div className="mt-4">
@@ -364,7 +364,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </Card>
 
         <Card className="lg:col-span-2">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Review actions
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">

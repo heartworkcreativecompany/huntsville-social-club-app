@@ -16,27 +16,25 @@ export default function EventRsvpCounts({
   return (
     <div>
       {showCaption ? (
-        <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          RSVP summary
-        </p>
+        <p className="eyebrow">RSVP summary</p>
       ) : null}
       <div
         className={`flex flex-wrap gap-3 ${showCaption ? 'mt-2' : ''}`}
         aria-label="RSVP counts"
       >
-        <div className="min-w-[4.5rem] rounded-lg border border-border bg-background/60 px-3 py-2 text-center">
+        <div className="min-w-[4.5rem] rounded-xl border border-border bg-surface px-3 py-2 text-center">
           <p className="text-display text-xl font-medium text-foreground">
             {counts.going}
           </p>
           <p className="text-xs text-muted-foreground">Going</p>
         </div>
-        <div className="min-w-[4.5rem] rounded-lg border border-border bg-background/60 px-3 py-2 text-center">
+        <div className="min-w-[4.5rem] rounded-xl border border-border bg-surface px-3 py-2 text-center">
           <p className="text-display text-xl font-medium text-foreground">
             {counts.maybe}
           </p>
           <p className="text-xs text-muted-foreground">Maybe</p>
         </div>
-        <div className="min-w-[4.5rem] rounded-lg border border-border bg-background/60 px-3 py-2 text-center">
+        <div className="min-w-[4.5rem] rounded-xl border border-border bg-surface px-3 py-2 text-center">
           <p className="text-display text-xl font-medium text-foreground">
             {counts.not_going}
           </p>

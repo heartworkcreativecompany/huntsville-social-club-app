@@ -10,7 +10,7 @@ export default function PrivacyPage() {
         how we protect member information.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         What we collect
       </h2>
       <ul className="list-disc space-y-2 pl-5">
@@ -20,7 +20,7 @@ export default function PrivacyPage() {
         <li>Event RSVPs and host activity within the club app</li>
       </ul>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         How we use information
       </h2>
       <p>
@@ -30,7 +30,7 @@ export default function PrivacyPage() {
         not shown in public member views.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Photo storage
       </h2>
       <p>
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
         generated at view time and are never stored in our database.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Contact
       </h2>
       <p>

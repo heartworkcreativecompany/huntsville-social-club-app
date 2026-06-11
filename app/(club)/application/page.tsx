@@ -44,7 +44,7 @@ export default async function ApplicationPage() {
       <PageHeader
         eyebrow="Membership"
         title="Your application"
-        description="A selective path into Huntsville Social Club—save progress anytime and submit when you're ready."
+        description="Tell us about yourself, save anytime, and we'll review your application for the club."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <ApplicationStatusBadge status={status} />
@@ -71,7 +71,7 @@ export default async function ApplicationPage() {
       ) : (
         <div className="mb-8 grid gap-4 lg:grid-cols-2">
           <Card>
-            <h2 className="text-display text-lg font-medium text-foreground">
+            <h2 className="text-display text-lg font-semibold">
               {next.title}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -93,7 +93,7 @@ export default async function ApplicationPage() {
           </Card>
 
           <Card>
-            <h2 className="text-display text-lg font-medium text-foreground">
+            <h2 className="text-display text-lg font-semibold">
               Getting started
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">

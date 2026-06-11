@@ -139,7 +139,7 @@ export function parseVerificationState(value: unknown): VerificationState {
 export type DisplayBadge = {
   key: string
   label: string
-  variant: 'success' | 'accent' | 'warning' | 'muted'
+  variant: 'success' | 'accent' | 'premium' | 'warning' | 'muted'
 }
 
 function badgeVariantForStatus(
@@ -227,19 +227,19 @@ export const MEMBERSHIP_TIER_DEFS: MembershipTierDef[] = [
   {
     key: 'premium_member',
     label: 'Premium member',
-    variant: 'accent',
+    variant: 'premium',
     cardPriority: 4,
   },
   {
     key: 'vendor_reviewed',
     label: 'Vendor reviewed',
-    variant: 'accent',
+    variant: 'premium',
     cardPriority: 5,
   },
   {
     key: 'community_partner',
     label: 'Community partner',
-    variant: 'accent',
+    variant: 'premium',
     cardPriority: 6,
   },
 ]
@@ -565,7 +565,7 @@ export function publicPremiumBadge(
     return {
       key: 'vendor_reviewed',
       label: 'Vendor reviewed',
-      variant: 'accent',
+      variant: 'premium',
     }
   }
   return null

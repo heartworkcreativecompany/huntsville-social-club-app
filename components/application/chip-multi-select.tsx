@@ -1,5 +1,7 @@
 'use client'
 
+import { chipActiveClassName, chipInactiveClassName } from '@/lib/event-labels'
+
 export default function ChipMultiSelect({
   options,
   selected,
@@ -42,11 +44,7 @@ export default function ChipMultiSelect({
               key={option}
               type="button"
               onClick={() => toggle(option)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                active
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-accent-soft text-muted-foreground hover:text-foreground'
-              }`}
+              className={active ? chipActiveClassName : chipInactiveClassName}
             >
               {option}
             </button>

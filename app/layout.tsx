@@ -1,22 +1,24 @@
 import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/react'
-import { Cormorant_Garamond, DM_Sans } from 'next/font/google'
+import { Montserrat, Raleway } from 'next/font/google'
 import './globals.css'
 
-const dmSans = DM_Sans({
-  variable: '--font-dm-sans',
+const montserrat = Montserrat({
+  variable: '--font-montserrat',
   subsets: ['latin'],
+  weight: ['500', '600', '700'],
 })
 
-const cormorant = Cormorant_Garamond({
-  variable: '--font-cormorant',
+const raleway = Raleway({
+  variable: '--font-raleway',
   subsets: ['latin'],
-  weight: ['500', '600'],
+  weight: ['400', '500', '600'],
 })
 
 export const metadata: Metadata = {
   title: 'Huntsville Social Club',
-  description: 'A selective, verified local membership community',
+  description:
+    'Mingle mixers, speed dating, and curated socials — where Huntsville connects in real life.',
 }
 
 export default function RootLayout({
@@ -27,7 +29,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${dmSans.variable} ${cormorant.variable} h-full antialiased`}
+      className={`${montserrat.variable} ${raleway.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {children}

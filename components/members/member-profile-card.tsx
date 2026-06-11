@@ -44,7 +44,7 @@ export default function MemberProfileCard({
 
   const card = (
     <Card
-      className={`transition ${href ? 'hover:border-border-strong hover:shadow-md' : ''}`}
+      className={`transition ${href ? 'hover:border-accent/25 hover:shadow-md' : ''}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         {primaryPhoto ? (
@@ -55,13 +55,11 @@ export default function MemberProfileCard({
           />
         ) : null}
         <div className="min-w-0 flex-1">
-          <p className="text-display text-xl font-medium text-foreground">
+          <p className="text-display text-xl font-semibold text-foreground">
             {displayName}
           </p>
           {isCurrentUser ? (
-            <p className="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Your account
-            </p>
+            <p className="eyebrow mt-1">Your account</p>
           ) : null}
           {!limited && member.email ? (
             <p className="mt-1 truncate text-sm text-muted-foreground">
@@ -73,9 +71,7 @@ export default function MemberProfileCard({
       </div>
 
       <div className="mt-4 border-t border-border pt-4">
-        <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Trust
-        </p>
+        <p className="eyebrow">Trust</p>
         <div className="mt-2">
           <MemberCardBadges member={member} />
         </div>
@@ -93,18 +89,14 @@ export default function MemberProfileCard({
       {!compact ? (
         <>
           <div className="mt-4">
-            <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-              Intent
-            </p>
+            <p className="eyebrow">Intent</p>
             <p className="mt-2 text-sm leading-relaxed text-foreground">
               {showIntent ? intent : 'Connect at club events to learn more.'}
             </p>
           </div>
 
           <div className="mt-4">
-            <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-              Context
-            </p>
+            <p className="eyebrow">Context</p>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               {context}
             </p>
@@ -123,7 +115,9 @@ export default function MemberProfileCard({
       ) : null}
 
       {href ? (
-        <p className="mt-4 text-sm font-medium text-accent">View profile →</p>
+        <p className="mt-4 font-brand text-sm font-medium text-accent">
+          View profile →
+        </p>
       ) : null}
     </Card>
   )

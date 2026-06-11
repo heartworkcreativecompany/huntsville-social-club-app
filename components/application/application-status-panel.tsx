@@ -73,7 +73,7 @@ export default function ApplicationStatusPanel({
     <div className="grid gap-6">
       {showSubmitBanner ? (
         <Card className="border-success/30 bg-success-soft/40">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Application submitted
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -182,7 +182,7 @@ export default function ApplicationStatusPanel({
       ) : null}
 
       <Card>
-        <h3 className="text-display text-lg font-medium text-foreground">
+        <h3 className="text-display text-lg font-semibold">
           {next.title}
         </h3>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">

@@ -82,7 +82,7 @@ export default function SignUpPage() {
     <AuthPageShell
       eyebrow="Membership"
       title="Create your account"
-      description="Join Huntsville Social Club. After confirming your email, you can complete your membership application."
+      description="Create your account, confirm your email, and start your application to join the club."
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{' '}

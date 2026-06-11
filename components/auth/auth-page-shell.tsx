@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import BrandLogo from '@/components/brand/brand-logo'
 import SiteFooter from '@/components/shell/site-footer'
 
 export default function AuthPageShell({
@@ -16,26 +17,15 @@ export default function AuthPageShell({
 }) {
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <header className="border-b border-border bg-surface">
+      <header className="border-b border-border bg-surface shadow-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
-          <Link
-            href="/"
-            className="text-display text-xl font-medium text-foreground"
-          >
-            Huntsville Social Club
-          </Link>
+          <BrandLogo href="/" variant="wordmark" size="md" />
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-md flex-1 px-5 py-16 sm:px-8">
-        {eyebrow ? (
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            {eyebrow}
-          </p>
-        ) : null}
-        <h1 className="text-display mt-2 text-3xl font-medium text-foreground">
-          {title}
-        </h1>
+        {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
+        <h1 className="text-display mt-2 text-3xl font-semibold">{title}</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {description}
         </p>
@@ -45,7 +35,7 @@ export default function AuthPageShell({
         {footer ? <div className="mt-8">{footer}</div> : null}
 
         <p className="mt-8 text-sm text-muted-foreground">
-          <Link href="/" className="font-medium text-accent underline">
+          <Link href="/" className="link-brand font-medium underline">
             ← Back to public home
           </Link>
         </p>

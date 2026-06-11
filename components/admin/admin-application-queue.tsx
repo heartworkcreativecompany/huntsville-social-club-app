@@ -110,7 +110,7 @@ export default function AdminApplicationQueue({
                     <div className="min-w-0">
                       <Link
                         href={`/admin/applications/${applicant.id}`}
-                        className="text-display text-lg font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-accent"
+                        className="text-display text-lg font-semibold underline decoration-border underline-offset-4 hover:decoration-accent"
                       >
                         {applicant.full_name ??
                           applicant.displayName ??

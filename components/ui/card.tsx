@@ -16,7 +16,7 @@ export default function Card({
 
   return (
     <div
-      className={`rounded-lg border border-border bg-surface shadow-sm ${paddingClass} ${className}`}
+      className={`rounded-xl border border-border bg-surface shadow-sm ${paddingClass} ${className}`}
     >
       {children}
     </div>

@@ -35,18 +35,12 @@ export default function MemberProfileDetailsPanel({
   return (
     <div className="grid gap-4">
       <div>
-        {title ? (
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            {title}
-          </p>
-        ) : null}
-        <h2 className="text-display text-2xl font-medium text-foreground sm:text-3xl">
+        {title ? <p className="eyebrow">{title}</p> : null}
+        <h2 className="text-display text-2xl font-semibold text-foreground sm:text-3xl">
           {displayName}
         </h2>
         {isCurrentUser ? (
-          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Your account
-          </p>
+          <p className="eyebrow mt-1">Your account</p>
         ) : null}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge variant="accent">{roleLabel(member.role)}</Badge>
@@ -65,9 +59,7 @@ export default function MemberProfileDetailsPanel({
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Trust
-        </p>
+        <p className="eyebrow">Trust</p>
         <div className="mt-2">
           <MemberProfileBadges member={member} />
         </div>
@@ -75,9 +67,7 @@ export default function MemberProfileDetailsPanel({
 
       {member.location_area || member.discovery_intent ? (
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Locality & intent
-          </p>
+          <p className="eyebrow">Locality & intent</p>
           <p className="mt-2 text-sm text-foreground">
             {member.location_area ?? 'Area not shared'}
             {member.discovery_intent
@@ -89,9 +79,7 @@ export default function MemberProfileDetailsPanel({
 
       {member.discovery_interests.length > 0 ? (
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Interests
-          </p>
+          <p className="eyebrow">Interests</p>
           <p className="mt-2 text-sm text-foreground">
             {member.discovery_interests.join(', ')}
           </p>
@@ -99,18 +87,14 @@ export default function MemberProfileDetailsPanel({
       ) : null}
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          About
-        </p>
+        <p className="eyebrow">About</p>
         <p className="mt-2 text-sm leading-relaxed text-foreground">
           {showIntent ? intent : 'Connect at club events to learn more.'}
         </p>
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Context
-        </p>
+        <p className="eyebrow">Context</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {context}
         </p>
@@ -118,9 +102,7 @@ export default function MemberProfileDetailsPanel({
 
       {!limited && member.email ? (
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Contact
-          </p>
+          <p className="eyebrow">Contact</p>
           <p className="mt-2 text-sm text-foreground">{member.email}</p>
         </div>
       ) : null}

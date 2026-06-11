@@ -48,7 +48,7 @@ export default function ProfileForm({
 
   return (
     <Card>
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Edit profile
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">

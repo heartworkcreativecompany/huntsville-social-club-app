@@ -20,9 +20,7 @@ export default function EventEligibilityBanner({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="font-medium text-foreground">{eligibility.accessLabel}</p>
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">
-          {eligibility.tierLabel}
-        </span>
+        <span className="eyebrow">{eligibility.tierLabel}</span>
       </div>
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
         {eligibility.accessDescription}

@@ -10,7 +10,7 @@ export default function TermsPage() {
         social network.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Membership
       </h2>
       <p>
@@ -18,7 +18,7 @@ export default function TermsPage() {
         We may approve, decline, or request more information at our discretion.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Conduct
       </h2>
       <p>
@@ -26,7 +26,7 @@ export default function TermsPage() {
         information, and participate respectfully in events and discovery.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Content
       </h2>
       <p>
@@ -35,7 +35,7 @@ export default function TermsPage() {
         administrators for club operations.
       </p>
 
-      <h2 className="text-display text-lg font-medium text-foreground">
+      <h2 className="text-display text-lg font-semibold">
         Contact
       </h2>
       <p>

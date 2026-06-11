@@ -1,26 +1,36 @@
 @import "tailwindcss";
 
+/* HSC approved direction — dark nightlife, gold accents */
 :root {
-  --background: #f6f3ef;
-  --surface: #fffcf8;
-  --surface-elevated: #ffffff;
-  --foreground: #1c1917;
-  --muted: #78716c;
-  --muted-foreground: #57534e;
-  --border: #e7e0d8;
-  --border-strong: #d6cec4;
-  --accent: #5c4a3a;
-  --accent-soft: #ebe4dc;
-  --accent-foreground: #fffcf8;
-  --success: #3d5c4a;
-  --success-soft: #e8f0eb;
-  --warning: #7a5c2e;
-  --warning-soft: #f5efe4;
-  --danger: #8b3a3a;
-  --danger-soft: #f8eded;
+  --background: #1d1f1d;
+  --surface: #272a27;
+  --surface-elevated: #323532;
+  --foreground: #ffffff;
+  --muted: #9a968f;
+  --muted-foreground: #d8d4cc;
+  --border: #3a3d3a;
+  --border-strong: #4a4e4a;
+
+  /* Gold — headers, icons, links, CTAs, premium highlights */
+  --accent: #af8b5a;
+  --accent-soft: #3a3528;
+  --accent-foreground: #1d1f1d;
+
+  --gold: #af8b5a;
+  --gold-soft: #3a3528;
+  --gold-foreground: #1d1f1d;
+
+  --success: #6b8f78;
+  --success-soft: #1e2a22;
+  --warning: #af8b5a;
+  --warning-soft: #3a3528;
+  --danger: #c45c5c;
+  --danger-soft: #2a1818;
+
   --radius: 12px;
-  --shadow-sm: 0 1px 2px rgb(28 25 23 / 0.04);
-  --shadow-md: 0 8px 24px rgb(28 25 23 / 0.06);
+  --radius-pill: 9999px;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.45);
 }
 
 @theme inline {
@@ -35,25 +45,73 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-foreground: var(--accent-foreground);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-foreground: var(--gold-foreground);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  --font-sans: var(--font-dm-sans);
-  --font-display: var(--font-cormorant);
+  --font-sans: var(--font-raleway);
+  --font-display: var(--font-montserrat);
   --radius-lg: var(--radius);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-family: var(--font-raleway), system-ui, sans-serif;
 }
 
 @layer utilities {
   .text-display {
-    font-family: var(--font-cormorant), Georgia, serif;
+    font-family: var(--font-montserrat), system-ui, sans-serif;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+
+  .font-brand {
+    font-family: var(--font-montserrat), system-ui, sans-serif;
+  }
+
+  .eyebrow {
+    font-family: var(--font-raleway), system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+  }
+
+  .link-brand {
+    color: var(--accent);
+    text-underline-offset: 3px;
+  }
+
+  .link-brand:hover {
+    color: var(--foreground);
+  }
+
+  .icon-accent,
+  .icon-gold {
+    color: var(--accent);
+  }
+
+  .icon-muted {
+    color: var(--muted);
+  }
+
+  .surface-card {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .surface-inset {
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
 }

@@ -13,9 +13,7 @@ export default function EventGatingScaffold({
     <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
       {eligibility.showWaitlistScaffold ? (
         <div className="rounded-lg border border-dashed border-border px-3 py-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Waitlist
-          </p>
+          <p className="eyebrow">Waitlist</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Coming soon — join queue when invite-only events are enforced.
           </p>
@@ -30,9 +28,7 @@ export default function EventGatingScaffold({
       ) : null}
       {eligibility.showCheckInScaffold ? (
         <div className="rounded-lg border border-dashed border-border px-3 py-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Check-in
-          </p>
+          <p className="eyebrow">Check-in</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Host check-in and day-of verification will live here.
           </p>

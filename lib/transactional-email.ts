@@ -1,5 +1,6 @@
 'use server'
 
+import { BRAND_ASSETS } from '@/lib/brand-assets'
 import { appOrigin, SUPPORT_EMAIL } from '@/lib/site'
 
 type EmailPayload = {
@@ -51,18 +52,19 @@ async function sendEmail(payload: EmailPayload) {
 
 function emailShell(title: string, body: string, cta?: { label: string; href: string }) {
   const origin = appOrigin()
+  const logoUrl = `${origin}${BRAND_ASSETS.wordmark.forDarkBackground}`
   const ctaBlock = cta
-    ? `<p style="margin:24px 0;"><a href="${cta.href}" style="background:#1a1a1a;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block;">${cta.label}</a></p>`
+    ? `<p style="margin:24px 0;"><a href="${cta.href}" style="background:#af8b5a;color:#1d1f1d;padding:12px 24px;border-radius:9999px;text-decoration:none;display:inline-block;font-family:'Montserrat',system-ui,sans-serif;font-weight:600;">${cta.label}</a></p>`
     : ''
 
   const html = `
-    <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#1a1a1a;line-height:1.5;">
-      <p style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#666;">Huntsville Social Club</p>
-      <h1 style="font-size:22px;font-weight:500;margin:8px 0 16px;">${title}</h1>
+    <div style="font-family:'Raleway',system-ui,sans-serif;max-width:520px;margin:0 auto;color:#ffffff;line-height:1.5;background:#1d1f1d;padding:24px;">
+      <img src="${logoUrl}" alt="Huntsville Social Club" width="240" style="height:auto;max-width:240px;display:block;margin-bottom:16px;" />
+      <h1 style="font-family:'Montserrat',system-ui,sans-serif;font-size:22px;font-weight:600;margin:16px 0;color:#af8b5a;">${title}</h1>
       ${body}
       ${ctaBlock}
-      <p style="margin-top:32px;font-size:13px;color:#666;">Questions? Reply to ${SUPPORT_EMAIL}</p>
-      <p style="font-size:12px;color:#999;">${origin}</p>
+      <p style="margin-top:32px;font-size:13px;color:#d8d4cc;">Questions? Reply to ${SUPPORT_EMAIL}</p>
+      <p style="font-size:12px;color:#9a968f;">${origin}</p>
     </div>
   `
 

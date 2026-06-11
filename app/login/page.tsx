@@ -20,11 +20,11 @@ export default function SignInPage() {
     <AuthPageShell
       eyebrow="Members"
       title="Sign in"
-      description="Access your profile, club events, and verified member tools."
+      description="Sign in to see upcoming nights, your profile, and everything happening in the club."
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Need an account?{' '}
-          <Link href="/signup" className="font-medium text-accent underline">
+          <Link href="/signup" className="link-brand font-medium underline">
             Sign up
           </Link>
         </p>
@@ -104,7 +104,7 @@ function SignInForm() {
           </label>
           <Link
             href="/login/forgot-password"
-            className="text-xs text-accent underline"
+            className="link-brand text-xs underline"
           >
             Forgot password?
           </Link>

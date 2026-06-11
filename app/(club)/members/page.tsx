@@ -49,7 +49,7 @@ export default async function MembersPage() {
       <PageHeader
         eyebrow="Discovery"
         title="Members"
-        description="A curated directory for verified connections—intent and trust first, not a public social graph."
+        description="Find people you might actually want to meet — members who show up for real-life nights out in Huntsville."
         actions={<ApplicationStatusBadge status={viewer.applicationStatus} />}
       />
 
@@ -105,7 +105,7 @@ export default async function MembersPage() {
 
       {viewer.role === 'admin' ? (
         <Card className="mb-10" padding="sm">
-          <h2 className="text-display text-lg font-medium text-foreground">
+          <h2 className="text-display text-lg font-semibold">
             Administrator
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">

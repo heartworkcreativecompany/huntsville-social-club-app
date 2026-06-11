@@ -13,7 +13,11 @@ import {
   uploadApplicationPhotoToStorage,
   validateApplicationPhotoFile,
 } from '@/lib/application-photo-storage'
-import { buttonSecondaryClassName } from '@/lib/event-labels'
+import {
+  buttonSecondaryClassName,
+  chipActiveClassName,
+  chipInactiveClassName,
+} from '@/lib/event-labels'
 
 function PhotoPreview({
   memberId,
@@ -31,7 +35,7 @@ function PhotoPreview({
   removing: boolean
 }) {
   return (
-    <li className="rounded-lg border border-border bg-background/50 p-3">
+    <li className="rounded-xl border border-border bg-surface p-3">
       <MemberPhotoDisplay
         memberId={memberId}
         photo={photo}
@@ -42,11 +46,9 @@ function PhotoPreview({
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-            photo.isPrimary
-              ? 'bg-accent text-accent-foreground'
-              : 'bg-accent-soft text-muted-foreground'
-          }`}
+          className={
+            photo.isPrimary ? chipActiveClassName : chipInactiveClassName
+          }
           onClick={onSetPrimary}
           disabled={removing}
         >
