@@ -3,15 +3,17 @@ import Badge from '@/components/ui/badge'
 import Card from '@/components/ui/card'
 import { roleLabel } from '@/lib/event-labels'
 import {
+  discoveryIntentLabel,
   intentLabel,
   memberDisplayName,
   memberSinceLabel,
   membershipBadgeLabel,
   professionalContext,
-  trustBadges,
   type DirectoryMember,
 } from '@/lib/members-discovery'
-import MemberTrustBadges from './member-trust-badges'
+import { MemberCardBadges } from '@/components/members/member-badge-row'
+import { primaryMemberPhoto } from '@/lib/member-photos'
+import MemberPhotoDisplay from './member-photo-display'
 
 type MemberProfileCardProps = {
   member: DirectoryMember
@@ -29,7 +31,6 @@ export default function MemberProfileCard({
   compact = false,
 }: MemberProfileCardProps) {
   const displayName = memberDisplayName(member)
-  const badges = trustBadges(member)
   const context = professionalContext(member.role, limited)
   const since = memberSinceLabel(member.created_at)
   const showIntent = !limited || isCurrentUser
@@ -39,11 +40,20 @@ export default function MemberProfileCard({
       : 'Intent shared at events',
   })
 
+  const primaryPhoto = primaryMemberPhoto(member.photos)
+
   const card = (
     <Card
       className={`transition ${href ? 'hover:border-border-strong hover:shadow-md' : ''}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
+        {primaryPhoto ? (
+          <MemberPhotoDisplay
+            memberId={member.id}
+            photo={primaryPhoto}
+            size={compact ? 'compact' : 'thumbnail'}
+          />
+        ) : null}
         <div className="min-w-0 flex-1">
           <p className="text-display text-xl font-medium text-foreground">
             {displayName}
@@ -67,9 +77,18 @@ export default function MemberProfileCard({
           Trust
         </p>
         <div className="mt-2">
-          <MemberTrustBadges badges={badges} />
+          <MemberCardBadges member={member} />
         </div>
       </div>
+
+      {compact && member.location_area ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          {member.location_area}
+          {member.discovery_intent
+            ? ` · ${discoveryIntentLabel(member.discovery_intent)}`
+            : ''}
+        </p>
+      ) : null}
 
       {!compact ? (
         <>

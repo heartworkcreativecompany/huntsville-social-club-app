@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import MemberPhotoDisplay from '@/components/members/member-photo-display'
 import type { ApplicationPhoto } from '@/lib/application'
 import {
   PHOTO_MAX_COUNT,
@@ -8,7 +9,6 @@ import {
 } from '@/lib/application-form-content'
 import {
   deleteApplicationPhotoFromStorage,
-  getApplicationPhotoSignedUrlClient,
   PHOTO_ALLOWED_MIME_TYPES,
   uploadApplicationPhotoToStorage,
   validateApplicationPhotoFile,
@@ -16,59 +16,29 @@ import {
 import { buttonSecondaryClassName } from '@/lib/event-labels'
 
 function PhotoPreview({
+  memberId,
   photo,
   onRemove,
   onSetPrimary,
   onConfirmFace,
   removing,
 }: {
+  memberId: string
   photo: ApplicationPhoto
   onRemove: () => void
   onSetPrimary: () => void
   onConfirmFace: (confirmed: boolean) => void
   removing: boolean
 }) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [previewError, setPreviewError] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    setPreviewError(false)
-
-    getApplicationPhotoSignedUrlClient(photo.storagePath).then((signedUrl) => {
-      if (cancelled) return
-      if (signedUrl) {
-        setUrl(signedUrl)
-      } else {
-        setPreviewError(true)
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [photo.storagePath])
-
   return (
     <li className="rounded-lg border border-border bg-background/50 p-3">
-      <div className="aspect-[4/5] overflow-hidden rounded-md bg-accent-soft/30">
-        {url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={url}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        ) : previewError ? (
-          <div className="flex h-full items-center justify-center px-3 text-center text-xs text-muted-foreground">
-            Preview unavailable
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-            Loading…
-          </div>
-        )}
-      </div>
+      <MemberPhotoDisplay
+        memberId={memberId}
+        photo={photo}
+        size="large"
+        className="w-full"
+        showPrimaryBadge={photo.isPrimary}
+      />
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
@@ -111,10 +81,12 @@ function PhotoPreview({
 }
 
 export default function ApplicationPhotosField({
+  memberId,
   photos,
   onChange,
   disabled,
 }: {
+  memberId: string
   photos: ApplicationPhoto[]
   onChange: (photos: ApplicationPhoto[]) => void
   disabled?: boolean
@@ -219,6 +191,7 @@ export default function ApplicationPhotosField({
         {photos.map((photo) => (
           <PhotoPreview
             key={photo.id}
+            memberId={memberId}
             photo={photo}
             onRemove={() => handleRemove(photo)}
             onSetPrimary={() => setPrimary(photo.id)}

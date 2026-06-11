@@ -5,24 +5,23 @@ import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
 import MemberDiscoveryGrid from '@/components/members/member-discovery-grid'
 import MemberProfileCard from '@/components/members/member-profile-card'
-import type { DirectoryMember } from '@/lib/members-discovery'
+import { buildDirectoryMember, type DirectoryMember } from '@/lib/members-discovery'
 import { loadDirectoryProfiles } from '@/lib/load-directory-profiles'
-import { applicationStatusLabel } from '@/lib/application'
+import { photosFromApplicationDraft } from '@/lib/member-photos'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
 import { getViewer, type ViewerProfile } from '@/lib/viewer'
+import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
+import MemberBillingStatus from '@/components/members/member-billing-status'
 import ProfileForm from './profile-form'
 
 function toDirectoryMember(profile: ViewerProfile, email: string): DirectoryMember {
-  return {
-    id: profile.id,
+  const member = buildDirectoryMember({
+    ...profile,
+    application_status: profile.application_status,
     email: profile.email ?? email,
-    full_name: profile.full_name,
-    role: profile.role,
-    created_at: profile.created_at,
-    membership_intent: profile.membership_intent ?? null,
-    verified_at: profile.verified_at ?? null,
-    membership_status: profile.application_status ?? null,
-  }
+  })
+  member.photos = photosFromApplicationDraft(profile.application_draft)
+  return member
 }
 
 export default async function MembersPage() {
@@ -41,6 +40,9 @@ export default async function MembersPage() {
   const currentMember = profile
     ? toDirectoryMember(profile, viewer.email)
     : null
+
+  const draft = mergeProfileIntoDraft(profile)
+  const canEditProfile = viewer.canAccessApp
 
   return (
     <>
@@ -81,14 +83,25 @@ export default async function MembersPage() {
         )}
       </section>
 
-      <section className="mb-10">
-        <ProfileForm
-          userId={viewer.userId}
-          email={profile?.email ?? viewer.email}
-          fullName={profile?.full_name ?? null}
-          membershipIntent={profile?.membership_intent ?? null}
-        />
-      </section>
+      {canEditProfile ? (
+        <section className="mb-10">
+          <MemberBillingStatus billingRaw={profile?.membership_billing} />
+        </section>
+      ) : null}
+
+      {canEditProfile ? (
+        <section className="mb-10">
+          <ProfileForm
+            displayName={
+              draft.profile.displayName || profile?.full_name || ''
+            }
+            bio={draft.prompts.hopingToMeet || profile?.membership_intent || ''}
+            locationArea={
+              draft.location.neighborhoodOrArea || profile?.location_area || ''
+            }
+          />
+        </section>
+      ) : null}
 
       {viewer.role === 'admin' ? (
         <Card className="mb-10" padding="sm">

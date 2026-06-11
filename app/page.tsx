@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import SiteFooter from '@/components/shell/site-footer'
 import { createClient } from '@/lib/supabase/server'
 import { buttonPrimaryClassName, buttonSecondaryClassName } from '@/lib/event-labels'
 
@@ -14,19 +15,24 @@ export default async function PublicHomePage() {
   }
 
   return (
-    <div className="min-h-full bg-background">
+    <div className="flex min-h-full flex-col bg-background">
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
           <p className="text-display text-xl font-medium text-foreground">
             Huntsville Social Club
           </p>
-          <Link href="/login" className={buttonSecondaryClassName}>
-            Member sign in
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/login" className={buttonSecondaryClassName}>
+              Sign in
+            </Link>
+            <Link href="/signup" className={buttonPrimaryClassName}>
+              Sign up
+            </Link>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-5 py-16 sm:px-8 sm:py-24">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-16 sm:px-8 sm:py-24">
         <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Private membership · Huntsville
         </p>
@@ -39,8 +45,11 @@ export default async function PublicHomePage() {
           connections.
         </p>
         <div className="mt-10 flex flex-wrap gap-3">
-          <Link href="/login" className={buttonPrimaryClassName}>
-            Apply or sign in
+          <Link href="/signup" className={buttonPrimaryClassName}>
+            Create account
+          </Link>
+          <Link href="/login" className={buttonSecondaryClassName}>
+            Sign in
           </Link>
         </div>
 
@@ -62,6 +71,8 @@ export default async function PublicHomePage() {
           </li>
         </ul>
       </main>
+
+      <SiteFooter />
     </div>
   )
 }

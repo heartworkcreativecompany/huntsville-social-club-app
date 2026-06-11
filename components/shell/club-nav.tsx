@@ -43,11 +43,18 @@ export default function ClubNav({
   ]
 
   if (showApplicationNav) {
-    items.push({
-      href: '/application',
-      label: 'Application',
-      match: (p) => p === '/application',
-    })
+    items.push(
+      {
+        href: '/application',
+        label: 'Application',
+        match: (p) => p === '/application',
+      },
+      {
+        href: '/application/status',
+        label: 'Status',
+        match: (p) => p === '/application/status',
+      }
+    )
   }
 
   if (canAccessApp) {

@@ -1,154 +1,139 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import AuthPageShell from '@/components/auth/auth-page-shell'
+import LoginStatusMessages from '@/components/auth/login-status-messages'
 import { createClient } from '@/lib/supabase/client'
-import {
-  isApprovedMember,
-  resolveApplicationStatus,
-} from '@/lib/application'
+import { postLoginPath } from '@/lib/auth-post-login'
+import { friendlyAuthError } from '@/lib/auth-errors'
+import { validateEmail, validatePassword } from '@/lib/auth-validation'
+import { trackEvent } from '@/lib/analytics'
 import {
   buttonPrimaryClassName,
-  buttonSecondaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
 
-export default function LoginPage() {
+export default function SignInPage() {
+  return (
+    <AuthPageShell
+      eyebrow="Members"
+      title="Sign in"
+      description="Access your profile, club events, and verified member tools."
+      footer={
+        <p className="text-center text-sm text-muted-foreground">
+          Need an account?{' '}
+          <Link href="/signup" className="font-medium text-accent underline">
+            Sign up
+          </Link>
+        </p>
+      }
+    >
+      <Suspense fallback={null}>
+        <LoginStatusMessages />
+      </Suspense>
+      <SignInForm />
+    </AuthPageShell>
+  )
+}
+
+function SignInForm() {
   const router = useRouter()
   const supabase = createClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [isPending, setIsPending] = useState(false)
 
-  const handleSignUp = async () => {
-    setMessage('')
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-
-    if (error) {
-      setMessage(error.message)
+    const emailError = validateEmail(email)
+    if (emailError) {
+      setError(emailError)
       return
     }
 
-    setMessage('Check your email to confirm your signup.')
-  }
-
-  const handleSignIn = async () => {
-    setMessage('')
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (error) {
-      setMessage(error.message)
+    const passwordError = validatePassword(password)
+    if (passwordError) {
+      setError(passwordError)
       return
     }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    setIsPending(true)
 
-    if (user) {
-      let profile: {
-        application_status?: string | null
-        role?: string | null
-        full_name?: string | null
-      } | null = null
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
 
-      const extended = await supabase
-        .from('profiles')
-        .select('application_status, role, full_name')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      if (!extended.error) {
-        profile = extended.data
-      } else {
-        const basic = await supabase
-          .from('profiles')
-          .select('role, full_name')
-          .eq('id', user.id)
-          .maybeSingle()
-        profile = basic.data
-      }
-
-      const status = resolveApplicationStatus(profile)
-      const role = profile?.role ?? 'member'
-
-      router.push(isApprovedMember(status, role) ? '/home' : '/application')
-    } else {
-      router.push('/home')
+    if (signInError) {
+      setError(friendlyAuthError(signInError.message))
+      trackEvent('auth_sign_in_failed', { reason: 'credentials' })
+      setIsPending(false)
+      return
     }
 
+    trackEvent('auth_sign_in')
+    const path = await postLoginPath(supabase)
+    router.push(path)
     router.refresh()
   }
 
   return (
-    <div className="min-h-full bg-background">
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
+    <form className="mt-6 grid gap-4" onSubmit={handleSubmit} noValidate>
+      <label className="grid gap-1.5 text-sm">
+        <span className="font-medium text-foreground">Email</span>
+        <input
+          type="email"
+          name="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className={inputClassName}
+          disabled={isPending}
+        />
+      </label>
+
+      <div className="grid gap-1.5 text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="password" className="font-medium text-foreground">
+            Password
+          </label>
           <Link
-            href="/"
-            className="text-display text-xl font-medium text-foreground"
+            href="/login/forgot-password"
+            className="text-xs text-accent underline"
           >
-            Huntsville Social Club
+            Forgot password?
           </Link>
         </div>
-      </header>
+        <input
+          id="password"
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={inputClassName}
+          disabled={isPending}
+        />
+      </div>
 
-      <main className="mx-auto max-w-md px-5 py-16 sm:px-8">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Members
+      {error ? (
+        <p className="text-sm text-danger" role="alert">
+          {error}
         </p>
-        <h1 className="text-display mt-2 text-3xl font-medium text-foreground">
-          Sign in
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Access your profile, club events, and verified member tools.
-        </p>
+      ) : null}
 
-        <div className="mt-8 grid gap-3">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={inputClassName}
-          />
-
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={inputClassName}
-          />
-
-          <button type="button" onClick={handleSignUp} className={buttonSecondaryClassName}>
-            Sign up
-          </button>
-
-          <button type="button" onClick={handleSignIn} className={buttonPrimaryClassName}>
-            Sign in
-          </button>
-
-          {message ? (
-            <p className="text-sm text-muted-foreground">{message}</p>
-          ) : null}
-        </div>
-
-        <p className="mt-8 text-sm text-muted-foreground">
-          <Link href="/" className="font-medium text-accent underline">
-            ← Back to public home
-          </Link>
-        </p>
-      </main>
-    </div>
+      <button
+        type="submit"
+        className={buttonPrimaryClassName}
+        disabled={isPending}
+      >
+        {isPending ? 'Signing in…' : 'Sign in'}
+      </button>
+    </form>
   )
 }

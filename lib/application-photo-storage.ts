@@ -188,6 +188,10 @@ export async function uploadApplicationPhotoToStorage(
     })
 
   if (error) {
+    const { captureOperationalError } = await import('@/lib/capture-error')
+    captureOperationalError('photo_upload', error, {
+      status: error.statusCode ?? 0,
+    })
     return { error: storageErrorMessage(error) }
   }
 

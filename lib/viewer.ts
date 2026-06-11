@@ -23,6 +23,17 @@ export type ViewerProfile = {
   admin_review_notes: string | null
   location_area: string | null
   referral_source: string | null
+  verification_state: unknown
+  approval_gates: unknown
+  locality_confirmation: unknown
+  premium_verification: unknown
+  membership_billing: unknown
+  discovery_intent: string | null
+  location_city: string | null
+  location_zip: string | null
+  birth_year: number | null
+  discovery_interests: string[] | null
+  discovery_industry: string | null
 }
 
 export type Viewer = {

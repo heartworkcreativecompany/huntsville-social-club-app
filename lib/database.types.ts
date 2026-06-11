@@ -30,6 +30,17 @@ export interface Database {
           admin_review_notes: string | null
           location_area: string | null
           referral_source: string | null
+          verification_state: Json
+          approval_gates: Json
+          locality_confirmation: Json
+          premium_verification: Json
+          membership_billing: Json
+          discovery_intent: string | null
+          location_city: string | null
+          location_zip: string | null
+          birth_year: number | null
+          discovery_interests: string[]
+          discovery_industry: string | null
         }
         Insert: {
           id: string
@@ -47,6 +58,17 @@ export interface Database {
           admin_review_notes?: string | null
           location_area?: string | null
           referral_source?: string | null
+          verification_state?: Json
+          approval_gates?: Json
+          locality_confirmation?: Json
+          premium_verification?: Json
+          membership_billing?: Json
+          discovery_intent?: string | null
+          location_city?: string | null
+          location_zip?: string | null
+          birth_year?: number | null
+          discovery_interests?: string[]
+          discovery_industry?: string | null
         }
         Update: {
           id?: string
@@ -64,6 +86,62 @@ export interface Database {
           admin_review_notes?: string | null
           location_area?: string | null
           referral_source?: string | null
+          verification_state?: Json
+          approval_gates?: Json
+          locality_confirmation?: Json
+          premium_verification?: Json
+          membership_billing?: Json
+          discovery_intent?: string | null
+          location_city?: string | null
+          location_zip?: string | null
+          birth_year?: number | null
+          discovery_interests?: string[]
+          discovery_industry?: string | null
+        }
+        Relationships: []
+      }
+      member_vouches: {
+        Row: {
+          id: string
+          voucher_id: string
+          vouchee_id: string
+          vouch_type: string
+          relationship_context: string
+          note: string | null
+          status: string
+          created_at: string
+          updated_at: string
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_reason: string | null
+        }
+        Insert: {
+          id?: string
+          voucher_id: string
+          vouchee_id: string
+          vouch_type: string
+          relationship_context: string
+          note?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+        }
+        Update: {
+          id?: string
+          voucher_id?: string
+          vouchee_id?: string
+          vouch_type?: string
+          relationship_context?: string
+          note?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
         }
         Relationships: []
       }

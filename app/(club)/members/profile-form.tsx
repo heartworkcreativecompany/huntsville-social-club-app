@@ -1,76 +1,49 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import Card from '@/components/ui/card'
 import {
   buttonPrimaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
+import { updateMemberProfile } from './actions'
 
 type ProfileFormProps = {
-  userId: string
-  email: string
-  fullName: string | null
-  membershipIntent?: string | null
+  displayName: string
+  bio: string
+  locationArea: string
 }
 
 export default function ProfileForm({
-  userId,
-  email,
-  fullName,
-  membershipIntent,
+  displayName,
+  bio,
+  locationArea,
 }: ProfileFormProps) {
-  const supabase = createClient()
   const router = useRouter()
-  const [name, setName] = useState(fullName ?? '')
-  const [intent, setIntent] = useState(membershipIntent ?? '')
+  const [name, setName] = useState(displayName)
+  const [about, setAbout] = useState(bio)
+  const [area, setArea] = useState(locationArea)
   const [message, setMessage] = useState('')
+  const [isPending, startTransition] = useTransition()
 
-  const handleSave = async () => {
-    setMessage('Saving...')
+  const handleSave = () => {
+    setMessage('')
+    startTransition(async () => {
+      const result = await updateMemberProfile({
+        displayName: name,
+        bio: about,
+        locationArea: area,
+      })
 
-    const basePayload = {
-      id: userId,
-      email,
-      full_name: name,
-      updated_at: new Date().toISOString(),
-    }
-
-    let error: { message: string } | null = null
-
-    if (intent.trim()) {
-      const withIntent = await supabase.from('profiles').upsert({
-        ...basePayload,
-        membership_intent: intent.trim(),
-      } as never)
-
-      error = withIntent.error
-
-      if (error?.message.includes('membership_intent')) {
-        const fallback = await supabase.from('profiles').upsert(basePayload)
-        error = fallback.error
-        if (!error) {
-          setMessage(
-            'Profile saved. Intent will appear once membership_intent is added to the database.'
-          )
-          router.refresh()
-          return
-        }
+      if (result.error) {
+        setMessage(result.error)
+        return
       }
-    } else {
-      const result = await supabase.from('profiles').upsert(basePayload)
-      error = result.error
-    }
 
-    if (error) {
-      setMessage(error.message)
-      return
-    }
-
-    setMessage('Profile saved successfully.')
-    router.refresh()
+      setMessage('Profile saved successfully.')
+      router.refresh()
+    })
   }
 
   return (
@@ -79,36 +52,50 @@ export default function ProfileForm({
         Edit profile
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        How you show up in discovery—name and a short statement of intent for the
-        club community.
+        Update how you appear in the member directory. Photo changes are managed
+        through your application until post-launch profile photo editing ships.
       </p>
 
       <div className="mt-4 grid max-w-lg gap-4">
         <label className="grid gap-1.5 text-sm">
-          <span className="font-medium text-foreground">Full name</span>
+          <span className="font-medium text-foreground">Display name</span>
           <input
             type="text"
-            placeholder="Full name"
+            placeholder="How members see you"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className={inputClassName}
+            disabled={isPending}
           />
         </label>
 
         <label className="grid gap-1.5 text-sm">
-          <span className="font-medium text-foreground">
-            Membership intent
-          </span>
+          <span className="font-medium text-foreground">Public area</span>
           <span className="text-xs text-muted-foreground">
-            A brief note on why you are here—networking, community, professional
-            connection, or hosting (visible when directory policies allow).
+            Neighborhood or general area — not your full address.
+          </span>
+          <input
+            type="text"
+            value={area}
+            onChange={(e) => setArea(e.target.value)}
+            placeholder="e.g. Downtown Huntsville"
+            className={inputClassName}
+            disabled={isPending}
+          />
+        </label>
+
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium text-foreground">About / bio</span>
+          <span className="text-xs text-muted-foreground">
+            A short note on what you are hoping to find in the club community.
           </span>
           <textarea
-            value={intent}
-            onChange={(e) => setIntent(e.target.value)}
+            value={about}
+            onChange={(e) => setAbout(e.target.value)}
             placeholder="e.g. Building thoughtful local connections outside of work..."
             rows={4}
             className={`${inputClassName} resize-y`}
+            disabled={isPending}
           />
         </label>
 
@@ -116,8 +103,9 @@ export default function ProfileForm({
           type="button"
           onClick={handleSave}
           className={buttonPrimaryClassName}
+          disabled={isPending}
         >
-          Save profile
+          {isPending ? 'Saving…' : 'Save profile'}
         </button>
 
         {message ? (

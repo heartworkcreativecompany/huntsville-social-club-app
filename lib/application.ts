@@ -26,6 +26,7 @@ export type ApplicationDraft = {
     gender: string
     pronouns: string
     lookingFor: string
+    connectionsOpenTo: string[]
   }
   location: {
     city: string
@@ -34,6 +35,7 @@ export type ApplicationDraft = {
     neighborhoodOrArea: string
     livesInHuntsvilleArea: boolean | null
     localConnection: string
+    socialLink: string
   }
   workAndInterests: {
     occupation: string
@@ -43,11 +45,17 @@ export type ApplicationDraft = {
     interests: string[]
     lifestyleTags: string[]
     eventInterests: string[]
+    socialVibe: string
   }
   prompts: {
-    perfectWeekend: string
+    bringsYouHere: string
     hopingToMeet: string
+    perfectWeekend: string
+    favoriteLocalActivities: string
+    icebreaker: string
+    /** @deprecated Legacy — migrated on read, not shown in form */
     intoLately: string
+    /** @deprecated Legacy — migrated on read, not shown in form */
     valueInCommunity: string
   }
   photos: ApplicationPhoto[]
@@ -174,17 +182,17 @@ export function nextActionForApplicant(status: ApplicationStatus): {
       return {
         title: 'Application submitted',
         description:
-          'The membership team will review your application. You will be notified when status changes.',
-        cta: 'View application',
-        href: '/application',
+          'The membership team will review your application. Track progress on your status page—we will email you when there is an update.',
+        cta: 'View status',
+        href: '/application/status',
       }
     case 'in_review':
       return {
         title: 'Under review',
         description:
-          'Your application is with the review team. No action is required right now.',
+          'Your application is with the review team. No action is required—check your status page for updates.',
         cta: 'View status',
-        href: '/application',
+        href: '/application/status',
       }
     case 'needs_info':
       return {
@@ -252,6 +260,7 @@ export function emptyDraft(): ApplicationDraft {
       gender: '',
       pronouns: '',
       lookingFor: '',
+      connectionsOpenTo: [],
     },
     location: {
       city: '',
@@ -260,6 +269,7 @@ export function emptyDraft(): ApplicationDraft {
       neighborhoodOrArea: '',
       livesInHuntsvilleArea: null,
       localConnection: '',
+      socialLink: '',
     },
     workAndInterests: {
       occupation: '',
@@ -269,10 +279,14 @@ export function emptyDraft(): ApplicationDraft {
       interests: [],
       lifestyleTags: [],
       eventInterests: [],
+      socialVibe: '',
     },
     prompts: {
-      perfectWeekend: '',
+      bringsYouHere: '',
       hopingToMeet: '',
+      perfectWeekend: '',
+      favoriteLocalActivities: '',
+      icebreaker: '',
       intoLately: '',
       valueInCommunity: '',
     },
@@ -303,10 +317,24 @@ function migrateLegacyDraft(legacy: LegacyApplicationDraft): ApplicationDraft {
   base.location.neighborhoodOrArea = legacy.locationArea ?? ''
   base.location.localConnection = legacy.referralSource ?? ''
   base.prompts.hopingToMeet = legacy.membershipIntent ?? ''
+  base.prompts.bringsYouHere = legacy.membershipIntent ?? ''
   base.agreements.informationAccurate = Boolean(legacy.acknowledgements)
   base.agreements.approvalRequired = Boolean(legacy.acknowledgements)
 
   return base
+}
+
+function migratePromptsFromLegacy(
+  prompts: ApplicationDraft['prompts']
+): ApplicationDraft['prompts'] {
+  const next = { ...prompts }
+  if (!next.bringsYouHere.trim() && next.valueInCommunity.trim()) {
+    next.bringsYouHere = next.valueInCommunity
+  }
+  if (!next.icebreaker.trim() && next.intoLately.trim()) {
+    next.icebreaker = next.intoLately
+  }
+  return next
 }
 
 function parseString(value: unknown, fallback = ''): string {
@@ -376,6 +404,7 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
       gender: parseString(profile.gender),
       pronouns: parseString(profile.pronouns),
       lookingFor: parseString(profile.lookingFor),
+      connectionsOpenTo: parseStringArray(profile.connectionsOpenTo),
     },
     location: {
       city: parseString(location.city),
@@ -384,6 +413,7 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
       neighborhoodOrArea: parseString(location.neighborhoodOrArea),
       livesInHuntsvilleArea: parseBooleanOrNull(location.livesInHuntsvilleArea),
       localConnection: parseString(location.localConnection),
+      socialLink: parseString(location.socialLink),
     },
     workAndInterests: {
       occupation: parseString(work.occupation),
@@ -393,13 +423,17 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
       interests: parseStringArray(work.interests),
       lifestyleTags: parseStringArray(work.lifestyleTags),
       eventInterests: parseStringArray(work.eventInterests),
+      socialVibe: parseString(work.socialVibe),
     },
-    prompts: {
-      perfectWeekend: parseString(prompts.perfectWeekend),
+    prompts: migratePromptsFromLegacy({
+      bringsYouHere: parseString(prompts.bringsYouHere),
       hopingToMeet: parseString(prompts.hopingToMeet),
+      perfectWeekend: parseString(prompts.perfectWeekend),
+      favoriteLocalActivities: parseString(prompts.favoriteLocalActivities),
+      icebreaker: parseString(prompts.icebreaker),
       intoLately: parseString(prompts.intoLately),
       valueInCommunity: parseString(prompts.valueInCommunity),
-    },
+    }),
     photos: parsePhotos(raw.photos),
     agreements: {
       codeOfConduct: Boolean(agreements.codeOfConduct),

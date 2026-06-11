@@ -2,11 +2,6 @@
 
 import { useMemo } from 'react'
 import type { ApplicationDraft, ApplicationStatus } from '@/lib/application'
-import {
-  directoryMemberFromApplicationDraft,
-  publicProfileDetailsFromDraft,
-} from '@/lib/application-profile-preview'
-import MemberProfilePresentation from '@/components/members/member-profile-presentation'
 import ApplicationProfilePhotoPreview from './application-profile-photo-preview'
 
 export default function ApplicationProfilePreview({
@@ -22,29 +17,20 @@ export default function ApplicationProfilePreview({
   applicationStatus: ApplicationStatus
   variant?: 'inline' | 'submitted'
 }) {
-  const member = useMemo(
+  const isLive = applicationStatus === 'approved'
+
+  const banner = useMemo(
     () =>
-      directoryMemberFromApplicationDraft(draft, {
-        userId,
-        email,
-        applicationStatus,
-      }),
-    [draft, userId, email, applicationStatus]
-  )
-
-  const details = useMemo(() => publicProfileDetailsFromDraft(draft), [draft])
-
-  const isLive =
-    applicationStatus === 'approved'
-
-  const banner = isLive ? (
-    <span>This is how your profile appears to other members.</span>
-  ) : (
-    <span>
-      <strong className="font-medium text-foreground">Preview only.</strong>{' '}
-      Your profile stays private until membership is approved. This matches the
-      layout other members will see in the directory.
-    </span>
+      isLive ? (
+        <span>This is how your profile appears to other members.</span>
+      ) : (
+        <span>
+          <strong className="font-medium text-foreground">Preview only.</strong>{' '}
+          Your profile stays private until membership is approved. This matches the
+          layout other members will see in the directory.
+        </span>
+      ),
+    [isLive]
   )
 
   return (
@@ -65,13 +51,15 @@ export default function ApplicationProfilePreview({
         </p>
       </div>
 
-      <MemberProfilePresentation
-        member={member}
-        isCurrentUser
-        limited
-        details={details}
-        banner={banner}
-        photoSlot={<ApplicationProfilePhotoPreview photos={draft.photos} />}
+      <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 px-4 py-3 text-sm text-muted-foreground">
+        {banner}
+      </div>
+
+      <ApplicationProfilePhotoPreview
+        draft={draft}
+        userId={userId}
+        email={email}
+        applicationStatus={applicationStatus}
       />
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import ApplicationPhotosField from '@/components/application/application-photos-field'
 import ApplicationProfilePreview from '@/components/application/application-profile-preview'
@@ -19,9 +20,13 @@ import {
   INTEREST_OPTIONS,
   LIFESTYLE_TAG_OPTIONS,
   PROMPT_MAX_CHARS,
-  PROMPT_MIN_REQUIRED,
+  REQUIRED_PROMPT_KEYS,
   US_STATE_OPTIONS,
 } from '@/lib/application-form-content'
+import {
+  CONNECTION_OPEN_TO_OPTIONS,
+  SOCIAL_VIBE_OPTIONS,
+} from '@/lib/application-fields'
 import type { ApplicationDraft, ApplicationStatus } from '@/lib/application'
 import { canEditApplication } from '@/lib/application'
 import { completedPromptCount } from '@/lib/application-validation'
@@ -30,21 +35,37 @@ import {
   buttonSecondaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
+import { DISCOVERY_INTENT_OPTIONS } from '@/lib/membership-systems'
+import { trackEvent } from '@/lib/analytics'
 import { saveApplicationDraft, submitApplication } from './actions'
 
 function FieldLabel({
   children,
   hint,
   privateField,
+  required,
+  optional,
 }: {
   children: React.ReactNode
   hint?: string
   privateField?: boolean
+  required?: boolean
+  optional?: boolean
 }) {
   return (
     <span className="grid gap-1">
       <span className="font-medium text-foreground">
         {children}
+        {required ? (
+          <span className="ml-1.5 text-xs font-normal text-accent">
+            (required)
+          </span>
+        ) : null}
+        {optional ? (
+          <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+            (optional)
+          </span>
+        ) : null}
         {privateField ? (
           <span className="ml-1.5 text-xs font-normal text-muted-foreground">
             (private)
@@ -79,6 +100,15 @@ export default function ApplicationForm({
   const [isPending, startTransition] = useTransition()
 
   const editable = canEditApplication(applicationStatus)
+
+  const startedTracked = useRef(false)
+
+  useEffect(() => {
+    if (!startedTracked.current) {
+      startedTracked.current = true
+      trackEvent('application_started')
+    }
+  }, [])
 
   if (!editable) {
     return null
@@ -135,6 +165,7 @@ export default function ApplicationForm({
         setMessage(result.error)
         return
       }
+      trackEvent('application_draft_saved')
       setMessage('Draft saved. You can return anytime to continue.')
       router.refresh()
     })
@@ -155,7 +186,8 @@ export default function ApplicationForm({
         return
       }
 
-      setMessage('Application submitted for review.')
+      trackEvent('application_submitted')
+      router.push('/application/status?submitted=1')
       router.refresh()
     })
   }
@@ -191,7 +223,7 @@ export default function ApplicationForm({
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-1.5 text-sm">
-                <FieldLabel>First name</FieldLabel>
+                <FieldLabel required>First name</FieldLabel>
                 <input
                   className={inputClassName}
                   value={draft.profile.firstName}
@@ -200,7 +232,9 @@ export default function ApplicationForm({
                 />
               </label>
               <label className="grid gap-1.5 text-sm">
-                <FieldLabel privateField>Last name</FieldLabel>
+                <FieldLabel required privateField>
+                  Last name
+                </FieldLabel>
                 <input
                   className={inputClassName}
                   value={draft.profile.lastName}
@@ -210,7 +244,10 @@ export default function ApplicationForm({
               </label>
             </div>
             <label className="grid gap-1.5 text-sm">
-              <FieldLabel hint="How other members will see you in the directory.">
+              <FieldLabel
+                required
+                hint="How other members will see you in the directory."
+              >
                 Display name
               </FieldLabel>
               <input
@@ -222,7 +259,9 @@ export default function ApplicationForm({
               />
             </label>
             <label className="grid gap-1.5 text-sm">
-              <FieldLabel privateField>Date of birth</FieldLabel>
+              <FieldLabel required privateField>
+                Date of birth
+              </FieldLabel>
               <input
                 type="date"
                 className={inputClassName}
@@ -258,16 +297,42 @@ export default function ApplicationForm({
               />
             </label>
             <label className="grid gap-1.5 text-sm">
-              <FieldLabel hint="Optional.">
-                What you&apos;re looking for in the club
+              <FieldLabel
+                required
+                hint="Helps members find compatible connections in discovery."
+              >
+                Primary intent
               </FieldLabel>
-              <input
+              <select
                 className={inputClassName}
                 value={draft.profile.lookingFor}
                 onChange={(e) => updateProfile({ lookingFor: e.target.value })}
-                placeholder="New friends, professional peers, activity partners…"
-              />
+              >
+                <option value="">Select intent…</option>
+                {DISCOVERY_INTENT_OPTIONS.filter((o) => o.value).map(
+                  (option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  )
+                )}
+              </select>
             </label>
+            <div className="text-sm">
+              <FieldLabel
+                optional
+                hint="Shown on your profile — helps members understand what you're open to."
+              >
+                Connection types open to
+              </FieldLabel>
+              <ChipMultiSelect
+                options={CONNECTION_OPEN_TO_OPTIONS}
+                selected={draft.profile.connectionsOpenTo}
+                onChange={(connectionsOpenTo) =>
+                  updateProfile({ connectionsOpenTo })
+                }
+              />
+            </div>
           </section>
         ) : null}
 
@@ -278,8 +343,10 @@ export default function ApplicationForm({
                 Location
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                City, state, and ZIP are private. Only your neighborhood or area
-                label is shown publicly after approval.
+                City and ZIP help us confirm local membership — they stay private
+                and are reviewed by admins as a trust signal, not proof of
+                identity. Only your neighborhood or area label is shown publicly
+                after approval.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -375,6 +442,21 @@ export default function ApplicationForm({
                 />
               </label>
             ) : null}
+            <label className="grid gap-1.5 text-sm">
+              <FieldLabel
+                hint="Optional. LinkedIn, personal site, or community profile — reviewed privately."
+                privateField
+              >
+                Social link or website
+              </FieldLabel>
+              <input
+                className={inputClassName}
+                type="url"
+                value={draft.location.socialLink}
+                onChange={(e) => updateLocation({ socialLink: e.target.value })}
+                placeholder="https://"
+              />
+            </label>
           </section>
         ) : null}
 
@@ -390,7 +472,7 @@ export default function ApplicationForm({
               </p>
             </div>
             <label className="grid gap-1.5 text-sm">
-              <FieldLabel>Occupation</FieldLabel>
+              <FieldLabel optional>Occupation</FieldLabel>
               <input
                 className={inputClassName}
                 value={draft.workAndInterests.occupation}
@@ -427,8 +509,25 @@ export default function ApplicationForm({
                 placeholder="School, program, or certification"
               />
             </label>
+            <label className="grid gap-1.5 text-sm">
+              <FieldLabel optional hint="Helps members find you in discovery.">
+                Preferred event / social vibe
+              </FieldLabel>
+              <select
+                className={inputClassName}
+                value={draft.workAndInterests.socialVibe}
+                onChange={(e) => updateWork({ socialVibe: e.target.value })}
+              >
+                <option value="">No preference</option>
+                {SOCIAL_VIBE_OPTIONS.map((vibe) => (
+                  <option key={vibe} value={vibe}>
+                    {vibe}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="text-sm">
-              <FieldLabel>Interests</FieldLabel>
+              <FieldLabel required>Interests</FieldLabel>
               <ChipMultiSelect
                 options={INTEREST_OPTIONS}
                 selected={draft.workAndInterests.interests}
@@ -460,23 +559,36 @@ export default function ApplicationForm({
           <section className="grid gap-5">
             <div>
               <h3 className="text-display text-base font-medium text-foreground">
-                Short prompts
+                About you
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Complete at least {PROMPT_MIN_REQUIRED} prompts (max{' '}
-                {PROMPT_MAX_CHARS} characters each). These help reviewers get a
-                feel for your voice—not a résumé.
+                Required prompts help reviewers understand your fit. Optional
+                prompts improve your profile in discovery (max{' '}
+                {PROMPT_MAX_CHARS} characters each).
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                {promptsDone} of {APPLICATION_PROMPTS.length} started ·{' '}
-                {PROMPT_MIN_REQUIRED} required to submit
+                {promptsDone} of {APPLICATION_PROMPTS.length} completed ·{' '}
+                {REQUIRED_PROMPT_KEYS.length} required to submit
               </p>
             </div>
             {APPLICATION_PROMPTS.map((prompt) => {
               const value = draft.prompts[prompt.key]
+              const isRequired = REQUIRED_PROMPT_KEYS.includes(
+                prompt.key as (typeof REQUIRED_PROMPT_KEYS)[number]
+              )
               return (
                 <label key={prompt.key} className="grid gap-1.5 text-sm">
-                  <FieldLabel>{prompt.label}</FieldLabel>
+                  <FieldLabel
+                    required={isRequired}
+                    optional={!isRequired}
+                    hint={
+                      prompt.profileVisible
+                        ? 'Visible to other members after approval.'
+                        : undefined
+                    }
+                  >
+                    {prompt.label}
+                  </FieldLabel>
                   <textarea
                     className={`${inputClassName} resize-y`}
                     rows={3}
@@ -504,6 +616,7 @@ export default function ApplicationForm({
               </h3>
             </div>
             <ApplicationPhotosField
+              memberId={userId}
               photos={draft.photos}
               onChange={(photos) => update({ photos })}
               disabled={isPending}
@@ -572,7 +685,20 @@ export default function ApplicationForm({
                     className="mt-1"
                   />
                   <span className="leading-relaxed text-muted-foreground">
-                    {item.label}
+                    {item.key === 'codeOfConduct' ? (
+                      <>
+                        I agree to the{' '}
+                        <Link
+                          href="/code-of-conduct"
+                          className="text-accent underline"
+                          target="_blank"
+                        >
+                          Code of Conduct
+                        </Link>
+                      </>
+                    ) : (
+                      item.label
+                    )}
                   </span>
                 </label>
               ))}

@@ -12,6 +12,19 @@ import {
 } from '@/lib/application'
 import { getViewer } from '@/lib/viewer'
 import AdminApplicationPhotoGallery from '@/components/admin/admin-application-photo-gallery'
+import AdminApprovalGates from '@/components/admin/admin-approval-gates'
+import AdminBillingStatus from '@/components/admin/admin-billing-status'
+import AdminLocalityReview from '@/components/admin/admin-locality-review'
+import AdminMemberVouches from '@/components/admin/admin-member-vouches'
+import AdminPremiumVerification from '@/components/admin/admin-premium-verification'
+import { loadAdminVouchesForMember } from '@/lib/load-member-vouches'
+import {
+  discoveryIntentLabel,
+  parseApprovalGates,
+  parseLocalityConfirmation,
+  parseMembershipBilling,
+  parsePremiumVerification,
+} from '@/lib/membership-systems'
 import ApplicationReviewActions from '../application-review-actions'
 
 type PageProps = {
@@ -41,7 +54,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
   const { data: applicant, error } = await supabase
     .from('profiles')
     .select(
-      'id, email, full_name, role, application_status, membership_intent, location_area, application_draft, application_submitted_at, application_reviewed_at, verified_at, admin_review_notes, created_at'
+      'id, email, full_name, role, application_status, membership_intent, location_area, application_draft, application_submitted_at, application_reviewed_at, verified_at, admin_review_notes, created_at, approval_gates, locality_confirmation, premium_verification, membership_billing'
     )
     .eq('id', id)
     .single()
@@ -65,6 +78,11 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
 
   const status = (applicant.application_status ?? 'draft') as ApplicationStatus
   const draft = mergeProfileIntoDraft(applicant)
+  const gates = parseApprovalGates(applicant.approval_gates)
+  const locality = parseLocalityConfirmation(applicant.locality_confirmation)
+  const premium = parsePremiumVerification(applicant.premium_verification)
+  const billing = parseMembershipBilling(applicant.membership_billing)
+  const memberVouches = await loadAdminVouchesForMember(applicant.id)
   const legalName = [draft.profile.firstName, draft.profile.lastName]
     .filter(Boolean)
     .join(' ')
@@ -138,7 +156,15 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
             <div>
               <dt className="text-muted-foreground">Looking for</dt>
               <dd className="font-medium text-foreground">
-                {draft.profile.lookingFor || '—'}
+                {draft.profile.lookingFor
+                  ? discoveryIntentLabel(draft.profile.lookingFor)
+                  : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Open to</dt>
+              <dd className="font-medium text-foreground">
+                {draft.profile.connectionsOpenTo.join(', ') || '—'}
               </dd>
             </div>
           </dl>
@@ -229,12 +255,26 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
                 {draft.workAndInterests.eventInterests.join(', ') || '—'}
               </dd>
             </div>
+            <div>
+              <dt className="text-muted-foreground">Social vibe</dt>
+              <dd className="font-medium text-foreground">
+                {draft.workAndInterests.socialVibe || '—'}
+              </dd>
+            </div>
+            {draft.location.socialLink ? (
+              <div>
+                <dt className="text-muted-foreground">Social link (private)</dt>
+                <dd className="font-medium text-foreground break-all">
+                  {draft.location.socialLink}
+                </dd>
+              </div>
+            ) : null}
           </dl>
         </Card>
 
         <Card>
           <h2 className="text-display text-lg font-medium text-foreground">
-            Short prompts
+            About you
           </h2>
           <dl className="mt-4 grid gap-3 text-sm">
             {APPLICATION_PROMPTS.map((prompt) => (
@@ -261,6 +301,65 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
               applicantId={applicant.id}
               photos={draft.photos}
             />
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <h2 className="text-display text-lg font-medium text-foreground">
+            Approval requirements
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            All gates must be approved before final membership approval.
+          </p>
+          <div className="mt-4">
+            <AdminApprovalGates applicantId={applicant.id} gates={gates} />
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <h2 className="text-display text-lg font-medium text-foreground">
+            Locality confirmation
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Trust signal review — not proof of identity. City and ZIP are
+            required from the applicant.
+          </p>
+          <div className="mt-4">
+            <AdminLocalityReview applicantId={applicant.id} locality={locality} />
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <h2 className="text-display text-lg font-medium text-foreground">
+            Member vouches
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Optional community endorsements — includes private notes for
+            moderation. Not required for approval.
+          </p>
+          <div className="mt-4">
+            <AdminMemberVouches vouches={memberVouches} />
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <h2 className="text-display text-lg font-medium text-foreground">
+            Premium / vendor verification
+          </h2>
+          <div className="mt-4">
+            <AdminPremiumVerification
+              applicantId={applicant.id}
+              premium={premium}
+            />
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <h2 className="text-display text-lg font-medium text-foreground">
+            Billing & plan status
+          </h2>
+          <div className="mt-4">
+            <AdminBillingStatus applicantId={applicant.id} billing={billing} />
           </div>
         </Card>
 

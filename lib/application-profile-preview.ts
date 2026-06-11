@@ -1,15 +1,30 @@
 import type { ApplicationDraft, ApplicationStatus } from '@/lib/application'
 import { membershipIntentFromDraft } from '@/lib/application-draft-sync'
-import type { DirectoryMember } from '@/lib/members-discovery'
+import { APPLICATION_PROMPTS } from '@/lib/application-form-content'
+import { buildDirectoryMember, type DirectoryMember } from '@/lib/members-discovery'
+import {
+  discoveryColumnsFromDraft,
+  discoveryIntentLabel,
+} from '@/lib/membership-systems'
+
+export type ProfilePromptDisplay = {
+  label: string
+  value: string
+}
 
 export type ApplicationPublicProfileDetails = {
+  displayName: string | null
+  intent: string | null
   locationArea: string | null
   occupation: string | null
   industry: string | null
   interests: string[]
   lifestyleTags: string[]
   eventInterests: string[]
+  connectionsOpenTo: string[]
+  socialVibe: string | null
   about: string | null
+  prompts: ProfilePromptDisplay[]
 }
 
 /** Maps application draft to the same directory member shape used in discovery. */
@@ -21,29 +36,57 @@ export function directoryMemberFromApplicationDraft(
     applicationStatus: ApplicationStatus
   }
 ): DirectoryMember {
-  return {
+  const discovery = discoveryColumnsFromDraft(draft)
+  const member = buildDirectoryMember({
     id: context.userId,
     email: context.email ?? null,
     full_name: draft.profile.displayName.trim() || null,
     role: 'member',
     created_at: null,
+    application_status: context.applicationStatus,
     membership_intent: membershipIntentFromDraft(draft) || null,
     verified_at: null,
-    membership_status: context.applicationStatus,
-  }
+    location_area: draft.location.neighborhoodOrArea.trim() || null,
+    discovery_intent: discovery.discovery_intent,
+    location_city: discovery.location_city,
+    location_zip: discovery.location_zip,
+    birth_year: discovery.birth_year,
+    discovery_interests: discovery.discovery_interests,
+    discovery_industry: discovery.discovery_industry,
+  })
+  member.photos = draft.photos
+  return member
 }
 
-/** Public-facing fields only — never includes private location or employer. */
+/** Public-facing fields only — never includes private location, employer, or admin notes. */
 export function publicProfileDetailsFromDraft(
   draft: ApplicationDraft
 ): ApplicationPublicProfileDetails {
+  const prompts: ProfilePromptDisplay[] = APPLICATION_PROMPTS.map((p) => ({
+    label: p.label,
+    value: draft.prompts[p.key]?.trim() ?? '',
+  })).filter((p) => p.value)
+
+  const socialVibe =
+    draft.workAndInterests.socialVibe.trim() ||
+    (draft.workAndInterests.eventInterests.length > 0
+      ? draft.workAndInterests.eventInterests.slice(0, 3).join(', ')
+      : null)
+
   return {
+    displayName: draft.profile.displayName.trim() || null,
+    intent: draft.profile.lookingFor
+      ? discoveryIntentLabel(draft.profile.lookingFor)
+      : null,
     locationArea: draft.location.neighborhoodOrArea.trim() || null,
     occupation: draft.workAndInterests.occupation.trim() || null,
     industry: draft.workAndInterests.industry.trim() || null,
     interests: draft.workAndInterests.interests,
     lifestyleTags: draft.workAndInterests.lifestyleTags,
     eventInterests: draft.workAndInterests.eventInterests,
+    connectionsOpenTo: draft.profile.connectionsOpenTo,
+    socialVibe,
     about: membershipIntentFromDraft(draft) || null,
+    prompts,
   }
 }

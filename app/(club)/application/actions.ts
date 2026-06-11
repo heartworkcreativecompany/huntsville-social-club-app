@@ -15,6 +15,13 @@ import {
 import { resolveApplicationStatus } from '@/lib/application'
 import { validateApplicationForSubmit } from '@/lib/application-validation'
 import { APPLICATION_TOTAL_STEPS } from '@/lib/application-form-content'
+import { trackServerEvent } from '@/lib/analytics'
+import { captureOperationalError } from '@/lib/capture-error'
+import { sendApplicationSubmittedEmail } from '@/lib/transactional-email'
+import {
+  emptyApprovalGates,
+  localityFromDraft,
+} from '@/lib/membership-systems'
 
 export async function saveApplicationDraft(draft: ApplicationDraft) {
   const supabase = await createClient()
@@ -55,8 +62,11 @@ export async function saveApplicationDraft(draft: ApplicationDraft) {
   }
 
   revalidatePath('/application')
+  revalidatePath('/application/status')
   revalidatePath('/home')
   revalidatePath('/members')
+
+  trackServerEvent('application_draft_saved')
 
   return { success: true as const }
 }
@@ -101,22 +111,43 @@ export async function submitApplication() {
     step: APPLICATION_TOTAL_STEPS,
   })
 
+  const gates = emptyApprovalGates()
+  gates.email_verified = 'pending_review'
+  gates.phone_verified = 'incomplete'
+  gates.photos_reviewed = 'pending_review'
+  gates.application_reviewed = 'pending_review'
+  gates.locality_confirmed = 'pending_review'
+
+  const locality = localityFromDraft(draft)
+  locality.reviewStatus = 'pending_review'
+
   const { error } = await supabase
     .from('profiles')
     .update({
       application_status: 'submitted',
       ...columns,
+      approval_gates: gates,
+      locality_confirmation: locality,
       application_submitted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq('id', user.id)
 
   if (error) {
+    captureOperationalError('application_submit', error)
     return { error: error.message }
   }
 
   revalidatePath('/application')
+  revalidatePath('/application/status')
   revalidatePath('/home')
+  revalidatePath('/admin/applications')
+
+  trackServerEvent('application_submitted')
+
+  if (user.email) {
+    void sendApplicationSubmittedEmail(user.email)
+  }
 
   return { success: true as const }
 }

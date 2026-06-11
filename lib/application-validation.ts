@@ -4,33 +4,31 @@ import {
   PHOTO_MAX_COUNT,
   PHOTO_MIN_COUNT,
   PROMPT_MAX_CHARS,
-  PROMPT_MIN_REQUIRED,
+  REQUIRED_PROMPT_KEYS,
+  APPLICATION_PROMPTS,
 } from '@/lib/application-form-content'
+import { DISCOVERY_INTENT_OPTIONS } from '@/lib/membership-systems'
 import type { ApplicationDraft } from '@/lib/application'
 
 export function completedPromptCount(draft: ApplicationDraft): number {
-  return [
-    draft.prompts.perfectWeekend,
-    draft.prompts.hopingToMeet,
-    draft.prompts.intoLately,
-    draft.prompts.valueInCommunity,
-  ].filter((value) => value.trim().length > 0).length
+  return APPLICATION_PROMPTS.filter((p) =>
+    draft.prompts[p.key]?.trim()
+  ).length
+}
+
+export function requiredPromptsComplete(draft: ApplicationDraft): boolean {
+  return REQUIRED_PROMPT_KEYS.every((key) =>
+    Boolean(draft.prompts[key]?.trim())
+  )
 }
 
 function promptTooLong(draft: ApplicationDraft): string | null {
-  const entries = [
-    ['A perfect weekend', draft.prompts.perfectWeekend],
-    ['Hoping to meet', draft.prompts.hopingToMeet],
-    ['Into lately', draft.prompts.intoLately],
-    ['Values in community', draft.prompts.valueInCommunity],
-  ] as const
-
-  for (const [label, value] of entries) {
+  for (const prompt of APPLICATION_PROMPTS) {
+    const value = draft.prompts[prompt.key] ?? ''
     if (value.trim().length > PROMPT_MAX_CHARS) {
-      return `${label} must be ${PROMPT_MAX_CHARS} characters or fewer.`
+      return `${prompt.label} must be ${PROMPT_MAX_CHARS} characters or fewer.`
     }
   }
-
   return null
 }
 
@@ -52,6 +50,13 @@ export function validateApplicationForSubmit(
     return 'Please enter your date of birth.'
   }
 
+  const validIntent = DISCOVERY_INTENT_OPTIONS.some(
+    (o) => o.value && o.value === profile.lookingFor
+  )
+  if (!validIntent) {
+    return 'Please select your primary intent (dating, networking, friends, or mixed).'
+  }
+
   if (!location.city.trim() || !location.state.trim() || !location.zipCode.trim()) {
     return 'Please complete your city, state, and ZIP code.'
   }
@@ -68,9 +73,6 @@ export function validateApplicationForSubmit(
     return 'Please describe your connection to the Huntsville area.'
   }
 
-  if (!workAndInterests.occupation.trim()) {
-    return 'Please enter your occupation.'
-  }
   if (workAndInterests.interests.length < INTEREST_MIN) {
     return `Please select at least ${INTEREST_MIN} interests.`
   }
@@ -81,8 +83,8 @@ export function validateApplicationForSubmit(
   const promptError = promptTooLong(draft)
   if (promptError) return promptError
 
-  if (completedPromptCount(draft) < PROMPT_MIN_REQUIRED) {
-    return `Please complete at least ${PROMPT_MIN_REQUIRED} short prompts.`
+  if (!requiredPromptsComplete(draft)) {
+    return 'Please complete the required about-you prompts.'
   }
 
   if (photos.length < PHOTO_MIN_COUNT) {

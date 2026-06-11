@@ -1,14 +1,15 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
+import ApplicationStatusPanel from '@/components/application/application-status-panel'
 import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import {
-  applicationStatusLabel,
   canEditApplication,
   nextActionForApplicant,
 } from '@/lib/application'
 import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
+import { parseApprovalGates } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
 import ApplicationProfilePreview from '@/components/application/application-profile-preview'
@@ -44,68 +45,65 @@ export default async function ApplicationPage() {
         eyebrow="Membership"
         title="Your application"
         description="A selective path into Huntsville Social Club—save progress anytime and submit when you're ready."
-        actions={<ApplicationStatusBadge status={status} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ApplicationStatusBadge status={status} />
+            <Link
+              href="/application/status"
+              className="text-sm font-medium text-accent underline"
+            >
+              Track status
+            </Link>
+          </div>
+        }
       />
 
-      <div className="mb-8 grid gap-4 lg:grid-cols-2">
-        <Card>
-          <h2 className="text-display text-lg font-medium text-foreground">
-            {next.title}
-          </h2>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            {next.description}
-          </p>
-          {status === 'draft' || status === 'needs_info' ? (
-            <a href={next.href} className={`${buttonSecondaryClassName} mt-4`}>
-              {next.cta}
-            </a>
-          ) : null}
-        </Card>
-
-        <Card>
-          <h2 className="text-display text-lg font-medium text-foreground">
-            Verification summary
-          </h2>
-          <dl className="mt-4 grid gap-3 text-sm">
-            <div>
-              <dt className="text-muted-foreground">Status</dt>
-              <dd className="font-medium text-foreground">
-                {applicationStatusLabel(status)}
-              </dd>
+      {!canEditApplication(status) && status !== 'approved' ? (
+        <section className="mb-8">
+          <ApplicationStatusPanel
+            status={status}
+            submittedAt={profile?.application_submitted_at}
+            verifiedAt={profile?.verified_at}
+            adminNotes={profile?.admin_review_notes}
+            approvalGates={parseApprovalGates(profile?.approval_gates)}
+          />
+        </section>
+      ) : (
+        <div className="mb-8 grid gap-4 lg:grid-cols-2">
+          <Card>
+            <h2 className="text-display text-lg font-medium text-foreground">
+              {next.title}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {next.description}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {status === 'draft' || status === 'needs_info' ? (
+                <a href={next.href} className={buttonSecondaryClassName}>
+                  {next.cta}
+                </a>
+              ) : null}
+              <Link
+                href="/application/status"
+                className="text-sm font-medium text-accent underline"
+              >
+                View full status
+              </Link>
             </div>
-            {profile?.application_submitted_at ? (
-              <div>
-                <dt className="text-muted-foreground">Submitted</dt>
-                <dd className="font-medium text-foreground">
-                  {new Date(profile.application_submitted_at).toLocaleString()}
-                </dd>
-              </div>
-            ) : null}
-            {profile?.verified_at ? (
-              <div>
-                <dt className="text-muted-foreground">Verified</dt>
-                <dd className="font-medium text-foreground">
-                  {new Date(profile.verified_at).toLocaleString()}
-                </dd>
-              </div>
-            ) : (
-              <div>
-                <dt className="text-muted-foreground">Verified</dt>
-                <dd className="text-muted-foreground">Pending approval</dd>
-              </div>
-            )}
-            {profile?.admin_review_notes &&
-            (status === 'needs_info' || status === 'rejected') ? (
-              <div>
-                <dt className="text-muted-foreground">Reviewer notes</dt>
-                <dd className="leading-relaxed text-foreground">
-                  {profile.admin_review_notes}
-                </dd>
-              </div>
-            ) : null}
-          </dl>
-        </Card>
-      </div>
+          </Card>
+
+          <Card>
+            <h2 className="text-display text-lg font-medium text-foreground">
+              Getting started
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {status === 'draft'
+                ? 'No application on file yet — complete the form below. Your progress saves automatically when you click Save draft.'
+                : 'Update your application using the form below, then resubmit when ready.'}
+            </p>
+          </Card>
+        </div>
+      )}
 
       {showReadOnlyPreview ? (
         <section className="mb-10">

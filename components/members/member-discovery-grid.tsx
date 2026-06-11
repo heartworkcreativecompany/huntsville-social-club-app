@@ -3,9 +3,11 @@
 import { useMemo, useState } from 'react'
 import EmptyState from '@/components/ui/empty-state'
 import {
+  collectInterestOptions,
+  DEFAULT_DISCOVERY_FILTERS,
   filterDirectoryMembers,
   type DirectoryMember,
-  type RoleFilterValue,
+  type DiscoveryFilters,
 } from '@/lib/members-discovery'
 import MemberDiscoveryFilters from './member-discovery-filters'
 import MemberProfileCard from './member-profile-card'
@@ -17,12 +19,18 @@ export default function MemberDiscoveryGrid({
   members: DirectoryMember[]
   limited: boolean
 }) {
-  const [query, setQuery] = useState('')
-  const [roleFilter, setRoleFilter] = useState<RoleFilterValue>('all')
+  const [filters, setFilters] = useState<DiscoveryFilters>({
+    ...DEFAULT_DISCOVERY_FILTERS,
+  })
+
+  const interestOptions = useMemo(
+    () => collectInterestOptions(members),
+    [members]
+  )
 
   const filtered = useMemo(
-    () => filterDirectoryMembers(members, query, roleFilter),
-    [members, query, roleFilter]
+    () => filterDirectoryMembers(members, filters),
+    [members, filters]
   )
 
   if (members.length === 0) {
@@ -37,18 +45,17 @@ export default function MemberDiscoveryGrid({
   return (
     <>
       <MemberDiscoveryFilters
-        query={query}
-        roleFilter={roleFilter}
-        onQueryChange={setQuery}
-        onRoleFilterChange={setRoleFilter}
+        filters={filters}
+        onChange={setFilters}
         resultCount={filtered.length}
         totalCount={members.length}
+        interestOptions={interestOptions}
       />
 
       {filtered.length === 0 ? (
         <EmptyState
           title="No matches"
-          description="Try a different search or role filter."
+          description="Try adjusting intent, age, location, or verification filters."
         />
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2">

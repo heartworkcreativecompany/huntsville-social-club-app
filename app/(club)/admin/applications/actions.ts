@@ -3,6 +3,20 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { ApplicationStatus } from '@/lib/application'
+import {
+  canApproveMember,
+  parseApprovalGates,
+  verificationStateFromGates,
+  parseVerificationState,
+  emptyMembershipBilling,
+  parseMembershipBilling,
+} from '@/lib/membership-systems'
+import { trackServerEvent } from '@/lib/analytics'
+import {
+  sendApplicationApprovedEmail,
+  sendApplicationNeedsInfoEmail,
+  sendApplicationRejectedEmail,
+} from '@/lib/transactional-email'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -37,6 +51,41 @@ export async function updateApplicationStatus(
     return { error: auth.error ?? 'Unauthorized' }
   }
 
+  const { data: applicant } = await auth.supabase
+    .from('profiles')
+    .select('email, approval_gates, verification_state, membership_billing')
+    .eq('id', applicantId)
+    .single()
+
+  if (status === 'approved') {
+    const gates = parseApprovalGates(applicant?.approval_gates)
+    const check = canApproveMember(gates)
+    if (!check.allowed) {
+      return {
+        error: `Cannot approve until all gates are complete: ${check.blockers.join('; ')}`,
+      }
+    }
+  }
+
+  const gates = parseApprovalGates(applicant?.approval_gates)
+  const verification =
+    status === 'approved'
+      ? verificationStateFromGates(
+          gates,
+          parseVerificationState(applicant?.verification_state)
+        )
+      : parseVerificationState(applicant?.verification_state)
+
+  const billing = parseMembershipBilling(applicant?.membership_billing)
+  const billingUpdate =
+    status === 'approved'
+      ? {
+          ...billing,
+          tier: 'member' as const,
+          subscription_status: 'none' as const,
+        }
+      : billing
+
   const { error } = await auth.supabase
     .from('profiles')
     .update({
@@ -47,7 +96,11 @@ export async function updateApplicationStatus(
         ? { admin_review_notes: adminNotes.trim() || null }
         : {}),
       ...(status === 'approved'
-        ? { verified_at: new Date().toISOString() }
+        ? {
+            verified_at: new Date().toISOString(),
+            verification_state: verification,
+            membership_billing: billingUpdate,
+          }
         : {}),
     })
     .eq('id', applicantId)
@@ -58,8 +111,22 @@ export async function updateApplicationStatus(
 
   revalidatePath('/admin/applications')
   revalidatePath(`/admin/applications/${applicantId}`)
+  revalidatePath('/application')
+  revalidatePath('/application/status')
   revalidatePath('/members')
   revalidatePath('/home')
+
+  const email = applicant?.email
+  if (email) {
+    if (status === 'approved') {
+      trackServerEvent('application_approved')
+      void sendApplicationApprovedEmail(email)
+    } else if (status === 'rejected') {
+      void sendApplicationRejectedEmail(email, adminNotes)
+    } else if (status === 'needs_info') {
+      void sendApplicationNeedsInfoEmail(email, adminNotes)
+    }
+  }
 
   return { success: true as const }
 }

@@ -1,36 +1,82 @@
+import { parseApplicationDraft } from '@/lib/application'
+import { publicProfileDetailsFromDraft } from '@/lib/application-profile-preview'
+import type { ApplicationPublicProfileDetails } from '@/lib/application-profile-preview'
 import { createClient } from '@/lib/supabase/server'
-import type { DirectoryMember } from '@/lib/members-discovery'
+import { enrichProfileFromDraft } from '@/lib/enrich-profile-discovery'
+import {
+  buildDirectoryMember,
+  type DirectoryMember,
+} from '@/lib/members-discovery'
+import { photosFromApplicationDraft } from '@/lib/member-photos'
+import {
+  DIRECTORY_APPLICATION_FIELDS,
+  DIRECTORY_FULL_FIELDS,
+  isMissingSchemaColumnError,
+} from '@/lib/profile-query-fields'
 
-function toDirectoryMember(
-  profile: {
-    id: string
-    email: string | null
-    full_name: string | null
-    role: string | null
-    created_at: string | null
-    application_status?: string | null
-    membership_intent?: string | null
-    verified_at?: string | null
-  }
-): DirectoryMember {
-  return {
-    id: profile.id,
-    email: profile.email,
-    full_name: profile.full_name,
-    role: profile.role,
-    created_at: profile.created_at,
-    membership_intent: profile.membership_intent ?? null,
-    verified_at: profile.verified_at ?? null,
-    membership_status: profile.application_status ?? null,
-  }
+type RawProfile = Parameters<typeof buildDirectoryMember>[0] & {
+  application_draft?: unknown
 }
 
-function stripForLimitedView(profile: DirectoryMember): DirectoryMember {
-  return {
-    ...profile,
-    email: null,
-    membership_intent: null,
+function finalizeMember(
+  profile: RawProfile,
+  isAdmin: boolean
+): DirectoryMember {
+  const enriched = enrichProfileFromDraft(profile)
+  const member = buildDirectoryMember(enriched)
+  member.photos = photosFromApplicationDraft(enriched.application_draft)
+  if (!isAdmin) {
+    return {
+      ...member,
+      email: null,
+      membership_intent: null,
+      location_city: null,
+      location_zip: null,
+      birth_year: null,
+    }
   }
+  return member
+}
+
+async function fetchApprovedProfiles(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  viewerId: string,
+  fields: string
+) {
+  return supabase
+    .from('profiles')
+    .select(fields)
+    .eq('application_status', 'approved')
+    .neq('id', viewerId)
+    .order('full_name', { ascending: true })
+}
+
+async function fetchProfileById(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  memberId: string,
+  fields: string
+) {
+  return supabase.from('profiles').select(fields).eq('id', memberId).single()
+}
+
+async function loadWithFieldFallback<T>(
+  load: (fields: string) => Promise<{ data: T | null; error: { message: string } | null }>
+): Promise<{ data: T | null; error: string | null; usedLegacyFields: boolean }> {
+  const full = await load(DIRECTORY_FULL_FIELDS)
+  if (!full.error && full.data) {
+    return { data: full.data, error: null, usedLegacyFields: false }
+  }
+
+  if (full.error && !isMissingSchemaColumnError(full.error)) {
+    return { data: null, error: full.error.message, usedLegacyFields: false }
+  }
+
+  const legacy = await load(DIRECTORY_APPLICATION_FIELDS)
+  if (legacy.error) {
+    return { data: null, error: legacy.error.message, usedLegacyFields: true }
+  }
+
+  return { data: legacy.data, error: null, usedLegacyFields: true }
 }
 
 export async function loadDirectoryProfiles(
@@ -44,24 +90,18 @@ export async function loadDirectoryProfiles(
 
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select(
-      'id, email, full_name, role, created_at, application_status, membership_intent, verified_at'
-    )
-    .eq('application_status', 'approved')
-    .neq('id', viewerId)
-    .order('full_name', { ascending: true })
+  const { data, error } = await loadWithFieldFallback((fields) =>
+    fetchApprovedProfiles(supabase, viewerId, fields)
+  )
 
-  if (error) {
-    return { members: [], error: error.message }
+  if (error || !data) {
+    return { members: [], error }
   }
 
+  const rows = (Array.isArray(data) ? data : [data]) as unknown as RawProfile[]
+
   return {
-    members: (data ?? []).map((profile) => {
-      const member = toDirectoryMember(profile)
-      return isAdmin ? member : stripForLimitedView(member)
-    }),
+    members: rows.map((profile) => finalizeMember(profile, isAdmin)),
     error: null,
   }
 }
@@ -71,40 +111,43 @@ export async function loadMemberProfile(
   viewerId: string,
   canBrowseDiscovery: boolean,
   isAdmin: boolean
-): Promise<{ member: DirectoryMember | null; error: string | null }> {
+): Promise<{
+  member: DirectoryMember | null
+  profileDetails: ApplicationPublicProfileDetails | null
+  error: string | null
+}> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select(
-      'id, email, full_name, role, created_at, application_status, membership_intent, verified_at'
-    )
-    .eq('id', memberId)
-    .single()
+  const { data, error } = await loadWithFieldFallback((fields) =>
+    fetchProfileById(supabase, memberId, fields)
+  )
 
   if (error || !data) {
-    return { member: null, error: error?.message ?? 'Profile not found' }
+    return { member: null, profileDetails: null, error: error ?? 'Profile not found' }
   }
 
+  const profile = data as unknown as RawProfile & {
+    application_status?: string | null
+  }
   const isSelf = memberId === viewerId
-  const isApproved = data.application_status === 'approved'
+  const isApproved = profile.application_status === 'approved'
 
   if (!canBrowseDiscovery && !isSelf) {
-    return { member: null, error: null }
+    return { member: null, profileDetails: null, error: null }
   }
 
-  if (isSelf) {
-    return { member: toDirectoryMember(data), error: null }
+  if (!isSelf && !isApproved) {
+    return { member: null, profileDetails: null, error: null }
   }
 
-  if (!isApproved) {
-    return { member: null, error: null }
-  }
-
-  const member = toDirectoryMember(data)
+  const draft = profile.application_draft
+    ? parseApplicationDraft(profile.application_draft)
+    : null
+  const profileDetails = draft ? publicProfileDetailsFromDraft(draft) : null
 
   return {
-    member: isAdmin ? member : stripForLimitedView(member),
+    member: finalizeMember(profile, isAdmin || isSelf),
+    profileDetails,
     error: null,
   }
 }

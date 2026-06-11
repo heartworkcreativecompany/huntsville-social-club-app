@@ -1,13 +1,13 @@
 /** Membership application intake copy and option lists. */
 
 export const APPLICATION_FORM_INTRO =
-  'A selective, trust-gated intake for Huntsville Social Club. Save anytime and return when you are ready to submit.'
+  'A selective, trust-gated intake for Huntsville Social Club. Fields marked required must be completed to submit. Optional sections help your profile stand out in discovery but never block approval.'
 
 export const APPLICATION_FORM_STEPS = [
   { id: 1, title: 'Profile basics' },
   { id: 2, title: 'Location' },
   { id: 3, title: 'Work & interests' },
-  { id: 4, title: 'Short prompts' },
+  { id: 4, title: 'About you' },
   { id: 5, title: 'Photos' },
   { id: 6, title: 'Review' },
 ] as const
@@ -15,7 +15,9 @@ export const APPLICATION_FORM_STEPS = [
 export const APPLICATION_TOTAL_STEPS = APPLICATION_FORM_STEPS.length
 
 export const PROMPT_MAX_CHARS = 250
-export const PROMPT_MIN_REQUIRED = 2
+
+/** Required short-answer prompts for submit. */
+export const REQUIRED_PROMPT_KEYS = ['bringsYouHere', 'hopingToMeet'] as const
 
 export const PHOTO_MIN_COUNT = 2
 export const PHOTO_MAX_COUNT = 6
@@ -72,24 +74,41 @@ export const EVENT_INTEREST_OPTIONS = [
 
 export const APPLICATION_PROMPTS = [
   {
-    key: 'perfectWeekend' as const,
-    label: 'A perfect weekend in Huntsville looks like…',
-    placeholder: 'Farmers market, live music, a long walk at Monte Sano…',
+    key: 'bringsYouHere' as const,
+    label: 'What brings you to the club most right now?',
+    placeholder:
+      'A fresh social circle, thoughtful events, professional peers outside work…',
+    required: true,
+    profileVisible: true,
   },
   {
     key: 'hopingToMeet' as const,
-    label: 'I’m hoping to meet people who…',
-    placeholder: 'Are curious, show up consistently, enjoy good conversation…',
+    label: 'What kind of connections are you open to?',
+    placeholder:
+      'Curious people who show up, low-pressure hangs, activity partners…',
+    required: true,
+    profileVisible: true,
   },
   {
-    key: 'intoLately' as const,
-    label: 'A few things I’m into lately…',
-    placeholder: 'Trail running, local coffee spots, board game nights…',
+    key: 'perfectWeekend' as const,
+    label: 'A perfect weekend in Huntsville looks like…',
+    placeholder: 'Farmers market, live music, a long walk at Monte Sano…',
+    required: false,
+    profileVisible: true,
   },
   {
-    key: 'valueInCommunity' as const,
-    label: 'One thing I value in a community is…',
-    placeholder: 'Kindness, follow-through, showing up for each other…',
+    key: 'favoriteLocalActivities' as const,
+    label: 'Favorite local activities or spots',
+    placeholder: 'Trail runs, downtown coffee, trivia nights, Lowe Mill…',
+    required: false,
+    profileVisible: true,
+  },
+  {
+    key: 'icebreaker' as const,
+    label: 'A quick icebreaker about you',
+    placeholder: 'Always down for a good bookstore or a new taco spot.',
+    required: false,
+    profileVisible: true,
   },
 ] as const
 
@@ -97,19 +116,23 @@ export const AGREEMENT_ITEMS = [
   {
     key: 'codeOfConduct' as const,
     label: 'I agree to the Code of Conduct',
+    required: true,
   },
   {
     key: 'informationAccurate' as const,
     label: 'I confirm the information I provided is accurate',
+    required: true,
   },
   {
     key: 'approvalRequired' as const,
     label:
       'I understand approval is required before my profile goes live',
+    required: true,
   },
   {
     key: 'verificationConsent' as const,
     label: 'I consent to verification review of my application',
+    required: true,
   },
 ] as const
 

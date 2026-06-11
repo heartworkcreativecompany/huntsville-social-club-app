@@ -1,12 +1,35 @@
 import {
   resolveApplicationStatus,
+  type ApplicationPhoto,
   type ApplicationStatus,
 } from '@/lib/application'
+import { enrichProfileFromDraft } from '@/lib/enrich-profile-discovery'
 import {
   membershipStatusLabel,
   resolveMembershipStatus,
   type MembershipStatus,
 } from '@/lib/membership'
+import {
+  ageFromBirthYear,
+  cardTierBadges,
+  cardVerificationBadges,
+  isMemberPubliclyVerified,
+  membershipTierBadge,
+  parseApprovalGates,
+  parseMembershipBilling,
+  parsePremiumVerification,
+  parseVerificationState,
+  publicPremiumBadge,
+  publicVerificationBadges,
+  resolveMembershipTier,
+  type DiscoveryIntent,
+  type DisplayBadge,
+  type MembershipTierKey,
+  type VerificationState,
+  discoveryIntentLabel,
+} from '@/lib/membership-systems'
+
+export { discoveryIntentLabel }
 import { roleLabel } from '@/lib/event-labels'
 
 export type DirectoryMember = {
@@ -18,17 +41,29 @@ export type DirectoryMember = {
   membership_intent: string | null
   verified_at: string | null
   membership_status: string | null
+  photos: ApplicationPhoto[]
+  location_area: string | null
+  discovery_intent: DiscoveryIntent | string | null
+  location_city: string | null
+  location_zip: string | null
+  birth_year: number | null
+  discovery_interests: string[]
+  discovery_industry: string | null
+  verification_state: VerificationState
+  membership_tier: MembershipTierKey
+  vendor_reviewed_badge: boolean
 }
 
-export type TrustBadge = {
-  label: string
-  variant: 'success' | 'accent' | 'warning' | 'muted'
-}
+export type TrustBadge = DisplayBadge
 
 export function memberDisplayName(member: DirectoryMember): string {
   if (member.full_name?.trim()) return member.full_name.trim()
   if (member.email) return member.email
   return 'Member'
+}
+
+export function memberAge(member: DirectoryMember): number | null {
+  return ageFromBirthYear(member.birth_year)
 }
 
 export function professionalContext(
@@ -47,30 +82,96 @@ export function professionalContext(
   return 'Verified member contributing to the Huntsville community.'
 }
 
+/** @deprecated Use membershipTierBadges + verificationBadges */
 export function trustBadges(member: DirectoryMember): TrustBadge[] {
-  const badges: TrustBadge[] = []
-  const status = resolveMembershipStatus(member)
+  return directoryCardBadges(member)
+}
 
-  if (member.verified_at) {
-    badges.push({ label: 'Verified member', variant: 'success' })
-  } else if (status === 'approved') {
-    badges.push({ label: 'Approved', variant: 'success' })
-  } else if (status === 'pending') {
-    badges.push({ label: 'Pending review', variant: 'warning' })
-  } else if (status === 'applicant') {
-    badges.push({ label: 'Applicant', variant: 'muted' })
+/** Top badges for directory cards: tier + up to 2 verification. */
+export function directoryCardBadges(member: DirectoryMember): DisplayBadge[] {
+  const tier = cardTierBadges(member.membership_tier)
+  const verification = cardVerificationBadges(member.verification_state)
+  const badges = [...tier, ...verification]
+  if (member.vendor_reviewed_badge) {
+    badges.push({
+      key: 'vendor_reviewed',
+      label: 'Vendor reviewed',
+      variant: 'accent',
+    })
   }
+  return badges.slice(0, 4)
+}
 
-  const role = member.role ?? 'member'
-  if (role === 'host') {
-    badges.push({ label: 'Host', variant: 'accent' })
-  } else if (role === 'admin') {
-    badges.push({ label: 'Operations', variant: 'accent' })
-  } else {
-    badges.push({ label: 'Member', variant: 'muted' })
+/** Full badge set for profile detail pages. */
+export function profilePageBadges(member: DirectoryMember): {
+  tier: DisplayBadge
+  verification: DisplayBadge[]
+  premium: DisplayBadge | null
+} {
+  return {
+    tier: membershipTierBadge(member.membership_tier),
+    verification: publicVerificationBadges(member.verification_state),
+    premium: member.vendor_reviewed_badge
+      ? { key: 'vendor_reviewed', label: 'Vendor reviewed', variant: 'accent' }
+      : null,
   }
+}
 
-  return badges
+export function buildDirectoryMember(
+  profile: {
+    id: string
+    email: string | null
+    full_name: string | null
+    role: string | null
+    created_at: string | null
+    application_status?: string | null
+    membership_intent?: string | null
+    verified_at?: string | null
+    application_draft?: unknown
+    location_area?: string | null
+    discovery_intent?: string | null
+    location_city?: string | null
+    location_zip?: string | null
+    birth_year?: number | null
+    discovery_interests?: string[] | null
+    discovery_industry?: string | null
+    verification_state?: unknown
+    premium_verification?: unknown
+    membership_billing?: unknown
+  }
+): DirectoryMember {
+  const enriched = enrichProfileFromDraft(profile)
+  const billing = parseMembershipBilling(enriched.membership_billing)
+  const premium = parsePremiumVerification(enriched.premium_verification)
+  const tier = resolveMembershipTier({
+    application_status: enriched.application_status,
+    role: enriched.role,
+    billing,
+    premium,
+  })
+  const vendorBadge = publicPremiumBadge(premium) !== null
+
+  return {
+    id: enriched.id,
+    email: enriched.email,
+    full_name: enriched.full_name,
+    role: enriched.role,
+    created_at: enriched.created_at,
+    membership_intent: enriched.membership_intent ?? null,
+    verified_at: enriched.verified_at ?? null,
+    membership_status: enriched.application_status ?? null,
+    photos: [],
+    location_area: enriched.location_area ?? null,
+    discovery_intent: (enriched.discovery_intent as DiscoveryIntent) ?? null,
+    location_city: enriched.location_city ?? null,
+    location_zip: enriched.location_zip ?? null,
+    birth_year: enriched.birth_year ?? null,
+    discovery_interests: enriched.discovery_interests ?? [],
+    discovery_industry: enriched.discovery_industry ?? null,
+    verification_state: parseVerificationState(enriched.verification_state),
+    membership_tier: tier,
+    vendor_reviewed_badge: vendorBadge,
+  }
 }
 
 export function intentLabel(
@@ -125,31 +226,135 @@ export const ROLE_FILTER_OPTIONS = [
 
 export type RoleFilterValue = (typeof ROLE_FILTER_OPTIONS)[number]['value']
 
+export const INTENT_FILTER_OPTIONS = [
+  { value: 'all', label: 'All intents' },
+  { value: 'dating', label: 'Dating' },
+  { value: 'networking', label: 'Networking' },
+  { value: 'friends', label: 'Friends' },
+  { value: 'mixed', label: 'Mixed / open' },
+] as const
+
+export type IntentFilterValue = (typeof INTENT_FILTER_OPTIONS)[number]['value']
+
+export const AGE_FILTER_OPTIONS = [
+  { value: 'all', label: 'Any age', min: null, max: null },
+  { value: '18-29', label: '18–29', min: 18, max: 29 },
+  { value: '30-39', label: '30–39', min: 30, max: 39 },
+  { value: '40-49', label: '40–49', min: 40, max: 49 },
+  { value: '50+', label: '50+', min: 50, max: 120 },
+] as const
+
+export type AgeFilterValue = (typeof AGE_FILTER_OPTIONS)[number]['value']
+
+export type DiscoveryFilters = {
+  query: string
+  roleFilter: RoleFilterValue
+  intentFilter: IntentFilterValue
+  ageFilter: AgeFilterValue
+  locationQuery: string
+  verifiedOnly: boolean
+  interestFilter: string
+  industryFilter: string
+}
+
+export const DEFAULT_DISCOVERY_FILTERS: DiscoveryFilters = {
+  query: '',
+  roleFilter: 'all',
+  intentFilter: 'all',
+  ageFilter: 'all',
+  locationQuery: '',
+  verifiedOnly: false,
+  interestFilter: '',
+  industryFilter: '',
+}
+
 export function filterDirectoryMembers(
   members: DirectoryMember[],
-  query: string,
-  roleFilter: RoleFilterValue
+  filters: DiscoveryFilters
 ): DirectoryMember[] {
-  const normalizedQuery = query.trim().toLowerCase()
+  const normalizedQuery = filters.query.trim().toLowerCase()
+  const normalizedLocation = filters.locationQuery.trim().toLowerCase()
+  const normalizedInterest = filters.interestFilter.trim().toLowerCase()
+  const normalizedIndustry = filters.industryFilter.trim().toLowerCase()
+
+  const ageOption = AGE_FILTER_OPTIONS.find((o) => o.value === filters.ageFilter)
 
   return members.filter((member) => {
-    const matchesRole =
-      roleFilter === 'all' || (member.role ?? 'member') === roleFilter
+    if (
+      filters.roleFilter !== 'all' &&
+      (member.role ?? 'member') !== filters.roleFilter
+    ) {
+      return false
+    }
 
-    if (!matchesRole) return false
+    if (
+      filters.intentFilter !== 'all' &&
+      (member.discovery_intent ?? '') !== filters.intentFilter
+    ) {
+      return false
+    }
+
+    if (filters.verifiedOnly && !isMemberPubliclyVerified(member.verification_state)) {
+      return false
+    }
+
+    if (ageOption && ageOption.min !== null && ageOption.max !== null) {
+      const age = memberAge(member)
+      if (age === null || age < ageOption.min || age > ageOption.max) {
+        return false
+      }
+    }
+
+    if (normalizedLocation) {
+      const loc = [
+        member.location_area,
+        member.location_city,
+        member.location_zip,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      if (!loc.includes(normalizedLocation)) return false
+    }
+
+    if (normalizedInterest) {
+      const interests = (member.discovery_interests ?? []).map((i) =>
+        i.toLowerCase()
+      )
+      if (!interests.some((i) => i.includes(normalizedInterest))) return false
+    }
+
+    if (normalizedIndustry) {
+      const industry = member.discovery_industry?.toLowerCase() ?? ''
+      if (!industry.includes(normalizedIndustry)) return false
+    }
 
     if (!normalizedQuery) return true
 
     const name = member.full_name?.toLowerCase() ?? ''
     const email = member.email?.toLowerCase() ?? ''
     const intent = member.membership_intent?.toLowerCase() ?? ''
+    const discoveryIntent = member.discovery_intent
+      ? discoveryIntentLabel(member.discovery_intent).toLowerCase()
+      : ''
     const role = (member.role ?? 'member').toLowerCase()
 
     return (
       name.includes(normalizedQuery) ||
       email.includes(normalizedQuery) ||
       intent.includes(normalizedQuery) ||
+      discoveryIntent.includes(normalizedQuery) ||
       role.includes(normalizedQuery)
     )
   })
+}
+
+export function collectInterestOptions(members: DirectoryMember[]): string[] {
+  const set = new Set<string>()
+  for (const member of members) {
+    for (const interest of member.discovery_interests ?? []) {
+      if (interest.trim()) set.add(interest.trim())
+    }
+  }
+  return [...set].sort((a, b) => a.localeCompare(b))
 }
