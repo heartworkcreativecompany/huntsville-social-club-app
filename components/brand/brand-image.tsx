@@ -34,7 +34,9 @@ export default function BrandImage({
 
   const dimensionClass =
     sizeClassName ||
-    (variant === 'circle' ? 'h-10 w-10' : 'h-10 w-auto max-w-[min(100%,280px)]')
+    (variant === 'circle'
+      ? 'h-14 w-14'
+      : 'h-auto w-[140px] max-w-[min(100%,280px)]')
 
   const imgClass = `${dimensionClass} object-contain ${className}`.trim()
 

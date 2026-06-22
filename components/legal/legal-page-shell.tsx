@@ -13,7 +13,7 @@ export default function LegalPageShell({
     <div className="flex min-h-full flex-col bg-background">
       <header className="border-b border-border bg-surface shadow-sm">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-5 sm:px-8">
-          <BrandLogo href="/" variant="wordmark" size="md" />
+          <BrandLogo href="/" variant="wordmark" size="lg" />
         </div>
       </header>
 

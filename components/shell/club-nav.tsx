@@ -85,7 +85,7 @@ export default function ClubNav({
     <header className="border-b border-border bg-surface shadow-sm">
       <div className="mx-auto flex max-w-5xl flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
         <div className="flex flex-wrap items-center gap-6">
-          <BrandLogo href="/home" variant="wordmark" size="sm" />
+          <BrandLogo href="/home" variant="wordmark" size="md" />
           <nav className="flex flex-wrap gap-1">
             {items.map((item) => {
               const active = item.match
