@@ -20,7 +20,7 @@ export default function ClubShell({
         canAccessApp={canAccessApp}
         applicationStatus={applicationStatus}
       />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8 sm:px-8 sm:py-10">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8 sm:px-8 sm:py-10">
         {children}
       </main>
       <SiteFooter />

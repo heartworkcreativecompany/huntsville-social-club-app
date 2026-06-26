@@ -59,9 +59,11 @@ export function brandAssetPair(
 /**
  * Responsive logo dimensions (official SVGs, width-led for wordmarks).
  *
- * sm  — footer, compact nav
- * md  — in-app header beside navigation
- * lg  — marketing/auth headers (wordmark) and homepage hero mark (circle)
+ * sm     — compact footer wordmark
+ * md     — in-app header beside navigation
+ * lg     — auth headers, feature sections
+ * xl     — marketing hero header wordmark (Lovable scale)
+ * footer — marketing footer circle mark
  */
 export const BRAND_LOGO_HEIGHT = {
   sm: {
@@ -75,5 +77,13 @@ export const BRAND_LOGO_HEIGHT = {
   lg: {
     wordmark: 'h-auto w-[140px] sm:w-[156px] md:w-[172px]',
     circle: 'h-[72px] w-[72px] sm:h-[88px] sm:w-[88px] md:h-[104px] md:w-[104px]',
+  },
+  xl: {
+    wordmark: 'h-12 w-auto sm:h-20 md:h-[6.5rem]',
+    circle: 'h-[72px] w-[72px] sm:h-[88px] sm:w-[88px] md:h-[104px] md:w-[104px]',
+  },
+  footer: {
+    wordmark: 'h-auto w-[112px]',
+    circle: 'h-24 w-24',
   },
 } as const

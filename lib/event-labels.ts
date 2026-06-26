@@ -11,6 +11,16 @@ export const buttonSecondaryClassName =
 
 export const buttonGoldClassName = buttonPrimaryClassName
 
+/** Marketing / public pages — matches Lovable prototype (rounded-md, hero overlays). */
+export const marketingButtonPrimaryClassName =
+  'inline-flex items-center justify-center rounded-md bg-accent px-6 py-3 text-sm font-medium tracking-wide text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+
+export const marketingButtonSecondaryClassName =
+  'inline-flex items-center justify-center rounded-md border border-white/40 px-6 py-3 text-sm font-medium tracking-wide text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50'
+
+export const marketingNavLinkClassName =
+  'hidden px-3 py-2 text-xs font-medium uppercase tracking-widest text-white/80 transition hover:text-white md:inline'
+
 export const chipActiveClassName =
   'rounded-full border border-accent bg-accent px-3 py-1 font-brand text-xs font-medium text-accent-foreground'
 

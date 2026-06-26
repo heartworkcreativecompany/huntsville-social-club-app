@@ -107,7 +107,7 @@ export async function sendApplicationApprovedEmail(to: string) {
   const { html, text } = emailShell(
     'Membership approved',
     `<p>Welcome to the club. Your membership is active — browse events, connect with verified members, and keep your profile current.</p>`,
-    { label: 'Go to member home', href: `${origin}/home` }
+    { label: 'Go to Members', href: `${origin}/members` }
   )
 
   return sendEmail({ to, subject: 'Membership approved', html, text })

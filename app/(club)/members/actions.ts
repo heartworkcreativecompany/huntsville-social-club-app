@@ -51,6 +51,7 @@ export async function updateMemberProfile(input: {
   }
 
   revalidatePath('/members')
+  revalidatePath('/profile')
   revalidatePath(`/members/${user.id}`)
   revalidatePath('/home')
 

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
-import EventListCard from '@/components/events/event-list-card'
+import EventRichCard from '@/components/events/event-rich-card'
 import { applicationStatusLabel } from '@/lib/application'
 import EventForm from './event-form'
 import { getViewer } from '@/lib/viewer'
@@ -87,10 +87,11 @@ export default async function EventsPage() {
   const visibleEvents =
     events?.filter((event) => canViewEvent(event, user.id, userRole)) ?? []
 
-  const myEvents = visibleEvents.filter((event) => event.owner_id === user.id)
-  const sharedEvents = visibleEvents.filter(
-    (event) => event.owner_id !== user.id
+  const upcomingEvents = visibleEvents.filter(
+    (event) => new Date(event.starts_at).getTime() >= Date.now() - 1000 * 60 * 60 * 12
   )
+  const myEvents = upcomingEvents.filter((event) => event.owner_id === user.id)
+  const clubEvents = upcomingEvents.filter((event) => event.owner_id !== user.id)
 
   const ownerIds = [...new Set(visibleEvents.map((event) => event.owner_id))]
   const profilesById: Record<string, ProfileRow> = {}
@@ -106,7 +107,7 @@ export default async function EventsPage() {
     }
   }
 
-  const eventIds = visibleEvents.map((event) => event.id)
+  const eventIds = upcomingEvents.map((event) => event.id)
   const rsvpCountsByEvent: Record<string, RsvpCounts> = {}
   const currentUserStatusByEvent: Record<string, string | null> = {}
 
@@ -138,19 +139,13 @@ export default async function EventsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Gated programming"
+        eyebrow="Nights out"
         title="Events"
-        description="A members-only calendar with clear eligibility, RSVP summaries on this page, and attendee names on each event’s detail page."
+        description="Mixers, speed dating, and curated socials worth showing up for — RSVP in one tap."
       />
 
       <Card className="mb-8" padding="sm">
         <p className="text-sm leading-relaxed text-muted-foreground">
-          <span className="font-medium text-foreground">How access works today: </span>
-          Published events are visible per club rules. RSVP counts stay on this
-          calendar; open an event to see who responded. Tier and waitlist rules
-          are labeled below and will enforce in a future release.
-        </p>
-        <p className="mt-2 text-xs text-muted-foreground">
           Your status: {applicationStatusLabel(viewer.applicationStatus)}
           {canCreateEvents ? ' · You can host events' : ''}
         </p>
@@ -158,9 +153,7 @@ export default async function EventsPage() {
 
       {canCreateEvents ? (
         <section className="mb-10">
-          <h2 className="text-display mb-4 text-xl font-medium text-foreground">
-            Create event
-          </h2>
+          <h2 className="text-display mb-4 text-xl font-semibold">Create event</h2>
           <EventForm userId={user.id} />
         </section>
       ) : null}
@@ -169,30 +162,15 @@ export default async function EventsPage() {
         <p className="text-sm text-danger">Could not load events: {error.message}</p>
       ) : (
         <>
-          <section className="mb-10">
-            <h2 className="text-display mb-1 text-xl font-medium text-foreground">
-              My events
-            </h2>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Gatherings you host — manage status, tier visibility, and RSVP
-              summaries.
-            </p>
-            {myEvents.length === 0 ? (
-              <EmptyState
-                title="No hosted events yet"
-                description="When you host a gathering, it will appear here with RSVP summaries."
-              />
-            ) : (
-              <ul className="grid gap-4">
+          {myEvents.length > 0 ? (
+            <section className="mb-12">
+              <h2 className="text-display mb-4 text-xl font-semibold">Your events</h2>
+              <ul className="grid gap-6 lg:grid-cols-2">
                 {myEvents.map((event) => (
                   <li key={event.id}>
-                    <EventListCard
+                    <EventRichCard
                       event={event}
-                      creatorLabel={creatorLabel(
-                        event.owner_id,
-                        profilesById,
-                        true
-                      )}
+                      creatorLabel={creatorLabel(event.owner_id, profilesById, true)}
                       counts={
                         rsvpCountsByEvent[event.id] ?? {
                           going: 0,
@@ -200,38 +178,29 @@ export default async function EventsPage() {
                           not_going: 0,
                         }
                       }
-                      currentUserStatus={
-                        currentUserStatusByEvent[event.id] ?? null
-                      }
+                      currentUserStatus={currentUserStatusByEvent[event.id] ?? null}
                       userId={user.id}
                       userRole={userRole}
                       applicationStatus={viewer.applicationStatus}
-                      canModerate
                     />
                   </li>
                 ))}
               </ul>
-            )}
-          </section>
+            </section>
+          ) : null}
 
           <section>
-            <h2 className="text-display mb-1 text-xl font-medium text-foreground">
-              Club calendar
-            </h2>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Published programming from other hosts. Counts only here — tap through
-              for names and host tools where allowed.
-            </p>
-            {sharedEvents.length === 0 ? (
+            <h2 className="text-display mb-4 text-xl font-semibold">Upcoming</h2>
+            {clubEvents.length === 0 ? (
               <EmptyState
-                title="No shared events on the calendar"
-                description="Published events from other hosts will appear here."
+                title="No upcoming events"
+                description="Published programming from hosts will appear here."
               />
             ) : (
-              <ul className="grid gap-4">
-                {sharedEvents.map((event) => (
+              <ul className="grid gap-6 lg:grid-cols-2">
+                {clubEvents.map((event) => (
                   <li key={event.id}>
-                    <EventListCard
+                    <EventRichCard
                       event={event}
                       creatorLabel={creatorLabel(
                         event.owner_id,
@@ -245,15 +214,10 @@ export default async function EventsPage() {
                           not_going: 0,
                         }
                       }
-                      currentUserStatus={
-                        currentUserStatusByEvent[event.id] ?? null
-                      }
+                      currentUserStatus={currentUserStatusByEvent[event.id] ?? null}
                       userId={user.id}
                       userRole={userRole}
                       applicationStatus={viewer.applicationStatus}
-                      canModerate={
-                        user.id === event.owner_id || userRole === 'admin'
-                      }
                     />
                   </li>
                 ))}
