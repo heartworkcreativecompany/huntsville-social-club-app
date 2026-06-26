@@ -1,14 +1,14 @@
 import Link from 'next/link'
 import Card from '@/components/ui/card'
-import EventEligibilityBanner from '@/components/events/event-eligibility-banner'
-import EventRsvpCounts from '@/components/events/event-rsvp-counts'
-import EventStatusBadge from '@/components/events/event-status-badge'
-import EventTierBadge from '@/components/events/event-tier-badge'
-import { formatEventDate } from '@/lib/event-labels'
-import { resolveEventEligibility } from '@/lib/event-eligibility'
-import type { ApplicationStatus } from '@/lib/application'
-import EventInlineEdit from '@/app/(club)/events/event-inline-edit'
-import DeleteEventButton from '@/app/(club)/events/delete-event-button'
+import EventMetaBadges from '@/components/events/event-meta-badges'
+import EventTypeBadge from '@/components/events/event-type-badge'
+import { formatEventDate, buttonPrimaryClassName } from '@/lib/event-labels'
+import {
+  eventCardAccessHint,
+  isEventPast,
+  memberGoingLabel,
+} from '@/lib/event-display'
+import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import EventRsvp from '@/app/(club)/events/event-rsvp'
 
 type EventRow = {
@@ -20,6 +20,7 @@ type EventRow = {
   ends_at: string | null
   visibility: string
   status: string
+  event_type?: string | null
 }
 
 type RsvpCounts = {
@@ -28,37 +29,40 @@ type RsvpCounts = {
   not_going: number
 }
 
+/** Compact list card — aligned with member-facing event copy rules. */
 export default function EventListCard({
   event,
   creatorLabel,
   counts,
   currentUserStatus,
-  userId,
-  userRole,
-  applicationStatus,
-  canModerate,
+  registrationPreview,
 }: {
   event: EventRow
   creatorLabel: string
   counts: RsvpCounts
   currentUserStatus: string | null
-  userId: string
-  userRole: string
-  applicationStatus: ApplicationStatus
-  canModerate: boolean
+  registrationPreview?: EventRegistrationDecision | null
 }) {
-  const eligibility = resolveEventEligibility(
-    { status: event.status, visibility: event.visibility },
-    { applicationStatus, role: userRole }
-  )
+  const isPast = isEventPast(event.starts_at, event.ends_at)
+  const isCancelled = event.status === 'cancelled'
+  const accessHint = eventCardAccessHint({
+    registrationPreview: registrationPreview ?? null,
+    currentUserStatus,
+    isPast,
+    isCancelled,
+  })
 
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap gap-2">
-            <EventTierBadge tier={eligibility.tier} />
-            <EventStatusBadge status={event.status} />
+            <EventTypeBadge eventType={event.event_type} />
+            <EventMetaBadges
+              isPast={isPast}
+              isCancelled={isCancelled}
+              currentUserStatus={currentUserStatus}
+            />
           </div>
           <Link
             href={`/events/${event.id}`}
@@ -67,59 +71,43 @@ export default function EventListCard({
             {event.title}
           </Link>
           <p className="mt-1 text-sm text-muted-foreground">
-            Hosted by {creatorLabel}
+            {formatEventDate(event.starts_at)}
+            {event.location ? ` · ${event.location}` : ''}
           </p>
         </div>
       </div>
 
       <dl className="mt-4 grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-2">
         <div>
-          <dt className="eyebrow">When</dt>
+          <dt className="eyebrow">Host</dt>
+          <dd className="mt-1 font-medium text-foreground">{creatorLabel}</dd>
+        </div>
+        <div>
+          <dt className="eyebrow">Attendance</dt>
           <dd className="mt-1 font-medium text-foreground">
-            {formatEventDate(event.starts_at)}
+            {memberGoingLabel(counts.going)}
           </dd>
         </div>
-        {event.location ? (
-          <div>
-            <dt className="eyebrow">Location</dt>
-            <dd className="mt-1 font-medium text-foreground">{event.location}</dd>
-          </div>
-        ) : null}
       </dl>
 
-      <div className="mt-4">
-        <EventEligibilityBanner eligibility={eligibility} compact />
-      </div>
-
-      <div className="mt-4">
-        <EventRsvpCounts counts={counts} />
-      </div>
-
-      <div className="mt-4 border-t border-border pt-4">
-        <p className="eyebrow mb-2">Your RSVP</p>
-        <EventRsvp
-          eventId={event.id}
-          userId={userId}
-          eventStatus={event.status ?? 'published'}
-          currentStatus={currentUserStatus}
-        />
-      </div>
-
-      {canModerate ? (
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
-          <EventInlineEdit
-            eventId={event.id}
-            initialTitle={event.title}
-            initialLocation={event.location}
-            initialStartsAt={event.starts_at}
-            initialDescription={event.description}
-            initialEndsAt={event.ends_at}
-            initialVisibility={event.visibility}
-            initialStatus={event.status ?? 'published'}
-          />
-          <DeleteEventButton eventId={event.id} />
-        </div>
+      {accessHint ? (
+        <p className="mt-3 text-sm font-medium text-accent">{accessHint}</p>
       ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-3 border-t border-border pt-4">
+        <Link href={`/events/${event.id}`} className={buttonPrimaryClassName}>
+          View details
+        </Link>
+        {!isPast && !isCancelled ? (
+          <EventRsvp
+            eventId={event.id}
+            eventStatus={event.status ?? 'published'}
+            currentStatus={currentUserStatus}
+            registrationPreview={registrationPreview}
+            canRegisterGoing={registrationPreview?.allowed !== false}
+          />
+        ) : null}
+      </div>
     </Card>
   )
 }

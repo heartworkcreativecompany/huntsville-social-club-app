@@ -1,15 +1,19 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import EventEligibilityBanner from '@/components/events/event-eligibility-banner'
-import EventGatingScaffold from '@/components/events/event-gating-scaffold'
+import EventAccessInfo from '@/components/events/event-access-info'
+import EventMetaBadges from '@/components/events/event-meta-badges'
 import EventRsvpCounts from '@/components/events/event-rsvp-counts'
-import EventStatusBadge from '@/components/events/event-status-badge'
-import EventTierBadge from '@/components/events/event-tier-badge'
+import EventTypeBadge from '@/components/events/event-type-badge'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import { formatEventDate } from '@/lib/event-labels'
-import { resolveEventEligibility } from '@/lib/event-eligibility'
+import { eventCoverImage } from '@/lib/event-images'
+import { isEventPast, memberGoingLabel } from '@/lib/event-display'
+import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { evaluateEventRegistration } from '@/lib/membership-entitlements'
+import type { EventAccessType } from '@/lib/membership-tier-config'
 import { getViewer } from '@/lib/viewer'
 import EventEditForm from '../event-edit-form'
 import EventRsvp from '../event-rsvp'
@@ -53,24 +57,22 @@ export default async function EventDetailPage({ params }: PageProps) {
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at'
+      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type'
     )
     .eq('id', id)
     .single()
 
   if (eventError || !event) {
     return (
-      <>
-        <EmptyState
-          title="Event not found"
-          description="This event may be private, removed, or unavailable to your account."
-          action={
-            <Link href="/events" className="text-sm font-medium text-accent underline">
-              Back to events
-            </Link>
-          }
-        />
-      </>
+      <EmptyState
+        title="Event not found"
+        description="This event may have been removed or is no longer available."
+        action={
+          <Link href="/events" className="text-sm font-medium text-accent underline">
+            Back to events
+          </Link>
+        }
+      />
     )
   }
 
@@ -110,11 +112,19 @@ export default async function EventDetailPage({ params }: PageProps) {
     attendeeRows?.find((row) => row.user_id === user.id)?.status ?? null
 
   const isMine = event.owner_id === user.id
+  const eventType = (event.event_type ?? 'standard_event') as EventAccessType
+  const isPast = isEventPast(event.starts_at, event.ends_at)
+  const isCancelled = event.status === 'cancelled'
 
-  const eligibility = resolveEventEligibility(
-    { status: event.status, visibility: event.visibility },
-    { applicationStatus: viewer.applicationStatus, role: userRole }
-  )
+  const { entitlements } = await loadMemberEntitlementsForViewer()
+  const registrationPreview = entitlements
+    ? evaluateEventRegistration({
+        entitlements,
+        eventType,
+        eventStatus: event.status,
+        isGoingRsvp: true,
+      })
+    : null
 
   const rsvpCounts = {
     going: attendeeRows?.filter((row) => row.status === 'going').length ?? 0,
@@ -187,76 +197,64 @@ export default async function EventDetailPage({ params }: PageProps) {
         ← Back to events
       </Link>
 
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div className="relative mb-8 aspect-[21/9] w-full overflow-hidden rounded-xl bg-surface-elevated">
+        <Image
+          src={eventCoverImage(event.id)}
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+        <div className="absolute right-0 bottom-0 left-0 p-6 sm:p-8">
           <div className="mb-3 flex flex-wrap gap-2">
-            <EventTierBadge tier={eligibility.tier} />
-            <EventStatusBadge status={event.status} />
+            <EventTypeBadge eventType={event.event_type} />
           </div>
-          <h1 className="text-display text-3xl font-medium text-foreground sm:text-4xl">
+          <h1 className="text-display text-3xl font-semibold text-white sm:text-4xl">
             {event.title}
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Hosted by {isMine ? 'you' : memberLabel(creator ?? undefined)}
+          <p className="mt-2 text-sm text-white/80">
+            {formatEventDate(event.starts_at)}
+            {event.location ? ` · ${event.location}` : ''}
           </p>
         </div>
       </div>
 
-      <div className="mb-8">
-        <EventEligibilityBanner eligibility={eligibility} />
-        <EventGatingScaffold eligibility={eligibility} />
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <EventMetaBadges
+          isPast={isPast}
+          isCancelled={isCancelled}
+          currentUserStatus={currentUserStatus}
+        />
+        <p className="text-sm text-muted-foreground">
+          Hosted by {isMine ? 'you' : memberLabel(creator ?? undefined)}
+          <span className="mx-2 text-border">·</span>
+          {memberGoingLabel(rsvpCounts.going)}
+        </p>
       </div>
 
-      <Card className="mb-8">
-        {event.description ? (
+      <EventAccessInfo
+        eventType={eventType}
+        entitlements={entitlements}
+        registrationPreview={registrationPreview}
+        isPast={isPast}
+        isCancelled={isCancelled}
+      />
+
+      {event.description ? (
+        <Card className="mb-8">
           <p className="text-sm leading-relaxed text-foreground">
             {event.description}
           </p>
-        ) : null}
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-muted-foreground">When</dt>
-            <dd className="font-medium text-foreground">
-              {formatEventDate(event.starts_at)}
-            </dd>
-          </div>
-          {event.ends_at ? (
-            <div>
-              <dt className="text-muted-foreground">Ends</dt>
-              <dd className="font-medium text-foreground">
-                {formatEventDate(event.ends_at)}
-              </dd>
-            </div>
-          ) : null}
-          <div>
-            <dt className="text-muted-foreground">Location</dt>
-            <dd className="font-medium text-foreground">
-              {event.location ?? 'Not provided'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Access tier</dt>
-            <dd className="font-medium text-foreground">
-              {eligibility.tierLabel}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Visibility</dt>
-            <dd className="font-medium capitalize text-foreground">
-              {event.visibility}
-            </dd>
-          </div>
-        </dl>
-      </Card>
+        </Card>
+      ) : null}
 
       {isMine ? (
         <Card className="mb-8">
-          <h2 className="text-display text-lg font-semibold">
-            Host dashboard
-          </h2>
+          <h2 className="text-display text-lg font-semibold">Host dashboard</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Operational view for your gathering — export and check-in tools will
-            expand here.
+            Attendance overview for your event.
           </p>
           <div className="mt-4">
             <EventRsvpCounts counts={rsvpCounts} showCaption={false} />
@@ -264,50 +262,48 @@ export default async function EventDetailPage({ params }: PageProps) {
         </Card>
       ) : null}
 
-      <section className="mb-8">
-        <div className="mb-2 flex flex-wrap items-center gap-3">
-          <h2 className="text-display text-xl font-medium text-foreground">
-            Attendee responses
+      {!isPast && !isCancelled ? (
+        <section className="mb-8">
+          <h2 className="text-display mb-4 text-xl font-medium text-foreground">
+            Your RSVP
           </h2>
-          {canExportAttendees ? (
-            <ExportAttendeesCsv filename={exportFilename} rows={exportRows} />
-          ) : null}
-        </div>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Member names appear here only — the events list shows RSVP counts for
-          privacy on the calendar.
-        </p>
-
-        {!attendeeRows?.length ? (
-          <EmptyState
-            title="No responses yet"
-            description="Member names will appear here as RSVPs come in."
-          />
-        ) : (
-          <Card className="grid gap-6 sm:grid-cols-3">
-            <AttendeeList title="Going" rows={goingRows} />
-            <AttendeeList title="Maybe" rows={maybeRows} />
-            <AttendeeList title="Not going" rows={notGoingRows} />
+          <Card>
+            <EventRsvp
+              eventId={event.id}
+              eventStatus={event.status ?? 'published'}
+              currentStatus={currentUserStatus}
+              registrationPreview={registrationPreview}
+              canRegisterGoing={registrationPreview?.allowed !== false}
+            />
           </Card>
-        )}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="mb-8">
-        <h2 className="text-display mb-1 text-xl font-medium text-foreground">
-          Your RSVP
-        </h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          {eligibility.rsvpMessage}
-        </p>
-        <Card>
-          <EventRsvp
-            eventId={event.id}
-            userId={user.id}
-            eventStatus={event.status ?? 'published'}
-            currentStatus={currentUserStatus}
-          />
-        </Card>
-      </section>
+      {isMine ? (
+        <section className="mb-8">
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <h2 className="text-display text-xl font-medium text-foreground">
+              Attendee responses
+            </h2>
+            {canExportAttendees ? (
+              <ExportAttendeesCsv filename={exportFilename} rows={exportRows} />
+            ) : null}
+          </div>
+
+          {!attendeeRows?.length ? (
+            <EmptyState
+              title="No responses yet"
+              description="Member names will appear here as RSVPs come in."
+            />
+          ) : (
+            <Card className="grid gap-6 sm:grid-cols-3">
+              <AttendeeList title="Going" rows={goingRows} />
+              <AttendeeList title="Maybe" rows={maybeRows} />
+              <AttendeeList title="Not going" rows={notGoingRows} />
+            </Card>
+          )}
+        </section>
+      ) : null}
 
       {isMine ? (
         <section>
@@ -323,6 +319,7 @@ export default async function EventDetailPage({ params }: PageProps) {
               initialDescription={event.description}
               initialEndsAt={event.ends_at}
               initialVisibility={event.visibility}
+              initialEventType={event.event_type ?? 'standard_event'}
             />
             <div className="mt-4 border-t border-border pt-4">
               <DeleteEventButton eventId={event.id} />

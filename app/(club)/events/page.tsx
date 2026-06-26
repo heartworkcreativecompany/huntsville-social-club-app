@@ -1,24 +1,20 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
-import EventRichCard from '@/components/events/event-rich-card'
-import { applicationStatusLabel } from '@/lib/application'
+import EventsBrowser, {
+  type EventBrowserItem,
+} from '@/components/events/events-browser'
 import EventForm from './event-form'
 import { getViewer } from '@/lib/viewer'
+import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { evaluateEventRegistration } from '@/lib/membership-entitlements'
+import type { EventAccessType } from '@/lib/membership-tier-config'
 
-type EventRow = {
+type ProfileRow = {
   id: string
-  owner_id: string
-  title: string
-  description: string | null
-  location: string | null
-  starts_at: string
-  ends_at: string | null
-  visibility: string
-  status: string
-  created_at: string
+  email: string | null
+  full_name: string | null
 }
 
 function canViewEvent(
@@ -31,12 +27,6 @@ function canViewEvent(
 
   const status = event.status ?? 'published'
   return status === 'published' || status === 'cancelled'
-}
-
-type ProfileRow = {
-  id: string
-  email: string | null
-  full_name: string | null
 }
 
 function memberLabel(profile: ProfileRow | undefined): string {
@@ -73,25 +63,19 @@ export default async function EventsPage() {
   }
 
   const supabase = await createClient()
-  const user = { id: viewer.userId, email: viewer.email }
+  const user = { id: viewer.userId }
   const userRole = viewer.role
   const canCreateEvents = userRole === 'host' || userRole === 'admin'
 
   const { data: events, error } = await supabase
     .from('events')
     .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at'
+      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type'
     )
     .order('starts_at', { ascending: true })
 
   const visibleEvents =
     events?.filter((event) => canViewEvent(event, user.id, userRole)) ?? []
-
-  const upcomingEvents = visibleEvents.filter(
-    (event) => new Date(event.starts_at).getTime() >= Date.now() - 1000 * 60 * 60 * 12
-  )
-  const myEvents = upcomingEvents.filter((event) => event.owner_id === user.id)
-  const clubEvents = upcomingEvents.filter((event) => event.owner_id !== user.id)
 
   const ownerIds = [...new Set(visibleEvents.map((event) => event.owner_id))]
   const profilesById: Record<string, ProfileRow> = {}
@@ -107,7 +91,7 @@ export default async function EventsPage() {
     }
   }
 
-  const eventIds = upcomingEvents.map((event) => event.id)
+  const eventIds = visibleEvents.map((event) => event.id)
   const rsvpCountsByEvent: Record<string, RsvpCounts> = {}
   const currentUserStatusByEvent: Record<string, string | null> = {}
 
@@ -136,20 +120,45 @@ export default async function EventsPage() {
     }
   }
 
+  const { entitlements } = await loadMemberEntitlementsForViewer()
+
+  const browserEvents: EventBrowserItem[] = visibleEvents.map((event) => ({
+    id: event.id,
+    title: event.title,
+    location: event.location,
+    starts_at: event.starts_at,
+    ends_at: event.ends_at,
+    description: event.description,
+    status: event.status ?? 'published',
+    event_type: event.event_type,
+    creatorLabel: creatorLabel(
+      event.owner_id,
+      profilesById,
+      event.owner_id === user.id
+    ),
+    counts: rsvpCountsByEvent[event.id] ?? {
+      going: 0,
+      maybe: 0,
+      not_going: 0,
+    },
+    currentUserStatus: currentUserStatusByEvent[event.id] ?? null,
+    registrationPreview: entitlements
+      ? evaluateEventRegistration({
+          entitlements,
+          eventType: (event.event_type ?? 'standard_event') as EventAccessType,
+          eventStatus: event.status,
+          isGoingRsvp: true,
+        })
+      : null,
+  }))
+
   return (
     <>
       <PageHeader
         eyebrow="Nights out"
         title="Events"
-        description="Mixers, speed dating, and curated socials worth showing up for — RSVP in one tap."
+        description="Mixers, speed dating, and curated socials worth showing up for."
       />
-
-      <Card className="mb-8" padding="sm">
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Your status: {applicationStatusLabel(viewer.applicationStatus)}
-          {canCreateEvents ? ' · You can host events' : ''}
-        </p>
-      </Card>
 
       {canCreateEvents ? (
         <section className="mb-10">
@@ -160,71 +169,13 @@ export default async function EventsPage() {
 
       {error ? (
         <p className="text-sm text-danger">Could not load events: {error.message}</p>
+      ) : visibleEvents.length === 0 ? (
+        <EmptyState
+          title="No events yet"
+          description="Programming from the club will appear here as it is announced."
+        />
       ) : (
-        <>
-          {myEvents.length > 0 ? (
-            <section className="mb-12">
-              <h2 className="text-display mb-4 text-xl font-semibold">Your events</h2>
-              <ul className="grid gap-6 lg:grid-cols-2">
-                {myEvents.map((event) => (
-                  <li key={event.id}>
-                    <EventRichCard
-                      event={event}
-                      creatorLabel={creatorLabel(event.owner_id, profilesById, true)}
-                      counts={
-                        rsvpCountsByEvent[event.id] ?? {
-                          going: 0,
-                          maybe: 0,
-                          not_going: 0,
-                        }
-                      }
-                      currentUserStatus={currentUserStatusByEvent[event.id] ?? null}
-                      userId={user.id}
-                      userRole={userRole}
-                      applicationStatus={viewer.applicationStatus}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <section>
-            <h2 className="text-display mb-4 text-xl font-semibold">Upcoming</h2>
-            {clubEvents.length === 0 ? (
-              <EmptyState
-                title="No upcoming events"
-                description="Published programming from hosts will appear here."
-              />
-            ) : (
-              <ul className="grid gap-6 lg:grid-cols-2">
-                {clubEvents.map((event) => (
-                  <li key={event.id}>
-                    <EventRichCard
-                      event={event}
-                      creatorLabel={creatorLabel(
-                        event.owner_id,
-                        profilesById,
-                        false
-                      )}
-                      counts={
-                        rsvpCountsByEvent[event.id] ?? {
-                          going: 0,
-                          maybe: 0,
-                          not_going: 0,
-                        }
-                      }
-                      currentUserStatus={currentUserStatusByEvent[event.id] ?? null}
-                      userId={user.id}
-                      userRole={userRole}
-                      applicationStatus={viewer.applicationStatus}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </>
+        <EventsBrowser events={browserEvents} />
       )}
     </>
   )

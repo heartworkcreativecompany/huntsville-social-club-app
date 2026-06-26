@@ -21,6 +21,7 @@ type EventEditFormProps = {
   initialDescription: string | null
   initialEndsAt: string | null
   initialVisibility: string
+  initialEventType: string
 }
 
 export default function EventEditForm({
@@ -31,6 +32,7 @@ export default function EventEditForm({
   initialDescription,
   initialEndsAt,
   initialVisibility,
+  initialEventType,
 }: EventEditFormProps) {
   const supabase = createClient()
   const router = useRouter()
@@ -41,6 +43,7 @@ export default function EventEditForm({
   const [description, setDescription] = useState(initialDescription ?? '')
   const [endsAt, setEndsAt] = useState(toDatetimeLocalValue(initialEndsAt))
   const [visibility, setVisibility] = useState(initialVisibility)
+  const [eventType, setEventType] = useState(initialEventType || 'standard_event')
   const [message, setMessage] = useState('')
 
   const handleSave = async () => {
@@ -55,6 +58,7 @@ export default function EventEditForm({
         description: description || null,
         ends_at: endsAt || null,
         visibility,
+        event_type: eventType,
         updated_at: new Date().toISOString(),
       })
       .eq('id', eventId)
@@ -121,6 +125,15 @@ export default function EventEditForm({
           <option value="private">private</option>
           <option value="members">members</option>
           <option value="public">public</option>
+        </select>
+
+        <select
+          value={eventType}
+          onChange={(e) => setEventType(e.target.value)}
+          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+        >
+          <option value="standard_event">Club event (standard)</option>
+          <option value="circle_social">Circle Social (paid members)</option>
         </select>
 
         <button

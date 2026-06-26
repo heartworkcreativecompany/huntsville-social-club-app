@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { assertMessagingAllowed } from '@/lib/require-messaging'
 
 export async function requestCuratedIntro(note?: string) {
   const supabase = await createClient()
@@ -37,6 +38,11 @@ export async function requestCuratedIntro(note?: string) {
 }
 
 export async function requestMemberIntro(targetMemberId: string) {
+  const gate = await assertMessagingAllowed()
+  if (!gate.ok) {
+    return { error: gate.error }
+  }
+
   const supabase = await createClient()
   const {
     data: { user },

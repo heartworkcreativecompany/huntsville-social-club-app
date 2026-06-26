@@ -234,6 +234,7 @@ export interface Database {
           ends_at: string | null
           visibility: string
           status: string
+          event_type: string
           created_at: string
           updated_at: string
         }
@@ -247,6 +248,7 @@ export interface Database {
           ends_at?: string | null
           visibility?: string
           status?: string
+          event_type?: string
           created_at?: string
           updated_at?: string
         }
@@ -260,6 +262,7 @@ export interface Database {
           ends_at?: string | null
           visibility?: string
           status?: string
+          event_type?: string
           created_at?: string
           updated_at?: string
         }
@@ -271,18 +274,129 @@ export interface Database {
           user_id: string
           status: string
           created_at: string | null
+          registration_method: string | null
+          payment_status: string | null
+          entitlement_cycle_id: string | null
+          credit_consumed: boolean
+          registered_at: string | null
+          cancelled_at: string | null
+          credit_returned: boolean
         }
         Insert: {
           event_id: string
           user_id: string
           status?: string
           created_at?: string | null
+          registration_method?: string | null
+          payment_status?: string | null
+          entitlement_cycle_id?: string | null
+          credit_consumed?: boolean
+          registered_at?: string | null
+          cancelled_at?: string | null
+          credit_returned?: boolean
         }
         Update: {
           event_id?: string
           user_id?: string
           status?: string
           created_at?: string | null
+          registration_method?: string | null
+          payment_status?: string | null
+          entitlement_cycle_id?: string | null
+          credit_consumed?: boolean
+          registered_at?: string | null
+          cancelled_at?: string | null
+          credit_returned?: boolean
+        }
+        Relationships: []
+      }
+      membership_entitlement_cycles: {
+        Row: {
+          id: string
+          user_id: string
+          product_tier: string
+          period_start: string
+          period_end: string
+          credits_granted: number | null
+          credits_used: number
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          product_tier: string
+          period_start: string
+          period_end: string
+          credits_granted?: number | null
+          credits_used?: number
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          product_tier?: string
+          period_start?: string
+          period_end?: string
+          credits_granted?: number | null
+          credits_used?: number
+          is_active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      event_registration_ledger: {
+        Row: {
+          id: string
+          user_id: string
+          event_id: string
+          action: string
+          registration_method: string | null
+          entitlement_cycle_id: string | null
+          credit_delta: number
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          event_id: string
+          action: string
+          registration_method?: string | null
+          entitlement_cycle_id?: string | null
+          credit_delta?: number
+          metadata?: import('./database.types').Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          event_id?: string
+          action?: string
+          registration_method?: string | null
+          entitlement_cycle_id?: string | null
+          credit_delta?: number
+          metadata?: import('./database.types').Json
+          created_at?: string
+        }
+        Relationships: []
+      }
+      stripe_webhook_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          processed_at: string
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          processed_at?: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          processed_at?: string
         }
         Relationships: []
       }

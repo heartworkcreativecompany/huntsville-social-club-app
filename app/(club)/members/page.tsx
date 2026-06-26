@@ -9,6 +9,8 @@ import MemberDirectorySection from '@/components/members/member-directory-sectio
 import RecentMessagesPreview from '@/components/messages/recent-messages-preview'
 import { loadDirectoryProfiles } from '@/lib/load-directory-profiles'
 import { loadRecentMessagePreviews } from '@/lib/member-messages'
+import MembershipEntitlementBanner from '@/components/membership/membership-entitlement-banner'
+import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -24,6 +26,8 @@ export default async function MembersPage() {
   const { members: directoryMembers, error: directoryError } =
     await loadDirectoryProfiles(viewer.userId, canBrowseDiscovery, isAdmin)
 
+  const { entitlements } = await loadMemberEntitlementsForViewer()
+
   const supabase = await createClient()
   const { previews: messagePreviews, error: messagesError } = canBrowseDiscovery
     ? await loadRecentMessagePreviews(supabase, viewer.userId, 3)
@@ -37,6 +41,12 @@ export default async function MembersPage() {
         description="Your dashboard for curated intros, member discovery, and recent conversations."
         actions={<ApplicationStatusBadge status={viewer.applicationStatus} />}
       />
+
+      {viewer.canAccessApp && entitlements ? (
+        <section className="mb-8">
+          <MembershipEntitlementBanner entitlements={entitlements} />
+        </section>
+      ) : null}
 
       {!viewer.canAccessApp ? (
         <Card className="mb-8 border-warning/30 bg-warning-soft/40" padding="sm">
@@ -101,7 +111,7 @@ export default async function MembersPage() {
         </Card>
       ) : null}
 
-      {canBrowseDiscovery ? (
+      {canBrowseDiscovery && entitlements?.canMessage ? (
         <RecentMessagesPreview previews={messagePreviews} error={messagesError} />
       ) : null}
     </>

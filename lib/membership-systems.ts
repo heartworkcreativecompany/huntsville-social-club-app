@@ -204,6 +204,8 @@ export type MembershipTierKey =
   | 'applicant'
   | 'pending_review'
   | 'member'
+  | 'inner_circle'
+  | 'elite_circle'
   | 'premium_member'
   | 'vendor_reviewed'
   | 'community_partner'
@@ -225,22 +227,34 @@ export const MEMBERSHIP_TIER_DEFS: MembershipTierDef[] = [
   },
   { key: 'member', label: 'Member', variant: 'success', cardPriority: 3 },
   {
+    key: 'inner_circle',
+    label: 'Inner Circle',
+    variant: 'premium',
+    cardPriority: 4,
+  },
+  {
+    key: 'elite_circle',
+    label: 'Elite Circle',
+    variant: 'premium',
+    cardPriority: 5,
+  },
+  {
     key: 'premium_member',
     label: 'Premium member',
     variant: 'premium',
-    cardPriority: 4,
+    cardPriority: 6,
   },
   {
     key: 'vendor_reviewed',
     label: 'Vendor reviewed',
     variant: 'premium',
-    cardPriority: 5,
+    cardPriority: 7,
   },
   {
     key: 'community_partner',
     label: 'Community partner',
     variant: 'premium',
-    cardPriority: 6,
+    cardPriority: 8,
   },
 ]
 
@@ -263,7 +277,9 @@ export function resolveMembershipTier(input: {
   if (billing.tier === 'vendor_reviewed' || premium.public_badge === 'vendor_reviewed') {
     return 'vendor_reviewed'
   }
-  if (billing.tier === 'premium_member') return 'premium_member'
+  if (billing.tier === 'elite_circle') return 'elite_circle'
+  if (billing.tier === 'premium_member') return 'elite_circle'
+  if (billing.tier === 'inner_circle') return 'inner_circle'
 
   if (status === 'approved') return 'member'
   if (status === 'submitted' || status === 'in_review' || status === 'needs_info') {
@@ -283,7 +299,7 @@ export function membershipTierBadge(
 
 export function cardTierBadges(tier: MembershipTierKey): DisplayBadge[] {
   const badge = membershipTierBadge(tier)
-  if (tier === 'member' || tier === 'premium_member' || tier === 'vendor_reviewed') {
+  if (tier === 'member' || tier === 'inner_circle' || tier === 'elite_circle' || tier === 'premium_member' || tier === 'vendor_reviewed' || tier === 'community_partner') {
     return [badge]
   }
   return [badge]
@@ -590,6 +606,8 @@ export type MembershipBilling = {
   tier:
     | 'applicant'
     | 'member'
+    | 'inner_circle'
+    | 'elite_circle'
     | 'premium_member'
     | 'vendor_reviewed'
     | 'community_partner'
@@ -602,6 +620,12 @@ export type MembershipBilling = {
   subscription_status: SubscriptionStatus
   renewal_at: string | null
   cancelled_at: string | null
+  billing_period_start: string | null
+  billing_period_end: string | null
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  stripe_price_id: string | null
+  trial_end: string | null
   plan_change_pending: 'upgrade' | 'downgrade' | null
   payment_failure: {
     active: boolean
@@ -622,6 +646,12 @@ export function emptyMembershipBilling(): MembershipBilling {
     subscription_status: 'none',
     renewal_at: null,
     cancelled_at: null,
+    billing_period_start: null,
+    billing_period_end: null,
+    stripe_customer_id: null,
+    stripe_subscription_id: null,
+    stripe_price_id: null,
+    trial_end: null,
     plan_change_pending: null,
     payment_failure: {
       active: false,
@@ -646,6 +676,8 @@ export function parseMembershipBilling(value: unknown): MembershipBilling {
   return {
     tier:
       tier === 'member' ||
+      tier === 'inner_circle' ||
+      tier === 'elite_circle' ||
       tier === 'premium_member' ||
       tier === 'vendor_reviewed' ||
       tier === 'community_partner'
@@ -680,6 +712,21 @@ export function parseMembershipBilling(value: unknown): MembershipBilling {
       typeof raw.renewal_at === 'string' ? raw.renewal_at : null,
     cancelled_at:
       typeof raw.cancelled_at === 'string' ? raw.cancelled_at : null,
+    billing_period_start:
+      typeof raw.billing_period_start === 'string'
+        ? raw.billing_period_start
+        : null,
+    billing_period_end:
+      typeof raw.billing_period_end === 'string' ? raw.billing_period_end : null,
+    stripe_customer_id:
+      typeof raw.stripe_customer_id === 'string' ? raw.stripe_customer_id : null,
+    stripe_subscription_id:
+      typeof raw.stripe_subscription_id === 'string'
+        ? raw.stripe_subscription_id
+        : null,
+    stripe_price_id:
+      typeof raw.stripe_price_id === 'string' ? raw.stripe_price_id : null,
+    trial_end: typeof raw.trial_end === 'string' ? raw.trial_end : null,
     plan_change_pending:
       planChange === 'upgrade' || planChange === 'downgrade'
         ? planChange
@@ -700,6 +747,15 @@ export function billingStatusLabel(billing: MembershipBilling): string {
   if (billing.subscription_status === 'grace') return 'Grace period'
   if (billing.subscription_status === 'past_due') return 'Past due'
   if (billing.subscription_status === 'cancelled') return 'Cancelled'
+  if (billing.tier === 'inner_circle' && billing.subscription_status === 'active') {
+    return 'Inner Circle'
+  }
+  if (
+    (billing.tier === 'elite_circle' || billing.tier === 'premium_member') &&
+    billing.subscription_status === 'active'
+  ) {
+    return 'Elite Circle'
+  }
   if (billing.subscription_status === 'active' && billing.plan) {
     const planLabel =
       billing.plan === 'monthly'
@@ -710,7 +766,7 @@ export function billingStatusLabel(billing: MembershipBilling): string {
     return `${planLabel} member`
   }
   if (billing.application_fee.status === 'unpaid') return 'Application fee due'
-  return 'Free membership'
+  return 'Member (free)'
 }
 
 // ---------------------------------------------------------------------------

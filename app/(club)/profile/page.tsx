@@ -13,6 +13,8 @@ import { photosFromApplicationDraft } from '@/lib/member-photos'
 import { computeProfileCompletion } from '@/lib/profile-completion'
 import { getViewer } from '@/lib/viewer'
 import ProfileForm from '@/app/(club)/members/profile-form'
+import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { freeRegistrationsSummary } from '@/lib/membership-entitlements'
 
 export default async function YourProfilePage() {
   const viewer = await getViewer()
@@ -41,6 +43,11 @@ export default async function YourProfilePage() {
     currentMember.photos = photosFromApplicationDraft(profile?.application_draft)
   }
 
+  const { entitlements } = await loadMemberEntitlementsForViewer()
+  const registrationLine = entitlements
+    ? freeRegistrationsSummary(entitlements)
+    : null
+
   return (
     <>
       <PageHeader
@@ -49,6 +56,10 @@ export default async function YourProfilePage() {
         description="Manage how you show up in the club — photos, details, verification, and membership status."
         actions={<ApplicationStatusBadge status={viewer.applicationStatus} />}
       />
+
+      {entitlements && registrationLine ? (
+        <p className="mb-6 text-sm text-muted-foreground">{registrationLine}</p>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <section className="space-y-6">
@@ -91,7 +102,10 @@ export default async function YourProfilePage() {
             />
           ) : null}
 
-          <MemberBillingStatus billingRaw={profile?.membership_billing} />
+          <MemberBillingStatus
+            billingRaw={profile?.membership_billing}
+            role={viewer.role}
+          />
         </aside>
       </div>
     </>

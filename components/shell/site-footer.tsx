@@ -29,6 +29,11 @@ export default function SiteFooter({
             </h4>
             <ul className="space-y-2 text-muted-foreground">
               <li>
+                <Link href="/pricing" className="link-brand hover:text-foreground">
+                  Membership
+                </Link>
+              </li>
+              <li>
                 <Link href="/signup" className="link-brand hover:text-foreground">
                   Join
                 </Link>

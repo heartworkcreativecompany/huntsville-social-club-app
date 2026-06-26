@@ -45,6 +45,7 @@ export default function EventForm({ userId }: EventFormProps) {
   const [description, setDescription] = useState('')
   const [endsAt, setEndsAt] = useState('')
   const [visibility, setVisibility] = useState('members')
+  const [eventType, setEventType] = useState('standard_event')
   const [status, setStatus] = useState('published')
   const [message, setMessage] = useState('')
 
@@ -61,6 +62,7 @@ export default function EventForm({ userId }: EventFormProps) {
         description: description || null,
         ends_at: endsAt || null,
         visibility,
+        event_type: eventType,
         status,
       })
       .select('id')
@@ -135,6 +137,15 @@ export default function EventForm({ userId }: EventFormProps) {
           onChange={(e) => setEndsAt(e.target.value)}
           className={inputClassName}
         />
+
+        <select
+          value={eventType}
+          onChange={(e) => setEventType(e.target.value)}
+          className={inputClassName}
+        >
+          <option value="standard_event">Standard event</option>
+          <option value="circle_social">Circle Social (paid members)</option>
+        </select>
 
         <select
           value={visibility}

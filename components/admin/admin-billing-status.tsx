@@ -46,6 +46,34 @@ export default function AdminBillingStatus({
       </div>
 
       <label className="grid gap-1.5">
+        <span className="font-medium text-foreground">Membership tier</span>
+        <select
+          className={inputClassName}
+          value={billing.tier}
+          disabled={isPending}
+          onChange={(e) => {
+            const tier = e.target.value as MembershipBilling['tier']
+            const isPaidTier =
+              tier === 'inner_circle' ||
+              tier === 'elite_circle' ||
+              tier === 'premium_member'
+            save({
+              tier,
+              subscription_status: isPaidTier ? 'active' : billing.subscription_status,
+            })
+          }}
+        >
+          <option value="applicant">Applicant</option>
+          <option value="member">Member (free)</option>
+          <option value="inner_circle">Inner Circle</option>
+          <option value="elite_circle">Elite Circle</option>
+          <option value="premium_member">Premium member (legacy → Elite)</option>
+          <option value="vendor_reviewed">Vendor reviewed</option>
+          <option value="community_partner">Community partner</option>
+        </select>
+      </label>
+
+      <label className="grid gap-1.5">
         <span className="font-medium text-foreground">Application fee</span>
         <select
           className={inputClassName}
