@@ -19,8 +19,8 @@ export default function UpgradePlans() {
     startTransition(async () => {
       const result =
         tier === 'inner'
-          ? await upgradeToInnerCircle('monthly')
-          : await upgradeToEliteCircle('monthly')
+          ? await upgradeToInnerCircle()
+          : await upgradeToEliteCircle()
 
       if (result.error) {
         setMessage(result.error)
