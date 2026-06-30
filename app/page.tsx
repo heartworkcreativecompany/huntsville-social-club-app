@@ -53,7 +53,7 @@ export default async function PublicHomePage() {
             Huntsville · Rocket City
           </span>
           <h1 className="font-brand mt-5 max-w-3xl text-5xl leading-[1.05] font-semibold md:text-7xl">
-            Where Huntsville Connects
+            Where Huntsville Connects — Live
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/85 md:text-xl">
             Mingle mixers, speed dating, and curated socials for people who want to
