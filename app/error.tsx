@@ -1,8 +1,8 @@
 'use client'
 
-import * as Sentry from '@sentry/nextjs'
 import Link from 'next/link'
 import { useEffect } from 'react'
+import { captureOperationalError } from '@/lib/capture-error'
 import { buttonPrimaryClassName } from '@/lib/event-labels'
 
 export default function Error({
@@ -13,7 +13,7 @@ export default function Error({
   reset: () => void
 }) {
   useEffect(() => {
-    Sentry.captureException(error)
+    captureOperationalError('app_error_boundary', error)
   }, [error])
 
   return (

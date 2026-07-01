@@ -1,4 +1,4 @@
-/** Report operational errors without PII. Sentry is optional until DSN is set. */
+/** Report operational errors without PII. */
 
 export function captureOperationalError(
   context: string,
@@ -8,13 +8,4 @@ export function captureOperationalError(
   if (process.env.NODE_ENV === 'development') {
     console.error(`[${context}]`, error, extra ?? {})
   }
-
-  if (!process.env.NEXT_PUBLIC_SENTRY_DSN) return
-
-  void import('@sentry/nextjs').then((Sentry) => {
-    Sentry.captureException(error, {
-      tags: { context },
-      extra,
-    })
-  })
 }

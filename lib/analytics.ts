@@ -66,15 +66,4 @@ export function trackServerEvent(name: string, props?: EventProps) {
   if (process.env.NODE_ENV === 'development') {
     console.info('[analytics:server]', name, sanitizeProps(props))
   }
-
-  if (!process.env.NEXT_PUBLIC_SENTRY_DSN) return
-
-  void import('@sentry/nextjs').then((Sentry) => {
-    Sentry.addBreadcrumb({
-      category: 'analytics',
-      message: name,
-      data: sanitizeProps(props),
-      level: 'info',
-    })
-  })
 }

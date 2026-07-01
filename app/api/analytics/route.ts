@@ -26,18 +26,6 @@ export async function POST(request: Request) {
       console.info('[analytics:api]', body.event, body.props ?? {})
     }
 
-    try {
-      const Sentry = await import('@sentry/nextjs')
-      Sentry.addBreadcrumb({
-        category: 'analytics',
-        message: body.event,
-        data: body.props,
-        level: 'info',
-      })
-    } catch {
-      // Sentry optional.
-    }
-
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ ok: false }, { status: 400 })
