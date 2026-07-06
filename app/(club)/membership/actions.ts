@@ -127,10 +127,8 @@ export async function createBillingPortalSession() {
 
     return { url: session.url }
   } catch (error) {
-    return {
-      error:
-        error instanceof Error ? error.message : 'Could not open billing portal.',
-    }
+    console.error('[billing_portal]', error)
+    return { error: 'Could not open billing portal.' }
   }
 }
 

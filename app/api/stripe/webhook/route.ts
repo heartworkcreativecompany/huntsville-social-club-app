@@ -29,9 +29,24 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       const session = event.data.object as Stripe.Checkout.Session
       if (session.mode !== 'subscription') return
 
-      const userId = resolveUserIdFromStripeMetadata(session.metadata)
-      const subscriptionId = session.subscription
-      if (!userId || !subscriptionId || typeof subscriptionId !== 'string') {
+      const userId =
+        resolveUserIdFromStripeMetadata(session.metadata) ??
+        (typeof session.client_reference_id === 'string' &&
+        session.client_reference_id.length > 0
+          ? session.client_reference_id
+          : null)
+
+      const subscriptionRef = session.subscription
+      const subscriptionId =
+        typeof subscriptionRef === 'string'
+          ? subscriptionRef
+          : subscriptionRef &&
+              typeof subscriptionRef === 'object' &&
+              'id' in subscriptionRef
+            ? subscriptionRef.id
+            : null
+
+      if (!userId || !subscriptionId) {
         return
       }
 
