@@ -33,7 +33,23 @@ export const PROFILE_MEMBERSHIP_SYSTEMS_FIELDS = [
   'discovery_industry',
 ].join(', ')
 
-export const PROFILE_FULL_FIELDS = `${PROFILE_APPLICATION_FIELDS}, ${PROFILE_MEMBERSHIP_SYSTEMS_FIELDS}`
+/** Compatibility + connections columns (20260701000000) — not used in directory queries. */
+export const PROFILE_COMPATIBILITY_FIELDS = [
+  'connections_open_to',
+  'compatibility_questionnaire',
+  'compatibility_completed_at',
+  'compatibility_updated_at',
+  'wants_curated_matches',
+  'curated_matches_paused_at',
+  'curated_matches_pause_reason',
+  'dating_connection_enabled_at',
+  'dating_connection_removed_at',
+  'messaging_entitlement_lost_at',
+  'messaging_entitlement_restored_at',
+  'last_match_generation_at',
+].join(', ')
+
+export const PROFILE_FULL_FIELDS = `${PROFILE_APPLICATION_FIELDS}, ${PROFILE_MEMBERSHIP_SYSTEMS_FIELDS}, ${PROFILE_COMPATIBILITY_FIELDS}`
 
 export const DIRECTORY_APPLICATION_FIELDS = [
   PROFILE_BASE_FIELDS,

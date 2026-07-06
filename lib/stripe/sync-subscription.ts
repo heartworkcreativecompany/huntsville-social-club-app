@@ -11,6 +11,7 @@ import {
 } from '@/lib/membership-systems'
 import { getStripe, tierFromStripePriceId, type PaidMembershipTier } from '@/lib/stripe/config'
 import { subscriptionPeriod } from '@/lib/stripe/invoice-helpers'
+import { runCompatibilitySubscriptionLifecycle } from '@/lib/compatibility/subscription-sync-hook'
 
 export function mapStripeSubscriptionStatus(
   status: Stripe.Subscription.Status
@@ -100,11 +101,12 @@ export async function syncStripeSubscription(
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('membership_billing')
+    .select('membership_billing, role')
     .eq('id', userId)
     .single()
 
   const existing = parseMembershipBilling(profile?.membership_billing)
+  const previousBilling = { ...existing }
 
   let tier: MembershipBilling['tier'] = existing.tier
   if (grantsAccess && mappedTier) {
@@ -170,6 +172,13 @@ export async function syncStripeSubscription(
     }
   }
 
+  await runCompatibilitySubscriptionLifecycle(supabase, {
+    userId,
+    previousBilling,
+    nextBilling: billing,
+    role: profile?.role,
+  })
+
   return billing
 }
 
@@ -180,11 +189,12 @@ export async function downgradeMembershipFromStripe(
 ): Promise<void> {
   const { data: profile } = await supabase
     .from('profiles')
-    .select('membership_billing')
+    .select('membership_billing, role')
     .eq('id', userId)
     .single()
 
   const existing = parseMembershipBilling(profile?.membership_billing)
+  const previousBilling = { ...existing }
 
   const billing: MembershipBilling = {
     ...existing,
@@ -216,6 +226,13 @@ export async function downgradeMembershipFromStripe(
   if (error) {
     throw new Error(error.message)
   }
+
+  await runCompatibilitySubscriptionLifecycle(supabase, {
+    userId,
+    previousBilling,
+    nextBilling: billing,
+    role: profile?.role,
+  })
 }
 
 export function paidTierFromSubscription(

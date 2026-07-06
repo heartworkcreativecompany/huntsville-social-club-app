@@ -41,6 +41,18 @@ export interface Database {
           birth_year: number | null
           discovery_interests: string[]
           discovery_industry: string | null
+          connections_open_to: string[]
+          compatibility_questionnaire: Json | null
+          compatibility_completed_at: string | null
+          compatibility_updated_at: string | null
+          wants_curated_matches: boolean
+          curated_matches_paused_at: string | null
+          curated_matches_pause_reason: string | null
+          dating_connection_enabled_at: string | null
+          dating_connection_removed_at: string | null
+          messaging_entitlement_lost_at: string | null
+          messaging_entitlement_restored_at: string | null
+          last_match_generation_at: string | null
         }
         Insert: {
           id: string
@@ -69,6 +81,18 @@ export interface Database {
           birth_year?: number | null
           discovery_interests?: string[]
           discovery_industry?: string | null
+          connections_open_to?: string[]
+          compatibility_questionnaire?: Json | null
+          compatibility_completed_at?: string | null
+          compatibility_updated_at?: string | null
+          wants_curated_matches?: boolean
+          curated_matches_paused_at?: string | null
+          curated_matches_pause_reason?: string | null
+          dating_connection_enabled_at?: string | null
+          dating_connection_removed_at?: string | null
+          messaging_entitlement_lost_at?: string | null
+          messaging_entitlement_restored_at?: string | null
+          last_match_generation_at?: string | null
         }
         Update: {
           id?: string
@@ -97,6 +121,84 @@ export interface Database {
           birth_year?: number | null
           discovery_interests?: string[]
           discovery_industry?: string | null
+          connections_open_to?: string[]
+          compatibility_questionnaire?: Json | null
+          compatibility_completed_at?: string | null
+          compatibility_updated_at?: string | null
+          wants_curated_matches?: boolean
+          curated_matches_paused_at?: string | null
+          curated_matches_pause_reason?: string | null
+          dating_connection_enabled_at?: string | null
+          dating_connection_removed_at?: string | null
+          messaging_entitlement_lost_at?: string | null
+          messaging_entitlement_restored_at?: string | null
+          last_match_generation_at?: string | null
+        }
+        Relationships: []
+      }
+      curated_match_batches: {
+        Row: {
+          id: string
+          user_id: string
+          status: string
+          scheduled_for: string
+          delivered_at: string | null
+          match_count: number
+          cancellation_reason: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          status?: string
+          scheduled_for: string
+          delivered_at?: string | null
+          match_count?: number
+          cancellation_reason?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          status?: string
+          scheduled_for?: string
+          delivered_at?: string | null
+          match_count?: number
+          cancellation_reason?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      curated_match_recommendations: {
+        Row: {
+          id: string
+          batch_id: string
+          user_id: string
+          recommended_user_id: string
+          compatibility_score: number
+          score_breakdown: Json
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          batch_id: string
+          user_id: string
+          recommended_user_id: string
+          compatibility_score: number
+          score_breakdown?: Json
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          batch_id?: string
+          user_id?: string
+          recommended_user_id?: string
+          compatibility_score?: number
+          score_breakdown?: Json
+          status?: string
+          created_at?: string
         }
         Relationships: []
       }
@@ -202,6 +304,7 @@ export interface Database {
           note: string | null
           status: string
           created_at: string
+          recommendation_id: string | null
         }
         Insert: {
           id?: string
@@ -211,6 +314,7 @@ export interface Database {
           note?: string | null
           status?: string
           created_at?: string
+          recommendation_id?: string | null
         }
         Update: {
           id?: string
@@ -220,6 +324,7 @@ export interface Database {
           note?: string | null
           status?: string
           created_at?: string
+          recommendation_id?: string | null
         }
         Relationships: []
       }

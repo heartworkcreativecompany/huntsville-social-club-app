@@ -22,6 +22,7 @@ import {
   emptyApprovalGates,
   localityFromDraft,
 } from '@/lib/membership-systems'
+import { runCompatibilityConnectionsLifecycle } from '@/lib/compatibility/sync-server'
 
 export async function saveApplicationDraft(draft: ApplicationDraft) {
   const supabase = await createClient()
@@ -35,7 +36,7 @@ export async function saveApplicationDraft(draft: ApplicationDraft) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('application_status')
+    .select('application_status, connections_open_to')
     .eq('id', user.id)
     .single()
 
@@ -45,6 +46,7 @@ export async function saveApplicationDraft(draft: ApplicationDraft) {
     return { error: 'This application cannot be edited in its current status.' }
   }
 
+  const previousConnections = profile?.connections_open_to ?? []
   const nextStatus = status === 'rejected' ? 'draft' : status
   const columns = profileColumnsFromDraft(draft)
 
@@ -60,6 +62,12 @@ export async function saveApplicationDraft(draft: ApplicationDraft) {
   if (error) {
     return { error: error.message }
   }
+
+  await runCompatibilityConnectionsLifecycle(
+    user.id,
+    previousConnections,
+    columns.connections_open_to
+  )
 
   revalidatePath('/application')
   revalidatePath('/application/status')
@@ -84,7 +92,7 @@ export async function submitApplication() {
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'application_status, full_name, membership_intent, location_area, application_draft'
+      'application_status, full_name, membership_intent, location_area, application_draft, connections_open_to'
     )
     .eq('id', user.id)
     .single()
@@ -110,6 +118,8 @@ export async function submitApplication() {
     ...draft,
     step: APPLICATION_TOTAL_STEPS,
   })
+
+  const previousConnections = profile.connections_open_to ?? []
 
   const gates = emptyApprovalGates()
   gates.email_verified = 'pending_review'
@@ -137,6 +147,12 @@ export async function submitApplication() {
     captureOperationalError('application_submit', error)
     return { error: error.message }
   }
+
+  await runCompatibilityConnectionsLifecycle(
+    user.id,
+    previousConnections,
+    columns.connections_open_to
+  )
 
   revalidatePath('/application')
   revalidatePath('/application/status')

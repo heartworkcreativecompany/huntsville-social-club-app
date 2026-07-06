@@ -15,6 +15,7 @@ export type FieldVisibility =
   | 'optionalTrust'
 
 export const CONNECTION_OPEN_TO_OPTIONS = [
+  'Dating',
   'New friends',
   'Professional peers',
   'Activity partners',

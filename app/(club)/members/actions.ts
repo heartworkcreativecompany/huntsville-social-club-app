@@ -7,6 +7,7 @@ import {
   profileColumnsFromDraft,
 } from '@/lib/application-draft-sync'
 import { parseApplicationDraft } from '@/lib/application'
+import { runCompatibilityConnectionsLifecycle } from '@/lib/compatibility/sync-server'
 
 export async function updateMemberProfile(input: {
   displayName: string
@@ -24,10 +25,11 @@ export async function updateMemberProfile(input: {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('application_draft, application_status')
+    .select('application_draft, application_status, connections_open_to')
     .eq('id', user.id)
     .single()
 
+  const previousConnections = profile?.connections_open_to ?? []
   const draft = profile?.application_draft
     ? parseApplicationDraft(profile.application_draft)
     : mergeProfileIntoDraft(null)
@@ -49,6 +51,12 @@ export async function updateMemberProfile(input: {
   if (error) {
     return { error: error.message }
   }
+
+  await runCompatibilityConnectionsLifecycle(
+    user.id,
+    previousConnections,
+    columns.connections_open_to
+  )
 
   revalidatePath('/members')
   revalidatePath('/profile')
