@@ -7,7 +7,7 @@ import { formatEventDate, buttonPrimaryClassName } from '@/lib/event-labels'
 import { eventCoverImage } from '@/lib/event-images'
 import {
   availabilityLabel,
-  eventCardAccessHint,
+  eventRsvpActionLabel,
   isEventPast,
   memberGoingLabel,
 } from '@/lib/event-display'
@@ -49,9 +49,9 @@ export default function EventRichCard({
   const isPast = isEventPast(event.starts_at, event.ends_at)
   const isCancelled = event.status === 'cancelled'
   const spotsLabel = availabilityLabel(counts.going, capacity)
-  const accessHint = eventCardAccessHint({
-    registrationPreview: registrationPreview ?? null,
+  const rsvpActionLabel = eventRsvpActionLabel({
     currentUserStatus,
+    registrationPreview: registrationPreview ?? null,
     isPast,
     isCancelled,
   })
@@ -106,8 +106,8 @@ export default function EventRichCard({
           ) : null}
         </p>
 
-        {accessHint ? (
-          <p className="text-sm font-medium text-accent">{accessHint}</p>
+        {rsvpActionLabel ? (
+          <p className="text-sm font-medium text-accent">{rsvpActionLabel}</p>
         ) : null}
 
         <div className="border-t border-border pt-4">

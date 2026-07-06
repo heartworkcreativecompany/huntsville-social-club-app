@@ -101,6 +101,54 @@ export function eventCardAccessHint(input: {
   return null
 }
 
+export function eventRsvpActionLabel(input: {
+  currentUserStatus: string | null
+  registrationPreview: EventRegistrationDecision | null
+  isPast: boolean
+  isCancelled: boolean
+}): string | null {
+  if (input.isPast || input.isCancelled) return null
+
+  if (input.currentUserStatus === 'going') {
+    return "Already RSVP'd"
+  }
+
+  if (input.currentUserStatus === 'maybe') {
+    return 'Maybe attending'
+  }
+
+  const preview = input.registrationPreview
+  if (!preview) return null
+
+  if (!preview.allowed) {
+    if (preview.code === 'circle_social_blocked') {
+      return 'Upgrade membership'
+    }
+    return null
+  }
+
+  if (preview.uiState === 'inner_included_exhausted') {
+    return 'No remaining uses'
+  }
+
+  if (preview.uiState === 'inner_included_remaining') {
+    return 'RSVP with membership'
+  }
+
+  if (
+    preview.uiState === 'elite_unlimited' ||
+    preview.uiState === 'inner_circle_social_included'
+  ) {
+    return 'Included with membership'
+  }
+
+  if (preview.method === 'paid_per_event') {
+    return 'Pay in advance'
+  }
+
+  return null
+}
+
 export function matchesEventFilter(input: {
   filter: EventListFilter
   startsAt: string

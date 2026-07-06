@@ -94,11 +94,23 @@ export default function EventRsvp({
     (preview.uiState === 'elite_unlimited' ||
       preview.uiState === 'inner_circle_social_included')
 
+  const isRegisteredGoing = currentStatus === 'going'
+
   return (
     <div>
+      {isRegisteredGoing ? (
+        <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 p-4 text-sm">
+          <p className="font-medium text-foreground">You&apos;re registered</p>
+          <p className="mt-1 text-muted-foreground">
+            You&apos;re going to this event. Update your RSVP below if your plans
+            change.
+          </p>
+        </div>
+      ) : null}
+
       {isCircleSocialBlocked ? <CircleSocialPaywall membershipsHref="/upgrade" /> : null}
 
-      {showInnerIncludedRemaining ? (
+      {showInnerIncludedRemaining && !isRegisteredGoing ? (
         <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 p-4 text-sm">
           <p className="font-medium text-foreground">{preview.description}</p>
           <p className="mt-2 text-muted-foreground">
@@ -125,7 +137,7 @@ export default function EventRsvp({
         </div>
       ) : null}
 
-      {showInnerIncludedExhausted ? (
+      {showInnerIncludedExhausted && !isRegisteredGoing ? (
         <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 p-4 text-sm">
           <p className="font-medium text-foreground">
             {FEATURE_GATE_COPY.inner_included_exhausted.title}
@@ -172,7 +184,7 @@ export default function EventRsvp({
       ) : null}
 
       <p className="mb-3 text-sm text-muted-foreground">
-        {currentStatus ? 'Your RSVP' : 'RSVP to this event'}
+        {isRegisteredGoing ? 'Change your RSVP' : currentStatus ? 'Your RSVP' : 'RSVP to this event'}
       </p>
       <div className="flex flex-wrap gap-2">
         {RSVP_OPTIONS.map((option) => {
