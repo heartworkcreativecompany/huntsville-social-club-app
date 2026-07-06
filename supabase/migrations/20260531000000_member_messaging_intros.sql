@@ -48,6 +48,7 @@ alter table public.member_conversations enable row level security;
 alter table public.member_messages enable row level security;
 alter table public.member_intro_requests enable row level security;
 
+drop policy if exists "Participants read conversations" on public.member_conversations;
 create policy "Participants read conversations"
   on public.member_conversations
   for select
@@ -58,6 +59,7 @@ create policy "Participants read conversations"
     or public.is_admin((select auth.uid()))
   );
 
+drop policy if exists "Participants read messages" on public.member_messages;
 create policy "Participants read messages"
   on public.member_messages
   for select
@@ -75,6 +77,7 @@ create policy "Participants read messages"
     )
   );
 
+drop policy if exists "Participants send messages" on public.member_messages;
 create policy "Participants send messages"
   on public.member_messages
   for insert
@@ -89,6 +92,7 @@ create policy "Participants send messages"
     )
   );
 
+drop policy if exists "Members read own intro requests" on public.member_intro_requests;
 create policy "Members read own intro requests"
   on public.member_intro_requests
   for select
@@ -98,6 +102,7 @@ create policy "Members read own intro requests"
     or public.is_admin((select auth.uid()))
   );
 
+drop policy if exists "Approved members create intro requests" on public.member_intro_requests;
 create policy "Approved members create intro requests"
   on public.member_intro_requests
   for insert
