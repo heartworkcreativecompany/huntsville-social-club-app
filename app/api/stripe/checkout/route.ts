@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createMembershipCheckoutSession } from '@/app/(club)/membership/actions'
+import { isPaidMembershipTier } from '@/lib/stripe/config'
 
 export const runtime = 'nodejs'
 
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
   }
 
-  if (typeof tier !== 'string' || !tier.trim()) {
+  if (typeof tier !== 'string' || !isPaidMembershipTier(tier)) {
     return NextResponse.json(
       { error: 'Invalid membership plan selected.' },
       { status: 400 }

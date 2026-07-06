@@ -94,10 +94,8 @@ export async function createMembershipCheckoutSession(tierInput: string) {
 
     return { url: session.url }
   } catch (error) {
-    return {
-      error:
-        error instanceof Error ? error.message : 'Could not start checkout.',
-    }
+    console.error('[membership_checkout]', error)
+    return { error: 'Could not start checkout.' }
   }
 }
 
