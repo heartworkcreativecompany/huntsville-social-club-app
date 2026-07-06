@@ -2,24 +2,18 @@ import Link from 'next/link'
 import Card from '@/components/ui/card'
 import Badge from '@/components/ui/badge'
 import { BillingPortalButton } from '@/components/membership/membership-billing-buttons'
-import {
-  billingStatusLabel,
-  parseMembershipBilling,
-} from '@/lib/membership-systems'
-import { buildMemberEntitlements } from '@/lib/membership-entitlements'
+import { billingStatusLabel } from '@/lib/membership-systems'
+import type { MemberEntitlements } from '@/lib/membership-entitlements'
 import { freeRegistrationsSummary } from '@/lib/membership-entitlements'
 import { buttonPrimaryClassName } from '@/lib/event-labels'
 
 export default function MemberBillingStatus({
-  billingRaw,
-  role = 'member',
+  entitlements,
 }: {
-  billingRaw: unknown
-  role?: string | null
+  entitlements: MemberEntitlements
 }) {
-  const billing = parseMembershipBilling(billingRaw)
+  const billing = entitlements.billing
   const label = billingStatusLabel(billing)
-  const entitlements = buildMemberEntitlements({ role, billing })
   const summary = freeRegistrationsSummary(entitlements)
   const hasPaidSubscription =
     Boolean(billing.stripe_subscription_id) &&

@@ -1,10 +1,9 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
 import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import MemberProfileCard from '@/components/members/member-profile-card'
-import MemberBillingStatus from '@/components/members/member-billing-status'
+import MembershipUsageCard from '@/components/membership/membership-usage-card'
 import ProfileStrengthModule from '@/components/profile/profile-strength-module'
 import VerificationStatusModule from '@/components/profile/verification-status-module'
 import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
@@ -14,7 +13,6 @@ import { computeProfileCompletion } from '@/lib/profile-completion'
 import { getViewer } from '@/lib/viewer'
 import ProfileForm from '@/app/(club)/members/profile-form'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
-import { freeRegistrationsSummary } from '@/lib/membership-entitlements'
 
 export default async function YourProfilePage() {
   const viewer = await getViewer()
@@ -44,9 +42,6 @@ export default async function YourProfilePage() {
   }
 
   const { entitlements } = await loadMemberEntitlementsForViewer()
-  const registrationLine = entitlements
-    ? freeRegistrationsSummary(entitlements)
-    : null
 
   return (
     <>
@@ -56,10 +51,6 @@ export default async function YourProfilePage() {
         description="Manage how you show up in the club — photos, details, verification, and membership status."
         actions={<ApplicationStatusBadge status={viewer.applicationStatus} />}
       />
-
-      {entitlements && registrationLine ? (
-        <p className="mb-6 text-sm text-muted-foreground">{registrationLine}</p>
-      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <section className="space-y-6">
@@ -89,6 +80,10 @@ export default async function YourProfilePage() {
         </section>
 
         <aside className="space-y-6">
+          {entitlements ? (
+            <MembershipUsageCard entitlements={entitlements} />
+          ) : null}
+
           <ProfileStrengthModule
             percent={completion.percent}
             items={completion.items}
@@ -101,11 +96,6 @@ export default async function YourProfilePage() {
               approvalGatesRaw={profile?.approval_gates}
             />
           ) : null}
-
-          <MemberBillingStatus
-            billingRaw={profile?.membership_billing}
-            role={viewer.role}
-          />
         </aside>
       </div>
     </>

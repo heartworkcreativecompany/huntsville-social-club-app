@@ -9,7 +9,7 @@ import MemberDirectorySection from '@/components/members/member-directory-sectio
 import RecentMessagesPreview from '@/components/messages/recent-messages-preview'
 import { loadDirectoryProfiles } from '@/lib/load-directory-profiles'
 import { loadRecentMessagePreviews } from '@/lib/member-messages'
-import MembershipEntitlementBanner from '@/components/membership/membership-entitlement-banner'
+import MembershipUsageCard from '@/components/membership/membership-usage-card'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
@@ -44,7 +44,10 @@ export default async function MembersPage() {
 
       {viewer.canAccessApp && entitlements ? (
         <section className="mb-8">
-          <MembershipEntitlementBanner entitlements={entitlements} />
+          <MembershipUsageCard
+            entitlements={entitlements}
+            className="border-accent/20 bg-accent-soft/30"
+          />
         </section>
       ) : null}
 
