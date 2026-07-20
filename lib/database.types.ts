@@ -21,6 +21,13 @@ export interface Database {
           role: string | null
           created_at: string | null
           updated_at: string | null
+          contact_email: string | null
+          show_contact_email: boolean
+          verified_phone_e164: string | null
+          identity_verification_status: string
+          identity_verification_session_id: string | null
+          identity_verified_at: string | null
+          identity_verification_last_error: string | null
           application_status: string
           membership_intent: string | null
           application_draft: Json | null
@@ -42,6 +49,7 @@ export interface Database {
           discovery_interests: string[]
           discovery_industry: string | null
           connections_open_to: string[]
+          connection_intents: string[]
           compatibility_questionnaire: Json | null
           compatibility_completed_at: string | null
           compatibility_updated_at: string | null
@@ -53,6 +61,16 @@ export interface Database {
           messaging_entitlement_lost_at: string | null
           messaging_entitlement_restored_at: string | null
           last_match_generation_at: string | null
+          last_match_review_at: string | null
+          profile_pending_revision: Json | null
+          profile_revision_status: string
+          profile_revision_submitted_at: string | null
+          profile_revision_reviewed_at: string | null
+          profile_revision_admin_notes: string | null
+          profile_revision_history: Json | null
+          messaging_suspended_at: string | null
+          messaging_suspension_reason: string | null
+          messaging_suspended_by: string | null
         }
         Insert: {
           id: string
@@ -70,6 +88,13 @@ export interface Database {
           admin_review_notes?: string | null
           location_area?: string | null
           referral_source?: string | null
+          contact_email?: string | null
+          show_contact_email?: boolean
+          verified_phone_e164?: string | null
+          identity_verification_status?: string
+          identity_verification_session_id?: string | null
+          identity_verified_at?: string | null
+          identity_verification_last_error?: string | null
           verification_state?: Json
           approval_gates?: Json
           locality_confirmation?: Json
@@ -82,6 +107,7 @@ export interface Database {
           discovery_interests?: string[]
           discovery_industry?: string | null
           connections_open_to?: string[]
+          connection_intents?: string[]
           compatibility_questionnaire?: Json | null
           compatibility_completed_at?: string | null
           compatibility_updated_at?: string | null
@@ -93,6 +119,16 @@ export interface Database {
           messaging_entitlement_lost_at?: string | null
           messaging_entitlement_restored_at?: string | null
           last_match_generation_at?: string | null
+          last_match_review_at?: string | null
+          profile_pending_revision?: Json | null
+          profile_revision_status?: string
+          profile_revision_submitted_at?: string | null
+          profile_revision_reviewed_at?: string | null
+          profile_revision_admin_notes?: string | null
+          profile_revision_history?: Json | null
+          messaging_suspended_at?: string | null
+          messaging_suspension_reason?: string | null
+          messaging_suspended_by?: string | null
         }
         Update: {
           id?: string
@@ -110,6 +146,13 @@ export interface Database {
           admin_review_notes?: string | null
           location_area?: string | null
           referral_source?: string | null
+          contact_email?: string | null
+          show_contact_email?: boolean
+          verified_phone_e164?: string | null
+          identity_verification_status?: string
+          identity_verification_session_id?: string | null
+          identity_verified_at?: string | null
+          identity_verification_last_error?: string | null
           verification_state?: Json
           approval_gates?: Json
           locality_confirmation?: Json
@@ -122,6 +165,7 @@ export interface Database {
           discovery_interests?: string[]
           discovery_industry?: string | null
           connections_open_to?: string[]
+          connection_intents?: string[]
           compatibility_questionnaire?: Json | null
           compatibility_completed_at?: string | null
           compatibility_updated_at?: string | null
@@ -133,6 +177,16 @@ export interface Database {
           messaging_entitlement_lost_at?: string | null
           messaging_entitlement_restored_at?: string | null
           last_match_generation_at?: string | null
+          last_match_review_at?: string | null
+          profile_pending_revision?: Json | null
+          profile_revision_status?: string
+          profile_revision_submitted_at?: string | null
+          profile_revision_reviewed_at?: string | null
+          profile_revision_admin_notes?: string | null
+          profile_revision_history?: Json | null
+          messaging_suspended_at?: string | null
+          messaging_suspension_reason?: string | null
+          messaging_suspended_by?: string | null
         }
         Relationships: []
       }
@@ -146,6 +200,11 @@ export interface Database {
           match_count: number
           cancellation_reason: string | null
           created_at: string
+          generation_source: string | null
+          empty_reason: string | null
+          top_candidate_score: number | null
+          notification_status: string | null
+          notification_sent_at: string | null
         }
         Insert: {
           id?: string
@@ -156,6 +215,11 @@ export interface Database {
           match_count?: number
           cancellation_reason?: string | null
           created_at?: string
+          generation_source?: string | null
+          empty_reason?: string | null
+          top_candidate_score?: number | null
+          notification_status?: string | null
+          notification_sent_at?: string | null
         }
         Update: {
           id?: string
@@ -166,6 +230,11 @@ export interface Database {
           match_count?: number
           cancellation_reason?: string | null
           created_at?: string
+          generation_source?: string | null
+          empty_reason?: string | null
+          top_candidate_score?: number | null
+          notification_status?: string | null
+          notification_sent_at?: string | null
         }
         Relationships: []
       }
@@ -179,6 +248,8 @@ export interface Database {
           score_breakdown: Json
           status: string
           created_at: string
+          expires_at: string | null
+          lifecycle_updated_at: string
         }
         Insert: {
           id?: string
@@ -189,6 +260,8 @@ export interface Database {
           score_breakdown?: Json
           status?: string
           created_at?: string
+          expires_at?: string | null
+          lifecycle_updated_at?: string
         }
         Update: {
           id?: string
@@ -199,6 +272,8 @@ export interface Database {
           score_breakdown?: Json
           status?: string
           created_at?: string
+          expires_at?: string | null
+          lifecycle_updated_at?: string
         }
         Relationships: []
       }
@@ -247,24 +322,195 @@ export interface Database {
         }
         Relationships: []
       }
+      member_member_blocks: {
+        Row: {
+          id: string
+          blocker_id: string
+          blocked_member_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          blocker_id: string
+          blocked_member_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          blocker_id?: string
+          blocked_member_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      member_conversation_reports: {
+        Row: {
+          id: string
+          reporter_id: string
+          conversation_id: string
+          reported_member_id: string | null
+          reason: string
+          details: string | null
+          status: string
+          created_at: string
+          admin_notes: string | null
+          admin_reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          id?: string
+          reporter_id: string
+          conversation_id: string
+          reported_member_id?: string | null
+          reason: string
+          details?: string | null
+          status?: string
+          created_at?: string
+          admin_notes?: string | null
+          admin_reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Update: {
+          id?: string
+          reporter_id?: string
+          conversation_id?: string
+          reported_member_id?: string | null
+          reason?: string
+          details?: string | null
+          status?: string
+          created_at?: string
+          admin_notes?: string | null
+          admin_reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Relationships: []
+      }
+      moderation_actions: {
+        Row: {
+          id: string
+          actor_id: string | null
+          target_member_id: string | null
+          action_type: string
+          source_type: string | null
+          source_id: string | null
+          reason: string | null
+          details: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          actor_id?: string | null
+          target_member_id?: string | null
+          action_type: string
+          source_type?: string | null
+          source_id?: string | null
+          reason?: string | null
+          details?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          actor_id?: string | null
+          target_member_id?: string | null
+          action_type?: string
+          source_type?: string | null
+          source_id?: string | null
+          reason?: string | null
+          details?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       member_conversations: {
         Row: {
           id: string
           participant_a: string
           participant_b: string
           updated_at: string
+          status: string
+          initiated_by: string | null
+          recommendation_id: string | null
+          responded_at: string | null
+          declined_at: string | null
+          recontact_status: string | null
+          recontact_requested_at: string | null
+          recontact_requested_by: string | null
+          recontact_note: string | null
+          recontact_admin_actor_id: string | null
+          recontact_admin_reviewed_at: string | null
+          recontact_recipient_responded_at: string | null
         }
         Insert: {
           id?: string
           participant_a: string
           participant_b: string
           updated_at?: string
+          status?: string
+          initiated_by?: string | null
+          recommendation_id?: string | null
+          responded_at?: string | null
+          declined_at?: string | null
+          recontact_status?: string | null
+          recontact_requested_at?: string | null
+          recontact_requested_by?: string | null
+          recontact_note?: string | null
+          recontact_admin_actor_id?: string | null
+          recontact_admin_reviewed_at?: string | null
+          recontact_recipient_responded_at?: string | null
         }
         Update: {
           id?: string
           participant_a?: string
           participant_b?: string
           updated_at?: string
+          status?: string
+          initiated_by?: string | null
+          recommendation_id?: string | null
+          responded_at?: string | null
+          declined_at?: string | null
+          recontact_status?: string | null
+          recontact_requested_at?: string | null
+          recontact_requested_by?: string | null
+          recontact_note?: string | null
+          recontact_admin_actor_id?: string | null
+          recontact_admin_reviewed_at?: string | null
+          recontact_recipient_responded_at?: string | null
+        }
+        Relationships: []
+      }
+      member_notifications: {
+        Row: {
+          id: string
+          user_id: string
+          type: string
+          title: string
+          body: string | null
+          href: string
+          read_at: string | null
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: string
+          title: string
+          body?: string | null
+          href: string
+          read_at?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          type?: string
+          title?: string
+          body?: string | null
+          href?: string
+          read_at?: string | null
+          metadata?: Json
+          created_at?: string
         }
         Relationships: []
       }
@@ -276,6 +522,7 @@ export interface Database {
           body: string
           read_at: string | null
           created_at: string
+          is_system: boolean
         }
         Insert: {
           id?: string
@@ -284,6 +531,7 @@ export interface Database {
           body: string
           read_at?: string | null
           created_at?: string
+          is_system?: boolean
         }
         Update: {
           id?: string
@@ -292,6 +540,7 @@ export interface Database {
           body?: string
           read_at?: string | null
           created_at?: string
+          is_system?: boolean
         }
         Relationships: []
       }
@@ -305,6 +554,9 @@ export interface Database {
           status: string
           created_at: string
           recommendation_id: string | null
+          admin_notes: string | null
+          admin_reviewed_at: string | null
+          conversation_id: string | null
         }
         Insert: {
           id?: string
@@ -315,6 +567,9 @@ export interface Database {
           status?: string
           created_at?: string
           recommendation_id?: string | null
+          admin_notes?: string | null
+          admin_reviewed_at?: string | null
+          conversation_id?: string | null
         }
         Update: {
           id?: string
@@ -325,6 +580,9 @@ export interface Database {
           status?: string
           created_at?: string
           recommendation_id?: string | null
+          admin_notes?: string | null
+          admin_reviewed_at?: string | null
+          conversation_id?: string | null
         }
         Relationships: []
       }
@@ -506,7 +764,15 @@ export interface Database {
         Relationships: []
       }
     }
-    Views: {}
+    Views: {
+      member_profiles: {
+        Row: Omit<
+          Database['public']['Tables']['profiles']['Row'],
+          'email'
+        >
+        Relationships: []
+      }
+    }
     Functions: {}
     Enums: {}
     CompositeTypes: {}

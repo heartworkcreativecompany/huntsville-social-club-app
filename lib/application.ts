@@ -1,4 +1,10 @@
+import {
+  memberPublicIntentsFromConnectionsOpenTo,
+  parseConnectionIntents,
+  type MemberPublicIntentValue,
+} from '@/lib/member-public-intent'
 import { APPLICATION_TOTAL_STEPS } from '@/lib/application-form-content'
+import { normalizeDiscoveryIntent } from '@/lib/membership-systems'
 
 export type ApplicationStatus =
   | 'draft'
@@ -26,6 +32,8 @@ export type ApplicationDraft = {
     gender: string
     pronouns: string
     lookingFor: string
+    /** Canonical intents for filters/badges (networking, dating, friends). */
+    connectionIntents: MemberPublicIntentValue[]
     connectionsOpenTo: string[]
   }
   location: {
@@ -260,6 +268,7 @@ export function emptyDraft(): ApplicationDraft {
       gender: '',
       pronouns: '',
       lookingFor: '',
+      connectionIntents: [],
       connectionsOpenTo: [],
     },
     location: {
@@ -375,6 +384,26 @@ function parsePhotos(value: unknown): ApplicationPhoto[] {
     .filter((photo): photo is ApplicationPhoto => photo !== null)
 }
 
+function migrateConnectionIntentsFromLegacy(
+  lookingFor: string,
+  connectionsOpenTo: string[]
+): MemberPublicIntentValue[] {
+  if (lookingFor.trim()) {
+    const normalized = normalizeDiscoveryIntent(lookingFor)
+    if (
+      normalized === 'networking' ||
+      normalized === 'dating' ||
+      normalized === 'friends'
+    ) {
+      return [normalized]
+    }
+    if (normalized === 'mixed') {
+      return memberPublicIntentsFromConnectionsOpenTo(connectionsOpenTo)
+    }
+  }
+  return memberPublicIntentsFromConnectionsOpenTo(connectionsOpenTo)
+}
+
 export function parseApplicationDraft(value: unknown): ApplicationDraft {
   if (!value || typeof value !== 'object') {
     return emptyDraft()
@@ -393,6 +422,14 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
   const prompts = (raw.prompts as Record<string, unknown>) ?? {}
   const agreements = (raw.agreements as Record<string, unknown>) ?? {}
 
+  const lookingFor = parseString(profile.lookingFor)
+  const connectionsOpenTo = parseStringArray(profile.connectionsOpenTo)
+  const parsedIntents = parseConnectionIntents(profile.connectionIntents)
+  const connectionIntents =
+    parsedIntents.length > 0
+      ? parsedIntents
+      : migrateConnectionIntentsFromLegacy(lookingFor, connectionsOpenTo)
+
   return {
     version: 2,
     step: clampStep(typeof raw.step === 'number' ? raw.step : base.step),
@@ -403,8 +440,9 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
       dateOfBirth: parseString(profile.dateOfBirth),
       gender: parseString(profile.gender),
       pronouns: parseString(profile.pronouns),
-      lookingFor: parseString(profile.lookingFor),
-      connectionsOpenTo: parseStringArray(profile.connectionsOpenTo),
+      lookingFor,
+      connectionIntents,
+      connectionsOpenTo,
     },
     location: {
       city: parseString(location.city),

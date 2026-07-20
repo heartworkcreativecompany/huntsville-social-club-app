@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
 import Card from '@/components/ui/card'
+import IdentityVerificationCard from '@/components/application/identity-verification-card'
 import {
   applicationStatusLabel,
   nextActionForApplicant,
@@ -8,11 +9,11 @@ import {
 } from '@/lib/application'
 import { buttonPrimaryClassName, buttonSecondaryClassName } from '@/lib/event-labels'
 import {
-  APPROVAL_GATE_DEFS,
   applicantGateSummary,
-  reviewStatusLabel,
   type ApprovalGates,
 } from '@/lib/membership-systems'
+import type { IdentityVerificationStatus } from '@/lib/stripe/identity'
+import { VerificationGateChecklistCard } from '@/components/profile/verification-gate-checklist'
 
 const STATUS_STEPS: {
   status: ApplicationStatus
@@ -47,20 +48,44 @@ function stepIndex(status: ApplicationStatus): number {
   return idx >= 0 ? idx : 0
 }
 
+function parseIdentityStatus(
+  value: string | null | undefined
+): IdentityVerificationStatus {
+  switch (value) {
+    case 'pending':
+    case 'processing':
+    case 'verified':
+    case 'requires_input':
+    case 'canceled':
+    case 'not_started':
+      return value
+    default:
+      return 'not_started'
+  }
+}
+
 export default function ApplicationStatusPanel({
   status,
   submittedAt,
   verifiedAt,
   adminNotes,
   approvalGates,
+  identityVerificationStatus,
+  identityVerifiedAt,
+  identityVerificationLastError,
   showSubmitBanner = false,
+  showIdentityReturnNotice = false,
 }: {
   status: ApplicationStatus
   submittedAt?: string | null
   verifiedAt?: string | null
   adminNotes?: string | null
   approvalGates?: ApprovalGates
+  identityVerificationStatus?: string | null
+  identityVerifiedAt?: string | null
+  identityVerificationLastError?: string | null
   showSubmitBanner?: boolean
+  showIdentityReturnNotice?: boolean
 }) {
   const next = nextActionForApplicant(status)
   const currentIdx = stepIndex(status)
@@ -68,6 +93,11 @@ export default function ApplicationStatusPanel({
   const gateSummary = approvalGates
     ? applicantGateSummary(approvalGates)
     : null
+  const showIdentityCard =
+    status === 'submitted' ||
+    status === 'in_review' ||
+    status === 'needs_info' ||
+    status === 'approved'
 
   return (
     <div className="grid gap-6">
@@ -81,8 +111,8 @@ export default function ApplicationStatusPanel({
             typically takes a few days. Track status here anytime.
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
-            What happens next: your application moves to review, and you will
-            see updates on this page.
+            What happens next: complete identity verification below, then your
+            application continues through review on this page.
           </p>
         </Card>
       ) : null}
@@ -156,29 +186,21 @@ export default function ApplicationStatusPanel({
         </Card>
       )}
 
+      {showIdentityCard ? (
+        <IdentityVerificationCard
+          status={parseIdentityStatus(identityVerificationStatus)}
+          lastError={identityVerificationLastError}
+          verifiedAt={identityVerifiedAt}
+          showReturnNotice={showIdentityReturnNotice}
+        />
+      ) : null}
+
       {gateSummary && status !== 'approved' && status !== 'draft' ? (
-        <Card padding="sm">
-          <h3 className="text-display text-base font-medium text-foreground">
-            Verification progress
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">{gateSummary.label}</p>
-          <ul className="mt-3 grid gap-2 text-sm">
-            {APPROVAL_GATE_DEFS.map((def) => {
-              const gateStatus = approvalGates?.[def.key] ?? 'incomplete'
-              return (
-                <li
-                  key={def.key}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-                >
-                  <span className="text-foreground">{def.label}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {reviewStatusLabel(gateStatus)}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        </Card>
+        <VerificationGateChecklistCard
+          title="Verification progress"
+          description={gateSummary.label}
+          gates={approvalGates ?? {}}
+        />
       ) : null}
 
       <Card>
@@ -198,7 +220,7 @@ export default function ApplicationStatusPanel({
             </div>
           ) : null}
           <div>
-            <dt className="text-muted-foreground">Verified</dt>
+            <dt className="text-muted-foreground">Membership approved</dt>
             <dd className="font-medium text-foreground">
               {verifiedAt
                 ? new Date(verifiedAt).toLocaleString()

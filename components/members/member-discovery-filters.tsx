@@ -146,7 +146,10 @@ export default function MemberDiscoveryFilters({
             onChange={(e) => patch({ verifiedOnly: e.target.checked })}
             className="mt-0.5"
           />
-          <span className="leading-snug text-muted-foreground">
+          <span
+            className="leading-snug text-muted-foreground"
+            title="Email and phone confirmed, plus staff-reviewed application, photos, and locality"
+          >
             Verified members only
           </span>
         </label>

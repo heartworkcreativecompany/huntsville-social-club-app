@@ -1,7 +1,6 @@
 import Badge from '@/components/ui/badge'
 import { roleLabel } from '@/lib/event-labels'
 import {
-  discoveryIntentLabel,
   intentLabel,
   memberDisplayName,
   memberSinceLabel,
@@ -9,6 +8,7 @@ import {
   professionalContext,
   type DirectoryMember,
 } from '@/lib/members-discovery'
+import { memberPublicIntentLabel } from '@/lib/member-public-intent'
 import { MemberProfileBadges } from '@/components/members/member-badge-row'
 
 export default function MemberProfileDetailsPanel({
@@ -28,7 +28,7 @@ export default function MemberProfileDetailsPanel({
   const showIntent = !limited || isCurrentUser
   const intent = intentLabel(member.membership_intent, {
     placeholder: isCurrentUser
-      ? 'Add your intent in profile settings'
+      ? 'Add your about note on your profile page'
       : 'Intent shared at events',
   })
 
@@ -65,13 +65,13 @@ export default function MemberProfileDetailsPanel({
         </div>
       </div>
 
-      {member.location_area || member.discovery_intent ? (
+      {member.location_area || member.public_intents.length > 0 ? (
         <div>
-          <p className="eyebrow">Locality & intent</p>
+          <p className="eyebrow">Locality & connections</p>
           <p className="mt-2 text-sm text-foreground">
             {member.location_area ?? 'Area not shared'}
-            {member.discovery_intent
-              ? ` · ${discoveryIntentLabel(member.discovery_intent)}`
+            {member.public_intents.length > 0
+              ? ` · ${member.public_intents.map(memberPublicIntentLabel).join(', ')}`
               : ''}
           </p>
         </div>
@@ -100,10 +100,10 @@ export default function MemberProfileDetailsPanel({
         </p>
       </div>
 
-      {!limited && member.email ? (
+      {member.contactEmail ? (
         <div>
           <p className="eyebrow">Contact</p>
-          <p className="mt-2 text-sm text-foreground">{member.email}</p>
+          <p className="mt-2 text-sm text-foreground">{member.contactEmail}</p>
         </div>
       ) : null}
     </div>

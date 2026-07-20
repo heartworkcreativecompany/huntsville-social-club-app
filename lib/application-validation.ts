@@ -7,8 +7,8 @@ import {
   REQUIRED_PROMPT_KEYS,
   APPLICATION_PROMPTS,
 } from '@/lib/application-form-content'
-import { DISCOVERY_INTENT_OPTIONS } from '@/lib/membership-systems'
 import type { ApplicationDraft } from '@/lib/application'
+import { parseConnectionIntents } from '@/lib/member-public-intent'
 
 export function completedPromptCount(draft: ApplicationDraft): number {
   return APPLICATION_PROMPTS.filter((p) =>
@@ -50,11 +50,12 @@ export function validateApplicationForSubmit(
     return 'Please enter your date of birth.'
   }
 
-  const validIntent = DISCOVERY_INTENT_OPTIONS.some(
-    (o) => o.value && o.value === profile.lookingFor
-  )
-  if (!validIntent) {
-    return 'Please select your primary intent (dating, networking, friends, or mixed).'
+  if (profile.connectionIntents.length < 1) {
+    return 'Select at least one kind of connection you are looking for.'
+  }
+  const validIntents = parseConnectionIntents(profile.connectionIntents)
+  if (validIntents.length < 1) {
+    return 'Select at least one kind of connection you are looking for.'
   }
 
   if (!location.city.trim() || !location.state.trim() || !location.zipCode.trim()) {

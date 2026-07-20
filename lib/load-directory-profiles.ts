@@ -13,6 +13,7 @@ import {
   DIRECTORY_FULL_FIELDS,
   isMissingSchemaColumnError,
 } from '@/lib/profile-query-fields'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 
 type RawProfile = Parameters<typeof buildDirectoryMember>[0] & {
   application_draft?: unknown
@@ -28,7 +29,6 @@ function finalizeMember(
   if (!isAdmin) {
     return {
       ...member,
-      email: null,
       membership_intent: null,
       location_city: null,
       location_zip: null,
@@ -44,7 +44,7 @@ async function fetchApprovedProfiles(
   fields: string
 ) {
   return supabase
-    .from('profiles')
+    .from(MEMBER_PROFILES_VIEW)
     .select(fields)
     .eq('application_status', 'approved')
     .neq('id', viewerId)
@@ -56,7 +56,7 @@ async function fetchProfileById(
   memberId: string,
   fields: string
 ) {
-  return supabase.from('profiles').select(fields).eq('id', memberId).single()
+  return supabase.from(MEMBER_PROFILES_VIEW).select(fields).eq('id', memberId).single()
 }
 
 async function loadWithFieldFallback<T>(
@@ -146,7 +146,7 @@ export async function loadMemberProfile(
   const profileDetails = draft ? publicProfileDetailsFromDraft(draft) : null
 
   return {
-    member: finalizeMember(profile, isAdmin || isSelf),
+    member: finalizeMember(profile, isAdmin),
     profileDetails,
     error: null,
   }

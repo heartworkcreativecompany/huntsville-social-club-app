@@ -5,6 +5,11 @@
 
 import type { ApplicationDraft } from '@/lib/application'
 import {
+  discoveryIntentFromMemberIntents,
+  memberPublicIntentsFromConnectionsOpenTo,
+  type MemberPublicIntentValue,
+} from '@/lib/member-public-intent'
+import {
   applicationStatusLabel,
   resolveApplicationStatus,
   type ApplicationStatus,
@@ -70,25 +75,35 @@ export type VerificationBadgeDef = {
 }
 
 export const VERIFICATION_BADGE_DEFS: VerificationBadgeDef[] = [
-  { key: 'email', label: 'Email verified', cardPriority: 1, publicSafe: true },
-  { key: 'phone', label: 'Phone verified', cardPriority: 2, publicSafe: true },
+  {
+    key: 'email',
+    label: 'Email verified',
+    cardPriority: 1,
+    publicSafe: false,
+  },
+  {
+    key: 'phone',
+    label: 'Phone verified',
+    cardPriority: 2,
+    publicSafe: false,
+  },
   {
     key: 'locality',
     label: 'Locality confirmed',
     cardPriority: 3,
-    publicSafe: true,
+    publicSafe: false,
   },
   {
     key: 'profile_reviewed',
     label: 'Profile reviewed',
     cardPriority: 4,
-    publicSafe: true,
+    publicSafe: false,
   },
   {
     key: 'photo_reviewed',
     label: 'Photo reviewed',
     cardPriority: 5,
-    publicSafe: true,
+    publicSafe: false,
   },
   {
     key: 'id_verified',
@@ -139,49 +154,44 @@ export function parseVerificationState(value: unknown): VerificationState {
 export type DisplayBadge = {
   key: string
   label: string
-  variant: 'success' | 'accent' | 'premium' | 'warning' | 'muted'
+  variant: 'trust' | 'premium' | 'category' | 'success' | 'accent' | 'warning' | 'muted'
 }
 
 function badgeVariantForStatus(
   status: ReviewStatus
 ): DisplayBadge['variant'] {
-  if (status === 'approved') return 'success'
+  if (status === 'approved') return 'trust'
   if (status === 'pending_review' || status === 'needs_followup') return 'warning'
   if (status === 'rejected') return 'muted'
   return 'muted'
 }
 
-/** Public verification badges for member-facing UI. */
+/** Public verification badges for member-facing UI (single combined badge only). */
 export function publicVerificationBadges(
   state: VerificationState,
-  options?: { maxCount?: number; includePending?: boolean }
+  _options?: { maxCount?: number; includePending?: boolean }
 ): DisplayBadge[] {
-  const max = options?.maxCount ?? 99
-  const badges: DisplayBadge[] = []
-
-  const sorted = [...VERIFICATION_BADGE_DEFS]
-    .filter((d) => d.publicSafe)
-    .sort((a, b) => a.cardPriority - b.cardPriority)
-
-  for (const def of sorted) {
-    const status = state[def.key]
-    if (!status) continue
-    if (status === 'approved' || (options?.includePending && status !== 'incomplete')) {
-      badges.push({
-        key: def.key,
-        label: def.label,
-        variant: badgeVariantForStatus(status),
-      })
-    }
-    if (badges.length >= max) break
-  }
-
-  return badges
+  const badge = memberVerifiedTrustBadge(state)
+  return badge ? [badge] : []
 }
 
-/** Card-level badges — top 2 public verification badges. */
+/** Card-level badges — single verified badge when fully verified. */
 export function cardVerificationBadges(state: VerificationState): DisplayBadge[] {
-  return publicVerificationBadges(state, { maxCount: 2 })
+  return publicVerificationBadges(state)
+}
+
+export const MEMBER_VERIFIED_BADGE_LABEL = 'Verified'
+
+/** Single public trust badge when all verification requirements are met. */
+export function memberVerifiedTrustBadge(
+  state: VerificationState
+): DisplayBadge | null {
+  if (!isMemberPubliclyVerified(state)) return null
+  return {
+    key: 'verified',
+    label: MEMBER_VERIFIED_BADGE_LABEL,
+    variant: 'trust',
+  }
 }
 
 /** Admin sees all verification statuses. */
@@ -225,7 +235,7 @@ export const MEMBERSHIP_TIER_DEFS: MembershipTierDef[] = [
     variant: 'warning',
     cardPriority: 2,
   },
-  { key: 'member', label: 'Member', variant: 'success', cardPriority: 3 },
+  { key: 'member', label: 'Member', variant: 'category', cardPriority: 3 },
   {
     key: 'inner_circle',
     label: 'Inner Circle',
@@ -247,7 +257,7 @@ export const MEMBERSHIP_TIER_DEFS: MembershipTierDef[] = [
   {
     key: 'vendor_reviewed',
     label: 'Vendor reviewed',
-    variant: 'premium',
+    variant: 'trust',
     cardPriority: 7,
   },
   {
@@ -309,44 +319,100 @@ export function cardTierBadges(tier: MembershipTierKey): DisplayBadge[] {
 // C. Approval gates (required for standard approval)
 // ---------------------------------------------------------------------------
 
+/**
+ * Membership approval requires all gates marked requiredForApproval.
+ *
+ * Public "verified" trust signal (directory filter + profile strength + card badge):
+ * email + phone + profile_reviewed + photo_reviewed + locality all approved.
+ * Individual verification states remain in verification_state for admin/account use.
+ *
+ * verified_at = timestamp when application_status became approved (membership date).
+ */
+
 export type ApprovalGateKey =
   | 'email_verified'
   | 'phone_verified'
+  | 'identity_verified'
   | 'photos_reviewed'
   | 'application_reviewed'
   | 'locality_confirmed'
 
-export const APPROVAL_GATE_DEFS: {
+export type ApprovalGateCompletedBy = 'member' | 'admin' | 'future'
+
+export type ApprovalGateDef = {
   key: ApprovalGateKey
   label: string
   description: string
-}[] = [
+  /** Must be approved before admin can approve membership. */
+  requiredForApproval: boolean
+  /** False when the member/admin flow is not built yet. */
+  implemented: boolean
+  completedBy: ApprovalGateCompletedBy
+}
+
+export const APPROVAL_GATE_DEFS: ApprovalGateDef[] = [
   {
     key: 'email_verified',
     label: 'Email verification',
-    description: 'Account email confirmed via Supabase Auth.',
+    description:
+      'Account email confirmed via Supabase Auth (member clicks confirmation link when enabled).',
+    requiredForApproval: true,
+    implemented: true,
+    completedBy: 'member',
   },
   {
     key: 'phone_verified',
     label: 'Phone OTP verification',
-    description: 'Phone number verified via one-time passcode.',
+    description:
+      'Phone number verified via Supabase Auth SMS OTP. Account verification only — not shown publicly.',
+    requiredForApproval: false,
+    implemented: true,
+    completedBy: 'member',
+  },
+  {
+    key: 'identity_verified',
+    label: 'Identity verification',
+    description:
+      'Government ID + matching selfie via Stripe Identity. Required before membership approval. Document/selfie images are not stored in our database.',
+    requiredForApproval: true,
+    implemented: true,
+    completedBy: 'member',
   },
   {
     key: 'photos_reviewed',
     label: 'Photo review',
-    description: 'Manual review of profile photos complete.',
+    description: 'Staff review of profile photos during application review.',
+    requiredForApproval: true,
+    implemented: true,
+    completedBy: 'admin',
   },
   {
     key: 'application_reviewed',
     label: 'Application text review',
-    description: 'Manual review of application responses complete.',
+    description:
+      'Staff review of application responses during application review.',
+    requiredForApproval: true,
+    implemented: true,
+    completedBy: 'admin',
   },
   {
     key: 'locality_confirmed',
     label: 'Locality confirmation',
-    description: 'City/ZIP and local connection reviewed.',
+    description:
+      'Staff review of city/ZIP and local connection signals from the application.',
+    requiredForApproval: true,
+    implemented: true,
+    completedBy: 'admin',
   },
 ]
+
+export const REQUIRED_APPROVAL_GATES = APPROVAL_GATE_DEFS.filter(
+  (def) => def.requiredForApproval
+)
+
+export const OPTIONAL_APPROVAL_GATES = APPROVAL_GATE_DEFS.filter(
+  (def) => !def.requiredForApproval
+)
 
 export type ApprovalGates = Partial<Record<ApprovalGateKey, ReviewStatus>>
 
@@ -354,6 +420,7 @@ export function emptyApprovalGates(): ApprovalGates {
   return {
     email_verified: 'incomplete',
     phone_verified: 'incomplete',
+    identity_verified: 'incomplete',
     photos_reviewed: 'incomplete',
     application_reviewed: 'incomplete',
     locality_confirmed: 'incomplete',
@@ -387,6 +454,7 @@ export function verificationStateFromGates(
   const state: VerificationState = { ...existing }
   if (gates.email_verified === 'approved') state.email = 'approved'
   if (gates.phone_verified === 'approved') state.phone = 'approved'
+  if (gates.identity_verified === 'approved') state.id_verified = 'approved'
   if (gates.locality_confirmed === 'approved') state.locality = 'approved'
   if (gates.application_reviewed === 'approved') state.profile_reviewed = 'approved'
   if (gates.photos_reviewed === 'approved') state.photo_reviewed = 'approved'
@@ -398,7 +466,7 @@ export function canApproveMember(gates: ApprovalGates): {
   blockers: string[]
 } {
   const blockers: string[] = []
-  for (const def of APPROVAL_GATE_DEFS) {
+  for (const def of REQUIRED_APPROVAL_GATES) {
     const status = gates[def.key] ?? 'incomplete'
     if (status !== 'approved') {
       blockers.push(`${def.label} (${reviewStatusLabel(status)})`)
@@ -413,15 +481,58 @@ export function applicantGateSummary(gates: ApprovalGates): {
   total: number
   label: string
 } {
-  const total = APPROVAL_GATE_DEFS.length
-  const completed = APPROVAL_GATE_DEFS.filter(
+  const total = REQUIRED_APPROVAL_GATES.length
+  const completed = REQUIRED_APPROVAL_GATES.filter(
     (d) => gates[d.key] === 'approved'
   ).length
   return {
     completed,
     total,
-    label: `${completed} of ${total} verification steps complete`,
+    label: `${completed} of ${total} required verification steps complete`,
   }
+}
+
+/** Initialize approval gates when an application is submitted. */
+export function initializeApprovalGatesForSubmit(
+  emailConfirmed: boolean
+): ApprovalGates {
+  const gates = emptyApprovalGates()
+  gates.email_verified = emailConfirmed ? 'approved' : 'pending_review'
+  gates.phone_verified = 'incomplete'
+  gates.identity_verified = 'incomplete'
+  gates.photos_reviewed = 'pending_review'
+  gates.application_reviewed = 'pending_review'
+  gates.locality_confirmed = 'pending_review'
+  return gates
+}
+
+/** Member-facing status label for a gate on application/profile checklists. */
+export function approvalGateApplicantStatus(
+  gateKey: ApprovalGateKey,
+  status: ReviewStatus
+): string {
+  const def = APPROVAL_GATE_DEFS.find((item) => item.key === gateKey)
+  if (status === 'approved') return 'Complete'
+  if (!def?.implemented) return 'Coming soon'
+  if (def.completedBy === 'member') {
+    if (gateKey === 'phone_verified') {
+      return 'Verify on your profile'
+    }
+    if (gateKey === 'identity_verified') {
+      if (status === 'pending_review') return 'In progress'
+      if (status === 'needs_followup') return 'Retry verification'
+      return 'Verify on application status'
+    }
+    if (status === 'pending_review' || status === 'incomplete') {
+      return 'Confirm your email'
+    }
+  }
+  if (def.completedBy === 'admin') {
+    if (status === 'pending_review') return 'With membership team'
+    if (status === 'needs_followup') return 'Follow-up needed'
+    if (status === 'rejected') return 'Needs attention'
+  }
+  return reviewStatusLabel(status)
 }
 
 // ---------------------------------------------------------------------------
@@ -581,7 +692,7 @@ export function publicPremiumBadge(
     return {
       key: 'vendor_reviewed',
       label: 'Vendor reviewed',
-      variant: 'premium',
+      variant: 'trust',
     }
   }
   return null
@@ -820,9 +931,34 @@ export function ageFromBirthYear(birthYear: number | null): number | null {
   return new Date().getFullYear() - birthYear
 }
 
+function connectionIntentsFromDraftForDiscovery(
+  draft: ApplicationDraft
+): MemberPublicIntentValue[] {
+  if (draft.profile.connectionIntents.length > 0) {
+    return draft.profile.connectionIntents
+  }
+  if (draft.profile.lookingFor.trim()) {
+    const normalized = normalizeDiscoveryIntent(draft.profile.lookingFor)
+    if (
+      normalized === 'networking' ||
+      normalized === 'dating' ||
+      normalized === 'friends'
+    ) {
+      return [normalized]
+    }
+    if (normalized === 'mixed') {
+      return memberPublicIntentsFromConnectionsOpenTo(
+        draft.profile.connectionsOpenTo
+      )
+    }
+  }
+  return memberPublicIntentsFromConnectionsOpenTo(draft.profile.connectionsOpenTo)
+}
+
 export function discoveryColumnsFromDraft(draft: ApplicationDraft) {
+  const connectionIntents = connectionIntentsFromDraftForDiscovery(draft)
   return {
-    discovery_intent: normalizeDiscoveryIntent(draft.profile.lookingFor) || null,
+    discovery_intent: discoveryIntentFromMemberIntents(connectionIntents),
     location_city: draft.location.city.trim() || null,
     location_zip: draft.location.zipCode.trim() || null,
     birth_year: birthYearFromDateOfBirth(draft.profile.dateOfBirth),
@@ -834,11 +970,16 @@ export function discoveryColumnsFromDraft(draft: ApplicationDraft) {
 
 export function isMemberPubliclyVerified(state: VerificationState): boolean {
   return (
+    state.email === 'approved' &&
+    state.phone === 'approved' &&
     state.profile_reviewed === 'approved' &&
     state.photo_reviewed === 'approved' &&
     state.locality === 'approved'
   )
 }
+
+export const PUBLIC_VERIFIED_BADGE_SUMMARY =
+  'Verified members have confirmed email and phone, staff-reviewed application and photos, and confirmed locality.'
 
 export function applicantStatusSummary(status: ApplicationStatus): string {
   return applicationStatusLabel(status)

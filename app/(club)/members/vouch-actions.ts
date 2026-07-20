@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
 import {
   VOUCH_NOTE_MAX,
@@ -20,7 +21,7 @@ async function requireApprovedMember() {
   }
 
   const { data: profile } = await supabase
-    .from('profiles')
+    .from(MEMBER_PROFILES_VIEW)
     .select('application_status')
     .eq('id', user.id)
     .single()
@@ -73,7 +74,7 @@ export async function createMemberVouch(input: {
   }
 
   const { data: vouchee } = await supabase
-    .from('profiles')
+    .from(MEMBER_PROFILES_VIEW)
     .select('application_status')
     .eq('id', input.voucheeId)
     .single()
@@ -149,7 +150,7 @@ export async function moderateMemberVouch(input: {
   }
 
   const { data: admin } = await supabase
-    .from('profiles')
+    .from(MEMBER_PROFILES_VIEW)
     .select('role')
     .eq('id', user.id)
     .single()

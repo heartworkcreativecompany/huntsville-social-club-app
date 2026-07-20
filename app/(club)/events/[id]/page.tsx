@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { redirect } from 'next/navigation'
+import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
 import EventAccessInfo from '@/components/events/event-access-info'
 import EventMetaBadges from '@/components/events/event-meta-badges'
@@ -24,15 +26,13 @@ import ExportAttendeesCsv, {
 
 type ProfileRow = {
   id: string
-  email: string | null
   full_name: string | null
 }
 
 function memberLabel(profile: ProfileRow | undefined): string {
   if (!profile) return 'Unknown member'
   if (profile.full_name) return profile.full_name
-  if (profile.email) return profile.email
-  return 'Unknown member'
+  return 'Member'
 }
 
 type PageProps = {
@@ -77,8 +77,8 @@ export default async function EventDetailPage({ params }: PageProps) {
   }
 
   const { data: creator } = await supabase
-    .from('profiles')
-    .select('id, email, full_name')
+    .from(MEMBER_PROFILES_VIEW)
+    .select('id, full_name')
     .eq('id', event.owner_id)
     .single()
 
@@ -99,8 +99,8 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   if (attendeeUserIds.length > 0) {
     const { data: attendeeProfiles } = await supabase
-      .from('profiles')
-      .select('id, email, full_name')
+      .from(MEMBER_PROFILES_VIEW)
+      .select('id, full_name')
       .in('id', attendeeUserIds)
 
     for (const profile of attendeeProfiles ?? []) {
@@ -146,13 +146,17 @@ export default async function EventDetailPage({ params }: PageProps) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '') || 'event'}-attendees.csv`
 
+  const attendeeAccountEmails = canExportAttendees
+    ? await loadProfileAccountEmails(attendeeUserIds)
+    : new Map<string, string | null>()
+
   const exportRows: AttendeeExportRow[] = (attendeeRows ?? []).map((row) => {
     const profile = attendeeProfilesById[row.user_id]
     return {
       eventTitle: event.title,
       eventDate: eventDateLabel,
       attendeeName: profile?.full_name ?? '',
-      attendeeEmail: profile?.email ?? '',
+      attendeeEmail: attendeeAccountEmails.get(row.user_id) ?? '',
       rsvpStatus: row.status.replace('_', ' '),
       respondedAt: row.created_at
         ? new Date(row.created_at).toLocaleString()

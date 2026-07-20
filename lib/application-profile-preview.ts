@@ -1,11 +1,8 @@
 import type { ApplicationDraft, ApplicationStatus } from '@/lib/application'
 import { membershipIntentFromDraft } from '@/lib/application-draft-sync'
-import { APPLICATION_PROMPTS } from '@/lib/application-form-content'
 import { buildDirectoryMember, type DirectoryMember } from '@/lib/members-discovery'
-import {
-  discoveryColumnsFromDraft,
-  discoveryIntentLabel,
-} from '@/lib/membership-systems'
+import { publicProfileDetailsFromDraft as publicProfileDetailsFromDraftImpl } from '@/lib/profile-public-display'
+import { discoveryColumnsFromDraft } from '@/lib/membership-systems'
 
 export type ProfilePromptDisplay = {
   label: string
@@ -14,7 +11,7 @@ export type ProfilePromptDisplay = {
 
 export type ApplicationPublicProfileDetails = {
   displayName: string | null
-  intent: string | null
+  connectionIntents: string[]
   locationArea: string | null
   occupation: string | null
   industry: string | null
@@ -39,7 +36,6 @@ export function directoryMemberFromApplicationDraft(
   const discovery = discoveryColumnsFromDraft(draft)
   const member = buildDirectoryMember({
     id: context.userId,
-    email: context.email ?? null,
     full_name: draft.profile.displayName.trim() || null,
     role: 'member',
     created_at: null,
@@ -60,33 +56,8 @@ export function directoryMemberFromApplicationDraft(
 
 /** Public-facing fields only — never includes private location, employer, or admin notes. */
 export function publicProfileDetailsFromDraft(
-  draft: ApplicationDraft
+  draft: ApplicationDraft,
+  options?: { connectionsOpenTo?: string[] | null }
 ): ApplicationPublicProfileDetails {
-  const prompts: ProfilePromptDisplay[] = APPLICATION_PROMPTS.map((p) => ({
-    label: p.label,
-    value: draft.prompts[p.key]?.trim() ?? '',
-  })).filter((p) => p.value)
-
-  const socialVibe =
-    draft.workAndInterests.socialVibe.trim() ||
-    (draft.workAndInterests.eventInterests.length > 0
-      ? draft.workAndInterests.eventInterests.slice(0, 3).join(', ')
-      : null)
-
-  return {
-    displayName: draft.profile.displayName.trim() || null,
-    intent: draft.profile.lookingFor
-      ? discoveryIntentLabel(draft.profile.lookingFor)
-      : null,
-    locationArea: draft.location.neighborhoodOrArea.trim() || null,
-    occupation: draft.workAndInterests.occupation.trim() || null,
-    industry: draft.workAndInterests.industry.trim() || null,
-    interests: draft.workAndInterests.interests,
-    lifestyleTags: draft.workAndInterests.lifestyleTags,
-    eventInterests: draft.workAndInterests.eventInterests,
-    connectionsOpenTo: draft.profile.connectionsOpenTo,
-    socialVibe,
-    about: membershipIntentFromDraft(draft) || null,
-    prompts,
-  }
+  return publicProfileDetailsFromDraftImpl(draft, options)
 }

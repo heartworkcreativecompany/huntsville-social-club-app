@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import {
   isApprovedMember,
   resolveApplicationStatus,
@@ -22,7 +23,7 @@ export async function postLoginPath(
   } | null = null
 
   const extended = await supabase
-    .from('profiles')
+    .from(MEMBER_PROFILES_VIEW)
     .select('application_status, role, full_name')
     .eq('id', user.id)
     .maybeSingle()
@@ -31,7 +32,7 @@ export async function postLoginPath(
     profile = extended.data
   } else {
     const basic = await supabase
-      .from('profiles')
+      .from(MEMBER_PROFILES_VIEW)
       .select('role, full_name')
       .eq('id', user.id)
       .maybeSingle()

@@ -6,7 +6,7 @@ import { isCompatibilityFeatureEnabled } from '@/lib/compatibility/eligibility'
 import { onDatingConnectionAdded, onDatingConnectionRemoved } from '@/lib/compatibility/dating-lifecycle'
 
 /**
- * Server-only hook after profiles.connections_open_to is persisted.
+ * Server-only hook after profiles.connection_intents is persisted.
  * Never call from client components — lifecycle runs via service role.
  */
 export async function runCompatibilityConnectionsLifecycle(

@@ -87,11 +87,14 @@ export default function ApplicationPhotosField({
   photos,
   onChange,
   disabled,
+  preserveStoragePaths,
 }: {
   memberId: string
   photos: ApplicationPhoto[]
   onChange: (photos: ApplicationPhoto[]) => void
   disabled?: boolean
+  /** Live approved paths — do not delete storage when removed from the editor. */
+  preserveStoragePaths?: string[]
 }) {
   const [message, setMessage] = useState('')
   const [isUploading, setIsUploading] = useState(false)
@@ -160,11 +163,14 @@ export default function ApplicationPhotosField({
     setRemovingId(photo.id)
 
     try {
-      const result = await deleteApplicationPhotoFromStorage(photo.storagePath)
+      const preserveLivePhoto = preserveStoragePaths?.includes(photo.storagePath)
+      if (!preserveLivePhoto) {
+        const result = await deleteApplicationPhotoFromStorage(photo.storagePath)
 
-      if (result.error) {
-        setMessage(result.error)
-        return
+        if (result.error) {
+          setMessage(result.error)
+          return
+        }
       }
 
       const remaining = photos.filter((item) => item.id !== photo.id)

@@ -104,10 +104,10 @@ export default async function MemberDetailPage({ params }: PageProps) {
         footer={
           isSelf ? (
             <p className="text-sm text-muted-foreground">
-              <Link href="/members" className="font-medium text-accent underline">
-                Edit profile settings
+              <Link href="/profile" className="font-medium text-accent underline">
+                Edit your profile
               </Link>{' '}
-              on the members page.
+              to update your bio, connection options, and public details.
             </p>
           ) : null
         }

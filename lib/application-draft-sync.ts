@@ -4,8 +4,20 @@ import {
   type ApplicationDraft,
 } from '@/lib/application'
 import { completedPromptCount } from '@/lib/application-validation'
-import { DATING_CONNECTION_OPTION, type DatingConnectionChange } from '@/lib/compatibility/types'
-import { discoveryColumnsFromDraft } from '@/lib/membership-systems'
+import {
+  discoveryIntentFromMemberIntents,
+  memberPublicIntentLabelsFromValues,
+  memberPublicIntentsFromConnectionIntents,
+  memberPublicIntentsFromConnectionsOpenTo,
+  parseConnectionIntents,
+  resolveMemberPublicIntents,
+  sanitizeConnectionsOpenToForStorage,
+  type MemberPublicIntentValue,
+} from '@/lib/member-public-intent'
+import {
+  discoveryColumnsFromDraft,
+  normalizeDiscoveryIntent,
+} from '@/lib/membership-systems'
 
 /** Short public summary for member cards — not a dump of all prompts. */
 export function membershipIntentFromDraft(draft: ApplicationDraft): string {
@@ -30,32 +42,81 @@ export function membershipIntentFromDraft(draft: ApplicationDraft): string {
     : ''
 }
 
+export function connectionIntentsFromDraft(
+  draft: ApplicationDraft
+): MemberPublicIntentValue[] {
+  if (draft.profile.connectionIntents.length > 0) {
+    return draft.profile.connectionIntents
+  }
+  if (draft.profile.lookingFor.trim()) {
+    const normalized = normalizeDiscoveryIntent(draft.profile.lookingFor)
+    if (
+      normalized === 'networking' ||
+      normalized === 'dating' ||
+      normalized === 'friends'
+    ) {
+      return [normalized]
+    }
+    if (normalized === 'mixed') {
+      return memberPublicIntentsFromConnectionsOpenTo(
+        draft.profile.connectionsOpenTo
+      )
+    }
+  }
+  return memberPublicIntentsFromConnectionsOpenTo(draft.profile.connectionsOpenTo)
+}
+
 export function connectionsOpenToFromDraft(draft: ApplicationDraft): string[] {
-  return [...draft.profile.connectionsOpenTo]
+  return sanitizeConnectionsOpenToForStorage(
+    [...draft.profile.connectionsOpenTo],
+    connectionIntentsFromDraft(draft)
+  )
 }
 
 export function detectDatingConnectionChange(
-  previous: string[],
-  next: string[]
-): DatingConnectionChange {
-  const hadDating = previous.includes(DATING_CONNECTION_OPTION)
-  const hasDating = next.includes(DATING_CONNECTION_OPTION)
+  previous: string[] | null | undefined,
+  next: string[] | null | undefined
+): import('@/lib/compatibility/types').DatingConnectionChange {
+  const hadDating = memberPublicIntentsFromConnectionIntents(previous).includes(
+    'dating'
+  )
+  const hasDating = memberPublicIntentsFromConnectionIntents(next).includes(
+    'dating'
+  )
 
   if (!hadDating && hasDating) return { type: 'added' }
   if (hadDating && !hasDating) return { type: 'removed' }
   return { type: 'none' }
 }
 
+export function memberIntentColumns(intents: MemberPublicIntentValue[]) {
+  return {
+    connection_intents: intents,
+    discovery_intent: discoveryIntentFromMemberIntents(intents),
+  }
+}
+
 export function profileColumnsFromDraft(draft: ApplicationDraft) {
   const discovery = discoveryColumnsFromDraft(draft)
+  const connectionIntents = connectionIntentsFromDraft(draft)
   return {
     full_name: draft.profile.displayName.trim() || null,
     location_area: draft.location.neighborhoodOrArea.trim() || null,
     membership_intent: membershipIntentFromDraft(draft) || null,
     referral_source: null,
-    application_draft: draft,
+    application_draft: {
+      ...draft,
+      profile: {
+        ...draft.profile,
+        connectionIntents,
+        connectionsOpenTo: connectionsOpenToFromDraft(draft),
+      },
+    },
+    connection_intents: connectionIntents,
     connections_open_to: connectionsOpenToFromDraft(draft),
-    discovery_intent: discovery.discovery_intent,
+    discovery_intent:
+      discoveryIntentFromMemberIntents(connectionIntents) ||
+      discovery.discovery_intent,
     location_city: discovery.location_city,
     location_zip: discovery.location_zip,
     birth_year: discovery.birth_year,
@@ -71,6 +132,9 @@ export function mergeProfileIntoDraft(
     membership_intent: string | null
     location_area: string | null
     application_draft: unknown
+    connections_open_to?: string[] | null
+    connection_intents?: string[] | null
+    discovery_intent?: string | null
   } | null
 ): ApplicationDraft {
   if (!profile) return emptyDraft()
@@ -99,8 +163,27 @@ export function mergeProfileIntoDraft(
     parsed.prompts.hopingToMeet = profile.membership_intent.trim()
   }
 
-  if (!parsed.prompts.bringsYouHere.trim() && profile.membership_intent?.trim()) {
-    parsed.prompts.bringsYouHere = profile.membership_intent.trim()
+  const resolvedIntents = profile
+    ? resolveMemberPublicIntents(profile)
+    : []
+  if (resolvedIntents.length > 0) {
+    parsed.profile.connectionIntents = resolvedIntents
+  }
+
+  if (
+    parsed.profile.connectionsOpenTo.length === 0 &&
+    profile?.connections_open_to &&
+    profile.connections_open_to.length > 0
+  ) {
+    parsed.profile.connectionsOpenTo = sanitizeConnectionsOpenToForStorage(
+      profile.connections_open_to,
+      resolvedIntents
+    )
+  } else if (parsed.profile.connectionsOpenTo.length > 0) {
+    parsed.profile.connectionsOpenTo = sanitizeConnectionsOpenToForStorage(
+      parsed.profile.connectionsOpenTo,
+      parsed.profile.connectionIntents
+    )
   }
 
   return parsed

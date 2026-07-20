@@ -1,5 +1,9 @@
 'use server'
 
+import {
+  isAuthEmailConfirmationRequired,
+  welcomeEmailConfirmationParagraph,
+} from '@/lib/auth-email'
 import { BRAND_ASSETS } from '@/lib/brand-assets'
 import { appOrigin, SUPPORT_EMAIL } from '@/lib/site'
 
@@ -77,14 +81,16 @@ export async function sendWelcomeEmail(to: string) {
   const origin = appOrigin()
   const { html, text } = emailShell(
     'Welcome to Huntsville Social Club',
-    `<p>Thanks for creating your account. Confirm your email using the link Supabase sent, then sign in to start your membership application.</p>
+    `${welcomeEmailConfirmationParagraph()}
      <p>We review every application thoughtfully — save progress anytime and submit when you are ready.</p>`,
     { label: 'Sign in', href: `${origin}/login` }
   )
 
   return sendEmail({
     to,
-    subject: 'Welcome — confirm your email',
+    subject: isAuthEmailConfirmationRequired()
+      ? 'Welcome — confirm your email'
+      : 'Welcome to Huntsville Social Club',
     html,
     text,
   })
@@ -152,6 +158,159 @@ export async function sendApplicationNeedsInfoEmail(
   return sendEmail({
     to,
     subject: 'Application — more information needed',
+    html,
+    text,
+  })
+}
+
+export async function sendProfileRevisionSubmittedEmail(to: string) {
+  const origin = appOrigin()
+  const { html, text } = emailShell(
+    'Profile changes submitted',
+    `<p>Your profile edits have been submitted for staff review. Your current public profile stays live until we approve the changes.</p>
+     <p>We will email you when the review is complete.</p>`,
+    { label: 'View your profile', href: `${origin}/profile` }
+  )
+
+  return sendEmail({
+    to,
+    subject: 'Profile changes submitted for review',
+    html,
+    text,
+  })
+}
+
+export async function sendProfileRevisionApprovedEmail(to: string) {
+  const origin = appOrigin()
+  const { html, text } = emailShell(
+    'Profile changes approved',
+    `<p>Your profile updates are now live in the member directory.</p>`,
+    { label: 'View your profile', href: `${origin}/profile` }
+  )
+
+  return sendEmail({
+    to,
+    subject: 'Profile changes approved',
+    html,
+    text,
+  })
+}
+
+export async function sendProfileRevisionRejectedEmail(
+  to: string,
+  notes?: string | null
+) {
+  const origin = appOrigin()
+  const noteBlock = notes?.trim()
+    ? `<p><strong>Staff note:</strong> ${notes.trim()}</p>`
+    : ''
+
+  const { html, text } = emailShell(
+    'Profile changes not approved',
+    `<p>Your recent profile edits were not approved. Your previously approved public profile is unchanged.</p>
+     ${noteBlock}
+     <p>You can edit and submit again anytime from your profile page.</p>`,
+    { label: 'Edit profile', href: `${origin}/profile` }
+  )
+
+  return sendEmail({
+    to,
+    subject: 'Profile changes not approved',
+    html,
+    text,
+  })
+}
+
+export async function sendCuratedIntroMatchedEmail(input: {
+  to: string
+  otherMemberName: string
+  conversationId: string
+}) {
+  const origin = appOrigin()
+  const { html, text } = emailShell(
+    'Your curated intro was approved',
+    `<p>Great news — we approved your intro to <strong>${input.otherMemberName}</strong>.</p>
+     <p>Open your messages to say hello and continue the conversation privately.</p>`,
+    {
+      label: 'Open conversation',
+      href: `${origin}/messages/${input.conversationId}`,
+    }
+  )
+
+  return sendEmail({
+    to: input.to,
+    subject: 'Curated intro approved',
+    html,
+    text,
+  })
+}
+
+export async function sendCuratedIntroMatchedTargetEmail(input: {
+  to: string
+  otherMemberName: string
+  conversationId: string
+}) {
+  const origin = appOrigin()
+  const { html, text } = emailShell(
+    'You have a new curated intro',
+    `<p><strong>${input.otherMemberName}</strong> requested an intro through our curated matches program, and we approved the connection.</p>
+     <p>A private conversation is ready in your inbox. You can read and reply there for this curated intro without upgrading your membership.</p>`,
+    {
+      label: 'Open conversation',
+      href: `${origin}/messages/${input.conversationId}`,
+    }
+  )
+
+  return sendEmail({
+    to: input.to,
+    subject: 'New curated intro in your inbox',
+    html,
+    text,
+  })
+}
+
+export async function sendCuratedIntroDeclinedEmail(input: {
+  to: string
+  otherMemberName: string
+}) {
+  const origin = appOrigin()
+  const { html, text } = emailShell(
+    'Curated intro update',
+    `<p>We reviewed your intro request for <strong>${input.otherMemberName}</strong> and are not moving forward with that connection at this time.</p>
+     <p>Your matches inbox has been updated with this recommendation in your archive. New curated recommendations may still arrive in future batches.</p>`,
+    { label: 'View matches', href: `${origin}/matches` }
+  )
+
+  return sendEmail({
+    to: input.to,
+    subject: 'Curated intro update',
+    html,
+    text,
+  })
+}
+
+export async function sendCuratedMatchesDeliveredEmail(input: {
+  to: string
+  memberName: string
+  matchCount: number
+}) {
+  const origin = appOrigin()
+  const matchLabel =
+    input.matchCount === 1
+      ? '1 new curated recommendation'
+      : `${input.matchCount} new curated recommendations`
+
+  const { html, text } = emailShell(
+    'New curated matches',
+    `<p>Hi ${input.memberName},</p>
+     <p>You have <strong>${matchLabel}</strong> waiting in your matches inbox.</p>
+     <p>Review the profiles, request an intro when someone feels right, or pass if it is not a fit.</p>`,
+    { label: 'View matches', href: `${origin}/matches` }
+  )
+
+  return sendEmail({
+    to: input.to,
+    subject: 'New curated matches in your inbox',
     html,
     text,
   })

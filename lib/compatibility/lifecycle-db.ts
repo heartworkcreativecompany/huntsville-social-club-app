@@ -30,7 +30,7 @@ export async function expirePendingRecommendations(
 ): Promise<void> {
   const { error } = await supabase
     .from('curated_match_recommendations')
-    .update({ status: 'expired' })
+    .update({ status: 'expired', lifecycle_updated_at: new Date().toISOString() })
     .eq('user_id', userId)
     .in('status', ['pending', 'viewed'])
 
@@ -87,7 +87,7 @@ export async function clearCompatibilityPause(
 }
 
 export type CompatibilityProfileRow = {
-  connections_open_to: string[] | null
+  connection_intents: string[] | null
   wants_curated_matches: boolean | null
   curated_matches_pause_reason: string | null
   compatibility_completed_at: string | null
@@ -102,7 +102,7 @@ export async function loadCompatibilityProfileRow(
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'connections_open_to, wants_curated_matches, curated_matches_pause_reason, compatibility_completed_at, membership_billing, role'
+      'connection_intents, wants_curated_matches, curated_matches_pause_reason, compatibility_completed_at, membership_billing, role'
     )
     .eq('id', userId)
     .maybeSingle()

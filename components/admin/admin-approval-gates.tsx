@@ -68,7 +68,7 @@ export default function AdminApprovalGates({
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
         {check.allowed ? (
-          <Badge variant="success">All gates complete — ready to approve</Badge>
+          <Badge variant="success">All required gates complete — ready to approve</Badge>
         ) : (
           <Badge variant="warning">
             {check.blockers.length} gate{check.blockers.length === 1 ? '' : 's'}{' '}
@@ -76,6 +76,10 @@ export default function AdminApprovalGates({
           </Badge>
         )}
       </div>
+
+      <p className="text-sm text-muted-foreground">
+        Required gates must be approved before membership approval. Members verify phone OTP on their profile page. Email sync reads Supabase Auth confirmation status.
+      </p>
 
       <ul className="grid gap-3">
         {APPROVAL_GATE_DEFS.map((def) => {
@@ -87,7 +91,15 @@ export default function AdminApprovalGates({
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="font-medium text-foreground">{def.label}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-foreground">{def.label}</p>
+                    <Badge variant={def.requiredForApproval ? 'accent' : 'muted'}>
+                      {def.requiredForApproval ? 'Required' : 'Optional'}
+                    </Badge>
+                    {!def.implemented ? (
+                      <Badge variant="muted">Not implemented</Badge>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {def.description}
                   </p>

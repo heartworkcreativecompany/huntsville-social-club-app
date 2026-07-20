@@ -19,8 +19,9 @@ import { trackServerEvent } from '@/lib/analytics'
 import { captureOperationalError } from '@/lib/capture-error'
 import { sendApplicationSubmittedEmail } from '@/lib/transactional-email'
 import {
-  emptyApprovalGates,
+  initializeApprovalGatesForSubmit,
   localityFromDraft,
+  verificationStateFromGates,
 } from '@/lib/membership-systems'
 import { runCompatibilityConnectionsLifecycle } from '@/lib/compatibility/sync-server'
 
@@ -36,7 +37,7 @@ export async function saveApplicationDraft(draft: ApplicationDraft) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('application_status, connections_open_to')
+    .select('application_status, connection_intents')
     .eq('id', user.id)
     .single()
 
@@ -46,7 +47,7 @@ export async function saveApplicationDraft(draft: ApplicationDraft) {
     return { error: 'This application cannot be edited in its current status.' }
   }
 
-  const previousConnections = profile?.connections_open_to ?? []
+  const previousIntents = profile?.connection_intents ?? []
   const nextStatus = status === 'rejected' ? 'draft' : status
   const columns = profileColumnsFromDraft(draft)
 
@@ -65,8 +66,8 @@ export async function saveApplicationDraft(draft: ApplicationDraft) {
 
   await runCompatibilityConnectionsLifecycle(
     user.id,
-    previousConnections,
-    columns.connections_open_to
+    previousIntents,
+    columns.connection_intents
   )
 
   revalidatePath('/application')
@@ -92,7 +93,7 @@ export async function submitApplication() {
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'application_status, full_name, membership_intent, location_area, application_draft, connections_open_to'
+      'application_status, full_name, membership_intent, location_area, application_draft, connections_open_to, connection_intents'
     )
     .eq('id', user.id)
     .single()
@@ -119,14 +120,10 @@ export async function submitApplication() {
     step: APPLICATION_TOTAL_STEPS,
   })
 
-  const previousConnections = profile.connections_open_to ?? []
+  const previousIntents = profile.connection_intents ?? []
 
-  const gates = emptyApprovalGates()
-  gates.email_verified = 'pending_review'
-  gates.phone_verified = 'incomplete'
-  gates.photos_reviewed = 'pending_review'
-  gates.application_reviewed = 'pending_review'
-  gates.locality_confirmed = 'pending_review'
+  const gates = initializeApprovalGatesForSubmit(Boolean(user.email_confirmed_at))
+  const verification_state = verificationStateFromGates(gates)
 
   const locality = localityFromDraft(draft)
   locality.reviewStatus = 'pending_review'
@@ -137,6 +134,7 @@ export async function submitApplication() {
       application_status: 'submitted',
       ...columns,
       approval_gates: gates,
+      verification_state,
       locality_confirmation: locality,
       application_submitted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -150,8 +148,8 @@ export async function submitApplication() {
 
   await runCompatibilityConnectionsLifecycle(
     user.id,
-    previousConnections,
-    columns.connections_open_to
+    previousIntents,
+    columns.connection_intents
   )
 
   revalidatePath('/application')

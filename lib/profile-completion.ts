@@ -1,7 +1,11 @@
 import type { ApplicationDraft } from '@/lib/application'
-import type { ViewerProfile } from '@/lib/viewer'
+import {
+  CONNECTION_LOOKING_FOR_FIELD,
+  resolveMemberPublicIntents,
+} from '@/lib/member-public-intent'
 import { photosFromApplicationDraft } from '@/lib/member-photos'
 import { isMemberPubliclyVerified, parseVerificationState } from '@/lib/membership-systems'
+import type { ViewerProfile } from '@/lib/viewer'
 
 export type ProfileCompletionItem = {
   key: string
@@ -9,55 +13,67 @@ export type ProfileCompletionItem = {
   done: boolean
 }
 
+/** Live approved profile fields for strength checklist — not pending revisions. */
 export function computeProfileCompletion(
   profile: ViewerProfile | null,
-  draft: ApplicationDraft
+  liveDraft: ApplicationDraft
 ): { percent: number; items: ProfileCompletionItem[] } {
-  const photos = photosFromApplicationDraft(draft)
+  const livePhotos = photosFromApplicationDraft(profile?.application_draft ?? liveDraft)
   const verification = parseVerificationState(profile?.verification_state)
+
+  const liveIntents = resolveMemberPublicIntents({
+    connection_intents: profile?.connection_intents ?? null,
+    connections_open_to: profile?.connections_open_to ?? null,
+    discovery_intent: profile?.discovery_intent ?? null,
+  })
+
+  const liveInterests =
+    (profile?.discovery_interests ?? []).filter((item) => item.trim()).length > 0
+      ? profile!.discovery_interests!
+      : liveDraft.workAndInterests.interests.filter((item) => item.trim())
 
   const items: ProfileCompletionItem[] = [
     {
       key: 'photo',
       label: 'Profile photo',
-      done: photos.length > 0,
+      done: livePhotos.length > 0,
     },
     {
       key: 'name',
       label: 'Display name',
       done: Boolean(
-        draft.profile.displayName.trim() || profile?.full_name?.trim()
+        profile?.full_name?.trim() || liveDraft.profile.displayName.trim()
       ),
     },
     {
       key: 'intent',
-      label: 'Connection intent',
-      done: Boolean(draft.profile.lookingFor.trim()),
+      label: CONNECTION_LOOKING_FOR_FIELD.label,
+      done: liveIntents.length > 0,
     },
     {
       key: 'bio',
       label: 'About you',
       done: Boolean(
-        draft.prompts.hopingToMeet.trim() || profile?.membership_intent?.trim()
+        profile?.membership_intent?.trim() ||
+          liveDraft.prompts.hopingToMeet.trim()
       ),
     },
     {
       key: 'location',
       label: 'Location area',
       done: Boolean(
-        draft.location.neighborhoodOrArea.trim() || profile?.location_area?.trim()
+        profile?.location_area?.trim() ||
+          liveDraft.location.neighborhoodOrArea.trim()
       ),
     },
     {
       key: 'interests',
       label: 'Interests',
-      done:
-        (profile?.discovery_interests ?? []).some((i) => i.trim()) ||
-        Boolean(draft.prompts.favoriteLocalActivities.trim()),
+      done: liveInterests.length >= 1,
     },
     {
       key: 'verification',
-      label: 'Verification complete',
+      label: 'Verified member',
       done: isMemberPubliclyVerified(verification),
     },
   ]

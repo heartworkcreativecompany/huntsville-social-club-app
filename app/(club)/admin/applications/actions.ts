@@ -1,7 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
+import { requireAdminClient } from '@/lib/supabase/require-admin-client'
 import type { ApplicationStatus } from '@/lib/application'
 import {
   canApproveMember,
@@ -17,6 +19,8 @@ import {
   sendApplicationNeedsInfoEmail,
   sendApplicationRejectedEmail,
 } from '@/lib/transactional-email'
+import { queueAutoGenerateCuratedMatches } from '@/lib/compatibility/auto-generate-matches'
+import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -29,7 +33,7 @@ async function requireAdmin() {
   }
 
   const { data: profile } = await supabase
-    .from('profiles')
+    .from(MEMBER_PROFILES_VIEW)
     .select('role')
     .eq('id', user.id)
     .single()
@@ -51,7 +55,8 @@ export async function updateApplicationStatus(
     return { error: auth.error ?? 'Unauthorized' }
   }
 
-  const { data: applicant } = await auth.supabase
+  const admin = requireAdminClient()
+  const { data: applicant } = await admin
     .from('profiles')
     .select('email, approval_gates, verification_state, membership_billing')
     .eq('id', applicantId)
@@ -116,10 +121,15 @@ export async function updateApplicationStatus(
   revalidatePath('/members')
   revalidatePath('/home')
 
+  if (status === 'approved') {
+    trackServerEvent('application_approved')
+    queueAutoGenerateCuratedMatches(applicantId, 'membership_approved')
+    revalidateCuratedMatchMemberRoutes()
+  }
+
   const email = applicant?.email
   if (email) {
     if (status === 'approved') {
-      trackServerEvent('application_approved')
       void sendApplicationApprovedEmail(email)
     } else if (status === 'rejected') {
       void sendApplicationRejectedEmail(email, adminNotes)

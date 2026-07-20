@@ -5,6 +5,28 @@ import {
   isCompatibilityFeatureEnabled,
 } from '@/lib/compatibility/eligibility'
 import type { CompatibilityProfileFields } from '@/lib/compatibility/types'
+import { COMPATIBILITY_QUESTIONNAIRE_VERSION } from '@/lib/compatibility/questionnaire-config'
+
+const completeQuestionnaire = {
+  version: COMPATIBILITY_QUESTIONNAIRE_VERSION,
+  gender: 'woman' as const,
+  genderSelfDescribe: null,
+  matchInterests: ['men' as const],
+  relationshipIntention: 2 as const,
+  faithValues: 2 as const,
+  valuesVsChemistry: 2 as const,
+  partnershipDailyLife: 3 as const,
+  socialRhythm: 3 as const,
+  saturdayStyle: 3 as const,
+  planningSpontaneity: 3 as const,
+  ambition: 3 as const,
+  maritalHistory: 1 as const,
+  familySituation: ['no_children' as const],
+  openToPartnerWithChildren: 4 as const,
+  futureChildren: 2 as const,
+  openToDivorced: 4 as const,
+  partnerHistoryPreference: 3 as const,
+}
 
 const innerCircleBilling = {
   tier: 'inner_circle',
@@ -28,7 +50,8 @@ function baseProfile(
 ): CompatibilityProfileFields {
   return {
     application_status: 'approved',
-    connections_open_to: ['Dating'],
+    connections_open_to: ['New friends'],
+    connection_intents: ['dating'],
     compatibility_completed_at: null,
     wants_curated_matches: true,
     curated_matches_paused_at: null,
@@ -84,7 +107,7 @@ describe('isCompatibilityEligible', () => {
   it('returns false without Dating connection option', () => {
     process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
     expect(
-      isCompatibilityEligible(baseProfile({ connections_open_to: ['New friends'] }), {
+      isCompatibilityEligible(baseProfile({ connection_intents: ['friends'] }), {
         billing: innerCircleBilling,
       })
     ).toBe(false)
@@ -136,10 +159,30 @@ describe('canGenerateMatches', () => {
     process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
     expect(
       canGenerateMatches(
-        baseProfile({ compatibility_completed_at: '2026-01-01T00:00:00.000Z' }),
+        baseProfile({
+          compatibility_questionnaire: completeQuestionnaire,
+          compatibility_completed_at: '2026-01-01T00:00:00.000Z',
+        }),
         { billing: innerCircleBilling }
       )
     ).toBe(true)
+  })
+
+  it('returns false when only the legacy test questionnaire is present', () => {
+    process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
+    expect(
+      canGenerateMatches(
+        baseProfile({
+          compatibility_questionnaire: {
+            version: 1,
+            relationshipGoals: 'Long-term',
+            communicationStyle: 'Direct',
+          },
+          compatibility_completed_at: '2026-01-01T00:00:00.000Z',
+        }),
+        { billing: innerCircleBilling }
+      )
+    ).toBe(false)
   })
 
   it('returns false when paused', () => {
@@ -147,6 +190,7 @@ describe('canGenerateMatches', () => {
     expect(
       canGenerateMatches(
         baseProfile({
+          compatibility_questionnaire: completeQuestionnaire,
           compatibility_completed_at: '2026-01-01T00:00:00.000Z',
           curated_matches_paused_at: '2026-01-02T00:00:00.000Z',
         }),
@@ -155,19 +199,3 @@ describe('canGenerateMatches', () => {
     ).toBe(false)
   })
 })
-
-it('canGenerateMatches returns false when feature flag is off even if profile is otherwise eligible', () => {
-  process.env.COMPABILITY_MATCHING_ENABLED = 'false';
-
-  const profile = {
-    applicationStatus: 'approved',
-    connectionsOpenTo: ['Dating'],
-    canMessage: true,
-    wantsCuratedMatches: true,
-    compatibilityCompletedAt: new Date(),
-    curatedMatchesPausedAt: null,
-  };
-
-  expect(canGenerateMatches(profile)).toBe(false);
-});
-

@@ -82,8 +82,9 @@ export default function MembershipUsageCard({
         <p className="mt-3 text-sm text-muted-foreground">{usageLine}</p>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">
-          Upgrade to Inner Circle or Elite Circle for messaging, included standard
-          event registrations, and Circle Social access.
+          Upgrade to Inner Circle or Elite Circle for curated matches, curated
+          intros, messaging, included standard event registrations, and Circle
+          Social access.
         </p>
       )}
 

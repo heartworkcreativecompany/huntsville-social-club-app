@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireAdminClient } from '@/lib/supabase/require-admin-client'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
@@ -18,14 +19,15 @@ import AdminLocalityReview from '@/components/admin/admin-locality-review'
 import AdminMemberVouches from '@/components/admin/admin-member-vouches'
 import AdminPremiumVerification from '@/components/admin/admin-premium-verification'
 import { loadAdminVouchesForMember } from '@/lib/load-member-vouches'
+import { memberPublicIntentLabelsFromValues } from '@/lib/member-public-intent'
 import {
-  discoveryIntentLabel,
   parseApprovalGates,
   parseLocalityConfirmation,
   parseMembershipBilling,
   parsePremiumVerification,
 } from '@/lib/membership-systems'
 import ApplicationReviewActions from '../application-review-actions'
+import RemoveMemberButton from '@/components/admin/remove-member-button'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -49,7 +51,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
     redirect('/home')
   }
 
-  const supabase = await createClient()
+  const supabase = requireAdminClient()
 
   const { data: applicant, error } = await supabase
     .from('profiles')
@@ -156,13 +158,13 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
             <div>
               <dt className="text-muted-foreground">Looking for</dt>
               <dd className="font-medium text-foreground">
-                {draft.profile.lookingFor
-                  ? discoveryIntentLabel(draft.profile.lookingFor)
-                  : '—'}
+                {memberPublicIntentLabelsFromValues(
+                  draft.profile.connectionIntents
+                ).join(', ') || '—'}
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Open to</dt>
+              <dt className="text-muted-foreground">Connection types open to</dt>
               <dd className="font-medium text-foreground">
                 {draft.profile.connectionsOpenTo.join(', ') || '—'}
               </dd>
@@ -386,6 +388,26 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
             </p>
           ) : null}
         </Card>
+
+        {applicant.id !== viewer.userId && applicant.role !== 'admin' ? (
+          <Card className="lg:col-span-2 border-danger/30">
+            <h2 className="text-display text-lg font-semibold text-danger">
+              Remove member
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Permanently delete this account and all related member data.
+            </p>
+            <div className="mt-4">
+              <RemoveMemberButton
+                userId={applicant.id}
+                memberName={
+                  applicant.full_name ?? applicant.email ?? 'Unknown member'
+                }
+                memberEmail={applicant.email}
+              />
+            </div>
+          </Card>
+        ) : null}
       </div>
     </>
   )

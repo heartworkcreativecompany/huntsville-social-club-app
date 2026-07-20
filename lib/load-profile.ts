@@ -4,11 +4,12 @@ import { enrichProfileFromDraft } from '@/lib/enrich-profile-discovery'
 import type { ViewerProfile } from '@/lib/viewer'
 import { parseApplicationDraft } from '@/lib/application'
 import {
-  PROFILE_APPLICATION_FIELDS,
+  DIRECTORY_PROFILE_BASE_FIELDS,
+  MEMBER_PROFILE_SELECT_TIERS,
   PROFILE_BASE_FIELDS,
-  PROFILE_FULL_FIELDS,
   isMissingSchemaColumnError,
 } from '@/lib/profile-query-fields'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 
 function toViewerProfile(
   data: Record<string, unknown>
@@ -47,6 +48,13 @@ function legacyViewerFromBasic(
     admin_review_notes: null,
     location_area: null,
     referral_source: null,
+    contact_email: null,
+    show_contact_email: false,
+    verified_phone_e164: null,
+    identity_verification_status: null,
+    identity_verification_session_id: null,
+    identity_verified_at: null,
+    identity_verification_last_error: null,
     verification_state: null,
     approval_gates: null,
     locality_confirmation: null,
@@ -58,6 +66,25 @@ function legacyViewerFromBasic(
     birth_year: null,
     discovery_interests: null,
     discovery_industry: null,
+    connections_open_to: null,
+    connection_intents: null,
+    profile_pending_revision: null,
+    profile_revision_status: null,
+    profile_revision_submitted_at: null,
+    profile_revision_reviewed_at: null,
+    profile_revision_admin_notes: null,
+    profile_revision_history: null,
+    compatibility_questionnaire: null,
+    compatibility_completed_at: null,
+    compatibility_updated_at: null,
+    wants_curated_matches: null,
+    curated_matches_paused_at: null,
+    curated_matches_pause_reason: null,
+    last_match_generation_at: null,
+    last_match_review_at: null,
+    messaging_suspended_at: null,
+    messaging_suspension_reason: null,
+    messaging_suspended_by: null,
   }
 }
 
@@ -65,57 +92,42 @@ export async function loadProfileForUser(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<{ profile: ViewerProfile | null; schemaReady: boolean }> {
-  const full = await supabase
-    .from('profiles')
-    .select(PROFILE_FULL_FIELDS)
-    .eq('id', userId)
-    .single()
+  for (let tierIndex = 0; tierIndex < MEMBER_PROFILE_SELECT_TIERS.length; tierIndex++) {
+    const fields = MEMBER_PROFILE_SELECT_TIERS[tierIndex]!
+    const result = await supabase
+      .from(MEMBER_PROFILES_VIEW)
+      .select(fields)
+      .eq('id', userId)
+      .single()
 
-  if (!full.error && full.data) {
-    return {
-      schemaReady: true,
-      profile: toViewerProfile(full.data as unknown as Record<string, unknown>),
+    if (!result.error && result.data) {
+      if (fields === DIRECTORY_PROFILE_BASE_FIELDS) {
+        return {
+          schemaReady: false,
+          profile: legacyViewerFromBasic(
+            result.data as unknown as {
+              id: string
+              email: string | null
+              full_name: string | null
+              role: string | null
+              created_at: string | null
+            }
+          ),
+        }
+      }
+
+      return {
+        schemaReady: tierIndex === 0,
+        profile: toViewerProfile(
+          result.data as unknown as Record<string, unknown>
+        ),
+      }
+    }
+
+    if (result.error && !isMissingSchemaColumnError(result.error)) {
+      return { profile: null, schemaReady: true }
     }
   }
 
-  if (full.error && !isMissingSchemaColumnError(full.error)) {
-    return { profile: null, schemaReady: true }
-  }
-
-  const application = await supabase
-    .from('profiles')
-    .select(PROFILE_APPLICATION_FIELDS)
-    .eq('id', userId)
-    .single()
-
-  if (!application.error && application.data) {
-    return {
-      schemaReady: true,
-      profile: toViewerProfile(
-        application.data as unknown as Record<string, unknown>
-      ),
-    }
-  }
-
-  if (
-    application.error &&
-    !isMissingSchemaColumnError(application.error)
-  ) {
-    return { profile: null, schemaReady: true }
-  }
-
-  const basic = await supabase
-    .from('profiles')
-    .select(PROFILE_BASE_FIELDS)
-    .eq('id', userId)
-    .single()
-
-  if (!basic.data) {
-    return { profile: null, schemaReady: false }
-  }
-
-  return {
-    schemaReady: false,
-    profile: legacyViewerFromBasic(basic.data),
-  }
+  return { profile: null, schemaReady: false }
 }

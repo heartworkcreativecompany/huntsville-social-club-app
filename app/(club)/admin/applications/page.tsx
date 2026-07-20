@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireAdminClient } from '@/lib/supabase/require-admin-client'
 import AdminApplicationQueue from '@/components/admin/admin-application-queue'
 import Badge from '@/components/ui/badge'
 import EmptyState from '@/components/ui/empty-state'
@@ -31,7 +32,7 @@ export default async function AdminApplicationsPage() {
     redirect('/home')
   }
 
-  const supabase = await createClient()
+  const supabase = requireAdminClient()
 
   const { data: applicants, error } = await supabase
     .from('profiles')
@@ -104,6 +105,36 @@ export default async function AdminApplicationsPage() {
       <div className="mb-6 flex flex-wrap gap-3 text-sm">
         <Link href="/admin/users" className="font-medium text-accent underline">
           Manage roles
+        </Link>
+        <Link
+          href="/admin/profile-revisions"
+          className="text-muted-foreground underline"
+        >
+          Profile revisions
+        </Link>
+        <Link
+          href="/admin/curated-intros"
+          className="text-muted-foreground underline"
+        >
+          Curated intros
+        </Link>
+        <Link
+          href="/admin/message-reports"
+          className="text-muted-foreground underline"
+        >
+          Message reports
+        </Link>
+        <Link
+          href="/admin/moderation-actions"
+          className="text-muted-foreground underline"
+        >
+          Moderation audit
+        </Link>
+        <Link
+          href="/admin/curated-matches"
+          className="text-muted-foreground underline"
+        >
+          Match generation
         </Link>
         <Link href="/members" className="text-muted-foreground underline">
           Member directory

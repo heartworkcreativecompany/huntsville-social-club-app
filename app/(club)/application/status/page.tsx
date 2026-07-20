@@ -7,7 +7,7 @@ import { parseApprovalGates } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
 
 type PageProps = {
-  searchParams: Promise<{ submitted?: string }>
+  searchParams: Promise<{ submitted?: string; identity?: string }>
 }
 
 export default async function ApplicationStatusPage({
@@ -23,6 +23,7 @@ export default async function ApplicationStatusPage({
   const profile = viewer.profile
   const status = viewer.applicationStatus
   const showSubmitBanner = params.submitted === '1'
+  const showIdentityReturnNotice = params.identity === 'return'
 
   return (
     <>
@@ -46,7 +47,13 @@ export default async function ApplicationStatusPage({
         verifiedAt={profile?.verified_at}
         adminNotes={profile?.admin_review_notes}
         approvalGates={parseApprovalGates(profile?.approval_gates)}
+        identityVerificationStatus={profile?.identity_verification_status}
+        identityVerifiedAt={profile?.identity_verified_at}
+        identityVerificationLastError={
+          profile?.identity_verification_last_error
+        }
         showSubmitBanner={showSubmitBanner}
+        showIdentityReturnNotice={showIdentityReturnNotice}
       />
     </>
   )

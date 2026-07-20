@@ -56,7 +56,10 @@ export default function RecentMessagesPreview({
         <ul className="grid gap-3">
           {previews.map((preview) => (
             <li key={preview.conversationId}>
-              <Link href="/messages" className="block no-underline">
+              <Link
+                href={`/messages/${preview.conversationId}`}
+                className="block no-underline"
+              >
                 <Card
                   padding="sm"
                   className="transition hover:border-accent/25 hover:bg-surface-elevated/40"

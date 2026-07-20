@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireAdminClient } from '@/lib/supabase/require-admin-client'
 import Badge from '@/components/ui/badge'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
@@ -9,6 +10,7 @@ import ApplicationStatusBadge from '@/components/application/application-status-
 import { resolveApplicationStatus, type ApplicationStatus } from '@/lib/application'
 import { getViewer } from '@/lib/viewer'
 import RoleUpdate from './role-update'
+import RemoveMemberButton from '@/components/admin/remove-member-button'
 
 export default async function AdminUsersPage() {
   const viewer = await getViewer()
@@ -31,7 +33,7 @@ export default async function AdminUsersPage() {
     )
   }
 
-  const supabase = await createClient()
+  const supabase = requireAdminClient()
 
   const { data: users, error } = await supabase
     .from('profiles')
@@ -111,10 +113,23 @@ export default async function AdminUsersPage() {
                     Current account — role changes disabled
                   </p>
                 ) : (
-                  <div className="mt-4 border-t border-border pt-4">
+                  <div className="mt-4 space-y-4 border-t border-border pt-4">
                     <RoleUpdate
                       userId={profile.id}
                       currentRole={profile.role ?? 'member'}
+                    />
+                    <RemoveMemberButton
+                      userId={profile.id}
+                      memberName={
+                        profile.full_name ?? profile.email ?? 'Unknown member'
+                      }
+                      memberEmail={profile.email}
+                      disabled={profile.role === 'admin'}
+                      disabledReason={
+                        profile.role === 'admin'
+                          ? 'Administrator accounts cannot be removed here.'
+                          : undefined
+                      }
                     />
                   </div>
                 )}

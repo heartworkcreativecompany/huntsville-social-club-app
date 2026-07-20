@@ -10,6 +10,8 @@ type ProfileWithDraft = {
   birth_year?: number | null
   discovery_interests?: string[] | null
   discovery_industry?: string | null
+  connections_open_to?: string[] | null
+  connection_intents?: string[] | null
   verification_state?: unknown
   approval_gates?: unknown
   locality_confirmation?: unknown

@@ -231,5 +231,5 @@ export function eliteUnlimitedSummary(): string {
 }
 
 export function memberFreeSummary(): string {
-  return 'Pay in advance for standard event attendance. Circle Socials require a paid membership.'
+  return 'Pay in advance for standard event attendance. Upgrade to Inner Circle or Elite Circle for curated matches, curated intros, messaging, and Circle Social access.'
 }

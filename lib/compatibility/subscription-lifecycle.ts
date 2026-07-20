@@ -1,9 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
+import { queueAutoGenerateCuratedMatches } from '@/lib/compatibility/auto-generate-matches'
+import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import {
   isCompatibilityFeatureEnabled,
   isDatingConnectionSelected,
 } from '@/lib/compatibility/eligibility'
+import { createMemberNotification } from '@/lib/member-notifications'
 import {
   cancelScheduledBatches,
   clearCompatibilityPause,
@@ -31,6 +34,8 @@ export async function onMessagingEntitlementLost(
   await pauseCompatibilityMatching(supabase, userId, 'subscription_inactive', {
     messaging_entitlement_lost_at: now,
   })
+
+  revalidateCuratedMatchMemberRoutes()
 }
 
 /** Server-only: paid messaging entitlement restored. */
@@ -55,7 +60,7 @@ export async function onMessagingEntitlementRestored(
     return
   }
 
-  if (!isDatingConnectionSelected(profile.connections_open_to)) {
+  if (!isDatingConnectionSelected(profile.connection_intents)) {
     return
   }
 
@@ -63,4 +68,14 @@ export async function onMessagingEntitlementRestored(
     messaging_entitlement_restored_at: new Date().toISOString(),
     messaging_entitlement_lost_at: null,
   })
+
+  if (!profile.compatibility_completed_at) {
+    void createMemberNotification(supabase, {
+      userId,
+      type: 'compatibility_questionnaire_ready',
+    })
+  }
+
+  queueAutoGenerateCuratedMatches(userId, 'messaging_restored')
+  revalidateCuratedMatchMemberRoutes()
 }

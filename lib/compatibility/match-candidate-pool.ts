@@ -1,0 +1,143 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database.types'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import {
+  canGenerateMatches,
+  isCompatibilityFeatureEnabled,
+} from '@/lib/compatibility/eligibility'
+import type { CompatibilityProfileFields } from '@/lib/compatibility/types'
+import type { ScorableMemberProfile } from '@/lib/compatibility/scoring'
+import { isMessagingSuspended } from '@/lib/messaging-suspension'
+
+export type MatchPoolProfile = CompatibilityProfileFields &
+  ScorableMemberProfile & {
+    id: string
+    messaging_suspended_at: string | null
+    last_match_generation_at: string | null
+    last_match_review_at: string | null
+  }
+
+const MATCH_POOL_SELECT =
+  'id, application_status, connection_intents, compatibility_questionnaire, compatibility_completed_at, wants_curated_matches, curated_matches_paused_at, curated_matches_pause_reason, role, membership_billing, discovery_interests, location_area, birth_year, messaging_suspended_at, last_match_generation_at, last_match_review_at'
+
+export function isCandidateAvailable(
+  profile: MatchPoolProfile,
+  options?: {
+    excludeUserIds?: Set<string>
+    blockedUserIds?: Set<string>
+  }
+): boolean {
+  if (options?.excludeUserIds?.has(profile.id)) {
+    return false
+  }
+
+  if (options?.blockedUserIds?.has(profile.id)) {
+    return false
+  }
+
+  if (isMessagingSuspended(profile)) {
+    return false
+  }
+
+  return canGenerateMatches(profile, {
+    role: profile.role,
+    billing: profile.membership_billing,
+    applicationApproved: profile.application_status === 'approved',
+  })
+}
+
+export async function loadMatchPoolProfiles(
+  supabase: SupabaseClient<Database>
+): Promise<{ profiles: MatchPoolProfile[]; error: string | null }> {
+  if (!isCompatibilityFeatureEnabled()) {
+    return { profiles: [], error: 'Compatibility matching is disabled.' }
+  }
+
+  const { data, error } = await supabase
+    .from(MEMBER_PROFILES_VIEW)
+    .select(MATCH_POOL_SELECT)
+    .eq('application_status', 'approved')
+    .contains('connection_intents', ['dating'])
+    .not('compatibility_completed_at', 'is', null)
+    .eq('wants_curated_matches', true)
+    .is('curated_matches_paused_at', null)
+
+  if (error) {
+    if (error.code === '42P01') {
+      return {
+        profiles: [],
+        error: 'Compatibility tables are missing. Run the latest database migrations.',
+      }
+    }
+    return { profiles: [], error: error.message }
+  }
+
+  return { profiles: (data ?? []) as MatchPoolProfile[], error: null }
+}
+
+export async function loadMatchPoolProfileForUser(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<MatchPoolProfile | null> {
+  const { data, error } = await supabase
+    .from(MEMBER_PROFILES_VIEW)
+    .select(MATCH_POOL_SELECT)
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (error) {
+    if (error.code === '42P01') {
+      return null
+    }
+    throw new Error(error.message)
+  }
+
+  return (data as MatchPoolProfile | null) ?? null
+}
+
+export async function loadBlockedUserIdsForMember(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<Set<string>> {
+  const blocked = new Set<string>()
+
+  const { data: rows, error } = await supabase
+    .from('member_member_blocks')
+    .select('blocker_id, blocked_member_id')
+    .or(`blocker_id.eq.${userId},blocked_member_id.eq.${userId}`)
+
+  if (error) {
+    if (error.code === '42P01') {
+      return blocked
+    }
+    throw new Error(error.message)
+  }
+
+  for (const row of rows ?? []) {
+    if (row.blocker_id === userId) {
+      blocked.add(row.blocked_member_id)
+    } else if (row.blocked_member_id === userId) {
+      blocked.add(row.blocker_id)
+    }
+  }
+
+  return blocked
+}
+
+export function isEligibleRecipient(profile: MatchPoolProfile): boolean {
+  if (isMessagingSuspended(profile)) {
+    return false
+  }
+
+  return canGenerateMatches(profile, {
+    role: profile.role,
+    billing: profile.membership_billing,
+    applicationApproved: profile.application_status === 'approved',
+  })
+}
+
+export function listEligibleRecipients(
+  profiles: MatchPoolProfile[]
+): MatchPoolProfile[] {
+  return profiles.filter((profile) => isEligibleRecipient(profile))
+}

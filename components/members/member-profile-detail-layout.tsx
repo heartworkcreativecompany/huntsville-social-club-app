@@ -4,8 +4,6 @@ import type { ApplicationPhoto } from '@/lib/application'
 import { primaryMemberPhoto } from '@/lib/member-photos'
 import {
   MemberProfileGalleryBlock,
-  MemberProfilePrimaryPhoto,
-  ProfileThumbnailStrip,
   useMemberPhotoSelection,
 } from '@/components/members/member-photo-gallery'
 
@@ -33,8 +31,7 @@ export default function MemberProfileDetailLayout({
         </div>
       ) : null}
 
-      {/* Mobile: gallery block (image + thumbs) then details */}
-      <div className="grid gap-6 lg:hidden">
+      <div className="grid items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-8">
         <MemberProfileGalleryBlock
           memberId={memberId}
           photos={photos}
@@ -44,29 +41,6 @@ export default function MemberProfileDetailLayout({
           thumbnailsVariant="scroll"
         />
         <div className="min-w-0">{details}</div>
-      </div>
-
-      {/* Desktop: two-column row, thumbnails below */}
-      <div className="hidden lg:grid lg:gap-8">
-        <div className="grid grid-cols-[17rem_minmax(0,1fr)] items-start gap-8">
-          <MemberProfilePrimaryPhoto
-            memberId={memberId}
-            photo={activePhoto}
-          />
-          <div className="min-w-0">{details}</div>
-        </div>
-
-        {photos.length > 1 ? (
-          <div className="border-t border-border pt-4">
-            <ProfileThumbnailStrip
-              memberId={memberId}
-              photos={photos}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              variant="wrap"
-            />
-          </div>
-        ) : null}
       </div>
 
       {footer ? <div>{footer}</div> : null}

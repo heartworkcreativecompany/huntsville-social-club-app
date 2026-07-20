@@ -1,0 +1,294 @@
+'use client'
+
+import { useEffect, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import Card from '@/components/ui/card'
+import Badge from '@/components/ui/badge'
+import { createClient } from '@/lib/supabase/client'
+import {
+  formatPhoneForDisplay,
+  normalizePhoneToE164,
+  phonesMatchE164,
+  validatePhoneInput,
+} from '@/lib/member-phone'
+import {
+  requestPhoneChangeOtp,
+  verifyPhoneChangeOtp,
+} from '@/lib/member-phone-auth'
+import { buttonPrimaryClassName, inputClassName } from '@/lib/event-labels'
+import {
+  markPhonePendingReverification,
+  syncPhoneVerificationAfterOtp,
+} from '@/app/(club)/members/phone-verification-actions'
+
+const RESEND_COOLDOWN_SECONDS = 60
+
+type ProfilePhoneVerificationCardProps = {
+  verifiedPhoneE164: string | null
+  phoneVerified: boolean
+  authPhoneE164: string | null
+}
+
+export default function ProfilePhoneVerificationCard({
+  verifiedPhoneE164,
+  phoneVerified,
+  authPhoneE164,
+}: ProfilePhoneVerificationCardProps) {
+  const router = useRouter()
+  const supabase = createClient()
+  const initialPhone =
+    formatPhoneForDisplay(verifiedPhoneE164 ?? authPhoneE164) || ''
+
+  const [phone, setPhone] = useState(initialPhone)
+  const [otp, setOtp] = useState('')
+  const [codeSent, setCodeSent] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [cooldown, setCooldown] = useState(0)
+  const [isPending, startTransition] = useTransition()
+  const lastResetPhone = useRef<string | null>(verifiedPhoneE164)
+  const otpTargetPhoneE164 = useRef<string | null>(null)
+
+  const isVerified =
+    phoneVerified &&
+    phonesMatchE164(phone, verifiedPhoneE164 ?? authPhoneE164)
+
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const timer = window.setTimeout(() => {
+      setCooldown((value) => Math.max(0, value - 1))
+    }, 1000)
+    return () => window.clearTimeout(timer)
+  }, [cooldown])
+
+  const clearOtpState = (nextMessage?: string) => {
+    setCodeSent(false)
+    setOtp('')
+    otpTargetPhoneE164.current = null
+    if (nextMessage) {
+      setMessage(nextMessage)
+    }
+  }
+
+  const handlePhoneChange = (value: string) => {
+    setPhone(value)
+    setError('')
+
+    const normalized = normalizePhoneToE164(value)
+    if (
+      codeSent &&
+      otpTargetPhoneE164.current &&
+      normalized &&
+      !phonesMatchE164(normalized, otpTargetPhoneE164.current)
+    ) {
+      clearOtpState('Phone number changed. Send a new verification code.')
+    } else {
+      setMessage('')
+    }
+
+    if (
+      normalized &&
+      verifiedPhoneE164 &&
+      !phonesMatchE164(normalized, verifiedPhoneE164) &&
+      lastResetPhone.current !== normalized
+    ) {
+      lastResetPhone.current = normalized
+      startTransition(async () => {
+        await markPhonePendingReverification(value)
+        router.refresh()
+      })
+    }
+  }
+
+  const handleSendCode = () => {
+    setError('')
+    setMessage('')
+
+    const validationError = validatePhoneInput(phone)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    const phoneE164 = normalizePhoneToE164(phone)
+    if (!phoneE164) {
+      setError('Enter a valid phone number.')
+      return
+    }
+
+    startTransition(async () => {
+      if (
+        verifiedPhoneE164 &&
+        !phonesMatchE164(phoneE164, verifiedPhoneE164)
+      ) {
+        await markPhonePendingReverification(phone)
+      }
+
+      const resend =
+        codeSent &&
+        otpTargetPhoneE164.current !== null &&
+        phonesMatchE164(phoneE164, otpTargetPhoneE164.current)
+
+      const { error: sendError } = await requestPhoneChangeOtp(
+        supabase,
+        phoneE164,
+        { resend }
+      )
+
+      if (sendError) {
+        setError(sendError.message)
+        return
+      }
+
+      otpTargetPhoneE164.current = phoneE164
+      setCodeSent(true)
+      setOtp('')
+      setCooldown(RESEND_COOLDOWN_SECONDS)
+      setMessage(
+        `Verification code sent to ${formatPhoneForDisplay(phoneE164)}.`
+      )
+    })
+  }
+
+  const handleVerifyCode = () => {
+    setError('')
+    setMessage('')
+
+    const phoneE164 = otpTargetPhoneE164.current ?? normalizePhoneToE164(phone)
+    if (!phoneE164) {
+      setError('Send a verification code before entering the OTP.')
+      return
+    }
+
+    const validationError = validatePhoneInput(phone)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    if (!phonesMatchE164(phone, phoneE164)) {
+      setError('Phone number changed since the code was sent. Request a new code.')
+      return
+    }
+
+    const token = otp.trim()
+    if (!/^\d{6}$/.test(token)) {
+      setError('Enter the 6-digit code from your text message.')
+      return
+    }
+
+    startTransition(async () => {
+      const { error: verifyError } = await verifyPhoneChangeOtp(
+        supabase,
+        phoneE164,
+        token
+      )
+
+      if (verifyError) {
+        setError(verifyError.message)
+        return
+      }
+
+      const syncResult = await syncPhoneVerificationAfterOtp(phone)
+      if (syncResult.error) {
+        setError(syncResult.error)
+        return
+      }
+
+      lastResetPhone.current = phoneE164
+      clearOtpState()
+      setMessage('Phone verified. This counts toward your Verified member badge.')
+      router.refresh()
+    })
+  }
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-display text-lg font-semibold">Phone verification</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Required for the public Verified badge. Your phone number is used for
+            account verification only and is never shown on your member profile.
+          </p>
+        </div>
+        {isVerified ? <Badge variant="success">Verified</Badge> : null}
+      </div>
+
+      <div className="mt-4 grid max-w-lg gap-4">
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium text-foreground">Mobile number</span>
+          <input
+            type="tel"
+            autoComplete="tel"
+            placeholder="e.g. (256) 555-0100"
+            value={phone}
+            onChange={(event) => handlePhoneChange(event.target.value)}
+            className={inputClassName}
+            disabled={isPending}
+          />
+          <span className="text-xs text-muted-foreground">
+            US numbers only. We attach this to your existing account with a secure
+            phone-change code.
+          </span>
+        </label>
+
+        {codeSent ? (
+          <label className="grid gap-1.5 text-sm">
+            <span className="font-medium text-foreground">Verification code</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="6-digit code"
+              value={otp}
+              onChange={(event) =>
+                setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))
+              }
+              className={inputClassName}
+              disabled={isPending}
+            />
+          </label>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleSendCode}
+            className={buttonPrimaryClassName}
+            disabled={isPending || cooldown > 0}
+          >
+            {isPending
+              ? 'Sending…'
+              : cooldown > 0
+                ? `Resend in ${cooldown}s`
+                : codeSent
+                  ? 'Resend code'
+                  : 'Send code'}
+          </button>
+
+          {codeSent ? (
+            <button
+              type="button"
+              onClick={handleVerifyCode}
+              className={buttonPrimaryClassName}
+              disabled={isPending}
+            >
+              {isPending ? 'Verifying…' : 'Verify code'}
+            </button>
+          ) : null}
+        </div>
+
+        {error ? (
+          <p className="text-sm text-danger" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        {message ? (
+          <p className="text-sm text-muted-foreground">{message}</p>
+        ) : null}
+      </div>
+    </Card>
+  )
+}

@@ -1,3 +1,4 @@
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
 import { APPLICATION_PHOTOS_BUCKET } from '@/lib/application-photo-storage'
 import { isApprovedMember } from '@/lib/application'
@@ -39,7 +40,7 @@ export async function canViewMemberPhotos(
 
   const supabase = await createClient()
   const { data: target } = await supabase
-    .from('profiles')
+    .from(MEMBER_PROFILES_VIEW)
     .select('application_status, role')
     .eq('id', memberId)
     .single()

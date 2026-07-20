@@ -30,11 +30,19 @@ import {
 } from '@/lib/membership-systems'
 
 export { discoveryIntentLabel }
+
+import { publicContactEmail } from '@/lib/member-contact-email'
 import { roleLabel } from '@/lib/event-labels'
+import {
+  memberMatchesMixedIntentFilter,
+  memberMatchesPublicIntentFilter,
+  resolveMemberPublicIntents,
+  type MemberPublicIntentValue,
+} from '@/lib/member-public-intent'
 
 export type DirectoryMember = {
   id: string
-  email: string | null
+  contactEmail: string | null
   full_name: string | null
   role: string | null
   created_at: string | null
@@ -49,6 +57,7 @@ export type DirectoryMember = {
   birth_year: number | null
   discovery_interests: string[]
   discovery_industry: string | null
+  public_intents: MemberPublicIntentValue[]
   verification_state: VerificationState
   membership_tier: MembershipTierKey
   vendor_reviewed_badge: boolean
@@ -58,7 +67,6 @@ export type TrustBadge = DisplayBadge
 
 export function memberDisplayName(member: DirectoryMember): string {
   if (member.full_name?.trim()) return member.full_name.trim()
-  if (member.email) return member.email
   return 'Member'
 }
 
@@ -87,7 +95,7 @@ export function trustBadges(member: DirectoryMember): TrustBadge[] {
   return directoryCardBadges(member)
 }
 
-/** Top badges for directory cards: tier + up to 2 verification. */
+/** Top badges for directory cards: tier + verified badge when fully verified. */
 export function directoryCardBadges(member: DirectoryMember): DisplayBadge[] {
   const tier = cardTierBadges(member.membership_tier)
   const verification = cardVerificationBadges(member.verification_state)
@@ -96,7 +104,7 @@ export function directoryCardBadges(member: DirectoryMember): DisplayBadge[] {
     badges.push({
       key: 'vendor_reviewed',
       label: 'Vendor reviewed',
-      variant: 'premium',
+      variant: 'trust',
     })
   }
   return badges.slice(0, 4)
@@ -112,7 +120,7 @@ export function profilePageBadges(member: DirectoryMember): {
     tier: membershipTierBadge(member.membership_tier),
     verification: publicVerificationBadges(member.verification_state),
     premium: member.vendor_reviewed_badge
-      ? { key: 'vendor_reviewed', label: 'Vendor reviewed', variant: 'premium' }
+      ? { key: 'vendor_reviewed', label: 'Vendor reviewed', variant: 'trust' }
       : null,
   }
 }
@@ -120,7 +128,8 @@ export function profilePageBadges(member: DirectoryMember): {
 export function buildDirectoryMember(
   profile: {
     id: string
-    email: string | null
+    contact_email?: string | null
+    show_contact_email?: boolean | null
     full_name: string | null
     role: string | null
     created_at: string | null
@@ -135,6 +144,8 @@ export function buildDirectoryMember(
     birth_year?: number | null
     discovery_interests?: string[] | null
     discovery_industry?: string | null
+    connections_open_to?: string[] | null
+    connection_intents?: string[] | null
     verification_state?: unknown
     premium_verification?: unknown
     membership_billing?: unknown
@@ -150,10 +161,15 @@ export function buildDirectoryMember(
     premium,
   })
   const vendorBadge = publicPremiumBadge(premium) !== null
+  const publicIntents = resolveMemberPublicIntents({
+    connection_intents: enriched.connection_intents,
+    connections_open_to: enriched.connections_open_to,
+    discovery_intent: enriched.discovery_intent,
+  })
 
   return {
     id: enriched.id,
-    email: enriched.email,
+    contactEmail: publicContactEmail(enriched),
     full_name: enriched.full_name,
     role: enriched.role,
     created_at: enriched.created_at,
@@ -168,6 +184,7 @@ export function buildDirectoryMember(
     birth_year: enriched.birth_year ?? null,
     discovery_interests: enriched.discovery_interests ?? [],
     discovery_industry: enriched.discovery_industry ?? null,
+    public_intents: publicIntents,
     verification_state: parseVerificationState(enriched.verification_state),
     membership_tier: tier,
     vendor_reviewed_badge: vendorBadge,
@@ -287,9 +304,23 @@ export function filterDirectoryMembers(
       return false
     }
 
+  if (filters.intentFilter !== 'all' && filters.intentFilter !== 'mixed') {
+      if (
+        !memberMatchesPublicIntentFilter(
+          member.public_intents,
+          filters.intentFilter as MemberPublicIntentValue
+        )
+      ) {
+        return false
+      }
+    }
+
     if (
-      filters.intentFilter !== 'all' &&
-      (member.discovery_intent ?? '') !== filters.intentFilter
+      filters.intentFilter === 'mixed' &&
+      !memberMatchesMixedIntentFilter(
+        member.public_intents,
+        member.discovery_intent
+      )
     ) {
       return false
     }
@@ -332,7 +363,6 @@ export function filterDirectoryMembers(
     if (!normalizedQuery) return true
 
     const name = member.full_name?.toLowerCase() ?? ''
-    const email = member.email?.toLowerCase() ?? ''
     const intent = member.membership_intent?.toLowerCase() ?? ''
     const discoveryIntent = member.discovery_intent
       ? discoveryIntentLabel(member.discovery_intent).toLowerCase()
@@ -341,7 +371,6 @@ export function filterDirectoryMembers(
 
     return (
       name.includes(normalizedQuery) ||
-      email.includes(normalizedQuery) ||
       intent.includes(normalizedQuery) ||
       discoveryIntent.includes(normalizedQuery) ||
       role.includes(normalizedQuery)

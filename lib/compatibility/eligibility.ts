@@ -3,7 +3,9 @@ import {
   canUseMessaging,
   type EntitlementCycle,
 } from '@/lib/membership-entitlements'
-import { DATING_CONNECTION_OPTION, type CompatibilityProfileFields } from '@/lib/compatibility/types'
+import type { CompatibilityProfileFields } from '@/lib/compatibility/types'
+import { includesDatingIntent } from '@/lib/member-public-intent'
+import { isCompatibilityQuestionnaireEffectivelyComplete } from '@/lib/compatibility/questionnaire'
 
 /** Central feature flag — when false, all compatibility flows are disabled. */
 export function isCompatibilityFeatureEnabled(): boolean {
@@ -11,9 +13,9 @@ export function isCompatibilityFeatureEnabled(): boolean {
 }
 
 export function isDatingConnectionSelected(
-  connectionsOpenTo: string[] | null | undefined
+  connectionIntents: string[] | null | undefined
 ): boolean {
-  return (connectionsOpenTo ?? []).includes(DATING_CONNECTION_OPTION)
+  return includesDatingIntent(connectionIntents)
 }
 
 export function isApprovedMember(applicationStatus: string | null | undefined): boolean {
@@ -56,7 +58,7 @@ export function isCompatibilityEligible(
     return false
   }
 
-  if (!isDatingConnectionSelected(profile.connections_open_to)) {
+  if (!isDatingConnectionSelected(profile.connection_intents)) {
     return false
   }
 
@@ -84,6 +86,15 @@ export function canGenerateMatches(
   }
 
   if (profile.compatibility_completed_at == null) {
+    return false
+  }
+
+  if (
+    !isCompatibilityQuestionnaireEffectivelyComplete({
+      compatibility_questionnaire: profile.compatibility_questionnaire,
+      compatibility_completed_at: profile.compatibility_completed_at,
+    })
+  ) {
     return false
   }
 

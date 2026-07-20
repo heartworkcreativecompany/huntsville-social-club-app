@@ -66,6 +66,11 @@ export default async function ApplicationPage() {
             verifiedAt={profile?.verified_at}
             adminNotes={profile?.admin_review_notes}
             approvalGates={parseApprovalGates(profile?.approval_gates)}
+            identityVerificationStatus={profile?.identity_verification_status}
+            identityVerifiedAt={profile?.identity_verified_at}
+            identityVerificationLastError={
+              profile?.identity_verification_last_error
+            }
           />
         </section>
       ) : (

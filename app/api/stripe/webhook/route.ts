@@ -8,6 +8,7 @@ import {
   resolveUserIdFromStripeMetadata,
   syncStripeSubscription,
 } from '@/lib/stripe/sync-subscription'
+import { applyIdentityVerificationSession } from '@/lib/stripe/identity'
 import {
   hasProcessedStripeEvent,
   markStripeEventProcessed,
@@ -113,6 +114,15 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         userId,
         subscription,
       })
+      return
+    }
+
+    case 'identity.verification_session.verified':
+    case 'identity.verification_session.requires_input':
+    case 'identity.verification_session.processing':
+    case 'identity.verification_session.canceled': {
+      const session = event.data.object as Stripe.Identity.VerificationSession
+      await applyIdentityVerificationSession(admin, session)
       return
     }
 

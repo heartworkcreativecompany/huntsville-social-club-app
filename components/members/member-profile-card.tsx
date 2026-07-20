@@ -3,7 +3,6 @@ import Badge from '@/components/ui/badge'
 import Card from '@/components/ui/card'
 import { roleLabel } from '@/lib/event-labels'
 import {
-  discoveryIntentLabel,
   intentLabel,
   memberDisplayName,
   memberSinceLabel,
@@ -11,6 +10,7 @@ import {
   professionalContext,
   type DirectoryMember,
 } from '@/lib/members-discovery'
+import { memberPublicIntentLabel } from '@/lib/member-public-intent'
 import { MemberCardBadges } from '@/components/members/member-badge-row'
 import { primaryMemberPhoto } from '@/lib/member-photos'
 import MemberPhotoDisplay from './member-photo-display'
@@ -36,7 +36,7 @@ export default function MemberProfileCard({
   const showIntent = !limited || isCurrentUser
   const intent = intentLabel(member.membership_intent, {
     placeholder: isCurrentUser
-      ? 'Add your intent in profile settings below'
+      ? 'Add your about note in the form below'
       : 'Intent shared at events',
   })
 
@@ -61,9 +61,9 @@ export default function MemberProfileCard({
           {isCurrentUser ? (
             <p className="eyebrow mt-1">Your account</p>
           ) : null}
-          {!limited && member.email ? (
+          {member.contactEmail ? (
             <p className="mt-1 truncate text-sm text-muted-foreground">
-              {member.email}
+              {member.contactEmail}
             </p>
           ) : null}
         </div>
@@ -77,11 +77,11 @@ export default function MemberProfileCard({
         </div>
       </div>
 
-      {compact && member.location_area ? (
+      {compact && (member.location_area || member.public_intents.length > 0) ? (
         <p className="mt-3 text-xs text-muted-foreground">
-          {member.location_area}
-          {member.discovery_intent
-            ? ` · ${discoveryIntentLabel(member.discovery_intent)}`
+          {member.location_area ?? ''}
+          {member.public_intents.length > 0
+            ? `${member.location_area ? ' · ' : ''}${member.public_intents.map(memberPublicIntentLabel).join(', ')}`
             : ''}
         </p>
       ) : null}

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { getStripe } from '@/lib/stripe/config'
 import { parseMembershipBilling } from '@/lib/membership-systems'
 
@@ -10,8 +11,8 @@ export async function getOrCreateStripeCustomer(
   const stripe = getStripe()
 
   const { data: profile } = await supabase
-    .from('profiles')
-    .select('membership_billing, email, full_name')
+    .from(MEMBER_PROFILES_VIEW)
+    .select('membership_billing, full_name')
     .eq('id', input.userId)
     .single()
 
@@ -21,7 +22,7 @@ export async function getOrCreateStripeCustomer(
   }
 
   const customer = await stripe.customers.create({
-    email: input.email ?? profile?.email ?? undefined,
+    email: input.email ?? undefined,
     name: profile?.full_name ?? undefined,
     metadata: {
       user_id: input.userId,

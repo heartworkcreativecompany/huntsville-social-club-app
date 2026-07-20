@@ -11,7 +11,9 @@ import {
   onMessagingEntitlementLost,
   onMessagingEntitlementRestored,
 } from '@/lib/compatibility/subscription-lifecycle'
+import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createMemberNotification } from '@/lib/member-notifications'
 
 /**
  * Server-only: compare messaging entitlement before/after a billing write.
@@ -54,10 +56,16 @@ export async function runCompatibilitySubscriptionLifecycle(
 
   if (hadMessaging && !hasMessaging) {
     await onMessagingEntitlementLost(admin, input.userId)
+    revalidateCuratedMatchMemberRoutes()
     return
   }
 
   if (!hadMessaging && hasMessaging) {
     await onMessagingEntitlementRestored(admin, input.userId)
+    void createMemberNotification(admin, {
+      userId: input.userId,
+      type: 'membership_upgraded',
+    })
+    revalidateCuratedMatchMemberRoutes()
   }
 }

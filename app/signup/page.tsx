@@ -5,8 +5,8 @@ import { useState } from 'react'
 import AuthPageShell from '@/components/auth/auth-page-shell'
 import AuthStatusBanner from '@/components/auth/auth-status-banner'
 import { createClient } from '@/lib/supabase/client'
+import { accountCreatedSuccessMessage, isAuthEmailConfirmationRequired } from '@/lib/auth-email'
 import {
-  ACCOUNT_CREATED_SUCCESS,
   friendlyAuthError,
 } from '@/lib/auth-errors'
 import {
@@ -82,7 +82,11 @@ export default function SignUpPage() {
     <AuthPageShell
       eyebrow="Membership"
       title="Create your account"
-      description="Create your account, confirm your email, and start your application to join the club."
+      description={
+        isAuthEmailConfirmationRequired()
+          ? 'Create your account, confirm your email, and start your application to join the club.'
+          : 'Create your account and start your application to join the club.'
+      }
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{' '}
@@ -94,7 +98,7 @@ export default function SignUpPage() {
     >
       {success ? (
         <AuthStatusBanner variant="success" title="Account created">
-          {ACCOUNT_CREATED_SUCCESS}
+          {accountCreatedSuccessMessage()}
         </AuthStatusBanner>
       ) : (
         <form className="grid gap-4" onSubmit={handleSubmit} noValidate>

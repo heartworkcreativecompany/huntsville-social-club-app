@@ -125,7 +125,7 @@ export function MemberProfileGalleryBlock({
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="mx-auto grid w-full max-w-[19rem] gap-3 lg:mx-0 lg:max-w-none">
       <MemberProfilePrimaryPhoto memberId={memberId} photo={selected} />
       <ProfileThumbnailStrip
         memberId={memberId}

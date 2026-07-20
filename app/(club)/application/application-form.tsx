@@ -31,11 +31,17 @@ import type { ApplicationDraft, ApplicationStatus } from '@/lib/application'
 import { canEditApplication } from '@/lib/application'
 import { completedPromptCount } from '@/lib/application-validation'
 import {
+  CONNECTION_LOOKING_FOR_FIELD,
+  CONNECTION_TYPES_OPEN_TO_FIELD,
+  MEMBER_PUBLIC_INTENT_LABELS,
+  memberPublicIntentLabelsFromValues,
+  memberPublicIntentValuesFromLabels,
+} from '@/lib/member-public-intent'
+import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
-import { DISCOVERY_INTENT_OPTIONS } from '@/lib/membership-systems'
 import { trackEvent } from '@/lib/analytics'
 import { saveApplicationDraft, submitApplication } from './actions'
 
@@ -296,34 +302,26 @@ export default function ApplicationForm({
                 placeholder="she/her, he/him, they/them…"
               />
             </label>
-            <label className="grid gap-1.5 text-sm">
-              <FieldLabel
-                required
-                hint="Helps members find compatible connections in discovery."
-              >
-                Primary intent
-              </FieldLabel>
-              <select
-                className={inputClassName}
-                value={draft.profile.lookingFor}
-                onChange={(e) => updateProfile({ lookingFor: e.target.value })}
-              >
-                <option value="">Select intent…</option>
-                {DISCOVERY_INTENT_OPTIONS.filter((o) => o.value).map(
-                  (option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  )
-                )}
-              </select>
-            </label>
             <div className="text-sm">
-              <FieldLabel
-                optional
-                hint="Shown on your profile — helps members understand what you're open to."
-              >
-                Connection types open to
+              <FieldLabel required hint={CONNECTION_LOOKING_FOR_FIELD.helper}>
+                {CONNECTION_LOOKING_FOR_FIELD.label}
+              </FieldLabel>
+              <ChipMultiSelect
+                options={MEMBER_PUBLIC_INTENT_LABELS}
+                selected={memberPublicIntentLabelsFromValues(
+                  draft.profile.connectionIntents
+                )}
+                onChange={(labels) =>
+                  updateProfile({
+                    connectionIntents: memberPublicIntentValuesFromLabels(labels),
+                  })
+                }
+                min={1}
+              />
+            </div>
+            <div className="text-sm">
+              <FieldLabel optional hint={CONNECTION_TYPES_OPEN_TO_FIELD.helper}>
+                {CONNECTION_TYPES_OPEN_TO_FIELD.label}
               </FieldLabel>
               <ChipMultiSelect
                 options={CONNECTION_OPEN_TO_OPTIONS}

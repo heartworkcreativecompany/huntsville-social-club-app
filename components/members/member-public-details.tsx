@@ -1,4 +1,6 @@
 import Card from '@/components/ui/card'
+import Badge from '@/components/ui/badge'
+import { CONNECTION_TYPES_OPEN_TO_FIELD } from '@/lib/member-public-intent'
 import type { ApplicationPublicProfileDetails } from '@/lib/application-profile-preview'
 
 export default function MemberPublicDetails({
@@ -9,7 +11,7 @@ export default function MemberPublicDetails({
   compact?: boolean
 }) {
   const hasContent =
-    details.intent ||
+    details.connectionIntents.length > 0 ||
     details.locationArea ||
     details.occupation ||
     details.interests.length > 0 ||
@@ -24,10 +26,16 @@ export default function MemberPublicDetails({
 
   const dl = (
     <dl className="grid gap-3 text-sm">
-      {details.intent ? (
+      {details.connectionIntents.length > 0 ? (
         <div>
-          <dt className="text-muted-foreground">Intent</dt>
-          <dd className="font-medium text-foreground">{details.intent}</dd>
+          <dt className="text-muted-foreground">Looking for</dt>
+          <dd className="mt-1 flex flex-wrap gap-1.5">
+            {details.connectionIntents.map((intent) => (
+              <Badge key={intent} variant="category">
+                {intent}
+              </Badge>
+            ))}
+          </dd>
         </div>
       ) : null}
       {details.locationArea ? (
@@ -44,7 +52,9 @@ export default function MemberPublicDetails({
       ) : null}
       {details.connectionsOpenTo.length > 0 ? (
         <div>
-          <dt className="text-muted-foreground">Open to</dt>
+          <dt className="text-muted-foreground">
+            {CONNECTION_TYPES_OPEN_TO_FIELD.label}
+          </dt>
           <dd className="font-medium text-foreground">
             {details.connectionsOpenTo.join(', ')}
           </dd>

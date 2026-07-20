@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation'
+import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
@@ -13,7 +15,6 @@ import type { EventAccessType } from '@/lib/membership-tier-config'
 
 type ProfileRow = {
   id: string
-  email: string | null
   full_name: string | null
 }
 
@@ -32,8 +33,7 @@ function canViewEvent(
 function memberLabel(profile: ProfileRow | undefined): string {
   if (!profile) return 'Unknown member'
   if (profile.full_name) return profile.full_name
-  if (profile.email) return profile.email
-  return 'Unknown member'
+  return 'Member'
 }
 
 function creatorLabel(
@@ -82,8 +82,8 @@ export default async function EventsPage() {
 
   if (ownerIds.length > 0) {
     const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, email, full_name')
+      .from(MEMBER_PROFILES_VIEW)
+      .select('id, full_name')
       .in('id', ownerIds)
 
     for (const profile of profiles ?? []) {
