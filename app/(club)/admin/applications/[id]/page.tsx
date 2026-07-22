@@ -56,7 +56,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
   const { data: applicant, error } = await supabase
     .from('profiles')
     .select(
-      'id, email, full_name, role, application_status, membership_intent, location_area, application_draft, application_submitted_at, application_reviewed_at, verified_at, admin_review_notes, created_at, approval_gates, locality_confirmation, premium_verification, membership_billing'
+      'id, email, full_name, role, application_status, membership_intent, location_area, application_draft, application_submitted_at, application_reviewed_at, verified_at, admin_review_notes, created_at, approval_gates, locality_confirmation, premium_verification, membership_billing, identity_verification_status, identity_verification_session_id, identity_verified_at, identity_verification_last_error'
     )
     .eq('id', id)
     .single()
@@ -311,8 +311,37 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
             Approval requirements
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            All gates must be approved before final membership approval.
+            Required gates must be approved before final membership approval.
+            Phone OTP is optional and does not block approval.
           </p>
+          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">Stripe Identity status</dt>
+              <dd className="font-medium text-foreground">
+                {applicant.identity_verification_status ?? 'not_started'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Identity session</dt>
+              <dd className="font-medium break-all text-foreground">
+                {applicant.identity_verification_session_id ?? '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Identity verified at</dt>
+              <dd className="font-medium text-foreground">
+                {applicant.identity_verified_at
+                  ? new Date(applicant.identity_verified_at).toLocaleString()
+                  : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Identity last error</dt>
+              <dd className="font-medium text-foreground">
+                {applicant.identity_verification_last_error ?? '—'}
+              </dd>
+            </div>
+          </dl>
           <div className="mt-4">
             <AdminApprovalGates applicantId={applicant.id} gates={gates} />
           </div>

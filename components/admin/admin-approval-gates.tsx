@@ -14,7 +14,9 @@ import {
 import { buttonSecondaryClassName } from '@/lib/event-labels'
 import {
   markApplicationReviewed,
+  markEmailVerifiedForApplicant,
   markPhotosReviewed,
+  resetIdentityVerification,
   syncEmailGateFromAuth,
   updateApprovalGate,
 } from '@/app/(club)/admin/applications/membership-actions'
@@ -78,7 +80,9 @@ export default function AdminApprovalGates({
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Required gates must be approved before membership approval. Members verify phone OTP on their profile page. Email sync reads Supabase Auth confirmation status.
+        Required gates must be approved before membership approval. Stripe
+        Identity is the required member ID check. Phone OTP is optional and
+        completed by the member on Profile after approval.
       </p>
 
       <ul className="grid gap-3">
@@ -150,6 +154,26 @@ export default function AdminApprovalGates({
           type="button"
           className={buttonSecondaryClassName}
           disabled={isPending}
+          onClick={() => {
+            if (
+              !window.confirm(
+                'Mark this applicant’s email as confirmed in Auth and approve the email_verified gate? Only use when confirmation mail cannot be delivered.'
+              )
+            ) {
+              return
+            }
+            runQuick(
+              () => markEmailVerifiedForApplicant(applicantId),
+              'Email marked verified'
+            )
+          }}
+        >
+          Mark email verified
+        </button>
+        <button
+          type="button"
+          className={buttonSecondaryClassName}
+          disabled={isPending}
           onClick={() => runQuick(() => markPhotosReviewed(applicantId), 'Photos')}
         >
           Mark photos reviewed
@@ -163,6 +187,26 @@ export default function AdminApprovalGates({
           }
         >
           Mark application reviewed
+        </button>
+        <button
+          type="button"
+          className={buttonSecondaryClassName}
+          disabled={isPending}
+          onClick={() => {
+            if (
+              !window.confirm(
+                'Reset Stripe Identity verification for this applicant? They will need to verify again.'
+              )
+            ) {
+              return
+            }
+            runQuick(
+              () => resetIdentityVerification(applicantId),
+              'Identity verification reset'
+            )
+          }}
+        >
+          Reset identity verification
         </button>
       </div>
 

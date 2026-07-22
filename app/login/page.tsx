@@ -5,6 +5,7 @@ import { Suspense, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthPageShell from '@/components/auth/auth-page-shell'
 import LoginStatusMessages from '@/components/auth/login-status-messages'
+import ResendConfirmationEmail from '@/components/auth/resend-confirmation-email'
 import { createClient } from '@/lib/supabase/client'
 import { postLoginPath } from '@/lib/auth-post-login'
 import { friendlyAuthError } from '@/lib/auth-errors'
@@ -38,17 +39,23 @@ export default function SignInPage() {
   )
 }
 
+function isEmailNotConfirmedError(message: string): boolean {
+  return message.toLowerCase().includes('email not confirmed')
+}
+
 function SignInForm() {
   const router = useRouter()
   const supabase = createClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [needsConfirmation, setNeedsConfirmation] = useState(false)
   const [isPending, setIsPending] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setNeedsConfirmation(false)
 
     const emailError = validateEmail(email)
     if (emailError) {
@@ -71,6 +78,7 @@ function SignInForm() {
 
     if (signInError) {
       setError(friendlyAuthError(signInError.message))
+      setNeedsConfirmation(isEmailNotConfirmedError(signInError.message))
       trackEvent('auth_sign_in_failed', { reason: 'credentials' })
       setIsPending(false)
       return
@@ -134,6 +142,19 @@ function SignInForm() {
       >
         {isPending ? 'Signing in…' : 'Sign in'}
       </button>
+
+      {needsConfirmation ? (
+        <ResendConfirmationEmail email={email} />
+      ) : (
+        <details className="text-sm text-muted-foreground">
+          <summary className="cursor-pointer text-accent underline">
+            Didn’t get a confirmation email?
+          </summary>
+          <div className="mt-3">
+            <ResendConfirmationEmail email={email} />
+          </div>
+        </details>
+      )}
     </form>
   )
 }

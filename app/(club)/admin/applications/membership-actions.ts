@@ -321,3 +321,97 @@ export async function markPhotosReviewed(applicantId: string) {
 export async function markApplicationReviewed(applicantId: string) {
   return updateApprovalGate(applicantId, 'application_reviewed', 'approved')
 }
+
+/**
+ * Admin-only: mark the Auth email as confirmed and approve email_verified gate.
+ * Use when confirmation mail cannot be delivered and identity has been verified another way.
+ */
+export async function markEmailVerifiedForApplicant(applicantId: string) {
+  const auth = await requireAdmin()
+  if (auth.error || !auth.supabase) {
+    return { error: auth.error ?? 'Unauthorized' }
+  }
+
+  const adminClient = createAdminClient()
+  if (!adminClient) {
+    return {
+      error:
+        'Service role key not configured. Set SUPABASE_SERVICE_ROLE_KEY to confirm email in Auth.',
+    }
+  }
+
+  const { error: authError } = await adminClient.auth.admin.updateUserById(
+    applicantId,
+    { email_confirm: true }
+  )
+
+  if (authError) {
+    return { error: authError.message }
+  }
+
+  const gateResult = await updateApprovalGate(
+    applicantId,
+    'email_verified',
+    'approved'
+  )
+
+  if (gateResult.error) {
+    return { error: gateResult.error }
+  }
+
+  revalidatePath(`/admin/applications/${applicantId}`)
+  revalidatePath('/application/status')
+  revalidatePath('/login')
+  return { success: true as const }
+}
+
+/**
+ * Admin-safe reset of Stripe Identity verification for retesting.
+ * Clears session metadata and sets identity gates back to incomplete.
+ * Does not change application_status or other approval gates.
+ */
+export async function resetIdentityVerification(applicantId: string) {
+  const auth = await requireAdmin()
+  if (auth.error || !auth.supabase) {
+    return { error: auth.error ?? 'Unauthorized' }
+  }
+
+  const { data: profile } = await auth.supabase
+    .from('profiles')
+    .select('approval_gates, verification_state')
+    .eq('id', applicantId)
+    .single()
+
+  if (!profile) {
+    return { error: 'Applicant not found.' }
+  }
+
+  const gates = parseApprovalGates(profile.approval_gates)
+  gates.identity_verified = 'incomplete'
+
+  const verification = verificationStateFromGates(
+    gates,
+    parseVerificationState(profile.verification_state)
+  )
+  verification.id_verified = 'incomplete'
+
+  const { error } = await auth.supabase
+    .from('profiles')
+    .update({
+      identity_verification_status: 'not_started',
+      identity_verification_session_id: null,
+      identity_verified_at: null,
+      identity_verification_last_error: null,
+      approval_gates: gates,
+      verification_state: verification,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', applicantId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/applications/${applicantId}`)
+  revalidatePath('/application/status')
+  revalidatePath('/application')
+  return { success: true as const }
+}

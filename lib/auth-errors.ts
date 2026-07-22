@@ -11,7 +11,7 @@ export function friendlyAuthError(message: string): string {
   }
 
   if (lower.includes('email not confirmed')) {
-    return 'Confirm your email before signing in. Check your inbox for the confirmation link.'
+    return 'Confirm your email before signing in. Use Resend confirmation email below if you did not receive the link.'
   }
 
   if (lower.includes('user already registered')) {

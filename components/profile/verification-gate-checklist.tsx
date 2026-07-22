@@ -3,7 +3,6 @@
 import Card from '@/components/ui/card'
 import Badge from '@/components/ui/badge'
 import {
-  APPROVAL_GATE_DEFS,
   OPTIONAL_APPROVAL_GATES,
   REQUIRED_APPROVAL_GATES,
   approvalGateApplicantStatus,
@@ -39,6 +38,11 @@ function GateChecklist({
                   {!gate.implemented ? ' · Coming soon' : ''}
                 </span>
               ) : null}
+              {gate.key === 'identity_verified' && !approved ? (
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Use “Verify your identity” above to complete this step.
+                </span>
+              ) : null}
             </div>
             <Badge variant={approved ? 'success' : gate.implemented ? 'warning' : 'muted'}>
               {approvalGateApplicantStatus(gate.key, status)}
@@ -53,9 +57,12 @@ function GateChecklist({
 export default function VerificationGateChecklist({
   gates,
   showRequiredLabels = false,
+  /** Application status should not surface optional phone OTP as a blocker. */
+  requiredOnly = false,
 }: {
   gates: Partial<Record<ApprovalGateKey, ReviewStatus>>
   showRequiredLabels?: boolean
+  requiredOnly?: boolean
 }) {
   return (
     <div className="grid gap-4">
@@ -71,10 +78,10 @@ export default function VerificationGateChecklist({
           />
         </div>
       </div>
-      {OPTIONAL_APPROVAL_GATES.length > 0 ? (
+      {!requiredOnly && OPTIONAL_APPROVAL_GATES.length > 0 ? (
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Optional / coming soon
+            Optional (after approval)
           </p>
           <div className="mt-2">
             <GateChecklist
@@ -93,10 +100,12 @@ export function VerificationGateChecklistCard({
   title,
   description,
   gates,
+  requiredOnly = false,
 }: {
   title: string
   description?: string
   gates: Partial<Record<ApprovalGateKey, ReviewStatus>>
+  requiredOnly?: boolean
 }) {
   return (
     <Card padding="sm">
@@ -105,7 +114,7 @@ export function VerificationGateChecklistCard({
         <p className="mt-2 text-sm text-muted-foreground">{description}</p>
       ) : null}
       <div className="mt-3">
-        <VerificationGateChecklist gates={gates} />
+        <VerificationGateChecklist gates={gates} requiredOnly={requiredOnly} />
       </div>
     </Card>
   )

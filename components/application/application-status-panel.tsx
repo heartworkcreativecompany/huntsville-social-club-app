@@ -195,11 +195,33 @@ export default function ApplicationStatusPanel({
         />
       ) : null}
 
+      {gateSummary &&
+      status !== 'approved' &&
+      status !== 'draft' &&
+      approvalGates?.identity_verified !== 'approved' ? (
+        <Card className="border-accent/30 bg-accent-soft/30" padding="sm">
+          <h3 className="text-display text-base font-medium text-foreground">
+            Your next verification step
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Stripe Identity (government ID + matching selfie) is required before
+            membership can be approved. Phone OTP is optional and only available
+            on your Profile after you are approved — it does not block this
+            application.
+          </p>
+          <p className="mt-2 text-sm text-foreground">
+            Use the <span className="font-medium">Identity verification</span>{' '}
+            card above to start or continue.
+          </p>
+        </Card>
+      ) : null}
+
       {gateSummary && status !== 'approved' && status !== 'draft' ? (
         <VerificationGateChecklistCard
           title="Verification progress"
           description={gateSummary.label}
           gates={approvalGates ?? {}}
+          requiredOnly
         />
       ) : null}
 

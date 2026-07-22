@@ -364,7 +364,7 @@ export const APPROVAL_GATE_DEFS: ApprovalGateDef[] = [
     key: 'phone_verified',
     label: 'Phone OTP verification',
     description:
-      'Phone number verified via Supabase Auth SMS OTP. Account verification only — not shown publicly.',
+      'Optional. After membership approval, members verify a phone number on Profile via Supabase Auth SMS OTP. Not required for application approval — Stripe Identity is the required ID check.',
     requiredForApproval: false,
     implemented: true,
     completedBy: 'member',
@@ -373,7 +373,7 @@ export const APPROVAL_GATE_DEFS: ApprovalGateDef[] = [
     key: 'identity_verified',
     label: 'Identity verification',
     description:
-      'Government ID + matching selfie via Stripe Identity. Required before membership approval. Document/selfie images are not stored in our database.',
+      'Required. Government ID + matching selfie via Stripe Identity before membership approval. Document/selfie images are not stored in our database.',
     requiredForApproval: true,
     implemented: true,
     completedBy: 'member',
@@ -516,12 +516,13 @@ export function approvalGateApplicantStatus(
   if (!def?.implemented) return 'Coming soon'
   if (def.completedBy === 'member') {
     if (gateKey === 'phone_verified') {
-      return 'Verify on your profile'
+      if (status === 'pending_review') return 'In progress'
+      return 'Optional — after approval on Profile'
     }
     if (gateKey === 'identity_verified') {
       if (status === 'pending_review') return 'In progress'
       if (status === 'needs_followup') return 'Retry verification'
-      return 'Verify on application status'
+      return 'Action required'
     }
     if (status === 'pending_review' || status === 'incomplete') {
       return 'Confirm your email'

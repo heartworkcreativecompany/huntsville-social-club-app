@@ -32,8 +32,8 @@ export default function LoginStatusMessages() {
   if (error === 'auth_callback_failed') {
     return (
       <AuthStatusBanner variant="info" title="Link could not be verified">
-        This sign-in or confirmation link may have expired. Try signing in, or
-        request a new password reset if needed.
+        This confirmation or sign-in link may have expired. Sign in again, or use
+        Resend confirmation email below if you still need to confirm your address.
       </AuthStatusBanner>
     )
   }
