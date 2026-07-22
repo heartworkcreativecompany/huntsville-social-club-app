@@ -1,10 +1,27 @@
 import type { ApplicationDraft } from '@/lib/application'
 import { APPLICATION_PROMPTS } from '@/lib/application-form-content'
-import {
-  CONNECTION_TYPES_OPEN_TO_FIELD,
-  memberPublicIntentLabelsFromValues,
-} from '@/lib/member-public-intent'
+import { memberPublicIntentLabelsFromValues } from '@/lib/member-public-intent'
 import { connectionIntentsFromDraft } from '@/lib/application-draft-sync'
+
+export type ProfilePromptDisplay = {
+  label: string
+  value: string
+}
+
+export type ApplicationPublicProfileDetails = {
+  displayName: string | null
+  connectionIntents: string[]
+  locationArea: string | null
+  occupation: string | null
+  industry: string | null
+  interests: string[]
+  lifestyleTags: string[]
+  eventInterests: string[]
+  connectionsOpenTo: string[]
+  socialVibe: string | null
+  about: string | null
+  prompts: ProfilePromptDisplay[]
+}
 
 /** Prompt keys rendered elsewhere — do not repeat under generic prompt list. */
 const PROMPT_KEYS_EXCLUDED_FROM_PUBLIC_LIST = new Set([

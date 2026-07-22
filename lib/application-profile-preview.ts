@@ -1,28 +1,16 @@
 import type { ApplicationDraft, ApplicationStatus } from '@/lib/application'
 import { membershipIntentFromDraft } from '@/lib/application-draft-sync'
 import { buildDirectoryMember, type DirectoryMember } from '@/lib/members-discovery'
-import { publicProfileDetailsFromDraft as publicProfileDetailsFromDraftImpl } from '@/lib/profile-public-display'
+import {
+  publicProfileDetailsFromDraft as publicProfileDetailsFromDraftImpl,
+  type ApplicationPublicProfileDetails,
+} from '@/lib/profile-public-display'
 import { discoveryColumnsFromDraft } from '@/lib/membership-systems'
 
-export type ProfilePromptDisplay = {
-  label: string
-  value: string
-}
-
-export type ApplicationPublicProfileDetails = {
-  displayName: string | null
-  connectionIntents: string[]
-  locationArea: string | null
-  occupation: string | null
-  industry: string | null
-  interests: string[]
-  lifestyleTags: string[]
-  eventInterests: string[]
-  connectionsOpenTo: string[]
-  socialVibe: string | null
-  about: string | null
-  prompts: ProfilePromptDisplay[]
-}
+export type {
+  ApplicationPublicProfileDetails,
+  ProfilePromptDisplay,
+} from '@/lib/profile-public-display'
 
 /** Maps application draft to the same directory member shape used in discovery. */
 export function directoryMemberFromApplicationDraft(

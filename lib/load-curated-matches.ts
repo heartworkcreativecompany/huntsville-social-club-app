@@ -7,6 +7,7 @@ import {
   deriveMatchExplanations,
   listSharedInterestLabels,
 } from '@/lib/compatibility/match-explanation'
+import { memberDisplayName } from '@/lib/members-discovery'
 import { photosFromApplicationDraft, primaryMemberPhoto } from '@/lib/member-photos'
 
 export type CuratedMatchIntroStatus =
@@ -73,6 +74,7 @@ export async function loadCuratedMatchRecommendations(
   const profileById = new Map<
     string,
     {
+      id: string
       full_name: string | null
       location_area: string | null
       membership_intent: string | null
@@ -132,7 +134,9 @@ export async function loadCuratedMatchRecommendations(
     return {
       id: row.id,
       recommendedUserId: row.recommended_user_id,
-      displayName: profile?.full_name?.trim() || 'Member',
+      displayName: profile
+        ? memberDisplayName(profile)
+        : 'Member',
       locationArea: profile?.location_area ?? null,
       membershipIntent: profile?.membership_intent ?? null,
       primaryPhoto: primaryMemberPhoto(photos),

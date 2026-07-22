@@ -74,6 +74,18 @@ export type MemberDisplayNameInput = {
   email?: string | null
 }
 
+/** Fields used by memberAge. */
+export type MemberAgeInput = {
+  birth_year: number | null
+}
+
+/** Fields used by membership/application status helpers. */
+export type MemberStatusInput = {
+  full_name: string | null
+  role: string | null
+  membership_status: string | null
+}
+
 export type TrustBadge = DisplayBadge
 
 export function memberDisplayName(member: MemberDisplayNameInput): string {
@@ -81,7 +93,7 @@ export function memberDisplayName(member: MemberDisplayNameInput): string {
   return 'Member'
 }
 
-export function memberAge(member: DirectoryMember): number | null {
+export function memberAge(member: MemberAgeInput): number | null {
   return ageFromBirthYear(member.birth_year)
 }
 
@@ -219,7 +231,9 @@ export function memberSinceLabel(createdAt: string | null | undefined): string |
   })}`
 }
 
-export function membershipStatusForMember(member: DirectoryMember): MembershipStatus {
+export function membershipStatusForMember(
+  member: MemberStatusInput
+): MembershipStatus {
   return resolveMembershipStatus({
     application_status: member.membership_status,
     role: member.role,
@@ -228,7 +242,7 @@ export function membershipStatusForMember(member: DirectoryMember): MembershipSt
 }
 
 export function applicationStatusForMember(
-  member: DirectoryMember
+  member: Pick<MemberStatusInput, 'membership_status' | 'role'>
 ): ApplicationStatus {
   return resolveApplicationStatus({
     application_status: member.membership_status,
@@ -236,7 +250,7 @@ export function applicationStatusForMember(
   })
 }
 
-export function membershipBadgeLabel(member: DirectoryMember): string {
+export function membershipBadgeLabel(member: MemberStatusInput): string {
   return membershipStatusLabel(membershipStatusForMember(member))
 }
 
