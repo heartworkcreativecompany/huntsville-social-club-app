@@ -67,6 +67,11 @@ export default function ClubNav({
         match: (p) => p === '/events' || p.startsWith('/events/'),
       },
       {
+        href: '/business',
+        label: 'Business',
+        match: (p) => p === '/business' || p.startsWith('/business/'),
+      },
+      {
         href: '/messages',
         label: 'Messages',
         match: (p) => p === '/messages' || p.startsWith('/messages/'),

@@ -8,6 +8,7 @@ import {
   consumeEventCredit,
   loadActiveEntitlementCycle,
   returnEventCredit,
+  returnGuestInvite,
 } from '@/lib/membership-billing-cycles'
 import {
   buildMemberEntitlements,
@@ -33,6 +34,8 @@ type AttendeeRow = {
   entitlement_cycle_id: string | null
   credit_consumed: boolean | null
   credit_returned: boolean | null
+  guest_name: string | null
+  guest_invite_consumed: boolean | null
 }
 
 async function requireEntitledViewer() {
@@ -72,7 +75,9 @@ export async function updateEventRsvp(input: {
 
   const { data: event, error: eventError } = await supabase
     .from('events')
-    .select('id, starts_at, status, event_type')
+    .select(
+      'id, starts_at, status, event_type, priority_rsvp_opens_at, general_rsvp_opens_at'
+    )
     .eq('id', input.eventId)
     .single()
 
@@ -80,14 +85,17 @@ export async function updateEventRsvp(input: {
     return { error: eventError?.message ?? 'Event not found.' }
   }
 
-  const eventRow = event as EventRow
+  const eventRow = event as EventRow & {
+    priority_rsvp_opens_at?: string | null
+    general_rsvp_opens_at?: string | null
+  }
   const eventType = (eventRow.event_type ?? 'standard_event') as EventAccessType
   const isGoing = input.status === 'going'
 
   const { data: existing } = await supabase
     .from('event_attendees')
     .select(
-      'status, registration_method, payment_status, entitlement_cycle_id, credit_consumed, credit_returned'
+      'status, registration_method, payment_status, entitlement_cycle_id, credit_consumed, credit_returned, guest_name, guest_invite_consumed'
     )
     .eq('event_id', input.eventId)
     .eq('user_id', userId)
@@ -126,6 +134,26 @@ export async function updateEventRsvp(input: {
     }
   }
 
+  // Cancelling Going also returns a spent guest invite to the active cycle.
+  if (!isGoing && wasGoing && existingRow?.guest_invite_consumed) {
+    const cycleId =
+      existingRow.entitlement_cycle_id ?? entitlements.activeCycle?.id ?? null
+    if (cycleId) {
+      await returnGuestInvite(supabase, cycleId)
+      await appendRegistrationLedger(supabase, {
+        userId,
+        eventId: input.eventId,
+        action: 'guest_invite_return',
+        entitlementCycleId: cycleId,
+        creditDelta: 0,
+        metadata: {
+          reason: 'rsvp_cancelled',
+          guest_name: existingRow.guest_name,
+        },
+      })
+    }
+  }
+
   if (isGoing && !wasGoing) {
     const decision = evaluateEventRegistration({
       entitlements,
@@ -133,6 +161,8 @@ export async function updateEventRsvp(input: {
       eventStatus: eventRow.status,
       isGoingRsvp: true,
       registrationPreference: input.registrationPreference,
+      priorityRsvpOpensAt: eventRow.priority_rsvp_opens_at,
+      generalRsvpOpensAt: eventRow.general_rsvp_opens_at,
     })
 
     if (!decision.allowed) {
@@ -224,6 +254,9 @@ export async function updateEventRsvp(input: {
             existingRow?.credit_returned
         : existingRow?.credit_returned
     ),
+    ...(!isGoing && wasGoing && existingRow?.guest_invite_consumed
+      ? { guest_name: null, guest_invite_consumed: false }
+      : {}),
   }
 
   const { error } = existingRow
@@ -255,7 +288,9 @@ export async function getEventRegistrationPreview(eventId: string) {
 
   const { data: event } = await supabase
     .from('events')
-    .select('id, starts_at, status, event_type')
+    .select(
+      'id, starts_at, status, event_type, priority_rsvp_opens_at, general_rsvp_opens_at'
+    )
     .eq('id', eventId)
     .single()
 
@@ -269,6 +304,8 @@ export async function getEventRegistrationPreview(eventId: string) {
     eventType,
     eventStatus: event.status,
     isGoingRsvp: true,
+    priorityRsvpOpensAt: event.priority_rsvp_opens_at,
+    generalRsvpOpensAt: event.general_rsvp_opens_at,
   })
 
   return {

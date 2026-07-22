@@ -11,8 +11,9 @@ Copy `.env.example` to `.env.local` and set:
 | `STRIPE_SECRET_KEY` | Server-side Stripe API key |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Client publishable key (reserved for future Elements use) |
 | `STRIPE_WEBHOOK_SECRET` | Webhook signing secret from Stripe CLI or Dashboard |
-| `STRIPE_PRICE_ID_INNER_CIRCLE` | Monthly price ID for Inner Circle ($39/mo) |
-| `STRIPE_PRICE_ID_ELITE_CIRCLE` | Monthly price ID for Elite Circle ($89/mo) |
+| `STRIPE_PRICE_ID_INNER_CIRCLE` | Monthly price ID for Inner Circle ($29.99/mo) |
+| `STRIPE_PRICE_ID_ELITE_CIRCLE` | Monthly price ID for Elite Circle ($69.99/mo) |
+| `STRIPE_PRICE_ID_EVENT_SPONSORSHIP` | Optional one-time $199 sponsorship price (falls back to inline `price_data`) |
 | `NEXT_PUBLIC_APP_URL` | App base URL for Checkout success/cancel and Portal return URLs |
 | `STRIPE_CHECKOUT_TRIAL_DAYS` | Optional default trial length for new checkouts |
 
@@ -20,12 +21,14 @@ Copy `.env.example` to `.env.local` and set:
 
 ### Stripe Dashboard setup
 
-1. Create products **Inner Circle** and **Elite Circle** with recurring **monthly** prices ($39 and $89).
+1. Create products **Inner Circle** and **Elite Circle** with recurring **monthly** prices ($29.99 and $69.99).
 2. Copy each **Price ID** into the env vars above.
-3. Enable the **Customer Portal** (Settings → Billing → Customer portal).
-4. Create **Coupons / Promotion codes** for beta testers as needed.
-5. Add webhook endpoint: `https://<your-domain>/api/stripe/webhook`
+3. Optional: create a one-time **Event Sponsorship** price ($199) for `STRIPE_PRICE_ID_EVENT_SPONSORSHIP`.
+4. Enable the **Customer Portal** (Settings → Billing → Customer portal).
+5. Create **Coupons / Promotion codes** for beta testers as needed.
+6. Add webhook endpoint: `https://<your-domain>/api/stripe/webhook`
    - Events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`
+   - Identity (if enabled): `identity.verification_session.verified`, `identity.verification_session.requires_input`, `identity.verification_session.processing`, `identity.verification_session.canceled`
 
 ### Local webhook testing
 

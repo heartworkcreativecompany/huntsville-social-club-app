@@ -7,10 +7,15 @@ export default function EventAccessTypeBadge({
 }: {
   eventType: EventAccessType | string | null | undefined
 }) {
-  const type = (eventType === 'circle_social'
-    ? 'circle_social'
-    : 'standard_event') as EventAccessType
-  const variant = type === 'circle_social' ? 'premium' : 'muted'
+  const type = (
+    eventType === 'circle_social'
+      ? 'circle_social'
+      : eventType === 'premium_event'
+        ? 'premium_event'
+        : 'standard_event'
+  ) as EventAccessType
+  const variant =
+    type === 'circle_social' || type === 'premium_event' ? 'premium' : 'muted'
 
   return <Badge variant={variant}>{EVENT_ACCESS_LABELS[type]}</Badge>
 }

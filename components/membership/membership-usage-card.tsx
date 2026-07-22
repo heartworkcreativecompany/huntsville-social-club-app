@@ -8,7 +8,6 @@ import {
 } from '@/lib/event-labels'
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
 import { freeRegistrationsSummary } from '@/lib/membership-entitlements'
-import { eliteUnlimitedSummary } from '@/lib/membership-pricing-copy'
 import type { SubscriptionStatus } from '@/lib/membership-systems'
 
 function subscriptionStatusLabel(status: SubscriptionStatus): string {
@@ -47,10 +46,7 @@ export default function MembershipUsageCard({
   const periodEnd =
     entitlements.activeCycle?.period_end ?? billing.billing_period_end
 
-  const usageLine =
-    entitlements.productTier === 'elite_circle'
-      ? eliteUnlimitedSummary()
-      : summary
+  const usageLine = summary
 
   const statusVariant =
     billing.payment_failure.active || billing.subscription_status === 'past_due'
@@ -82,13 +78,21 @@ export default function MembershipUsageCard({
         <p className="mt-3 text-sm text-muted-foreground">{usageLine}</p>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">
-          Upgrade to Inner Circle or Elite Circle for curated matches, curated
-          intros, messaging, included standard event registrations, and Circle
-          Social access.
+          Upgrade to Inner Circle or Elite Circle for messaging, free Circle
+          Socials, and premium event credits.
         </p>
       )}
 
-      {periodEnd && entitlements.productTier === 'inner_circle' ? (
+      {entitlements.productTier === 'elite_circle' ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Guest invites remaining this period:{' '}
+          {entitlements.guestInvitesRemaining}
+        </p>
+      ) : null}
+
+      {periodEnd &&
+      (entitlements.productTier === 'inner_circle' ||
+        entitlements.productTier === 'elite_circle') ? (
         <p className="mt-2 text-xs text-muted">
           Current period ends: {new Date(periodEnd).toLocaleDateString()}
         </p>

@@ -28,6 +28,18 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session
+
+      if (
+        session.mode === 'payment' &&
+        session.metadata?.checkout_type === 'event_sponsorship'
+      ) {
+        const { markSponsorshipPaidFromCheckout } = await import(
+          '@/app/(club)/events/sponsorship-actions'
+        )
+        await markSponsorshipPaidFromCheckout(session)
+        return
+      }
+
       if (session.mode !== 'subscription') return
 
       const userId =

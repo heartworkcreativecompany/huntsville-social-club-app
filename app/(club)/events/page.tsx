@@ -65,12 +65,15 @@ export default async function EventsPage() {
   const supabase = await createClient()
   const user = { id: viewer.userId }
   const userRole = viewer.role
-  const canCreateEvents = userRole === 'host' || userRole === 'admin'
+  const { entitlements } = await loadMemberEntitlementsForViewer()
+  const isAdminCreator = userRole === 'host' || userRole === 'admin'
+  const canCreateEvents =
+    isAdminCreator || Boolean(entitlements?.canCreateStandardEvents)
 
   const { data: events, error } = await supabase
     .from('events')
     .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type'
+      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, priority_rsvp_opens_at, general_rsvp_opens_at'
     )
     .order('starts_at', { ascending: true })
 
@@ -120,8 +123,6 @@ export default async function EventsPage() {
     }
   }
 
-  const { entitlements } = await loadMemberEntitlementsForViewer()
-
   const browserEvents: EventBrowserItem[] = visibleEvents.map((event) => ({
     id: event.id,
     title: event.title,
@@ -148,6 +149,8 @@ export default async function EventsPage() {
           eventType: (event.event_type ?? 'standard_event') as EventAccessType,
           eventStatus: event.status,
           isGoingRsvp: true,
+          priorityRsvpOpensAt: event.priority_rsvp_opens_at,
+          generalRsvpOpensAt: event.general_rsvp_opens_at,
         })
       : null,
   }))
@@ -163,7 +166,11 @@ export default async function EventsPage() {
       {canCreateEvents ? (
         <section className="mb-10">
           <h2 className="text-display mb-4 text-xl font-semibold">Create event</h2>
-          <EventForm userId={user.id} />
+          <EventForm
+            userId={user.id}
+            isAdminCreator={isAdminCreator}
+            canCreateStandardOnly={!isAdminCreator}
+          />
         </section>
       ) : null}
 

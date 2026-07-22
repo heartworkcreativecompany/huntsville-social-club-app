@@ -123,27 +123,3 @@ export function MessagingPaywall({
     </Card>
   )
 }
-
-export function CircleSocialPaywall({
-  membershipsHref = '/pricing',
-}: {
-  membershipsHref?: string
-}) {
-  const copy = FEATURE_GATE_COPY.circle_social
-
-  return (
-    <Card className="mb-4 border-accent/30 bg-accent-soft/40">
-      <p className="eyebrow">Circle Social</p>
-      <h3 className="text-display mt-1 text-base font-semibold">{copy.title}</h3>
-      <p className="mt-2 text-sm text-muted-foreground">{copy.body}</p>
-      <div className="mt-4 flex flex-wrap gap-3">
-        <Link href="/upgrade" className={buttonPrimaryClassName}>
-          {copy.primaryCta}
-        </Link>
-        <Link href={membershipsHref} className={buttonSecondaryClassName}>
-          {copy.secondaryCta}
-        </Link>
-      </div>
-    </Card>
-  )
-}

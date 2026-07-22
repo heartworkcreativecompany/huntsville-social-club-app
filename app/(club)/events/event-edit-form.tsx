@@ -3,15 +3,16 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-
-function toDatetimeLocalValue(iso: string | null): string {
-  if (!iso) return ''
-
-  const date = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
+import {
+  buttonPrimaryClassName,
+  inputClassName,
+} from '@/lib/event-labels'
+import {
+  formatFeeCents,
+  parseDatetimeLocalToIso,
+  parseFeeDollarsToCents,
+  toDatetimeLocalValue,
+} from '@/lib/membership-tier-config'
 
 type EventEditFormProps = {
   eventId: string
@@ -22,6 +23,11 @@ type EventEditFormProps = {
   initialEndsAt: string | null
   initialVisibility: string
   initialEventType: string
+  initialFeeCents?: number | null
+  initialPriorityRsvpOpensAt?: string | null
+  initialGeneralRsvpOpensAt?: string | null
+  /** Only admins can edit fee and RSVP window fields. */
+  isAdminEditor?: boolean
 }
 
 export default function EventEditForm({
@@ -33,6 +39,10 @@ export default function EventEditForm({
   initialEndsAt,
   initialVisibility,
   initialEventType,
+  initialFeeCents = null,
+  initialPriorityRsvpOpensAt = null,
+  initialGeneralRsvpOpensAt = null,
+  isAdminEditor = false,
 }: EventEditFormProps) {
   const supabase = createClient()
   const router = useRouter()
@@ -44,10 +54,35 @@ export default function EventEditForm({
   const [endsAt, setEndsAt] = useState(toDatetimeLocalValue(initialEndsAt))
   const [visibility, setVisibility] = useState(initialVisibility)
   const [eventType, setEventType] = useState(initialEventType || 'standard_event')
+  const [feeDollars, setFeeDollars] = useState(formatFeeCents(initialFeeCents))
+  const [priorityRsvpOpensAt, setPriorityRsvpOpensAt] = useState(
+    toDatetimeLocalValue(initialPriorityRsvpOpensAt)
+  )
+  const [generalRsvpOpensAt, setGeneralRsvpOpensAt] = useState(
+    toDatetimeLocalValue(initialGeneralRsvpOpensAt)
+  )
   const [message, setMessage] = useState('')
 
   const handleSave = async () => {
     setMessage('Saving...')
+
+    const sponsorshipEligible =
+      eventType === 'circle_social' || eventType === 'premium_event'
+
+    let feeCents: number | null = null
+    let priorityIso: string | null = null
+    let generalIso: string | null = null
+
+    if (isAdminEditor) {
+      try {
+        feeCents = parseFeeDollarsToCents(feeDollars)
+        priorityIso = parseDatetimeLocalToIso(priorityRsvpOpensAt)
+        generalIso = parseDatetimeLocalToIso(generalRsvpOpensAt)
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Invalid fee or RSVP window.')
+        return
+      }
+    }
 
     const { error } = await supabase
       .from('events')
@@ -59,6 +94,14 @@ export default function EventEditForm({
         ends_at: endsAt || null,
         visibility,
         event_type: eventType,
+        sponsorship_eligible: sponsorshipEligible,
+        ...(isAdminEditor
+          ? {
+              fee_cents: feeCents,
+              priority_rsvp_opens_at: priorityIso,
+              general_rsvp_opens_at: generalIso,
+            }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', eventId)
@@ -74,13 +117,13 @@ export default function EventEditForm({
 
   return (
     <section>
-      <div style={{ display: 'grid', gap: '12px', maxWidth: '480px' }}>
+      <div className="grid max-w-md gap-3">
         <input
           type="text"
           placeholder="Event title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         />
 
         <input
@@ -88,39 +131,34 @@ export default function EventEditForm({
           placeholder="Location"
           value={location}
           onChange={(e) => setLocation(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         />
 
         <textarea
           placeholder="Event description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          style={{
-            padding: '12px',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            minHeight: '120px',
-          }}
+          className={`${inputClassName} min-h-[120px] resize-y`}
         />
 
         <input
           type="datetime-local"
           value={startsAt}
           onChange={(e) => setStartsAt(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         />
 
         <input
           type="datetime-local"
           value={endsAt}
           onChange={(e) => setEndsAt(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         />
 
         <select
           value={visibility}
           onChange={(e) => setVisibility(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
         >
           <option value="private">private</option>
           <option value="members">members</option>
@@ -130,20 +168,60 @@ export default function EventEditForm({
         <select
           value={eventType}
           onChange={(e) => setEventType(e.target.value)}
-          style={{ padding: '12px', border: '1px solid #ccc', borderRadius: '8px' }}
+          className={inputClassName}
+          disabled={!isAdminEditor}
         >
-          <option value="standard_event">Club event (standard)</option>
-          <option value="circle_social">Circle Social (paid members)</option>
+          <option value="standard_event">Standard event</option>
+          <option value="circle_social">Circle Social</option>
+          <option value="premium_event">Premium event</option>
         </select>
 
+        {isAdminEditor ? (
+          <div className="grid gap-3 rounded-lg border border-border p-3">
+            <p className="text-sm font-medium text-foreground">Admin event controls</p>
+            <label className="grid gap-1 text-sm">
+              <span className="text-muted-foreground">Event fee (USD)</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 25 or 25.00"
+                value={feeDollars}
+                onChange={(e) => setFeeDollars(e.target.value)}
+                className={inputClassName}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-muted-foreground">
+                Priority RSVP opens (Elite)
+              </span>
+              <input
+                type="datetime-local"
+                value={priorityRsvpOpensAt}
+                onChange={(e) => setPriorityRsvpOpensAt(e.target.value)}
+                className={inputClassName}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-muted-foreground">General RSVP opens</span>
+              <input
+                type="datetime-local"
+                value={generalRsvpOpensAt}
+                onChange={(e) => setGeneralRsvpOpensAt(e.target.value)}
+                className={inputClassName}
+              />
+            </label>
+          </div>
+        ) : null}
+
         <button
+          type="button"
           onClick={handleSave}
-          style={{ padding: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+          className={buttonPrimaryClassName}
         >
           Save Changes
         </button>
 
-        {message ? <p>{message}</p> : null}
+        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </div>
     </section>
   )

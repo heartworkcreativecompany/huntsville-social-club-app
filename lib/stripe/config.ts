@@ -63,6 +63,12 @@ export function optionalCheckoutTrialDays(): number | undefined {
   return days
 }
 
+/** Stripe Price ID for $199 event sponsorship (one-time). Optional — falls back to price_data. */
+export function stripeSponsorshipPriceId(): string | null {
+  const id = process.env.STRIPE_PRICE_ID_EVENT_SPONSORSHIP?.trim()
+  return id || null
+}
+
 export function appBaseUrl(): string {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
   if (configured) return configured

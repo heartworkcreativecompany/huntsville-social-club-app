@@ -5,6 +5,7 @@ import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
 import EventAccessInfo from '@/components/events/event-access-info'
+import EventGuestInviteControls from '@/components/events/event-guest-invite-controls'
 import EventMetaBadges from '@/components/events/event-meta-badges'
 import EventRsvpCounts from '@/components/events/event-rsvp-counts'
 import EventTypeBadge from '@/components/events/event-type-badge'
@@ -20,6 +21,7 @@ import { getViewer } from '@/lib/viewer'
 import EventEditForm from '../event-edit-form'
 import EventRsvp from '../event-rsvp'
 import DeleteEventButton from './delete-event-button'
+import EventSponsorButton from '@/components/events/event-sponsor-button'
 import ExportAttendeesCsv, {
   type AttendeeExportRow,
 } from './export-attendees-csv'
@@ -57,7 +59,7 @@ export default async function EventDetailPage({ params }: PageProps) {
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type'
+      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, sponsorship_eligible, priority_rsvp_opens_at, general_rsvp_opens_at, fee_cents'
     )
     .eq('id', id)
     .single()
@@ -88,7 +90,9 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   const { data: attendeeRows } = await supabase
     .from('event_attendees')
-    .select('event_id, user_id, status, created_at')
+    .select(
+      'event_id, user_id, status, created_at, guest_name, guest_invite_consumed'
+    )
     .eq('event_id', event.id)
 
   const attendeeUserIds = [
@@ -108,8 +112,12 @@ export default async function EventDetailPage({ params }: PageProps) {
     }
   }
 
-  const currentUserStatus =
-    attendeeRows?.find((row) => row.user_id === user.id)?.status ?? null
+  const currentUserAttendee =
+    attendeeRows?.find((row) => row.user_id === user.id) ?? null
+  const currentUserStatus = currentUserAttendee?.status ?? null
+  const currentGuestName = currentUserAttendee?.guest_name ?? null
+  const currentGuestInviteConsumed =
+    currentUserAttendee?.guest_invite_consumed === true
 
   const isMine = event.owner_id === user.id
   const eventType = (event.event_type ?? 'standard_event') as EventAccessType
@@ -123,8 +131,31 @@ export default async function EventDetailPage({ params }: PageProps) {
         eventType,
         eventStatus: event.status,
         isGoingRsvp: true,
+        priorityRsvpOpensAt: event.priority_rsvp_opens_at,
+        generalRsvpOpensAt: event.general_rsvp_opens_at,
       })
     : null
+
+  const sponsorshipEligible =
+    event.sponsorship_eligible === true ||
+    eventType === 'circle_social' ||
+    eventType === 'premium_event'
+
+  const { data: activeSponsorship } = sponsorshipEligible
+    ? await supabase
+        .from('event_sponsorships')
+        .select('id, status')
+        .eq('event_id', event.id)
+        .in('status', ['pending_payment', 'paid', 'approved', 'claimed'])
+        .maybeSingle()
+    : { data: null }
+
+  const sponsorshipAvailable =
+    sponsorshipEligible &&
+    eventType !== 'standard_event' &&
+    !activeSponsorship &&
+    !isPast &&
+    !isCancelled
 
   const rsvpCounts = {
     going: attendeeRows?.filter((row) => row.status === 'going').length ?? 0,
@@ -184,6 +215,12 @@ export default async function EventDetailPage({ params }: PageProps) {
                 className="text-sm text-foreground"
               >
                 {memberLabel(attendeeProfilesById[row.user_id])}
+                {row.guest_name ? (
+                  <span className="text-muted-foreground">
+                    {' '}
+                    (+ guest: {row.guest_name})
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -244,6 +281,9 @@ export default async function EventDetailPage({ params }: PageProps) {
         registrationPreview={registrationPreview}
         isPast={isPast}
         isCancelled={isCancelled}
+        feeCents={event.fee_cents}
+        priorityRsvpOpensAt={event.priority_rsvp_opens_at}
+        generalRsvpOpensAt={event.general_rsvp_opens_at}
       />
 
       {event.description ? (
@@ -272,13 +312,37 @@ export default async function EventDetailPage({ params }: PageProps) {
             Your RSVP
           </h2>
           <Card>
-            <EventRsvp
-              eventId={event.id}
-              eventStatus={event.status ?? 'published'}
-              currentStatus={currentUserStatus}
-              registrationPreview={registrationPreview}
-              canRegisterGoing={registrationPreview?.allowed !== false}
-            />
+            <div className="grid gap-6 sm:grid-cols-[1fr_auto] sm:items-start">
+              <div>
+                <EventRsvp
+                  eventId={event.id}
+                  eventStatus={event.status ?? 'published'}
+                  currentStatus={currentUserStatus}
+                  registrationPreview={registrationPreview}
+                  canRegisterGoing={registrationPreview?.allowed !== false}
+                />
+                <EventGuestInviteControls
+                  eventId={event.id}
+                  eventType={eventType}
+                  isGoing={currentUserStatus === 'going'}
+                  guestName={currentGuestName}
+                  guestInviteConsumed={currentGuestInviteConsumed}
+                  guestInvitesRemaining={entitlements?.guestInvitesRemaining ?? 0}
+                  isElite={entitlements?.productTier === 'elite_circle'}
+                />
+              </div>
+              {sponsorshipEligible && eventType !== 'standard_event' ? (
+                <div className="min-w-[200px] border-t border-border pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
+                  <p className="mb-2 text-sm font-medium text-foreground">
+                    Sponsor this event
+                  </p>
+                  <EventSponsorButton
+                    eventId={event.id}
+                    sponsorshipAvailable={sponsorshipAvailable}
+                  />
+                </div>
+              ) : null}
+            </div>
           </Card>
         </section>
       ) : null}
@@ -324,6 +388,10 @@ export default async function EventDetailPage({ params }: PageProps) {
               initialEndsAt={event.ends_at}
               initialVisibility={event.visibility}
               initialEventType={event.event_type ?? 'standard_event'}
+              initialFeeCents={event.fee_cents}
+              initialPriorityRsvpOpensAt={event.priority_rsvp_opens_at}
+              initialGeneralRsvpOpensAt={event.general_rsvp_opens_at}
+              isAdminEditor={userRole === 'admin'}
             />
             <div className="mt-4 border-t border-border pt-4">
               <DeleteEventButton eventId={event.id} />

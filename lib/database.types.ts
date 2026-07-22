@@ -598,6 +598,10 @@ export interface Database {
           visibility: string
           status: string
           event_type: string
+          fee_cents: number | null
+          sponsorship_eligible: boolean
+          priority_rsvp_opens_at: string | null
+          general_rsvp_opens_at: string | null
           created_at: string
           updated_at: string
         }
@@ -612,6 +616,10 @@ export interface Database {
           visibility?: string
           status?: string
           event_type?: string
+          fee_cents?: number | null
+          sponsorship_eligible?: boolean
+          priority_rsvp_opens_at?: string | null
+          general_rsvp_opens_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -626,8 +634,126 @@ export interface Database {
           visibility?: string
           status?: string
           event_type?: string
+          fee_cents?: number | null
+          sponsorship_eligible?: boolean
+          priority_rsvp_opens_at?: string | null
+          general_rsvp_opens_at?: string | null
           created_at?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      event_sponsorships: {
+        Row: {
+          id: string
+          event_id: string
+          sponsor_user_id: string | null
+          business_name: string
+          contact_email: string | null
+          status: string
+          amount_cents: number
+          ticket_count: number
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          logo_url: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+          paid_at: string | null
+          approved_at: string | null
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          sponsor_user_id?: string | null
+          business_name?: string
+          contact_email?: string | null
+          status?: string
+          amount_cents?: number
+          ticket_count?: number
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          logo_url?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+          paid_at?: string | null
+          approved_at?: string | null
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          sponsor_user_id?: string | null
+          business_name?: string
+          contact_email?: string | null
+          status?: string
+          amount_cents?: number
+          ticket_count?: number
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          logo_url?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+          paid_at?: string | null
+          approved_at?: string | null
+        }
+        Relationships: []
+      }
+      business_listings: {
+        Row: {
+          id: string
+          owner_id: string
+          business_name: string
+          description: string
+          industry: string
+          category: string
+          website_url: string | null
+          contact_email: string | null
+          phone: string | null
+          city: string | null
+          status: string
+          admin_notes: string | null
+          created_at: string
+          updated_at: string
+          submitted_at: string | null
+          reviewed_at: string | null
+        }
+        Insert: {
+          id?: string
+          owner_id: string
+          business_name: string
+          description?: string
+          industry?: string
+          category?: string
+          website_url?: string | null
+          contact_email?: string | null
+          phone?: string | null
+          city?: string | null
+          status?: string
+          admin_notes?: string | null
+          created_at?: string
+          updated_at?: string
+          submitted_at?: string | null
+          reviewed_at?: string | null
+        }
+        Update: {
+          id?: string
+          owner_id?: string
+          business_name?: string
+          description?: string
+          industry?: string
+          category?: string
+          website_url?: string | null
+          contact_email?: string | null
+          phone?: string | null
+          city?: string | null
+          status?: string
+          admin_notes?: string | null
+          created_at?: string
+          updated_at?: string
+          submitted_at?: string | null
+          reviewed_at?: string | null
         }
         Relationships: []
       }
@@ -644,6 +770,8 @@ export interface Database {
           registered_at: string | null
           cancelled_at: string | null
           credit_returned: boolean
+          guest_name: string | null
+          guest_invite_consumed: boolean
         }
         Insert: {
           event_id: string
@@ -657,6 +785,8 @@ export interface Database {
           registered_at?: string | null
           cancelled_at?: string | null
           credit_returned?: boolean
+          guest_name?: string | null
+          guest_invite_consumed?: boolean
         }
         Update: {
           event_id?: string
@@ -670,6 +800,8 @@ export interface Database {
           registered_at?: string | null
           cancelled_at?: string | null
           credit_returned?: boolean
+          guest_name?: string | null
+          guest_invite_consumed?: boolean
         }
         Relationships: []
       }
@@ -682,6 +814,8 @@ export interface Database {
           period_end: string
           credits_granted: number | null
           credits_used: number
+          guest_invites_granted: number
+          guest_invites_used: number
           is_active: boolean
           created_at: string
         }
@@ -693,6 +827,8 @@ export interface Database {
           period_end: string
           credits_granted?: number | null
           credits_used?: number
+          guest_invites_granted?: number
+          guest_invites_used?: number
           is_active?: boolean
           created_at?: string
         }
@@ -704,6 +840,8 @@ export interface Database {
           period_end?: string
           credits_granted?: number | null
           credits_used?: number
+          guest_invites_granted?: number
+          guest_invites_used?: number
           is_active?: boolean
           created_at?: string
         }

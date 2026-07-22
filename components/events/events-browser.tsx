@@ -38,6 +38,11 @@ const EMPTY_COPY: Record<
     description:
       'Circle Socials are included with Inner Circle and Elite Circle. Check back soon.',
   },
+  premium_event: {
+    title: 'No premium events on the calendar',
+    description:
+      'Premium events use membership credits or an event fee. Check back soon.',
+  },
   past: {
     title: 'No past events yet',
     description: 'Events you have attended will show up here over time.',
@@ -53,7 +58,13 @@ export default function EventsBrowser({ events }: { events: EventBrowserItem[] }
 
   const counts = useMemo(() => {
     const result: Partial<Record<EventListFilter, number>> = {}
-    for (const tab of ['upcoming', 'circle_social', 'past', 'rsvpd'] as EventListFilter[]) {
+    for (const tab of [
+      'upcoming',
+      'circle_social',
+      'premium_event',
+      'past',
+      'rsvpd',
+    ] as EventListFilter[]) {
       result[tab] = events.filter((event) =>
         matchesEventFilter({
           filter: tab,

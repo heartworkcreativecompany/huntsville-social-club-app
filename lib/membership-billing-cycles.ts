@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
 import {
-  INNER_CIRCLE_FREE_REGISTRATIONS_PER_PERIOD,
+  ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD,
+  ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+  INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
   type ProductTier,
 } from '@/lib/membership-tier-config'
 import type { EntitlementCycle } from '@/lib/membership-entitlements'
@@ -19,6 +21,8 @@ type CycleRow = {
   period_end: string
   credits_granted: number | null
   credits_used: number
+  guest_invites_granted?: number
+  guest_invites_used?: number
   is_active: boolean
 }
 
@@ -42,6 +46,8 @@ function toCycle(row: CycleRow): EntitlementCycle {
     period_end: row.period_end,
     credits_granted: row.credits_granted,
     credits_used: row.credits_used,
+    guest_invites_granted: row.guest_invites_granted ?? 0,
+    guest_invites_used: row.guest_invites_used ?? 0,
     is_active: row.is_active,
   }
 }
@@ -53,7 +59,7 @@ export async function loadActiveEntitlementCycle(
   const { data, error } = await supabase
     .from('membership_entitlement_cycles')
     .select(
-      'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, is_active'
+      'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, guest_invites_granted, guest_invites_used, is_active'
     )
     .eq('user_id', userId)
     .eq('is_active', true)
@@ -62,7 +68,23 @@ export async function loadActiveEntitlementCycle(
     .maybeSingle()
 
   if (error) {
-    if (error.code === '42P01') return null
+    if (error.code === '42P01' || error.message?.includes('guest_invites')) {
+      const fallback = await supabase
+        .from('membership_entitlement_cycles')
+        .select(
+          'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, is_active'
+        )
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (fallback.error) {
+        if (fallback.error.code === '42P01') return null
+        throw new Error(fallback.error.message)
+      }
+      return fallback.data ? toCycle(fallback.data as CycleRow) : null
+    }
     throw new Error(error.message)
   }
 
@@ -80,6 +102,22 @@ export async function deactivateActiveCycles(
     .eq('is_active', true)
 }
 
+function creditsAndGuestsForTier(productTier: 'inner_circle' | 'elite_circle'): {
+  creditsGranted: number
+  guestInvitesGranted: number
+} {
+  if (productTier === 'inner_circle') {
+    return {
+      creditsGranted: INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+      guestInvitesGranted: 0,
+    }
+  }
+  return {
+    creditsGranted: ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+    guestInvitesGranted: ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD,
+  }
+}
+
 export async function startEntitlementCycle(
   supabase: SupabaseClient<Database>,
   input: {
@@ -93,13 +131,11 @@ export async function startEntitlementCycle(
   const periodStart = input.periodStart ?? new Date()
   const plan = input.plan ?? 'monthly'
   const periodEnd = input.periodEnd ?? defaultPeriodEnd(plan, periodStart)
+  const { creditsGranted, guestInvitesGranted } = creditsAndGuestsForTier(
+    input.productTier
+  )
 
   await deactivateActiveCycles(supabase, input.userId)
-
-  const creditsGranted =
-    input.productTier === 'inner_circle'
-      ? INNER_CIRCLE_FREE_REGISTRATIONS_PER_PERIOD
-      : null
 
   const { data, error } = await supabase
     .from('membership_entitlement_cycles')
@@ -110,14 +146,36 @@ export async function startEntitlementCycle(
       period_end: periodEnd.toISOString(),
       credits_granted: creditsGranted,
       credits_used: 0,
+      guest_invites_granted: guestInvitesGranted,
+      guest_invites_used: 0,
       is_active: true,
     })
     .select(
-      'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, is_active'
+      'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, guest_invites_granted, guest_invites_used, is_active'
     )
     .single()
 
   if (error) {
+    // Fallback if guest invite columns are not migrated yet.
+    if (error.message?.includes('guest_invites')) {
+      const legacy = await supabase
+        .from('membership_entitlement_cycles')
+        .insert({
+          user_id: input.userId,
+          product_tier: input.productTier,
+          period_start: periodStart.toISOString(),
+          period_end: periodEnd.toISOString(),
+          credits_granted: creditsGranted,
+          credits_used: 0,
+          is_active: true,
+        })
+        .select(
+          'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, is_active'
+        )
+        .single()
+      if (legacy.error) throw new Error(legacy.error.message)
+      return toCycle(legacy.data as CycleRow)
+    }
     throw new Error(error.message)
   }
 
@@ -236,7 +294,7 @@ export async function consumeEventCredit(
   const used = cycle.credits_used ?? 0
   if (used >= granted) {
     throw new Error(
-      'No included standard event registrations remaining this billing period.'
+      'No included premium event credits remaining this billing period.'
     )
   }
 
@@ -250,6 +308,62 @@ export async function consumeEventCredit(
   }
 
   return { creditsRemaining: Math.max(0, granted - used - 1) }
+}
+
+export async function returnGuestInvite(
+  supabase: SupabaseClient<Database>,
+  cycleId: string
+): Promise<void> {
+  const { data: cycle } = await supabase
+    .from('membership_entitlement_cycles')
+    .select('guest_invites_used')
+    .eq('id', cycleId)
+    .single()
+
+  if (!cycle || (cycle.guest_invites_used ?? 0) <= 0) return
+
+  await supabase
+    .from('membership_entitlement_cycles')
+    .update({
+      guest_invites_used: Math.max(0, (cycle.guest_invites_used ?? 0) - 1),
+    })
+    .eq('id', cycleId)
+}
+
+export async function consumeGuestInvite(
+  supabase: SupabaseClient<Database>,
+  cycleId: string
+): Promise<{ guestInvitesRemaining: number }> {
+  const { data: cycle, error: readError } = await supabase
+    .from('membership_entitlement_cycles')
+    .select('id, guest_invites_granted, guest_invites_used, is_active')
+    .eq('id', cycleId)
+    .single()
+
+  if (readError || !cycle) {
+    throw new Error(readError?.message ?? 'Entitlement cycle not found.')
+  }
+
+  if (!cycle.is_active) {
+    throw new Error('Billing period has ended. Guest invites cannot be used.')
+  }
+
+  const granted = cycle.guest_invites_granted ?? 0
+  const used = cycle.guest_invites_used ?? 0
+  if (used >= granted) {
+    throw new Error('No guest invites remaining this billing period.')
+  }
+
+  const { error: updateError } = await supabase
+    .from('membership_entitlement_cycles')
+    .update({ guest_invites_used: used + 1 })
+    .eq('id', cycleId)
+
+  if (updateError) {
+    throw new Error(updateError.message)
+  }
+
+  return { guestInvitesRemaining: Math.max(0, granted - used - 1) }
 }
 
 export async function returnEventCredit(

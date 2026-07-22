@@ -1,7 +1,12 @@
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import type { EventAccessType } from '@/lib/membership-tier-config'
 
-export type EventListFilter = 'upcoming' | 'circle_social' | 'past' | 'rsvpd'
+export type EventListFilter =
+  | 'upcoming'
+  | 'circle_social'
+  | 'premium_event'
+  | 'past'
+  | 'rsvpd'
 
 export const EVENT_LIST_FILTERS: {
   id: EventListFilter
@@ -9,14 +14,17 @@ export const EVENT_LIST_FILTERS: {
 }[] = [
   { id: 'upcoming', label: 'Upcoming' },
   { id: 'circle_social', label: 'Circle Socials' },
+  { id: 'premium_event', label: 'Premium' },
   { id: 'past', label: 'Past' },
   { id: 'rsvpd', label: "RSVP'd" },
 ]
 
 export function eventTypeLabel(
   eventType: EventAccessType | string | null | undefined
-): 'Standard Event' | 'Circle Social' {
-  return eventType === 'circle_social' ? 'Circle Social' : 'Standard Event'
+): 'Standard Event' | 'Circle Social' | 'Premium Event' {
+  if (eventType === 'circle_social') return 'Circle Social'
+  if (eventType === 'premium_event') return 'Premium Event'
+  return 'Standard Event'
 }
 
 export function isEventPast(
@@ -74,15 +82,18 @@ export function eventCardAccessHint(input: {
   if (!preview) return null
 
   if (!preview.allowed) {
-    if (preview.code === 'circle_social_blocked') {
-      return 'Included with Inner Circle and Elite Circle'
+    if (preview.code === 'priority_window') {
+      return 'Elite priority RSVP window'
     }
     return null
   }
 
-  if (preview.uiState === 'elite_unlimited') {
-    return preview.circleSocialIncluded
-      ? 'Included with Elite Circle'
+  if (
+    preview.uiState === 'elite_circle_social_included' ||
+    preview.uiState === 'member_standard_free'
+  ) {
+    return preview.uiState === 'member_standard_free'
+      ? 'Free for members'
       : 'Included with Elite Circle'
   }
 
@@ -90,8 +101,12 @@ export function eventCardAccessHint(input: {
     return 'Included with Inner Circle'
   }
 
-  if (preview.method === 'credit') {
-    return 'Included with Inner Circle'
+  if (
+    preview.method === 'credit' ||
+    preview.uiState === 'inner_premium_credit_remaining' ||
+    preview.uiState === 'elite_premium_credit_remaining'
+  ) {
+    return 'Use premium credit'
   }
 
   if (preview.method === 'paid_per_event') {
@@ -121,23 +136,30 @@ export function eventRsvpActionLabel(input: {
   if (!preview) return null
 
   if (!preview.allowed) {
-    if (preview.code === 'circle_social_blocked') {
-      return 'Upgrade membership'
+    if (preview.code === 'priority_window') {
+      return 'Elite priority window'
     }
     return null
   }
 
-  if (preview.uiState === 'inner_included_exhausted') {
-    return 'No remaining uses'
-  }
-
-  if (preview.uiState === 'inner_included_remaining') {
-    return 'RSVP with membership'
+  if (
+    preview.uiState === 'inner_premium_credit_exhausted' ||
+    preview.uiState === 'elite_premium_credit_exhausted'
+  ) {
+    return 'No remaining credits'
   }
 
   if (
-    preview.uiState === 'elite_unlimited' ||
-    preview.uiState === 'inner_circle_social_included'
+    preview.uiState === 'inner_premium_credit_remaining' ||
+    preview.uiState === 'elite_premium_credit_remaining'
+  ) {
+    return 'RSVP with credit'
+  }
+
+  if (
+    preview.uiState === 'elite_circle_social_included' ||
+    preview.uiState === 'inner_circle_social_included' ||
+    preview.uiState === 'member_standard_free'
   ) {
     return 'Included with membership'
   }
@@ -167,6 +189,8 @@ export function matchesEventFilter(input: {
       return upcoming
     case 'circle_social':
       return isCircleSocial && upcoming
+    case 'premium_event':
+      return input.eventType === 'premium_event' && upcoming
     case 'past':
       return past || input.status === 'cancelled'
     case 'rsvpd':

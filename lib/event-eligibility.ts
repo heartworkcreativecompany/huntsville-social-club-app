@@ -77,14 +77,20 @@ export function resolveEventEligibility(
     }
   }
 
-  if (status === 'draft') {
+  if (status === 'draft' || status === 'pending_approval') {
     return {
       ...base,
-      accessLabel: 'Draft',
-      accessDescription: 'Visible to hosts and administrators until published.',
+      accessLabel: status === 'pending_approval' ? 'Pending approval' : 'Draft',
+      accessDescription:
+        status === 'pending_approval'
+          ? 'Awaiting admin approval before members can RSVP.'
+          : 'Visible to hosts and administrators until published.',
       variant: 'warning',
       canRsvpNow: false,
-      rsvpMessage: 'RSVP opens when the host publishes this event.',
+      rsvpMessage:
+        status === 'pending_approval'
+          ? 'RSVP opens after an admin publishes this event.'
+          : 'RSVP opens when the host publishes this event.',
     }
   }
 

@@ -7,7 +7,10 @@ export default function EventTypeBadge({
   eventType: string | null | undefined
 }) {
   const label = eventTypeLabel(eventType)
-  const variant = eventType === 'circle_social' ? 'premium' : 'muted'
+  const variant =
+    eventType === 'circle_social' || eventType === 'premium_event'
+      ? 'premium'
+      : 'muted'
 
   return <Badge variant={variant}>{label}</Badge>
 }

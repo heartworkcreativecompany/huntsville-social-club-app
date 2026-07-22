@@ -13,7 +13,6 @@ import {
 } from '@/lib/event-labels'
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import { FEATURE_GATE_COPY } from '@/lib/membership-pricing-copy'
-import { CircleSocialPaywall } from '@/components/membership/feature-paywalls'
 
 type EventRsvpProps = {
   eventId: string
@@ -73,16 +72,17 @@ export default function EventRsvp({
   }
 
   const preview = registrationPreview
-  const isCircleSocialBlocked =
-    preview && !preview.allowed && preview.code === 'circle_social_blocked'
 
   const showInnerIncludedRemaining =
     preview?.allowed &&
-    preview.uiState === 'inner_included_remaining' &&
+    (preview.uiState === 'inner_premium_credit_remaining' ||
+      preview.uiState === 'elite_premium_credit_remaining') &&
     preview.method === 'credit'
 
   const showInnerIncludedExhausted =
-    preview?.allowed && preview.uiState === 'inner_included_exhausted'
+    preview?.allowed &&
+    (preview.uiState === 'inner_premium_credit_exhausted' ||
+      preview.uiState === 'elite_premium_credit_exhausted')
 
   const showStandardPaywall =
     preview?.allowed &&
@@ -91,8 +91,12 @@ export default function EventRsvp({
 
   const showIncludedInfo =
     preview?.allowed &&
-    (preview.uiState === 'elite_unlimited' ||
-      preview.uiState === 'inner_circle_social_included')
+    (preview.uiState === 'elite_circle_social_included' ||
+      preview.uiState === 'inner_circle_social_included' ||
+      preview.uiState === 'member_standard_free')
+
+  const isPriorityLocked =
+    preview && !preview.allowed && preview.code === 'priority_window'
 
   const isRegisteredGoing = currentStatus === 'going'
 
@@ -108,7 +112,14 @@ export default function EventRsvp({
         </div>
       ) : null}
 
-      {isCircleSocialBlocked ? <CircleSocialPaywall membershipsHref="/upgrade" /> : null}
+      {isPriorityLocked ? (
+        <div className="mb-4 rounded-lg border border-warning/30 bg-warning-soft/40 p-4 text-sm">
+          <p className="font-medium text-foreground">Priority RSVP window</p>
+          <p className="mt-1 text-muted-foreground">
+            {preview && !preview.allowed ? preview.message : 'Elite Circle has priority access right now.'}
+          </p>
+        </div>
+      ) : null}
 
       {showInnerIncludedRemaining && !isRegisteredGoing ? (
         <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 p-4 text-sm">
@@ -169,7 +180,7 @@ export default function EventRsvp({
         <p className="mb-3 text-sm text-muted-foreground">{preview.description}</p>
       ) : null}
 
-      {preview && !preview.allowed && !isCircleSocialBlocked ? (
+      {preview && !preview.allowed && preview.code !== 'priority_window' ? (
         <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 p-3 text-sm">
           <p className="text-muted-foreground">{preview.message}</p>
           {preview.upgradeTier ? (
