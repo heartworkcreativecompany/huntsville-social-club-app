@@ -48,28 +48,7 @@ function displayName(profile: ProfileRow | undefined): string {
     return 'Member'
   }
 
-  return memberDisplayName({
-    id: profile.id,
-    full_name: profile.full_name,
-    contactEmail: null,
-    role: null,
-    created_at: null,
-    membership_intent: null,
-    verified_at: null,
-    membership_status: null,
-    photos: [],
-    location_area: null,
-    discovery_intent: null,
-    location_city: null,
-    location_zip: null,
-    birth_year: null,
-    discovery_interests: [],
-    discovery_industry: null,
-    public_intents: [],
-    verification_state: {},
-    membership_tier: 'member',
-    vendor_reviewed_badge: false,
-  } as Parameters<typeof memberDisplayName>[0])
+  return memberDisplayName(profile)
 }
 
 export async function notifyMessageRequestReceived(

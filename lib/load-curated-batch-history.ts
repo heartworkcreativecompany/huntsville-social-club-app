@@ -74,13 +74,7 @@ type ProfileRow = {
 function toMember(profile: ProfileRow | undefined, fallbackId: string) {
   return {
     id: fallbackId,
-    name: profile
-      ? memberDisplayName({
-          id: profile.id,
-          full_name: profile.full_name,
-          email: profile.email,
-        } as Parameters<typeof memberDisplayName>[0])
-      : 'Member',
+    name: profile ? memberDisplayName(profile) : 'Member',
     email: profile?.email ?? null,
   }
 }

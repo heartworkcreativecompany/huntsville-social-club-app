@@ -63,9 +63,20 @@ export type DirectoryMember = {
   vendor_reviewed_badge: boolean
 }
 
+/**
+ * Minimal fields for display-name resolution.
+ * Accepts slim admin/loader profile rows ({ id, full_name, email? })
+ * and full DirectoryMember values (which include id + full_name).
+ */
+export type MemberDisplayNameInput = {
+  id: string
+  full_name: string | null
+  email?: string | null
+}
+
 export type TrustBadge = DisplayBadge
 
-export function memberDisplayName(member: DirectoryMember): string {
+export function memberDisplayName(member: MemberDisplayNameInput): string {
   if (member.full_name?.trim()) return member.full_name.trim()
   return 'Member'
 }
