@@ -1,7 +1,5 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import ApplicationStatusBadge from '@/components/application/application-status-badge'
-import ApplicationStatusPanel from '@/components/application/application-status-panel'
 import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import {
@@ -9,7 +7,6 @@ import {
   nextActionForApplicant,
 } from '@/lib/application'
 import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
-import { parseApprovalGates } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
 import ApplicationProfilePreview from '@/components/application/application-profile-preview'
@@ -28,6 +25,7 @@ export default async function ApplicationPage() {
   const draft = mergeProfileIntoDraft(profile)
   const showReadOnlyPreview =
     !canEditApplication(status) && status !== 'approved'
+  const adminNotes = profile?.admin_review_notes?.trim() || null
 
   return (
     <>
@@ -44,41 +42,67 @@ export default async function ApplicationPage() {
       <PageHeader
         eyebrow="Membership"
         title="Your application"
-        description="Tell us about yourself, save anytime, and we'll review your application for the club."
+        description={
+          showReadOnlyPreview
+            ? 'Review what you submitted. Track verification and review progress on your status page.'
+            : "Tell us about yourself, save anytime, and we'll review your application for the club."
+        }
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ApplicationStatusBadge status={status} />
-            <Link
-              href="/application/status"
-              className="text-sm font-medium text-accent underline"
-            >
-              Track status
-            </Link>
-          </div>
+          <Link
+            href="/application/status"
+            className="text-sm font-medium text-accent underline"
+          >
+            Track status
+          </Link>
         }
       />
 
-      {!canEditApplication(status) && status !== 'approved' ? (
-        <section className="mb-8">
-          <ApplicationStatusPanel
-            status={status}
-            submittedAt={profile?.application_submitted_at}
-            verifiedAt={profile?.verified_at}
-            adminNotes={profile?.admin_review_notes}
-            approvalGates={parseApprovalGates(profile?.approval_gates)}
-            identityVerificationStatus={profile?.identity_verification_status}
-            identityVerifiedAt={profile?.identity_verified_at}
-            identityVerificationLastError={
-              profile?.identity_verification_last_error
-            }
-          />
-        </section>
+      {showReadOnlyPreview ? (
+        <div className="mb-10 grid gap-6">
+          <Card className="border-success/30 bg-success-soft/40">
+            <h2 className="text-display text-lg font-semibold">
+              Application submitted
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              The membership team has your application. Track verification and
+              review progress on your status page.
+            </p>
+            <Link
+              href="/application/status"
+              className={`${buttonSecondaryClassName} mt-4`}
+            >
+              View status & verification
+            </Link>
+          </Card>
+
+          {adminNotes ? (
+            <Card className="border-warning/30 bg-warning-soft/40" padding="sm">
+              <h2 className="text-display text-base font-medium text-foreground">
+                Reviewer notes
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                {adminNotes}
+              </p>
+            </Card>
+          ) : null}
+
+          <section>
+            <h2 className="text-display mb-4 text-xl font-medium text-foreground">
+              Your profile preview
+            </h2>
+            <ApplicationProfilePreview
+              draft={draft}
+              userId={viewer.userId}
+              email={viewer.email}
+              applicationStatus={status}
+              variant="submitted"
+            />
+          </section>
+        </div>
       ) : (
         <div className="mb-8 grid gap-4 lg:grid-cols-2">
           <Card>
-            <h2 className="text-display text-lg font-semibold">
-              {next.title}
-            </h2>
+            <h2 className="text-display text-lg font-semibold">{next.title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               {next.description}
             </p>
@@ -109,21 +133,6 @@ export default async function ApplicationPage() {
           </Card>
         </div>
       )}
-
-      {showReadOnlyPreview ? (
-        <section className="mb-10">
-          <h2 className="text-display mb-4 text-xl font-medium text-foreground">
-            Your profile preview
-          </h2>
-          <ApplicationProfilePreview
-            draft={draft}
-            userId={viewer.userId}
-            email={viewer.email}
-            applicationStatus={status}
-            variant="submitted"
-          />
-        </section>
-      ) : null}
 
       {canEditApplication(status) ? (
         <section>

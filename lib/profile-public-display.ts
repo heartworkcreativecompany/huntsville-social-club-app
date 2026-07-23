@@ -35,33 +35,57 @@ function normalizeForCompare(value: string): string {
 
 /**
  * Public profile details with deduplicated sections.
- * - About = hopingToMeet only (profile bio)
- * - Connection intents = canonical filters/badges source
- * - Connection types open to = display-only detail
+ * About Me (`profile.aboutMe`) is the only main bio source.
  */
 export function publicProfileDetailsFromDraft(
   draft: ApplicationDraft,
   options?: { connectionsOpenTo?: string[] | null }
 ): ApplicationPublicProfileDetails {
-  const bio = draft.prompts.hopingToMeet.trim() || null
+  const bio = draft.profile.aboutMe.trim() || null
   const normalizedBio = bio ? normalizeForCompare(bio) : null
 
   const connectionIntents = memberPublicIntentLabelsFromValues(
     connectionIntentsFromDraft(draft)
   )
 
-  const connectionsOpenTo = [
-    ...(options?.connectionsOpenTo ?? draft.profile.connectionsOpenTo),
-  ]
-
   const usedValues = new Set<string>()
   if (normalizedBio) usedValues.add(normalizedBio)
   for (const label of connectionIntents) {
     usedValues.add(normalizeForCompare(label))
   }
-  for (const label of connectionsOpenTo) {
-    usedValues.add(normalizeForCompare(label))
-  }
+
+  // Keep connection-type detail only when it adds unique labels beyond intents.
+  const connectionsOpenTo = [
+    ...(options?.connectionsOpenTo ?? draft.profile.connectionsOpenTo),
+  ].filter((label) => {
+    const normalized = normalizeForCompare(label)
+    if (!normalized || usedValues.has(normalized)) return false
+    usedValues.add(normalized)
+    return true
+  })
+
+  const interests = draft.workAndInterests.interests.filter((label) => {
+    const normalized = normalizeForCompare(label)
+    if (!normalized || usedValues.has(normalized)) return false
+    usedValues.add(normalized)
+    return true
+  })
+
+  const lifestyleTags = draft.workAndInterests.lifestyleTags.filter((label) => {
+    const normalized = normalizeForCompare(label)
+    if (!normalized || usedValues.has(normalized)) return false
+    usedValues.add(normalized)
+    return true
+  })
+
+  const eventInterests = draft.workAndInterests.eventInterests.filter(
+    (label) => {
+      const normalized = normalizeForCompare(label)
+      if (!normalized || usedValues.has(normalized)) return false
+      usedValues.add(normalized)
+      return true
+    }
+  )
 
   const prompts = APPLICATION_PROMPTS.filter(
     (prompt) => !PROMPT_KEYS_EXCLUDED_FROM_PUBLIC_LIST.has(prompt.key)
@@ -78,11 +102,12 @@ export function publicProfileDetailsFromDraft(
       return true
     })
 
+  const socialVibeRaw = draft.workAndInterests.socialVibe.trim()
   const socialVibe =
-    draft.workAndInterests.socialVibe.trim() ||
-    (draft.workAndInterests.eventInterests.length > 0
-      ? draft.workAndInterests.eventInterests.slice(0, 3).join(', ')
-      : null)
+    socialVibeRaw && !usedValues.has(normalizeForCompare(socialVibeRaw))
+      ? socialVibeRaw
+      : null
+  if (socialVibe) usedValues.add(normalizeForCompare(socialVibe))
 
   return {
     displayName: draft.profile.displayName.trim() || null,
@@ -90,9 +115,9 @@ export function publicProfileDetailsFromDraft(
     locationArea: draft.location.neighborhoodOrArea.trim() || null,
     occupation: draft.workAndInterests.occupation.trim() || null,
     industry: draft.workAndInterests.industry.trim() || null,
-    interests: draft.workAndInterests.interests,
-    lifestyleTags: draft.workAndInterests.lifestyleTags,
-    eventInterests: draft.workAndInterests.eventInterests,
+    interests,
+    lifestyleTags,
+    eventInterests,
     connectionsOpenTo,
     socialVibe,
     about: bio,

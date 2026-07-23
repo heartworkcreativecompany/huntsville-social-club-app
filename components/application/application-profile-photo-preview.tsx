@@ -42,8 +42,8 @@ export default function ApplicationProfilePhotoPreview({
         <div className="grid gap-4">
           <MemberProfileDetailsPanel
             member={member}
-            isCurrentUser
             limited
+            previewMode
           />
           <MemberPublicDetails details={details} compact />
         </div>

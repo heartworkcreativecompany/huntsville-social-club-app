@@ -73,10 +73,13 @@ export function identityLastErrorMessage(
 }
 
 /**
- * Creates a Stripe Identity VerificationSession that requires:
+ * Creates a Stripe Identity VerificationSession for member-facing
+ * "Identity & location verification".
+ * Requires:
  * 1) government ID document scan, and
  * 2) a matching selfie (require_matching_selfie).
  * Images stay in Stripe — we only persist session status metadata.
+ * return_url is always `{appOrigin}/application/status?identity=return`.
  */
 export async function createIdentityVerificationSession(input: {
   userId: string

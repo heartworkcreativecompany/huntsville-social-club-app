@@ -27,12 +27,15 @@ type ProfilePhoneVerificationCardProps = {
   verifiedPhoneE164: string | null
   phoneVerified: boolean
   authPhoneE164: string | null
+  /** When true, omit outer card chrome (for embedding in status rows). */
+  embedded?: boolean
 }
 
 export default function ProfilePhoneVerificationCard({
   verifiedPhoneE164,
   phoneVerified,
   authPhoneE164,
+  embedded = false,
 }: ProfilePhoneVerificationCardProps) {
   const router = useRouter()
   const supabase = createClient()
@@ -202,20 +205,32 @@ export default function ProfilePhoneVerificationCard({
     })
   }
 
-  return (
-    <Card>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-display text-lg font-semibold">Phone verification</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Required for the public Verified badge. Your phone number is used for
-            account verification only and is never shown on your member profile.
-          </p>
+  const body = (
+    <>
+      {!embedded ? (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-display text-lg font-semibold">
+              Phone verification
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {/* User-facing: Phone verification. Implementation: Supabase Auth
+                  phone_change OTP; SMS provider is configured in Supabase (e.g. Twilio). */}
+              Optional for approval; required for the public Verified badge.
+              Your number is never shown on your member profile.
+            </p>
+          </div>
+          {isVerified ? <Badge variant="success">Verified</Badge> : null}
         </div>
-        {isVerified ? <Badge variant="success">Verified</Badge> : null}
-      </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {/* Supabase Auth SMS under the hood; provider configured in Supabase. */}
+          We&apos;ll text a verification code to your mobile number. Your number
+          stays private.
+        </p>
+      )}
 
-      <div className="mt-4 grid max-w-lg gap-4">
+      <div className={embedded ? 'mt-3 grid max-w-lg gap-4' : 'mt-4 grid max-w-lg gap-4'}>
         <label className="grid gap-1.5 text-sm">
           <span className="font-medium text-foreground">Mobile number</span>
           <input
@@ -289,6 +304,12 @@ export default function ProfilePhoneVerificationCard({
           <p className="text-sm text-muted-foreground">{message}</p>
         ) : null}
       </div>
-    </Card>
+    </>
   )
+
+  if (embedded) {
+    return <div className="rounded-md border border-border bg-background/40 p-3">{body}</div>
+  }
+
+  return <Card>{body}</Card>
 }

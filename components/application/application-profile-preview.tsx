@@ -18,6 +18,7 @@ export default function ApplicationProfilePreview({
   variant?: 'inline' | 'submitted'
 }) {
   const isLive = applicationStatus === 'approved'
+  const showChrome = variant !== 'submitted'
 
   const banner = useMemo(
     () =>
@@ -41,19 +42,27 @@ export default function ApplicationProfilePreview({
           : 'rounded-lg border border-border bg-background/30 p-4'
       }
     >
-      <div className="mb-4">
-        <h3 className="text-display text-base font-medium text-foreground">
-          Profile preview
-        </h3>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          Review your public name, about text, details, and photos before you
-          submit.
-        </p>
-      </div>
+      {showChrome ? (
+        <>
+          <div className="mb-4">
+            <h3 className="text-display text-base font-medium text-foreground">
+              Profile preview
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Review your public name, About Me, details, and photos before you
+              submit.
+            </p>
+          </div>
 
-      <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 px-4 py-3 text-sm text-muted-foreground">
-        {banner}
-      </div>
+          <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 px-4 py-3 text-sm text-muted-foreground">
+            {banner}
+          </div>
+        </>
+      ) : (
+        <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 px-4 py-3 text-sm text-muted-foreground">
+          {banner}
+        </div>
+      )}
 
       <ApplicationProfilePhotoPreview
         draft={draft}

@@ -38,11 +38,6 @@ function GateChecklist({
                   {!gate.implemented ? ' · Coming soon' : ''}
                 </span>
               ) : null}
-              {gate.key === 'identity_verified' && !approved ? (
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Use “Verify your identity” above to complete this step.
-                </span>
-              ) : null}
             </div>
             <Badge variant={approved ? 'success' : gate.implemented ? 'warning' : 'muted'}>
               {approvalGateApplicantStatus(gate.key, status)}
@@ -81,7 +76,7 @@ export default function VerificationGateChecklist({
       {!requiredOnly && OPTIONAL_APPROVAL_GATES.length > 0 ? (
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Optional (after approval)
+            Optional
           </p>
           <div className="mt-2">
             <GateChecklist

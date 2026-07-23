@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { syncEmailApprovalGateForUser } from '@/lib/approval-gate-sync'
 import { createClient } from '@/lib/supabase/server'
 
+/**
+ * Supabase Auth PKCE / email confirmation callback.
+ * Redirect URLs in Supabase must allow this path on the same origin as
+ * NEXT_PUBLIC_APP_URL (see lib/site.ts authCallbackUrl).
+ * Email verified gate sync uses Auth `email_confirmed_at` as source of truth.
+ */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')

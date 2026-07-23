@@ -81,6 +81,13 @@ export function validateApplicationForSubmit(
     return `Please select no more than ${INTEREST_MAX} interests.`
   }
 
+  if (!draft.profile.aboutMe.trim()) {
+    return 'Please complete your About Me.'
+  }
+  if (draft.profile.aboutMe.trim().length > PROMPT_MAX_CHARS) {
+    return `About Me must be ${PROMPT_MAX_CHARS} characters or fewer.`
+  }
+
   const promptError = promptTooLong(draft)
   if (promptError) return promptError
 

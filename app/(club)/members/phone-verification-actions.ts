@@ -6,8 +6,13 @@ import {
   syncPhoneApprovalGateForUser,
 } from '@/lib/approval-gate-sync'
 import { normalizePhoneToE164, validatePhoneInput } from '@/lib/member-phone'
-import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
+
+/**
+ * Phone verification actions for the member-facing "Phone verification" step.
+ * Implementation uses Supabase Auth phone_change OTP; SMS delivery depends on
+ * the SMS provider configured in the Supabase project (commonly Twilio).
+ */
 
 export async function markPhonePendingReverification(phoneInput: string) {
   const supabase = await createClient()
@@ -32,6 +37,7 @@ export async function markPhonePendingReverification(phoneInput: string) {
   await resetPhoneApprovalGateForUser(supabase, user.id, phoneE164)
 
   revalidatePath('/profile')
+  revalidatePath('/application/status')
   return { success: true as const }
 }
 
@@ -55,19 +61,6 @@ export async function syncPhoneVerificationAfterOtp(phoneInput: string) {
     return { error: 'Enter a valid phone number.' }
   }
 
-  const { data: profile } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
-    .select('application_status')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.application_status !== 'approved') {
-    return {
-      error:
-        'Phone verification is available after your membership application is approved.',
-    }
-  }
-
   const syncResult = await syncPhoneApprovalGateForUser(
     supabase,
     user.id,
@@ -80,6 +73,8 @@ export async function syncPhoneVerificationAfterOtp(phoneInput: string) {
   }
 
   revalidatePath('/profile')
+  revalidatePath('/application/status')
+  revalidatePath('/application')
   revalidatePath('/members')
   revalidatePath(`/members/${user.id}`)
   revalidatePath('/home')

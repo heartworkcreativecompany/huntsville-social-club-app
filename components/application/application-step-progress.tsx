@@ -2,8 +2,10 @@ import { APPLICATION_FORM_STEPS } from '@/lib/application-form-content'
 
 export default function ApplicationStepProgress({
   currentStep,
+  onStepSelect,
 }: {
   currentStep: number
+  onStepSelect?: (step: number) => void
 }) {
   return (
     <div className="mb-6">
@@ -33,19 +35,30 @@ export default function ApplicationStepProgress({
         {APPLICATION_FORM_STEPS.map((step) => {
           const done = step.id < currentStep
           const active = step.id === currentStep
+          const className = `w-full rounded-full border px-3 py-2 text-left text-xs transition ${
+            active
+              ? 'border-accent/35 bg-accent-soft font-brand text-foreground'
+              : done
+                ? 'border-border bg-surface text-muted-foreground hover:border-accent/30 hover:text-foreground'
+                : 'border-border/80 text-muted-foreground hover:border-accent/30 hover:text-foreground'
+          }`
 
           return (
-            <li
-              key={step.id}
-              className={`rounded-full border px-3 py-2 text-xs ${
-                active
-                  ? 'border-accent/35 bg-accent-soft font-brand text-foreground'
-                  : done
-                    ? 'border-border bg-surface text-muted-foreground'
-                    : 'border-border/80 text-muted-foreground'
-              }`}
-            >
-              <span className="font-medium">{step.id}.</span> {step.title}
+            <li key={step.id}>
+              {onStepSelect ? (
+                <button
+                  type="button"
+                  className={className}
+                  aria-current={active ? 'step' : undefined}
+                  onClick={() => onStepSelect(step.id)}
+                >
+                  <span className="font-medium">{step.id}.</span> {step.title}
+                </button>
+              ) : (
+                <div className={className}>
+                  <span className="font-medium">{step.id}.</span> {step.title}
+                </div>
+              )}
             </li>
           )
         })}

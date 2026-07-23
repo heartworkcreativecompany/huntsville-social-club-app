@@ -15,7 +15,7 @@ export function applyProfileRevisionToDraft(
 
   next.profile.displayName = revision.displayName
   next.location.neighborhoodOrArea = revision.locationArea
-  next.prompts.hopingToMeet = revision.bio
+  next.profile.aboutMe = revision.bio
   next.profile.connectionIntents = revision.memberPublicIntents
 
   if (revision.interests !== undefined) {

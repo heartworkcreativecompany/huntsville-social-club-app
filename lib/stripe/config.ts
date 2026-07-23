@@ -1,4 +1,5 @@
 import Stripe from 'stripe'
+import { appOrigin } from '@/lib/site'
 
 let stripeClient: Stripe | null = null
 
@@ -21,6 +22,17 @@ export function isStripeConfigured(): boolean {
       process.env.STRIPE_PRICE_ID_INNER_CIRCLE &&
       process.env.STRIPE_PRICE_ID_ELITE_CIRCLE
   )
+}
+
+/** Stripe Identity needs the secret key plus a public app origin for return_url. */
+export function isStripeIdentityConfigured(): boolean {
+  if (!process.env.STRIPE_SECRET_KEY?.trim()) return false
+  try {
+    appOrigin()
+    return true
+  } catch {
+    return false
+  }
 }
 
 export type PaidMembershipTier = 'inner_circle' | 'elite_circle'
@@ -69,11 +81,7 @@ export function stripeSponsorshipPriceId(): string | null {
   return id || null
 }
 
+/** Public origin for Stripe Checkout / Identity return URLs (same rules as lib/site). */
 export function appBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
-  if (configured) return configured
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`
-  }
-  return 'http://localhost:3000'
+  return appOrigin()
 }

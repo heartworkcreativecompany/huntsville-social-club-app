@@ -54,8 +54,7 @@ export function computeProfileCompletion(
       key: 'bio',
       label: 'About you',
       done: Boolean(
-        profile?.membership_intent?.trim() ||
-          liveDraft.prompts.hopingToMeet.trim()
+        profile?.membership_intent?.trim() || liveDraft.profile.aboutMe.trim()
       ),
     },
     {

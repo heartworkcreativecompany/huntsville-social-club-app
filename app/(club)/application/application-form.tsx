@@ -207,7 +207,10 @@ export default function ApplicationForm({
           {APPLICATION_FORM_INTRO}
         </p>
 
-        <ApplicationStepProgress currentStep={draft.step} />
+        <ApplicationStepProgress
+          currentStep={draft.step}
+          onStepSelect={(step) => update({ step })}
+        />
 
         {applicationStatus === 'needs_info' && adminNotes ? (
           <div className="mb-6 rounded-lg border border-warning/30 bg-warning-soft/40 px-4 py-3 text-sm text-muted-foreground">
@@ -560,15 +563,34 @@ export default function ApplicationForm({
                 About you
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Required prompts help reviewers understand your fit. Optional
-                prompts improve your profile in discovery (max{' '}
+                Your About Me is the primary bio on your member profile. Short
+                prompts help reviewers understand your fit (max{' '}
                 {PROMPT_MAX_CHARS} characters each).
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                {promptsDone} of {APPLICATION_PROMPTS.length} completed ·{' '}
+                {promptsDone} of {APPLICATION_PROMPTS.length} prompts completed ·{' '}
                 {REQUIRED_PROMPT_KEYS.length} required to submit
               </p>
             </div>
+            <label className="grid gap-1.5 text-sm">
+              <FieldLabel
+                required
+                hint="Visible to other members after approval. This is your profile bio."
+              >
+                About Me
+              </FieldLabel>
+              <textarea
+                className={`${inputClassName} resize-y`}
+                rows={4}
+                maxLength={PROMPT_MAX_CHARS}
+                value={draft.profile.aboutMe}
+                onChange={(e) => updateProfile({ aboutMe: e.target.value })}
+                placeholder="A short introduction — what you’re like to hang out with, and what you’re hoping to find here."
+              />
+              <span className="text-xs text-muted-foreground">
+                {draft.profile.aboutMe.length}/{PROMPT_MAX_CHARS}
+              </span>
+            </label>
             {APPLICATION_PROMPTS.map((prompt) => {
               const value = draft.prompts[prompt.key]
               const isRequired = REQUIRED_PROMPT_KEYS.includes(
@@ -646,6 +668,16 @@ export default function ApplicationForm({
                 <dt className="text-muted-foreground">Display name</dt>
                 <dd className="font-medium text-foreground">
                   {draft.profile.displayName || '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">About Me</dt>
+                <dd className="font-medium text-foreground">
+                  {draft.profile.aboutMe.trim()
+                    ? `${draft.profile.aboutMe.trim().slice(0, 80)}${
+                        draft.profile.aboutMe.trim().length > 80 ? '…' : ''
+                      }`
+                    : '—'}
                 </dd>
               </div>
               <div>

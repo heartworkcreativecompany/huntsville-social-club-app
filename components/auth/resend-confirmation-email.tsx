@@ -8,11 +8,13 @@ import { authCallbackUrl } from '@/lib/site'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
 
 const RESEND_SUCCESS =
-  'If that email needs confirmation, we sent a new link. Check inbox and spam.'
+  'If that email still needs confirmation, we sent a new link. Check inbox and spam.'
 
 /**
  * Resends the Supabase Auth signup confirmation email (not Resend transactional mail).
+ * Used by the Status page “Email verified” step when Auth has not confirmed yet.
  * Confirmation links always come from Supabase Auth / project SMTP.
+ * emailRedirectTo must match an allow-listed Redirect URL in Supabase Auth.
  */
 export default function ResendConfirmationEmail({
   email,
@@ -80,8 +82,8 @@ export default function ResendConfirmationEmail({
         </p>
       ) : null}
       <p className="mt-2 text-xs text-muted-foreground">
-        Confirmation emails are sent by Supabase Auth (project SMTP). This is
-        separate from other club emails.
+        Confirmation emails come from Supabase Auth. After you confirm, refresh
+        this page — Email verified should show Complete.
       </p>
     </div>
   )

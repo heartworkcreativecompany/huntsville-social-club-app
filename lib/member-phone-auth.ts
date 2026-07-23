@@ -1,3 +1,8 @@
+/**
+ * Phone verification for members uses Supabase Auth `phone_change` OTP.
+ * SMS delivery depends on the SMS provider configured in the Supabase project
+ * (Authentication → Phone). There is no separate Twilio SDK path in this app.
+ */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { phonesMatchE164 } from '@/lib/member-phone'
 

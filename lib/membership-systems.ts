@@ -353,27 +353,27 @@ export type ApprovalGateDef = {
 export const APPROVAL_GATE_DEFS: ApprovalGateDef[] = [
   {
     key: 'email_verified',
-    label: 'Email verification',
+    label: 'Email verified',
     description:
-      'Account email confirmed via Supabase Auth (member clicks confirmation link when enabled).',
+      'Account email confirmed via Supabase Auth (confirmation link when signup confirmation is enabled).',
     requiredForApproval: true,
     implemented: true,
     completedBy: 'member',
   },
   {
     key: 'phone_verified',
-    label: 'Phone OTP verification',
+    label: 'Phone verification',
     description:
-      'Optional. After membership approval, members verify a phone number on Profile via Supabase Auth SMS OTP. Not required for application approval — Stripe Identity is the required ID check.',
+      'Optional. Member verifies a phone number via Supabase Auth SMS (provider configured in Supabase, commonly Twilio). Not required for membership approval — Stripe Identity covers identity and location.',
     requiredForApproval: false,
     implemented: true,
     completedBy: 'member',
   },
   {
     key: 'identity_verified',
-    label: 'Identity verification',
+    label: 'Identity & location verification',
     description:
-      'Required. Government ID + matching selfie via Stripe Identity before membership approval. Document/selfie images are not stored in our database.',
+      'Required. Government ID + matching selfie via Stripe Identity before membership approval. Confirms identity and location signals. Document/selfie images are not stored in our database.',
     requiredForApproval: true,
     implemented: true,
     completedBy: 'member',
@@ -388,7 +388,7 @@ export const APPROVAL_GATE_DEFS: ApprovalGateDef[] = [
   },
   {
     key: 'application_reviewed',
-    label: 'Application text review',
+    label: 'Application review',
     description:
       'Staff review of application responses during application review.',
     requiredForApproval: true,
@@ -397,14 +397,30 @@ export const APPROVAL_GATE_DEFS: ApprovalGateDef[] = [
   },
   {
     key: 'locality_confirmed',
-    label: 'Locality confirmation',
+    label: 'Locality confirmation (admin)',
     description:
-      'Staff review of city/ZIP and local connection signals from the application.',
+      'Admin-only staff review of city/ZIP and local connection signals. Not shown to applicants — members complete identity & location via Stripe Identity.',
     requiredForApproval: true,
     implemented: true,
     completedBy: 'admin',
   },
 ]
+
+/**
+ * Member-facing verification steps on Application status.
+ * Order matches product copy. Locality stays admin-only (not listed here).
+ */
+export const APPLICANT_VERIFICATION_GATE_KEYS: ApprovalGateKey[] = [
+  'email_verified',
+  'phone_verified',
+  'photos_reviewed',
+  'application_reviewed',
+  'identity_verified',
+]
+
+export const APPLICANT_VERIFICATION_GATES = APPLICANT_VERIFICATION_GATE_KEYS.map(
+  (key) => APPROVAL_GATE_DEFS.find((def) => def.key === key)!
+)
 
 export const REQUIRED_APPROVAL_GATES = APPROVAL_GATE_DEFS.filter(
   (def) => def.requiredForApproval
@@ -481,10 +497,11 @@ export function applicantGateSummary(gates: ApprovalGates): {
   total: number
   label: string
 } {
-  const total = REQUIRED_APPROVAL_GATES.length
-  const completed = REQUIRED_APPROVAL_GATES.filter(
-    (d) => gates[d.key] === 'approved'
-  ).length
+  const visible = APPLICANT_VERIFICATION_GATES.filter(
+    (d) => d.requiredForApproval
+  )
+  const total = visible.length
+  const completed = visible.filter((d) => gates[d.key] === 'approved').length
   return {
     completed,
     total,
@@ -492,12 +509,67 @@ export function applicantGateSummary(gates: ApprovalGates): {
   }
 }
 
+/** Member-facing row status for application Status verification list. */
+export function applicantVerificationRowState(
+  gateKey: ApprovalGateKey,
+  status: ReviewStatus
+): {
+  label: string
+  tone: 'success' | 'warning' | 'muted' | 'danger'
+} {
+  if (status === 'approved') {
+    return { label: 'Complete', tone: 'success' }
+  }
+
+  const def = APPROVAL_GATE_DEFS.find((item) => item.key === gateKey)
+  if (!def?.implemented) {
+    return { label: 'Coming soon', tone: 'muted' }
+  }
+
+  if (def.completedBy === 'admin') {
+    if (status === 'pending_review') {
+      return { label: 'Pending review', tone: 'warning' }
+    }
+    if (status === 'needs_followup') {
+      return { label: 'Action required', tone: 'warning' }
+    }
+    if (status === 'rejected') {
+      return { label: 'Needs attention', tone: 'danger' }
+    }
+    return { label: 'Pending review', tone: 'warning' }
+  }
+
+  if (gateKey === 'email_verified') {
+    return { label: 'Action required', tone: 'warning' }
+  }
+
+  if (gateKey === 'phone_verified') {
+    if (status === 'pending_review') {
+      return { label: 'Incomplete', tone: 'warning' }
+    }
+    return { label: 'Incomplete', tone: 'muted' }
+  }
+
+  if (gateKey === 'identity_verified') {
+    // Prefer Stripe-backed presentation via identityVerificationRowState in the UI.
+    if (status === 'pending_review') {
+      return { label: 'Processing', tone: 'warning' }
+    }
+    if (status === 'needs_followup') {
+      return { label: 'Action required', tone: 'warning' }
+    }
+    return { label: 'Action required', tone: 'warning' }
+  }
+
+  return { label: reviewStatusLabel(status), tone: 'muted' }
+}
+
 /** Initialize approval gates when an application is submitted. */
 export function initializeApprovalGatesForSubmit(
   emailConfirmed: boolean
 ): ApprovalGates {
   const gates = emptyApprovalGates()
-  gates.email_verified = emailConfirmed ? 'approved' : 'pending_review'
+  gates.email_verified = emailConfirmed ? 'approved' : 'incomplete'
   gates.phone_verified = 'incomplete'
   gates.identity_verified = 'incomplete'
   gates.photos_reviewed = 'pending_review'
@@ -511,29 +583,76 @@ export function approvalGateApplicantStatus(
   gateKey: ApprovalGateKey,
   status: ReviewStatus
 ): string {
+  return applicantVerificationRowState(gateKey, status).label
+}
+
+/** Display title for a member-facing verification row (fixed product labels). */
+export function applicantVerificationGateTitle(
+  gateKey: ApprovalGateKey,
+  _status?: ReviewStatus
+): string {
   const def = APPROVAL_GATE_DEFS.find((item) => item.key === gateKey)
-  if (status === 'approved') return 'Complete'
-  if (!def?.implemented) return 'Coming soon'
-  if (def.completedBy === 'member') {
-    if (gateKey === 'phone_verified') {
-      if (status === 'pending_review') return 'In progress'
-      return 'Optional — after approval on Profile'
-    }
-    if (gateKey === 'identity_verified') {
-      if (status === 'pending_review') return 'In progress'
-      if (status === 'needs_followup') return 'Retry verification'
-      return 'Action required'
-    }
-    if (status === 'pending_review' || status === 'incomplete') {
-      return 'Confirm your email'
+  if (!def) return gateKey
+  // Product list always uses these labels; completion is shown via row state, not title.
+  return def.label
+}
+
+/**
+ * Member-facing identity row state from Stripe Identity session status
+ * (source of truth for this step once a session exists).
+ */
+export function identityVerificationRowState(
+  stripeStatus: string | null | undefined,
+  gateStatus: ReviewStatus
+): {
+  label: string
+  tone: 'success' | 'warning' | 'muted' | 'danger'
+  approved: boolean
+  cta: 'start' | 'continue' | 'retry' | null
+} {
+  const status =
+    stripeStatus === 'verified' ||
+    stripeStatus === 'processing' ||
+    stripeStatus === 'pending' ||
+    stripeStatus === 'requires_input' ||
+    stripeStatus === 'canceled' ||
+    stripeStatus === 'not_started'
+      ? stripeStatus
+      : 'not_started'
+
+  if (gateStatus === 'approved' || status === 'verified') {
+    return { label: 'Complete', tone: 'success', approved: true, cta: null }
+  }
+  if (status === 'processing' || status === 'pending') {
+    return {
+      label: 'Processing',
+      tone: 'warning',
+      approved: false,
+      cta: 'continue',
     }
   }
-  if (def.completedBy === 'admin') {
-    if (status === 'pending_review') return 'With membership team'
-    if (status === 'needs_followup') return 'Follow-up needed'
-    if (status === 'rejected') return 'Needs attention'
+  if (status === 'requires_input') {
+    return {
+      label: 'Action required',
+      tone: 'warning',
+      approved: false,
+      cta: 'retry',
+    }
   }
-  return reviewStatusLabel(status)
+  if (status === 'canceled') {
+    return {
+      label: 'Incomplete',
+      tone: 'muted',
+      approved: false,
+      cta: 'start',
+    }
+  }
+  return {
+    label: 'Action required',
+    tone: 'warning',
+    approved: false,
+    cta: 'start',
+  }
 }
 
 // ---------------------------------------------------------------------------

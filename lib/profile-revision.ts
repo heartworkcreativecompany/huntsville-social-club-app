@@ -176,7 +176,7 @@ export function liveProfileRevisionSnapshot(profile: {
   const draft = mergeProfileIntoDraft(profile)
   return {
     displayName: draft.profile.displayName || profile.full_name || '',
-    bio: draft.prompts.hopingToMeet || profile.membership_intent || '',
+    bio: draft.profile.aboutMe || profile.membership_intent || '',
     locationArea:
       draft.location.neighborhoodOrArea || profile.location_area || '',
     memberPublicIntents: resolveMemberPublicIntents({

@@ -19,27 +19,9 @@ import {
   normalizeDiscoveryIntent,
 } from '@/lib/membership-systems'
 
-/** Short public summary for member cards — not a dump of all prompts. */
+/** Short public bio for member cards — dedicated About Me field only. */
 export function membershipIntentFromDraft(draft: ApplicationDraft): string {
-  const parts = [
-    draft.prompts.bringsYouHere,
-    draft.prompts.hopingToMeet,
-  ]
-    .map((s) => s.trim())
-    .filter(Boolean)
-
-  if (parts.length > 0) {
-    return parts.join(' · ')
-  }
-
-  const interests = draft.workAndInterests.interests
-  if (interests.length > 0) {
-    return `Interested in ${interests.slice(0, 3).join(', ')}`
-  }
-
-  return draft.profile.displayName.trim()
-    ? `Member in ${draft.location.neighborhoodOrArea.trim() || 'Huntsville area'}`
-    : ''
+  return draft.profile.aboutMe.trim()
 }
 
 export function connectionIntentsFromDraft(
@@ -159,8 +141,8 @@ export function mergeProfileIntoDraft(
     parsed.location.neighborhoodOrArea = profile.location_area.trim()
   }
 
-  if (!parsed.prompts.hopingToMeet.trim() && profile.membership_intent?.trim()) {
-    parsed.prompts.hopingToMeet = profile.membership_intent.trim()
+  if (!parsed.profile.aboutMe.trim() && profile.membership_intent?.trim()) {
+    parsed.profile.aboutMe = profile.membership_intent.trim()
   }
 
   const resolvedIntents = profile

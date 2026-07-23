@@ -81,8 +81,8 @@ export default function AdminApprovalGates({
 
       <p className="text-sm text-muted-foreground">
         Required gates must be approved before membership approval. Stripe
-        Identity is the required member ID check. Phone OTP is optional and
-        completed by the member on Profile after approval.
+        Identity is the required member ID check. Phone verification is optional and
+        completed by the member via Supabase Auth SMS.
       </p>
 
       <ul className="grid gap-3">

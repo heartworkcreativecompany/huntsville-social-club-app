@@ -91,6 +91,14 @@ export default function MemberPublicDetails({
           </dd>
         </div>
       ) : null}
+      {details.eventInterests.length > 0 ? (
+        <div>
+          <dt className="text-muted-foreground">Event interests</dt>
+          <dd className="font-medium text-foreground">
+            {details.eventInterests.join(', ')}
+          </dd>
+        </div>
+      ) : null}
       {details.prompts.map((prompt) => (
         <div key={prompt.label}>
           <dt className="text-muted-foreground">{prompt.label}</dt>

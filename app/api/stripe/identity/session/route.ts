@@ -4,13 +4,25 @@ import {
   createIdentityVerificationSession,
   markIdentitySessionPending,
 } from '@/lib/stripe/identity'
+import { isStripeIdentityConfigured } from '@/lib/stripe/config'
 
 export const runtime = 'nodejs'
 
+/**
+ * Creates a Stripe Identity VerificationSession for the member-facing
+ * "Identity & location verification" step. Outcomes are applied via webhook
+ * (`applyIdentityVerificationSession`).
+ *
+ * Requires STRIPE_SECRET_KEY and NEXT_PUBLIC_APP_URL (return URL).
+ * Supabase Auth email/phone config is unrelated to this route.
+ */
 export async function POST() {
-  if (!process.env.STRIPE_SECRET_KEY) {
+  if (!isStripeIdentityConfigured()) {
     return NextResponse.json(
-      { error: 'STRIPE_SECRET_KEY is not configured.' },
+      {
+        error:
+          'Identity verification is not configured. Set STRIPE_SECRET_KEY and NEXT_PUBLIC_APP_URL.',
+      },
       { status: 503 }
     )
   }

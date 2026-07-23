@@ -312,7 +312,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Required gates must be approved before final membership approval.
-            Phone OTP is optional and does not block approval.
+            Phone verification is optional and does not block approval.
           </p>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
             <div>
@@ -349,7 +349,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
 
         <Card className="lg:col-span-2">
           <h2 className="text-display text-lg font-semibold">
-            Locality confirmation
+            Locality confirmation (admin)
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Trust signal review — not proof of identity. City and ZIP are

@@ -1,19 +1,12 @@
 import Link from 'next/link'
-import ApplicationStatusBadge from '@/components/application/application-status-badge'
+import ApplicantVerificationProgress from '@/components/application/applicant-verification-progress'
 import Card from '@/components/ui/card'
-import IdentityVerificationCard from '@/components/application/identity-verification-card'
 import {
-  applicationStatusLabel,
   nextActionForApplicant,
   type ApplicationStatus,
 } from '@/lib/application'
 import { buttonPrimaryClassName, buttonSecondaryClassName } from '@/lib/event-labels'
-import {
-  applicantGateSummary,
-  type ApprovalGates,
-} from '@/lib/membership-systems'
-import type { IdentityVerificationStatus } from '@/lib/stripe/identity'
-import { VerificationGateChecklistCard } from '@/components/profile/verification-gate-checklist'
+import { type ApprovalGates } from '@/lib/membership-systems'
 
 const STATUS_STEPS: {
   status: ApplicationStatus
@@ -48,31 +41,19 @@ function stepIndex(status: ApplicationStatus): number {
   return idx >= 0 ? idx : 0
 }
 
-function parseIdentityStatus(
-  value: string | null | undefined
-): IdentityVerificationStatus {
-  switch (value) {
-    case 'pending':
-    case 'processing':
-    case 'verified':
-    case 'requires_input':
-    case 'canceled':
-    case 'not_started':
-      return value
-    default:
-      return 'not_started'
-  }
-}
-
 export default function ApplicationStatusPanel({
   status,
   submittedAt,
   verifiedAt,
   adminNotes,
   approvalGates,
+  email,
+  emailConfirmed = false,
   identityVerificationStatus,
   identityVerifiedAt,
   identityVerificationLastError,
+  verifiedPhoneE164,
+  authPhoneE164,
   showSubmitBanner = false,
   showIdentityReturnNotice = false,
 }: {
@@ -81,23 +62,24 @@ export default function ApplicationStatusPanel({
   verifiedAt?: string | null
   adminNotes?: string | null
   approvalGates?: ApprovalGates
+  email?: string | null
+  emailConfirmed?: boolean
   identityVerificationStatus?: string | null
   identityVerifiedAt?: string | null
   identityVerificationLastError?: string | null
+  verifiedPhoneE164?: string | null
+  authPhoneE164?: string | null
   showSubmitBanner?: boolean
   showIdentityReturnNotice?: boolean
 }) {
   const next = nextActionForApplicant(status)
   const currentIdx = stepIndex(status)
   const isException = status === 'needs_info' || status === 'rejected'
-  const gateSummary = approvalGates
-    ? applicantGateSummary(approvalGates)
-    : null
-  const showIdentityCard =
-    status === 'submitted' ||
-    status === 'in_review' ||
-    status === 'needs_info' ||
-    status === 'approved'
+  const showVerification =
+    Boolean(approvalGates) && status !== 'approved' && status !== 'draft'
+  // Stepper cards already show Draft/Submitted/etc. — avoid repeating that title below.
+  const showQuietDetails =
+    status === 'submitted' || status === 'in_review' || status === 'approved'
 
   return (
     <div className="grid gap-6">
@@ -107,27 +89,11 @@ export default function ApplicationStatusPanel({
             Application submitted
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Thank you — the membership team has your application. Review
-            typically takes a few days. Track status here anytime.
-          </p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            What happens next: complete identity verification below, then your
-            application continues through review on this page.
+            Thank you — the membership team has your application. Use the steps
+            below for status and verification.
           </p>
         </Card>
       ) : null}
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-display text-xl font-medium text-foreground">
-            Application status
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {applicationStatusLabel(status)}
-          </p>
-        </div>
-        <ApplicationStatusBadge status={status} />
-      </div>
 
       {isException ? (
         <Card
@@ -186,52 +152,38 @@ export default function ApplicationStatusPanel({
         </Card>
       )}
 
-      {showIdentityCard ? (
-        <IdentityVerificationCard
-          status={parseIdentityStatus(identityVerificationStatus)}
-          lastError={identityVerificationLastError}
-          verifiedAt={identityVerifiedAt}
-          showReturnNotice={showIdentityReturnNotice}
-        />
-      ) : null}
-
-      {gateSummary &&
-      status !== 'approved' &&
-      status !== 'draft' &&
-      approvalGates?.identity_verified !== 'approved' ? (
-        <Card className="border-accent/30 bg-accent-soft/30" padding="sm">
-          <h3 className="text-display text-base font-medium text-foreground">
-            Your next verification step
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Stripe Identity (government ID + matching selfie) is required before
-            membership can be approved. Phone OTP is optional and only available
-            on your Profile after you are approved — it does not block this
-            application.
-          </p>
-          <p className="mt-2 text-sm text-foreground">
-            Use the <span className="font-medium">Identity verification</span>{' '}
-            card above to start or continue.
-          </p>
-        </Card>
-      ) : null}
-
-      {gateSummary && status !== 'approved' && status !== 'draft' ? (
-        <VerificationGateChecklistCard
-          title="Verification progress"
-          description={gateSummary.label}
-          gates={approvalGates ?? {}}
-          requiredOnly
+      {showVerification && approvalGates ? (
+        <ApplicantVerificationProgress
+          gates={approvalGates}
+          email={email}
+          emailConfirmed={emailConfirmed}
+          identityVerificationStatus={identityVerificationStatus}
+          identityVerifiedAt={identityVerifiedAt}
+          identityVerificationLastError={identityVerificationLastError}
+          verifiedPhoneE164={verifiedPhoneE164}
+          authPhoneE164={authPhoneE164}
+          showIdentityReturnNotice={showIdentityReturnNotice}
         />
       ) : null}
 
       <Card>
-        <h3 className="text-display text-lg font-semibold">
-          {next.title}
-        </h3>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          {next.description}
-        </p>
+        {showQuietDetails ? (
+          <>
+            <h3 className="text-display text-lg font-semibold">Details</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {status === 'approved'
+                ? 'Your membership is active.'
+                : 'Complete any open verification steps above while the membership team reviews your application.'}
+            </p>
+          </>
+        ) : (
+          <>
+            <h3 className="text-display text-lg font-semibold">{next.title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {next.description}
+            </p>
+          </>
+        )}
         <dl className="mt-4 grid gap-3 text-sm">
           {submittedAt ? (
             <div>
@@ -251,7 +203,9 @@ export default function ApplicationStatusPanel({
           </div>
         </dl>
         <div className="mt-4 flex flex-wrap gap-2">
-          {(status === 'draft' || status === 'needs_info' || status === 'rejected') && (
+          {(status === 'draft' ||
+            status === 'needs_info' ||
+            status === 'rejected') && (
             <Link href={next.href} className={buttonPrimaryClassName}>
               {next.cta}
             </Link>

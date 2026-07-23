@@ -32,6 +32,8 @@ export type ApplicationDraft = {
     gender: string
     pronouns: string
     lookingFor: string
+    /** Dedicated public bio shown as About Me on the member profile. */
+    aboutMe: string
     /** Canonical intents for filters/badges (networking, dating, friends). */
     connectionIntents: MemberPublicIntentValue[]
     connectionsOpenTo: string[]
@@ -268,6 +270,7 @@ export function emptyDraft(): ApplicationDraft {
       gender: '',
       pronouns: '',
       lookingFor: '',
+      aboutMe: '',
       connectionIntents: [],
       connectionsOpenTo: [],
     },
@@ -430,6 +433,10 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
       ? parsedIntents
       : migrateConnectionIntentsFromLegacy(lookingFor, connectionsOpenTo)
 
+  const hopingToMeet = parseString(prompts.hopingToMeet)
+  // Prefer dedicated aboutMe; fall back once from hopingToMeet for older drafts.
+  const aboutMe = parseString(profile.aboutMe) || hopingToMeet
+
   return {
     version: 2,
     step: clampStep(typeof raw.step === 'number' ? raw.step : base.step),
@@ -441,6 +448,7 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
       gender: parseString(profile.gender),
       pronouns: parseString(profile.pronouns),
       lookingFor,
+      aboutMe,
       connectionIntents,
       connectionsOpenTo,
     },
@@ -465,7 +473,7 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
     },
     prompts: migratePromptsFromLegacy({
       bringsYouHere: parseString(prompts.bringsYouHere),
-      hopingToMeet: parseString(prompts.hopingToMeet),
+      hopingToMeet,
       perfectWeekend: parseString(prompts.perfectWeekend),
       favoriteLocalActivities: parseString(prompts.favoriteLocalActivities),
       icebreaker: parseString(prompts.icebreaker),

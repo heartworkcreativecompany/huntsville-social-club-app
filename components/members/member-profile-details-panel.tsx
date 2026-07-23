@@ -16,16 +16,19 @@ export default function MemberProfileDetailsPanel({
   isCurrentUser = false,
   limited = true,
   title,
+  previewMode = false,
 }: {
   member: DirectoryMember
   isCurrentUser?: boolean
   limited?: boolean
   title?: string | null
+  /** Application profile preview — hide account chrome and avoid repeating detail sections. */
+  previewMode?: boolean
 }) {
   const displayName = memberDisplayName(member)
   const context = professionalContext(member.role, limited)
   const since = memberSinceLabel(member.created_at)
-  const showIntent = !limited || isCurrentUser
+  const showIntent = !limited || isCurrentUser || previewMode
   const intent = intentLabel(member.membership_intent, {
     placeholder: isCurrentUser
       ? 'Add your about note on your profile page'
@@ -39,33 +42,38 @@ export default function MemberProfileDetailsPanel({
         <h2 className="text-display text-2xl font-semibold text-foreground sm:text-3xl">
           {displayName}
         </h2>
-        {isCurrentUser ? (
+        {!previewMode && isCurrentUser ? (
           <p className="eyebrow mt-1">Your account</p>
         ) : null}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Badge variant="accent">{roleLabel(member.role)}</Badge>
-          <span className="text-xs text-muted-foreground">
-            {membershipBadgeLabel(member)}
-          </span>
-          {since ? (
-            <>
-              <span aria-hidden className="text-muted-foreground">
-                ·
-              </span>
-              <span className="text-xs text-muted-foreground">{since}</span>
-            </>
-          ) : null}
-        </div>
+        {!previewMode ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Badge variant="accent">{roleLabel(member.role)}</Badge>
+            <span className="text-xs text-muted-foreground">
+              {membershipBadgeLabel(member)}
+            </span>
+            {since ? (
+              <>
+                <span aria-hidden className="text-muted-foreground">
+                  ·
+                </span>
+                <span className="text-xs text-muted-foreground">{since}</span>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
-      <div>
-        <p className="eyebrow">Trust</p>
-        <div className="mt-2">
-          <MemberProfileBadges member={member} />
+      {!previewMode ? (
+        <div>
+          <p className="eyebrow">Trust</p>
+          <div className="mt-2">
+            <MemberProfileBadges member={member} />
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {member.location_area || member.public_intents.length > 0 ? (
+      {!previewMode &&
+      (member.location_area || member.public_intents.length > 0) ? (
         <div>
           <p className="eyebrow">Locality & connections</p>
           <p className="mt-2 text-sm text-foreground">
@@ -77,7 +85,7 @@ export default function MemberProfileDetailsPanel({
         </div>
       ) : null}
 
-      {member.discovery_interests.length > 0 ? (
+      {!previewMode && member.discovery_interests.length > 0 ? (
         <div>
           <p className="eyebrow">Interests</p>
           <p className="mt-2 text-sm text-foreground">
@@ -86,21 +94,25 @@ export default function MemberProfileDetailsPanel({
         </div>
       ) : null}
 
-      <div>
-        <p className="eyebrow">About</p>
-        <p className="mt-2 text-sm leading-relaxed text-foreground">
-          {showIntent ? intent : 'Connect at club events to learn more.'}
-        </p>
-      </div>
+      {!previewMode ? (
+        <div>
+          <p className="eyebrow">About</p>
+          <p className="mt-2 text-sm leading-relaxed text-foreground">
+            {showIntent ? intent : 'Connect at club events to learn more.'}
+          </p>
+        </div>
+      ) : null}
 
-      <div>
-        <p className="eyebrow">Context</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          {context}
-        </p>
-      </div>
+      {!previewMode ? (
+        <div>
+          <p className="eyebrow">Context</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            {context}
+          </p>
+        </div>
+      ) : null}
 
-      {member.contactEmail ? (
+      {!previewMode && member.contactEmail ? (
         <div>
           <p className="eyebrow">Contact</p>
           <p className="mt-2 text-sm text-foreground">{member.contactEmail}</p>
