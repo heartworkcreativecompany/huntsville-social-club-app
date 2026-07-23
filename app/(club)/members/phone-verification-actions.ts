@@ -5,13 +5,14 @@ import {
   resetPhoneApprovalGateForUser,
   syncPhoneApprovalGateForUser,
 } from '@/lib/approval-gate-sync'
-import { normalizePhoneToE164, validatePhoneInput } from '@/lib/member-phone'
+import { requireUsPhoneE164 } from '@/lib/member-phone'
 import { createClient } from '@/lib/supabase/server'
 
 /**
  * Phone verification actions for the member-facing "Phone verification" step.
  * Implementation uses Supabase Auth phone_change OTP; SMS delivery depends on
  * the SMS provider configured in the Supabase project (commonly Twilio).
+ * All numbers are normalized to US E.164 before any Auth/gate updates.
  */
 
 export async function markPhonePendingReverification(phoneInput: string) {
@@ -24,17 +25,12 @@ export async function markPhonePendingReverification(phoneInput: string) {
     return { error: 'You must be signed in.' }
   }
 
-  const validationError = validatePhoneInput(phoneInput)
-  if (validationError) {
-    return { error: validationError }
+  const parsed = requireUsPhoneE164(phoneInput)
+  if (parsed.error || !parsed.e164) {
+    return { error: parsed.error ?? 'Enter a valid phone number.' }
   }
 
-  const phoneE164 = normalizePhoneToE164(phoneInput)
-  if (!phoneE164) {
-    return { error: 'Enter a valid phone number.' }
-  }
-
-  await resetPhoneApprovalGateForUser(supabase, user.id, phoneE164)
+  await resetPhoneApprovalGateForUser(supabase, user.id, parsed.e164)
 
   revalidatePath('/profile')
   revalidatePath('/application/status')
@@ -51,20 +47,15 @@ export async function syncPhoneVerificationAfterOtp(phoneInput: string) {
     return { error: 'You must be signed in.' }
   }
 
-  const validationError = validatePhoneInput(phoneInput)
-  if (validationError) {
-    return { error: validationError }
-  }
-
-  const phoneE164 = normalizePhoneToE164(phoneInput)
-  if (!phoneE164) {
-    return { error: 'Enter a valid phone number.' }
+  const parsed = requireUsPhoneE164(phoneInput)
+  if (parsed.error || !parsed.e164) {
+    return { error: parsed.error ?? 'Enter a valid phone number.' }
   }
 
   const syncResult = await syncPhoneApprovalGateForUser(
     supabase,
     user.id,
-    phoneE164,
+    parsed.e164,
     user
   )
 
@@ -79,5 +70,5 @@ export async function syncPhoneVerificationAfterOtp(phoneInput: string) {
   revalidatePath(`/members/${user.id}`)
   revalidatePath('/home')
 
-  return { success: true as const, phoneE164 }
+  return { success: true as const, phoneE164: parsed.e164 }
 }

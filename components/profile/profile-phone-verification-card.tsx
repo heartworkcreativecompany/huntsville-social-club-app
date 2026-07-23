@@ -7,9 +7,11 @@ import Badge from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
 import {
   formatPhoneForDisplay,
+  friendlyPhoneOtpError,
   normalizePhoneToE164,
   phonesMatchE164,
-  validatePhoneInput,
+  requireUsPhoneE164,
+  US_PHONE_INPUT_HINT,
 } from '@/lib/member-phone'
 import {
   requestPhoneChangeOtp,
@@ -97,7 +99,7 @@ export default function ProfilePhoneVerificationCard({
     ) {
       lastResetPhone.current = normalized
       startTransition(async () => {
-        await markPhonePendingReverification(value)
+        await markPhonePendingReverification(normalized)
         router.refresh()
       })
     }
@@ -107,49 +109,51 @@ export default function ProfilePhoneVerificationCard({
     setError('')
     setMessage('')
 
-    const validationError = validatePhoneInput(phone)
-    if (validationError) {
-      setError(validationError)
+    const parsed = requireUsPhoneE164(phone)
+    if (parsed.error || !parsed.e164) {
+      setError(parsed.error ?? 'Enter a valid phone number.')
       return
     }
 
-    const phoneE164 = normalizePhoneToE164(phone)
-    if (!phoneE164) {
-      setError('Enter a valid phone number.')
-      return
-    }
+    const phoneE164 = parsed.e164
 
     startTransition(async () => {
-      if (
-        verifiedPhoneE164 &&
-        !phonesMatchE164(phoneE164, verifiedPhoneE164)
-      ) {
-        await markPhonePendingReverification(phone)
+      try {
+        if (
+          verifiedPhoneE164 &&
+          !phonesMatchE164(phoneE164, verifiedPhoneE164)
+        ) {
+          await markPhonePendingReverification(phoneE164)
+        }
+
+        const resend =
+          codeSent &&
+          otpTargetPhoneE164.current !== null &&
+          phonesMatchE164(phoneE164, otpTargetPhoneE164.current)
+
+        const { error: sendError } = await requestPhoneChangeOtp(
+          supabase,
+          phoneE164,
+          { resend }
+        )
+
+        if (sendError) {
+          setError(friendlyPhoneOtpError(sendError.message))
+          return
+        }
+
+        otpTargetPhoneE164.current = phoneE164
+        setCodeSent(true)
+        setOtp('')
+        setCooldown(RESEND_COOLDOWN_SECONDS)
+        setMessage(
+          `Verification code sent to ${formatPhoneForDisplay(phoneE164)}.`
+        )
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Could not send verification code.'
+        setError(friendlyPhoneOtpError(message))
       }
-
-      const resend =
-        codeSent &&
-        otpTargetPhoneE164.current !== null &&
-        phonesMatchE164(phoneE164, otpTargetPhoneE164.current)
-
-      const { error: sendError } = await requestPhoneChangeOtp(
-        supabase,
-        phoneE164,
-        { resend }
-      )
-
-      if (sendError) {
-        setError(sendError.message)
-        return
-      }
-
-      otpTargetPhoneE164.current = phoneE164
-      setCodeSent(true)
-      setOtp('')
-      setCooldown(RESEND_COOLDOWN_SECONDS)
-      setMessage(
-        `Verification code sent to ${formatPhoneForDisplay(phoneE164)}.`
-      )
     })
   }
 
@@ -157,20 +161,22 @@ export default function ProfilePhoneVerificationCard({
     setError('')
     setMessage('')
 
-    const phoneE164 = otpTargetPhoneE164.current ?? normalizePhoneToE164(phone)
-    if (!phoneE164) {
-      setError('Send a verification code before entering the OTP.')
+    const parsed = requireUsPhoneE164(
+      otpTargetPhoneE164.current ?? phone
+    )
+    if (parsed.error || !parsed.e164) {
+      setError(
+        parsed.error ?? 'Send a verification code before entering the OTP.'
+      )
       return
     }
 
-    const validationError = validatePhoneInput(phone)
-    if (validationError) {
-      setError(validationError)
-      return
-    }
+    const phoneE164 = parsed.e164
 
     if (!phonesMatchE164(phone, phoneE164)) {
-      setError('Phone number changed since the code was sent. Request a new code.')
+      setError(
+        'Phone number changed since the code was sent. Request a new code.'
+      )
       return
     }
 
@@ -181,27 +187,35 @@ export default function ProfilePhoneVerificationCard({
     }
 
     startTransition(async () => {
-      const { error: verifyError } = await verifyPhoneChangeOtp(
-        supabase,
-        phoneE164,
-        token
-      )
+      try {
+        const { error: verifyError } = await verifyPhoneChangeOtp(
+          supabase,
+          phoneE164,
+          token
+        )
 
-      if (verifyError) {
-        setError(verifyError.message)
-        return
+        if (verifyError) {
+          setError(friendlyPhoneOtpError(verifyError.message))
+          return
+        }
+
+        const syncResult = await syncPhoneVerificationAfterOtp(phoneE164)
+        if (syncResult.error) {
+          setError(syncResult.error)
+          return
+        }
+
+        lastResetPhone.current = phoneE164
+        clearOtpState()
+        setMessage(
+          'Phone verified. This counts toward your Verified member badge.'
+        )
+        router.refresh()
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Could not verify the code.'
+        setError(friendlyPhoneOtpError(message))
       }
-
-      const syncResult = await syncPhoneVerificationAfterOtp(phone)
-      if (syncResult.error) {
-        setError(syncResult.error)
-        return
-      }
-
-      lastResetPhone.current = phoneE164
-      clearOtpState()
-      setMessage('Phone verified. This counts toward your Verified member badge.')
-      router.refresh()
     })
   }
 
@@ -236,15 +250,15 @@ export default function ProfilePhoneVerificationCard({
           <input
             type="tel"
             autoComplete="tel"
-            placeholder="e.g. (256) 555-0100"
+            inputMode="tel"
+            placeholder="e.g. 615 290 1426"
             value={phone}
             onChange={(event) => handlePhoneChange(event.target.value)}
             className={inputClassName}
             disabled={isPending}
           />
           <span className="text-xs text-muted-foreground">
-            US numbers only. We attach this to your existing account with a secure
-            phone-change code.
+            {US_PHONE_INPUT_HINT}
           </span>
         </label>
 
