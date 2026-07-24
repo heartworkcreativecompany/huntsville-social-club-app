@@ -8,10 +8,13 @@ import { createClient } from '@/lib/supabase/client'
 import {
   formatPhoneForDisplay,
   friendlyPhoneOtpError,
+  logPhoneOtpDebug,
   normalizePhoneToE164,
   phonesMatchE164,
+  PHONE_OTP_SEND_FAILED_MESSAGE,
   requireUsPhoneE164,
   US_PHONE_INPUT_HINT,
+  US_PHONE_INPUT_PLACEHOLDER,
 } from '@/lib/member-phone'
 import {
   requestPhoneChangeOtp,
@@ -111,7 +114,11 @@ export default function ProfilePhoneVerificationCard({
 
     const parsed = requireUsPhoneE164(phone)
     if (parsed.error || !parsed.e164) {
-      setError(parsed.error ?? 'Enter a valid phone number.')
+      logPhoneOtpDebug('validation', {
+        note: 'Send blocked — normalization/validation failed before provider call',
+        errorMessage: parsed.error,
+      })
+      setError(parsed.error ?? PHONE_OTP_SEND_FAILED_MESSAGE)
       return
     }
 
@@ -138,7 +145,7 @@ export default function ProfilePhoneVerificationCard({
         )
 
         if (sendError) {
-          setError(friendlyPhoneOtpError(sendError.message))
+          setError(friendlyPhoneOtpError(sendError.message, 'send'))
           return
         }
 
@@ -152,7 +159,12 @@ export default function ProfilePhoneVerificationCard({
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Could not send verification code.'
-        setError(friendlyPhoneOtpError(message))
+        logPhoneOtpDebug('provider_send', {
+          e164: phoneE164,
+          errorMessage: message,
+          note: 'Unexpected exception during phone OTP send',
+        })
+        setError(friendlyPhoneOtpError(message, 'send'))
       }
     })
   }
@@ -165,6 +177,10 @@ export default function ProfilePhoneVerificationCard({
       otpTargetPhoneE164.current ?? phone
     )
     if (parsed.error || !parsed.e164) {
+      logPhoneOtpDebug('validation', {
+        note: 'Verify blocked — phone normalization failed',
+        errorMessage: parsed.error,
+      })
       setError(
         parsed.error ?? 'Send a verification code before entering the OTP.'
       )
@@ -195,7 +211,7 @@ export default function ProfilePhoneVerificationCard({
         )
 
         if (verifyError) {
-          setError(friendlyPhoneOtpError(verifyError.message))
+          setError(friendlyPhoneOtpError(verifyError.message, 'verify'))
           return
         }
 
@@ -214,7 +230,12 @@ export default function ProfilePhoneVerificationCard({
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Could not verify the code.'
-        setError(friendlyPhoneOtpError(message))
+        logPhoneOtpDebug('provider_verify', {
+          e164: phoneE164,
+          errorMessage: message,
+          note: 'Unexpected exception during phone OTP verify',
+        })
+        setError(friendlyPhoneOtpError(message, 'verify'))
       }
     })
   }
@@ -251,7 +272,7 @@ export default function ProfilePhoneVerificationCard({
             type="tel"
             autoComplete="tel"
             inputMode="tel"
-            placeholder="e.g. 615 290 1426"
+            placeholder={US_PHONE_INPUT_PLACEHOLDER}
             value={phone}
             onChange={(event) => handlePhoneChange(event.target.value)}
             className={inputClassName}

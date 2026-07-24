@@ -8,6 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   isStrictUsPhoneE164,
+  logPhoneOtpDebug,
   phonesMatchE164,
   requireUsPhoneE164,
 } from '@/lib/member-phone'
@@ -54,6 +55,11 @@ type AuthClient = Pick<SupabaseClient, 'auth'>
 function assertUsPhoneE164ForAuth(phoneE164: string): string {
   const result = requireUsPhoneE164(phoneE164)
   if (result.error || !result.e164 || !isStrictUsPhoneE164(result.e164)) {
+    logPhoneOtpDebug('assert_e164', {
+      e164: phoneE164,
+      errorMessage: result.error,
+      note: 'Rejected before Supabase Auth call — value was not strict US E.164',
+    })
     throw new Error(
       result.error ??
         'Phone must be US E.164 (+1XXXXXXXXXX) before calling Supabase Auth.'
@@ -66,6 +72,7 @@ function assertUsPhoneE164ForAuth(phoneE164: string): string {
  * Request OTP for an already signed-in user attaching or changing a phone number.
  * First send: updateUser. Resend to same pending number: resend phone_change.
  * `phoneE164` must already be strict US E.164 (re-validated here as a safety net).
+ * The value passed to Supabase is the asserted E.164 string with no further formatting.
  */
 export async function requestPhoneChangeOtp(
   supabase: AuthClient,
@@ -74,16 +81,34 @@ export async function requestPhoneChangeOtp(
 ) {
   const e164 = assertUsPhoneE164ForAuth(phoneE164)
 
-  if (options.resend) {
-    return supabase.auth.resend({
-      type: 'phone_change',
-      phone: e164,
+  logPhoneOtpDebug('provider_send', {
+    e164,
+    resend: options.resend,
+    note: options.resend
+      ? 'Calling auth.resend({ type: phone_change }) with strict E.164'
+      : 'Calling auth.updateUser({ phone }) with strict E.164',
+  })
+
+  const result = options.resend
+    ? await supabase.auth.resend({
+        type: 'phone_change',
+        phone: e164,
+      })
+    : await supabase.auth.updateUser({
+        phone: e164,
+      })
+
+  if (result.error) {
+    logPhoneOtpDebug('provider_send', {
+      e164,
+      resend: options.resend,
+      errorMessage: result.error.message,
+      errorCode: result.error.code ?? result.error.status ?? null,
+      note: 'Supabase/Twilio provider rejected phone_change OTP send',
     })
   }
 
-  return supabase.auth.updateUser({
-    phone: e164,
-  })
+  return result
 }
 
 export async function verifyPhoneChangeOtp(
@@ -98,6 +123,15 @@ export async function verifyPhoneChangeOtp(
     token,
     type: 'phone_change',
   })
+
+  if (result.error) {
+    logPhoneOtpDebug('provider_verify', {
+      e164,
+      errorMessage: result.error.message,
+      errorCode: result.error.code ?? result.error.status ?? null,
+      note: 'Supabase Auth verifyOtp phone_change failed',
+    })
+  }
 
   if (!result.error) {
     await supabase.auth.refreshSession()

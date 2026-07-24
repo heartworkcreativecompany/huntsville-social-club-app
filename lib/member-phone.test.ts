@@ -3,61 +3,79 @@ import {
   formatPhoneForDisplay,
   friendlyPhoneOtpError,
   isStrictUsPhoneE164,
+  maskPhoneE164ForLog,
   normalizePhoneToE164,
   phonesMatchE164,
+  PHONE_OTP_SEND_FAILED_MESSAGE,
   requireUsPhoneE164,
+  US_PHONE_INPUT_HINT,
+  US_PHONE_INPUT_PLACEHOLDER,
   validatePhoneInput,
 } from '@/lib/member-phone'
 
+/** Generic 555 example used in UI/docs — not a real member number. */
+const EXAMPLE_NATIONAL = '3345550187'
+const EXAMPLE_E164 = '+13345550187'
+
+describe('phone UX copy', () => {
+  it('uses the approved placeholder and helper strings', () => {
+    expect(US_PHONE_INPUT_PLACEHOLDER).toBe('e.g. (334) 555-0187')
+    expect(US_PHONE_INPUT_HINT).toBe(
+      'US mobile numbers only. Enter 10 digits and we’ll format it as +1... before texting.'
+    )
+    expect(PHONE_OTP_SEND_FAILED_MESSAGE).toBe(
+      'We couldn’t send a code to that number. Enter a valid US mobile number and try again.'
+    )
+  })
+})
+
 describe('normalizePhoneToE164', () => {
   it('converts exactly 10 digits to +1XXXXXXXXXX', () => {
-    expect(normalizePhoneToE164('6152901426')).toBe('+16152901426')
+    expect(normalizePhoneToE164(EXAMPLE_NATIONAL)).toBe(EXAMPLE_E164)
     expect(normalizePhoneToE164('2565550100')).toBe('+12565550100')
   })
 
   it('accepts formatted 10-digit national numbers', () => {
-    expect(normalizePhoneToE164('(615) 290-1426')).toBe('+16152901426')
-    expect(normalizePhoneToE164('615-290-1426')).toBe('+16152901426')
-    expect(normalizePhoneToE164('615 290 1426')).toBe('+16152901426')
+    expect(normalizePhoneToE164('(334) 555-0187')).toBe(EXAMPLE_E164)
+    expect(normalizePhoneToE164('334-555-0187')).toBe(EXAMPLE_E164)
+    expect(normalizePhoneToE164('334 555 0187')).toBe(EXAMPLE_E164)
   })
 
   it('converts 11 digits starting with 1 to +1XXXXXXXXXX', () => {
-    expect(normalizePhoneToE164('16152901426')).toBe('+16152901426')
-    expect(normalizePhoneToE164('1 (615) 290-1426')).toBe('+16152901426')
+    expect(normalizePhoneToE164('13345550187')).toBe(EXAMPLE_E164)
+    expect(normalizePhoneToE164('1 (334) 555-0187')).toBe(EXAMPLE_E164)
   })
 
   it('preserves valid +1 E.164', () => {
-    expect(normalizePhoneToE164('+16152901426')).toBe('+16152901426')
-    expect(normalizePhoneToE164('+1 615 290 1426')).toBe('+16152901426')
+    expect(normalizePhoneToE164(EXAMPLE_E164)).toBe(EXAMPLE_E164)
+    expect(normalizePhoneToE164('+1 334 555 0187')).toBe(EXAMPLE_E164)
   })
 
-  it('treats +615… (missing country code) as 10-digit US national', () => {
-    // Digits-only path: +6152901426 → 6152901426 → +16152901426
-    expect(normalizePhoneToE164('+6152901426')).toBe('+16152901426')
+  it('treats +334… (missing country code) as 10-digit US national', () => {
+    expect(normalizePhoneToE164('+3345550187')).toBe(EXAMPLE_E164)
   })
 
   it('rejects invalid lengths and non-NANP area codes', () => {
     expect(normalizePhoneToE164('123')).toBeNull()
-    expect(normalizePhoneToE164('615290142')).toBeNull()
-    expect(normalizePhoneToE164('06152901426')).toBeNull()
-    // Area code cannot start with 0 or 1
-    expect(normalizePhoneToE164('0152901426')).toBeNull()
-    expect(normalizePhoneToE164('1152901426')).toBeNull()
+    expect(normalizePhoneToE164('334555018')).toBeNull()
+    expect(normalizePhoneToE164('03345550187')).toBeNull()
+    expect(normalizePhoneToE164('0155550100')).toBeNull()
+    expect(normalizePhoneToE164('1155550100')).toBeNull()
   })
 })
 
 describe('isStrictUsPhoneE164', () => {
   it('accepts only +1 + NANP', () => {
-    expect(isStrictUsPhoneE164('+16152901426')).toBe(true)
-    expect(isStrictUsPhoneE164('6152901426')).toBe(false)
+    expect(isStrictUsPhoneE164(EXAMPLE_E164)).toBe(true)
+    expect(isStrictUsPhoneE164(EXAMPLE_NATIONAL)).toBe(false)
     expect(isStrictUsPhoneE164('+441234567890')).toBe(false)
   })
 })
 
 describe('requireUsPhoneE164', () => {
   it('returns e164 for valid input', () => {
-    expect(requireUsPhoneE164('6152901426')).toEqual({
-      e164: '+16152901426',
+    expect(requireUsPhoneE164(EXAMPLE_NATIONAL)).toEqual({
+      e164: EXAMPLE_E164,
     })
   })
 
@@ -70,36 +88,48 @@ describe('requireUsPhoneE164', () => {
 
 describe('validatePhoneInput', () => {
   it('accepts valid US mobile numbers', () => {
-    expect(validatePhoneInput('6152901426')).toBeNull()
-    expect(validatePhoneInput('+16152901426')).toBeNull()
+    expect(validatePhoneInput(EXAMPLE_NATIONAL)).toBeNull()
+    expect(validatePhoneInput(EXAMPLE_E164)).toBeNull()
   })
 
   it('rejects invalid numbers', () => {
     expect(validatePhoneInput('123')).not.toBeNull()
-    expect(validatePhoneInput('0152901426')).not.toBeNull()
+    expect(validatePhoneInput('0155550100')).not.toBeNull()
   })
 })
 
 describe('phonesMatchE164', () => {
   it('matches formatted and E.164 values', () => {
-    expect(phonesMatchE164('6152901426', '+16152901426')).toBe(true)
-    expect(phonesMatchE164('(615) 290-1426', '16152901426')).toBe(true)
+    expect(phonesMatchE164(EXAMPLE_NATIONAL, EXAMPLE_E164)).toBe(true)
+    expect(phonesMatchE164('(334) 555-0187', '13345550187')).toBe(true)
   })
 })
 
 describe('formatPhoneForDisplay', () => {
   it('formats verified numbers for account UI', () => {
-    expect(formatPhoneForDisplay('+16152901426')).toBe('(615) 290-1426')
+    expect(formatPhoneForDisplay(EXAMPLE_E164)).toBe('(334) 555-0187')
+  })
+})
+
+describe('maskPhoneE164ForLog', () => {
+  it('masks middle digits', () => {
+    expect(maskPhoneE164ForLog(EXAMPLE_E164)).toBe('+1334****0187')
   })
 })
 
 describe('friendlyPhoneOtpError', () => {
-  it('maps Twilio 60200 / invalid parameter to clear copy', () => {
+  it('never exposes provider codes to users', () => {
     expect(
       friendlyPhoneOtpError(
-        'Error sending phone_change OTP to provider: Invalid parameter'
+        'Error sending phone_change OTP to provider: Invalid parameter',
+        'send'
       )
-    ).toMatch(/US mobile/i)
-    expect(friendlyPhoneOtpError('Twilio error 60200')).toMatch(/US mobile/i)
+    ).toBe(PHONE_OTP_SEND_FAILED_MESSAGE)
+    expect(friendlyPhoneOtpError('Twilio error 60200', 'send')).toBe(
+      PHONE_OTP_SEND_FAILED_MESSAGE
+    )
+    expect(friendlyPhoneOtpError('Token expired', 'verify')).toMatch(
+      /could not be verified/i
+    )
   })
 })

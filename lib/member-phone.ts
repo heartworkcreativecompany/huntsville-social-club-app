@@ -1,14 +1,21 @@
 /**
  * US mobile phone helpers for Supabase Auth phone_change OTP.
- * Twilio (via Supabase SMS) requires strict E.164 — e.g. +16152901426.
+ * Twilio (via Supabase SMS) requires strict E.164 — e.g. +13345550187.
  * Never pass raw 10-digit national numbers to Auth/Twilio.
  */
 
 /** NANP US mobile: +1 + area code [2-9] + 7 digits. */
 const US_E164_PATTERN = /^\+1[2-9]\d{9}$/
 
+/** Placeholder for the phone input (generic 555 example — not a real member number). */
+export const US_PHONE_INPUT_PLACEHOLDER = 'e.g. (334) 555-0187'
+
 export const US_PHONE_INPUT_HINT =
-  'US mobile numbers only. Enter 10 digits (e.g. 615 290 1426) — we send it as +1… E.164.'
+  'US mobile numbers only. Enter 10 digits and we’ll format it as +1... before texting.'
+
+/** Member-facing message when SMS/OTP send fails (never expose provider codes). */
+export const PHONE_OTP_SEND_FAILED_MESSAGE =
+  'We couldn’t send a code to that number. Enter a valid US mobile number and try again.'
 
 export function digitsOnly(value: string): string {
   return value.replace(/\D/g, '')
@@ -61,7 +68,7 @@ export function requireUsPhoneE164(
   if (!e164 || !isStrictUsPhoneE164(e164)) {
     return {
       error:
-        'Enter a valid US mobile number with area code (10 digits). Example: 615 290 1426 → +16152901426.',
+        'Enter a valid US mobile number with area code (10 digits). Example: (334) 555-0187.',
     }
   }
   return { e164 }
@@ -91,25 +98,51 @@ export function formatPhoneForDisplay(e164: string | null | undefined): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
 }
 
+/** Mask for logs: +1334****0187 */
+export function maskPhoneE164ForLog(e164: string): string {
+  if (!isStrictUsPhoneE164(e164)) return '[invalid-or-unset]'
+  return `${e164.slice(0, 5)}****${e164.slice(-4)}`
+}
+
+export type PhoneOtpDebugStage =
+  | 'validation'
+  | 'provider_send'
+  | 'provider_verify'
+  | 'assert_e164'
+
+/** Debug-only logging — never show raw provider errors in the UI. */
+export function logPhoneOtpDebug(
+  stage: PhoneOtpDebugStage,
+  details: {
+    e164?: string | null
+    resend?: boolean
+    errorMessage?: string | null
+    errorCode?: string | number | null
+    note?: string
+  }
+): void {
+  const masked =
+    details.e164 != null ? maskPhoneE164ForLog(details.e164) : undefined
+  console.error('[phone-otp]', {
+    stage,
+    maskedE164: masked,
+    resend: details.resend,
+    errorMessage: details.errorMessage ?? undefined,
+    errorCode: details.errorCode ?? undefined,
+    note: details.note,
+  })
+}
+
 /**
  * Map Supabase/Twilio phone OTP failures to member-facing copy.
- * Twilio 60200 = invalid `To` (often missing + / not E.164).
+ * Never surface Twilio error codes or raw provider messages.
  */
-export function friendlyPhoneOtpError(message: string): string {
-  const lower = message.toLowerCase()
-  if (
-    lower.includes('60200') ||
-    lower.includes('invalid parameter') ||
-    lower.includes('invalid phone') ||
-    lower.includes('invalid to')
-  ) {
-    return 'That phone number could not be sent. Use a US mobile number with area code (10 digits). We format it as +1… before texting.'
+export function friendlyPhoneOtpError(
+  _message: string,
+  kind: 'send' | 'verify' = 'send'
+): string {
+  if (kind === 'verify') {
+    return 'That code could not be verified. Check the 6-digit code and try again.'
   }
-  if (lower.includes('rate') || lower.includes('too many')) {
-    return 'Too many attempts. Wait a minute, then try again.'
-  }
-  if (lower.includes('sms') || lower.includes('provider')) {
-    return 'We could not send a text code right now. Check the number and try again, or try later.'
-  }
-  return message.trim() || 'Could not send a verification code. Try again.'
+  return PHONE_OTP_SEND_FAILED_MESSAGE
 }
