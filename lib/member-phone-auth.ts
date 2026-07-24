@@ -96,6 +96,15 @@ export async function requestPhoneChangeOtp(
       phone: phoneForProvider,
     })
     if (result.error) {
+      console.error('[phone-otp:error]', {
+        stage: 'auth.resend',
+        message: result.error.message,
+        code: result.error.code ?? null,
+        status: result.error.status ?? null,
+        name: result.error.name ?? null,
+        error: result.error,
+        phone: phoneForProvider,
+      })
       logPhoneOtpDebug('provider_send', {
         exactPhone: phoneForProvider,
         resend: true,
@@ -123,6 +132,15 @@ export async function requestPhoneChangeOtp(
     phone: phoneForProvider,
   })
   if (result.error) {
+    console.error('[phone-otp:error]', {
+      stage: 'auth.updateUser',
+      message: result.error.message,
+      code: result.error.code ?? null,
+      status: result.error.status ?? null,
+      name: result.error.name ?? null,
+      error: result.error,
+      phone: phoneForProvider,
+    })
     logPhoneOtpDebug('provider_send', {
       exactPhone: phoneForProvider,
       resend: false,
@@ -171,6 +189,15 @@ export async function verifyPhoneChangeOtp(
   })
 
   if (result.error) {
+    console.error('[phone-otp:error]', {
+      stage: 'auth.verifyOtp',
+      message: result.error.message,
+      code: result.error.code ?? null,
+      status: result.error.status ?? null,
+      name: result.error.name ?? null,
+      error: result.error,
+      phone: phoneForProvider,
+    })
     logPhoneOtpDebug('provider_verify', {
       exactPhone: phoneForProvider,
       boundary: 'auth.verifyOtp',
