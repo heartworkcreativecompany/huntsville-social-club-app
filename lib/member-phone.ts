@@ -4,14 +4,13 @@
  * Never pass raw 10-digit national numbers to Auth/Twilio.
  */
 
-/** NANP US mobile: +1 + area code [2-9] + 7 digits. */
+/** NANP US mobile: +1 + area code [2-9] + 7 digits. Exact match only. */
 const US_E164_PATTERN = /^\+1[2-9]\d{9}$/
 
 /** Placeholder for the phone input (generic 555 example — not a real member number). */
 export const US_PHONE_INPUT_PLACEHOLDER = 'e.g. (334) 555-0187'
 
-export const US_PHONE_INPUT_HINT =
-  'US mobile numbers only. Enter 10 digits and we’ll format it as +1... before texting.'
+export const US_PHONE_INPUT_HINT = 'US mobile numbers only. Enter 10 digits.'
 
 /** Member-facing message when SMS/OTP send fails (never expose provider codes). */
 export const PHONE_OTP_SEND_FAILED_MESSAGE =
@@ -53,8 +52,41 @@ export function normalizePhoneToE164(
 }
 
 /** True only for Twilio-safe US E.164 used by this app. */
-export function isStrictUsPhoneE164(value: string | null | undefined): boolean {
-  return Boolean(value && US_E164_PATTERN.test(value))
+export function isStrictUsPhoneE164(value: string | null | undefined): value is string {
+  return typeof value === 'string' && US_E164_PATTERN.test(value)
+}
+
+/**
+ * Final provider-boundary assertion.
+ * Does NOT re-normalize — the value must already be exact `+1[2-9]#########`.
+ * Call immediately before every supabase.auth method that sends `phone`.
+ */
+export function assertStrictUsE164ForProvider(
+  value: string,
+  boundary: string
+): string {
+  const ok =
+    typeof value === 'string' &&
+    value.length === 12 &&
+    value.startsWith('+1') &&
+    US_E164_PATTERN.test(value) &&
+    value === value.trim() &&
+    !/\s/.test(value)
+
+  if (!ok) {
+    logPhoneOtpDebug('assert_e164', {
+      exactPhone: value,
+      rawInput: value,
+      boundary,
+      errorMessage: `Not strict US E.164 at ${boundary}`,
+      note: `Rejected before provider call. typeof=${typeof value} length=${typeof value === 'string' ? value.length : 'n/a'}`,
+    })
+    throw new Error(
+      `Phone must be strict US E.164 (+1XXXXXXXXXX) before ${boundary}. Got: ${JSON.stringify(value)}`
+    )
+  }
+
+  return value
 }
 
 /**
@@ -98,7 +130,7 @@ export function formatPhoneForDisplay(e164: string | null | undefined): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
 }
 
-/** Mask for logs: +1334****0187 */
+/** Mask for casual logs: +1334****0187 */
 export function maskPhoneE164ForLog(e164: string): string {
   if (!isStrictUsPhoneE164(e164)) return '[invalid-or-unset]'
   return `${e164.slice(0, 5)}****${e164.slice(-4)}`
@@ -106,26 +138,37 @@ export function maskPhoneE164ForLog(e164: string): string {
 
 export type PhoneOtpDebugStage =
   | 'validation'
+  | 'ui_to_request'
   | 'provider_send'
   | 'provider_verify'
   | 'assert_e164'
 
-/** Debug-only logging — never show raw provider errors in the UI. */
+/** Debug logging for phone OTP — includes exact values for send-path diagnosis. */
 export function logPhoneOtpDebug(
   stage: PhoneOtpDebugStage,
   details: {
+    rawInput?: string | null
+    normalized?: string | null
+    exactPhone?: string | null
     e164?: string | null
+    boundary?: string
     resend?: boolean
     errorMessage?: string | null
     errorCode?: string | number | null
     note?: string
   }
 ): void {
-  const masked =
-    details.e164 != null ? maskPhoneE164ForLog(details.e164) : undefined
+  const exact = details.exactPhone ?? details.e164 ?? details.normalized ?? null
   console.error('[phone-otp]', {
     stage,
-    maskedE164: masked,
+    boundary: details.boundary,
+    rawInput: details.rawInput ?? undefined,
+    normalized: details.normalized ?? undefined,
+    exactPhone: exact ?? undefined,
+    maskedE164: exact ? maskPhoneE164ForLog(exact) : undefined,
+    startsWithPlus: typeof exact === 'string' ? exact.startsWith('+') : undefined,
+    length: typeof exact === 'string' ? exact.length : undefined,
+    isStrictUsE164: isStrictUsPhoneE164(exact),
     resend: details.resend,
     errorMessage: details.errorMessage ?? undefined,
     errorCode: details.errorCode ?? undefined,

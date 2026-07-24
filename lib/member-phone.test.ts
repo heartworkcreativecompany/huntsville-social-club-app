@@ -20,12 +20,22 @@ const EXAMPLE_E164 = '+13345550187'
 describe('phone UX copy', () => {
   it('uses the approved placeholder and helper strings', () => {
     expect(US_PHONE_INPUT_PLACEHOLDER).toBe('e.g. (334) 555-0187')
-    expect(US_PHONE_INPUT_HINT).toBe(
-      'US mobile numbers only. Enter 10 digits and we’ll format it as +1... before texting.'
-    )
+    expect(US_PHONE_INPUT_HINT).toBe('US mobile numbers only. Enter 10 digits.')
     expect(PHONE_OTP_SEND_FAILED_MESSAGE).toBe(
       'We couldn’t send a code to that number. Enter a valid US mobile number and try again.'
     )
+  })
+})
+
+describe('assertStrictUsE164ForProvider', () => {
+  it('accepts exact +1 E.164 and rejects raw 10-digit national', async () => {
+    const { assertStrictUsE164ForProvider } = await import('@/lib/member-phone')
+    expect(assertStrictUsE164ForProvider(EXAMPLE_E164, 'test')).toBe(
+      EXAMPLE_E164
+    )
+    expect(() =>
+      assertStrictUsE164ForProvider(EXAMPLE_NATIONAL, 'test')
+    ).toThrow(/strict US E.164/i)
   })
 })
 

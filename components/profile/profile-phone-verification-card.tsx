@@ -112,9 +112,11 @@ export default function ProfilePhoneVerificationCard({
     setError('')
     setMessage('')
 
-    const parsed = requireUsPhoneE164(phone)
+    const rawInput = phone
+    const parsed = requireUsPhoneE164(rawInput)
     if (parsed.error || !parsed.e164) {
       logPhoneOtpDebug('validation', {
+        rawInput,
         note: 'Send blocked — normalization/validation failed before provider call',
         errorMessage: parsed.error,
       })
@@ -123,6 +125,12 @@ export default function ProfilePhoneVerificationCard({
     }
 
     const phoneE164 = parsed.e164
+    logPhoneOtpDebug('ui_to_request', {
+      rawInput,
+      normalized: phoneE164,
+      exactPhone: phoneE164,
+      note: `Passing to requestPhoneChangeOtp: ${phoneE164}`,
+    })
 
     startTransition(async () => {
       try {
@@ -160,7 +168,8 @@ export default function ProfilePhoneVerificationCard({
         const message =
           err instanceof Error ? err.message : 'Could not send verification code.'
         logPhoneOtpDebug('provider_send', {
-          e164: phoneE164,
+          rawInput,
+          exactPhone: phoneE164,
           errorMessage: message,
           note: 'Unexpected exception during phone OTP send',
         })
@@ -188,6 +197,12 @@ export default function ProfilePhoneVerificationCard({
     }
 
     const phoneE164 = parsed.e164
+    logPhoneOtpDebug('ui_to_request', {
+      rawInput: otpTargetPhoneE164.current ?? phone,
+      normalized: phoneE164,
+      exactPhone: phoneE164,
+      note: `Passing to verifyPhoneChangeOtp: ${phoneE164}`,
+    })
 
     if (!phonesMatchE164(phone, phoneE164)) {
       setError(
