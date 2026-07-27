@@ -28,6 +28,22 @@ import {
 
 const RESEND_COOLDOWN_SECONDS = 60
 
+/** Display-only: "6152901426" → "(615)2901426" */
+function formatUsPhoneShort(digits: string): string {
+  const cleaned = digits.replace(/\D/g, '')
+  if (cleaned.length <= 3) return cleaned
+  const area = cleaned.slice(0, 3)
+  const rest = cleaned.slice(3)
+  return `(${area})${rest}`
+}
+
+function nationalDigitsFromE164(e164: string | null | undefined): string {
+  if (!e164) return ''
+  const normalized = normalizePhoneToE164(e164)
+  if (!normalized) return e164.replace(/\D/g, '').slice(-10)
+  return normalized.slice(2)
+}
+
 type ProfilePhoneVerificationCardProps = {
   verifiedPhoneE164: string | null
   phoneVerified: boolean
@@ -44,10 +60,11 @@ export default function ProfilePhoneVerificationCard({
 }: ProfilePhoneVerificationCardProps) {
   const router = useRouter()
   const supabase = createClient()
-  const initialPhone =
-    formatPhoneForDisplay(verifiedPhoneE164 ?? authPhoneE164) || ''
+  const initialDigits = nationalDigitsFromE164(
+    verifiedPhoneE164 ?? authPhoneE164
+  )
 
-  const [phone, setPhone] = useState(initialPhone)
+  const [phoneDigits, setPhoneDigits] = useState(initialDigits)
   const [otp, setOtp] = useState('')
   const [codeSent, setCodeSent] = useState(false)
   const [message, setMessage] = useState('')
@@ -59,7 +76,7 @@ export default function ProfilePhoneVerificationCard({
 
   const isVerified =
     phoneVerified &&
-    phonesMatchE164(phone, verifiedPhoneE164 ?? authPhoneE164)
+    phonesMatchE164(phoneDigits, verifiedPhoneE164 ?? authPhoneE164)
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -79,10 +96,11 @@ export default function ProfilePhoneVerificationCard({
   }
 
   const handlePhoneChange = (value: string) => {
-    setPhone(value)
+    const digits = value.replace(/\D/g, '').slice(0, 10)
+    setPhoneDigits(digits)
     setError('')
 
-    const normalized = normalizePhoneToE164(value)
+    const normalized = normalizePhoneToE164(digits)
     if (
       codeSent &&
       otpTargetPhoneE164.current &&
@@ -112,21 +130,21 @@ export default function ProfilePhoneVerificationCard({
     setError('')
     setMessage('')
 
-    const rawInput = phone
-    const parsed = requireUsPhoneE164(rawInput)
-    if (parsed.error || !parsed.e164) {
+    const cleaned = phoneDigits.replace(/\D/g, '')
+    if (cleaned.length !== 10) {
+      const validationError = requireUsPhoneE164(cleaned).error
       logPhoneOtpDebug('validation', {
-        rawInput,
-        note: 'Send blocked — normalization/validation failed before provider call',
-        errorMessage: parsed.error,
+        rawInput: phoneDigits,
+        note: 'Send blocked — need exactly 10 national digits',
+        errorMessage: validationError,
       })
-      setError(parsed.error ?? PHONE_OTP_SEND_FAILED_MESSAGE)
+      setError(validationError ?? PHONE_OTP_SEND_FAILED_MESSAGE)
       return
     }
 
-    const phoneE164 = parsed.e164
+    const phoneE164 = `+1${cleaned}`
     logPhoneOtpDebug('ui_to_request', {
-      rawInput,
+      rawInput: phoneDigits,
       normalized: phoneE164,
       exactPhone: phoneE164,
       note: `Passing to requestPhoneChangeOtp: ${phoneE164}`,
@@ -168,7 +186,7 @@ export default function ProfilePhoneVerificationCard({
         const message =
           err instanceof Error ? err.message : 'Could not send verification code.'
         logPhoneOtpDebug('provider_send', {
-          rawInput,
+          rawInput: phoneDigits,
           exactPhone: phoneE164,
           errorMessage: message,
           note: 'Unexpected exception during phone OTP send',
@@ -182,29 +200,31 @@ export default function ProfilePhoneVerificationCard({
     setError('')
     setMessage('')
 
-    const parsed = requireUsPhoneE164(
-      otpTargetPhoneE164.current ?? phone
-    )
-    if (parsed.error || !parsed.e164) {
+    const cleaned = phoneDigits.replace(/\D/g, '')
+    const phoneE164 =
+      otpTargetPhoneE164.current ??
+      (cleaned.length === 10 ? `+1${cleaned}` : null)
+
+    if (!phoneE164) {
+      const validationError = requireUsPhoneE164(cleaned).error
       logPhoneOtpDebug('validation', {
         note: 'Verify blocked — phone normalization failed',
-        errorMessage: parsed.error,
+        errorMessage: validationError,
       })
       setError(
-        parsed.error ?? 'Send a verification code before entering the OTP.'
+        validationError ?? 'Send a verification code before entering the OTP.'
       )
       return
     }
 
-    const phoneE164 = parsed.e164
     logPhoneOtpDebug('ui_to_request', {
-      rawInput: otpTargetPhoneE164.current ?? phone,
+      rawInput: phoneDigits,
       normalized: phoneE164,
       exactPhone: phoneE164,
       note: `Passing to verifyPhoneChangeOtp: ${phoneE164}`,
     })
 
-    if (!phonesMatchE164(phone, phoneE164)) {
+    if (!phonesMatchE164(phoneDigits, phoneE164)) {
       setError(
         'Phone number changed since the code was sent. Request a new code.'
       )
@@ -286,9 +306,9 @@ export default function ProfilePhoneVerificationCard({
           <input
             type="tel"
             autoComplete="tel"
-            inputMode="tel"
+            inputMode="numeric"
             placeholder={US_PHONE_INPUT_PLACEHOLDER}
-            value={phone}
+            value={formatUsPhoneShort(phoneDigits)}
             onChange={(event) => handlePhoneChange(event.target.value)}
             className={inputClassName}
             disabled={isPending}
