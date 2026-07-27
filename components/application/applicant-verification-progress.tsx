@@ -129,10 +129,14 @@ export default function ApplicantVerificationProgress({
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">{title}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {gateDescription(gate.key)}
+                  <p className="text-sm font-medium text-foreground">
+                    {verificationRowTitle(gate.key, title)}
                   </p>
+                  {gateDescription(gate.key) ? (
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      {gateDescription(gate.key)}
+                    </p>
+                  ) : null}
                 </div>
                 <Badge
                   variant={
@@ -158,15 +162,17 @@ export default function ApplicantVerificationProgress({
               {gate.key === 'phone_verified' && !approved ? (
                 <div className="mt-3 grid gap-3">
                   {!phoneOpen ? (
-                    <button
-                      type="button"
-                      className={buttonPrimaryClassName}
-                      onClick={() => setPhoneOpen(true)}
-                    >
-                      {status === 'pending_review'
-                        ? 'Continue phone verification'
-                        : 'Start phone verification'}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={buttonPrimaryClassName}
+                        onClick={() => setPhoneOpen(true)}
+                      >
+                        {status === 'pending_review'
+                          ? 'Continue phone verification'
+                          : 'Start phone verification'}
+                      </button>
+                    </div>
                   ) : (
                     <ProfilePhoneVerificationCard
                       verifiedPhoneE164={verifiedPhoneE164 ?? null}
@@ -225,13 +231,27 @@ export default function ApplicantVerificationProgress({
   )
 }
 
+function verificationRowTitle(
+  key: ApprovalGateKey,
+  fallback: string
+): string {
+  switch (key) {
+    case 'email_verified':
+      return 'Email Verification'
+    case 'phone_verified':
+      return 'Phone Verification'
+    default:
+      return fallback
+  }
+}
+
 function gateDescription(key: ApprovalGateKey): string {
   switch (key) {
     case 'email_verified':
-      return 'Confirmed through your signup email link.'
+      return ''
     case 'phone_verified':
       // Underlying flow: Supabase Auth phone_change SMS (provider set in Supabase).
-      return 'Optional. Verify your mobile number with a text code.'
+      return 'Verify your mobile number with a text code.'
     case 'photos_reviewed':
       return 'Membership team reviews your photos.'
     case 'application_reviewed':
