@@ -12,15 +12,12 @@ import {
 import {
   ageFromBirthYear,
   cardTierBadges,
-  cardVerificationBadges,
   isMemberPubliclyVerified,
   membershipTierBadge,
-  parseApprovalGates,
   parseMembershipBilling,
   parsePremiumVerification,
   parseVerificationState,
   publicPremiumBadge,
-  publicVerificationBadges,
   resolveMembershipTier,
   type DiscoveryIntent,
   type DisplayBadge,
@@ -108,9 +105,9 @@ export function professionalContext(
     return 'Stewards membership standards, programming, and club operations.'
   }
   if (limited) {
-    return 'Verified member · Connect in person at club events.'
+    return 'Connect in person at club events.'
   }
-  return 'Verified member contributing to the Huntsville community.'
+  return 'Active member of the Huntsville Social Club community.'
 }
 
 /** @deprecated Use membershipTierBadges + verificationBadges */
@@ -118,22 +115,12 @@ export function trustBadges(member: DirectoryMember): TrustBadge[] {
   return directoryCardBadges(member)
 }
 
-/** Top badges for directory cards: tier + verified badge when fully verified. */
+/** Member-facing directory cards: membership tier only (no Verified / trust badges). */
 export function directoryCardBadges(member: DirectoryMember): DisplayBadge[] {
-  const tier = cardTierBadges(member.membership_tier)
-  const verification = cardVerificationBadges(member.verification_state)
-  const badges = [...tier, ...verification]
-  if (member.vendor_reviewed_badge) {
-    badges.push({
-      key: 'vendor_reviewed',
-      label: 'Vendor reviewed',
-      variant: 'trust',
-    })
-  }
-  return badges.slice(0, 4)
+  return cardTierBadges(member.membership_tier).slice(0, 1)
 }
 
-/** Full badge set for profile detail pages. */
+/** Member-facing profile pages: membership tier only. */
 export function profilePageBadges(member: DirectoryMember): {
   tier: DisplayBadge
   verification: DisplayBadge[]
@@ -141,10 +128,8 @@ export function profilePageBadges(member: DirectoryMember): {
 } {
   return {
     tier: membershipTierBadge(member.membership_tier),
-    verification: publicVerificationBadges(member.verification_state),
-    premium: member.vendor_reviewed_badge
-      ? { key: 'vendor_reviewed', label: 'Vendor reviewed', variant: 'trust' }
-      : null,
+    verification: [],
+    premium: null,
   }
 }
 

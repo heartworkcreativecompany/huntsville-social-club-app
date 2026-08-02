@@ -79,10 +79,7 @@ export default async function MatchesPage() {
         />
         <Card>
           <p className="text-sm text-muted-foreground">
-            Curated matching is disabled in this environment. Set{' '}
-            <code className="text-foreground">COMPATIBILITY_MATCHING_ENABLED=true</code>{' '}
-            in your environment to enable the questionnaire, matches inbox, and nav
-            link.
+            Curated matches are not available right now.
           </p>
         </Card>
       </>

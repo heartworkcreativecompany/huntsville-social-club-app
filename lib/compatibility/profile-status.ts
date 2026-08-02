@@ -62,8 +62,7 @@ export function summarizeCompatibilityProfileStatus(input: {
     return {
       status: 'disabled',
       headline: 'Curated matches',
-      detail:
-        'Curated compatibility matching is turned off in this environment. Set COMPATIBILITY_MATCHING_ENABLED=true to enable the questionnaire and matches inbox.',
+      detail: 'Curated matches are not available right now.',
       showCard: true,
       ctaHref: null,
       ctaLabel: null,
@@ -86,10 +85,10 @@ export function summarizeCompatibilityProfileStatus(input: {
       status: 'no_dating',
       headline: 'Curated matches',
       detail:
-        'Select Dating under “What kinds of connections are you looking for?” on your profile, then submit for review. Matches unlock after staff approves that change.',
-      showCard: false,
-      ctaHref: null,
-      ctaLabel: null,
+        'Curated matches are for members open to dating. Add Dating under connection preferences on your profile, then submit for review.',
+      showCard: true,
+      ctaHref: '/profile',
+      ctaLabel: 'Edit profile',
     }
   }
 
@@ -97,7 +96,8 @@ export function summarizeCompatibilityProfileStatus(input: {
     return {
       status: 'no_messaging',
       headline: 'Curated matches',
-      detail: 'Unlock curated matches by upgrading to a paid subscription.',
+      detail:
+        'Curated matches are included with Inner Circle and Elite Circle memberships. Upgrade to unlock private recommendations.',
       showCard: true,
       ctaHref: '/upgrade',
       ctaLabel: 'View memberships',

@@ -42,7 +42,7 @@ export default function MemberProfilePresentation({
             limited={limited}
           />
           {details ? (
-            <MemberPublicDetails details={details} compact />
+            <MemberPublicDetails details={details} compact omitHeaderFields />
           ) : null}
           {vouchSummary && vouchSummary.total > 0 ? (
             <MemberVouchSummary summary={vouchSummary} />

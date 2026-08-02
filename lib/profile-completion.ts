@@ -72,7 +72,7 @@ export function computeProfileCompletion(
     },
     {
       key: 'verification',
-      label: 'Verified member',
+      label: 'Phone & review checks',
       done: isMemberPubliclyVerified(verification),
     },
   ]

@@ -6,6 +6,7 @@ import { INTEREST_MIN, PHOTO_MIN_COUNT } from '@/lib/application-form-content'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { MemberPublicIntentValue } from '@/lib/member-public-intent'
+import { sanitizeConnectionsOpenToForStorage } from '@/lib/member-public-intent'
 import { approvalGatesAfterRevisionSubmit } from '@/lib/profile-revision-approval'
 import { cleanupProfilePhotoStorageSafe } from '@/lib/profile-photo-cleanup'
 import {
@@ -14,14 +15,15 @@ import {
 } from '@/lib/profile-photo-cleanup-plan'
 import { storagePathsFromPhotos } from '@/lib/profile-photo-references'
 import {
+  buildProfileRevisionDiff,
   liveProfileRevisionSnapshot,
   photosEqual,
   type ProfilePendingRevision,
 } from '@/lib/profile-revision'
 import { sendProfileRevisionSubmittedEmail } from '@/lib/transactional-email'
 
-function interestsKey(interests: string[]): string {
-  return [...interests].map((item) => item.trim()).filter(Boolean).sort().join(',')
+function listKey(values: string[]): string {
+  return [...values].map((item) => item.trim()).filter(Boolean).sort().join(',')
 }
 
 export async function updateMemberProfile(input: {
@@ -30,6 +32,15 @@ export async function updateMemberProfile(input: {
   locationArea: string
   memberPublicIntents: MemberPublicIntentValue[]
   interests: string[]
+  occupation: string
+  industry: string
+  lifestyleTags: string[]
+  eventInterests: string[]
+  socialVibe: string
+  connectionsOpenTo: string[]
+  perfectWeekend: string
+  favoriteLocalActivities: string
+  icebreaker: string
   photos: ApplicationPhoto[]
 }) {
   const supabase = await createClient()
@@ -86,8 +97,21 @@ export async function updateMemberProfile(input: {
   })
 
   const photosChanged = !photosEqual(live.photos, input.photos)
-  const interestsChanged =
-    interestsKey(live.interests) !== interestsKey(input.interests)
+  const interestsChanged = listKey(live.interests) !== listKey(input.interests)
+  const occupation = input.occupation.trim()
+  const industry = input.industry.trim()
+  const socialVibe = input.socialVibe.trim()
+  const perfectWeekend = input.perfectWeekend.trim()
+  const favoriteLocalActivities = input.favoriteLocalActivities.trim()
+  const icebreaker = input.icebreaker.trim()
+  const lifestyleTags = input.lifestyleTags.map((item) => item.trim()).filter(Boolean)
+  const eventInterests = input.eventInterests
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const connectionsOpenTo = sanitizeConnectionsOpenToForStorage(
+    input.connectionsOpenTo,
+    input.memberPublicIntents
+  )
 
   const revision: ProfilePendingRevision = {
     displayName: input.displayName.trim(),
@@ -97,18 +121,27 @@ export async function updateMemberProfile(input: {
     submittedAt: new Date().toISOString(),
     ...(photosChanged ? { photos: input.photos } : {}),
     ...(interestsChanged ? { interests: input.interests } : {}),
+    ...(occupation !== live.occupation ? { occupation } : {}),
+    ...(industry !== live.industry ? { industry } : {}),
+    ...(listKey(lifestyleTags) !== listKey(live.lifestyleTags)
+      ? { lifestyleTags }
+      : {}),
+    ...(listKey(eventInterests) !== listKey(live.eventInterests)
+      ? { eventInterests }
+      : {}),
+    ...(socialVibe !== live.socialVibe ? { socialVibe } : {}),
+    ...(listKey(connectionsOpenTo) !== listKey(live.connectionsOpenTo)
+      ? { connectionsOpenTo }
+      : {}),
+    ...(perfectWeekend !== live.perfectWeekend ? { perfectWeekend } : {}),
+    ...(favoriteLocalActivities !== live.favoriteLocalActivities
+      ? { favoriteLocalActivities }
+      : {}),
+    ...(icebreaker !== live.icebreaker ? { icebreaker } : {}),
   }
 
-  const hasChanges =
-    revision.displayName !== live.displayName.trim() ||
-    revision.bio !== live.bio.trim() ||
-    revision.locationArea !== live.locationArea.trim() ||
-    [...revision.memberPublicIntents].sort().join(',') !==
-      [...live.memberPublicIntents].sort().join(',') ||
-    photosChanged ||
-    interestsChanged
-
-  if (!hasChanges) {
+  const diff = buildProfileRevisionDiff(live, revision)
+  if (diff.changedFields.length === 0) {
     return { error: 'No changes to submit.' }
   }
 

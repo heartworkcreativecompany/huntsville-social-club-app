@@ -186,6 +186,74 @@ export default function AdminProfileRevisionQueue({
                 />
               ) : null}
 
+              {diff.occupation.changed || diff.industry.changed ? (
+                <DiffRow
+                  label="Work"
+                  live={[diff.occupation.live, diff.industry.live]
+                    .filter(Boolean)
+                    .join(' · ') || '—'}
+                  pending={[diff.occupation.pending, diff.industry.pending]
+                    .filter(Boolean)
+                    .join(' · ') || '—'}
+                />
+              ) : null}
+
+              {diff.lifestyleTags.changed ? (
+                <DiffRow
+                  label="Lifestyle"
+                  live={diff.lifestyleTags.live.join(', ') || '—'}
+                  pending={diff.lifestyleTags.pending.join(', ') || '—'}
+                />
+              ) : null}
+
+              {diff.socialVibe.changed ? (
+                <DiffRow
+                  label="Event vibe"
+                  live={diff.socialVibe.live || '—'}
+                  pending={diff.socialVibe.pending || '—'}
+                />
+              ) : null}
+
+              {diff.eventInterests.changed ? (
+                <DiffRow
+                  label="Event interests"
+                  live={diff.eventInterests.live.join(', ') || '—'}
+                  pending={diff.eventInterests.pending.join(', ') || '—'}
+                />
+              ) : null}
+
+              {diff.connectionsOpenTo.changed ? (
+                <DiffRow
+                  label={profileRevisionFieldLabels().connectionsOpenTo}
+                  live={diff.connectionsOpenTo.live.join(', ') || '—'}
+                  pending={diff.connectionsOpenTo.pending.join(', ') || '—'}
+                />
+              ) : null}
+
+              {diff.perfectWeekend.changed ? (
+                <DiffRow
+                  label="Perfect weekend"
+                  live={diff.perfectWeekend.live || '—'}
+                  pending={diff.perfectWeekend.pending || '—'}
+                />
+              ) : null}
+
+              {diff.favoriteLocalActivities.changed ? (
+                <DiffRow
+                  label="Favorite local activities"
+                  live={diff.favoriteLocalActivities.live || '—'}
+                  pending={diff.favoriteLocalActivities.pending || '—'}
+                />
+              ) : null}
+
+              {diff.icebreaker.changed ? (
+                <DiffRow
+                  label="Icebreaker"
+                  live={diff.icebreaker.live || '—'}
+                  pending={diff.icebreaker.pending || '—'}
+                />
+              ) : null}
+
               {diff.photos.changed ? (
                 <div className="grid gap-4 rounded-lg border border-border bg-surface/50 p-4 lg:grid-cols-2">
                   <div>

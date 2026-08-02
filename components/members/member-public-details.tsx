@@ -6,13 +6,19 @@ import type { ApplicationPublicProfileDetails } from '@/lib/application-profile-
 export default function MemberPublicDetails({
   details,
   compact = false,
+  /** Skip looking-for / area when the profile header already shows them. */
+  omitHeaderFields = false,
 }: {
   details: ApplicationPublicProfileDetails
   compact?: boolean
+  omitHeaderFields?: boolean
 }) {
+  const connectionIntents = omitHeaderFields ? [] : details.connectionIntents
+  const locationArea = omitHeaderFields ? null : details.locationArea
+
   const hasContent =
-    details.connectionIntents.length > 0 ||
-    details.locationArea ||
+    connectionIntents.length > 0 ||
+    locationArea ||
     details.occupation ||
     details.interests.length > 0 ||
     details.connectionsOpenTo.length > 0 ||
@@ -26,11 +32,11 @@ export default function MemberPublicDetails({
 
   const dl = (
     <dl className="grid gap-3 text-sm">
-      {details.connectionIntents.length > 0 ? (
+      {connectionIntents.length > 0 ? (
         <div>
           <dt className="text-muted-foreground">Looking for</dt>
           <dd className="mt-1 flex flex-wrap gap-1.5">
-            {details.connectionIntents.map((intent) => (
+            {connectionIntents.map((intent) => (
               <Badge key={intent} variant="category">
                 {intent}
               </Badge>
@@ -38,10 +44,10 @@ export default function MemberPublicDetails({
           </dd>
         </div>
       ) : null}
-      {details.locationArea ? (
+      {locationArea ? (
         <div>
           <dt className="text-muted-foreground">Area</dt>
-          <dd className="font-medium text-foreground">{details.locationArea}</dd>
+          <dd className="font-medium text-foreground">{locationArea}</dd>
         </div>
       ) : null}
       {details.about ? (

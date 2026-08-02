@@ -4,12 +4,15 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import Badge from '@/components/ui/badge'
 import Card from '@/components/ui/card'
-import { buttonSecondaryClassName } from '@/lib/event-labels'
+import { buttonSecondaryClassName, inputClassName } from '@/lib/event-labels'
 import {
   memberDisplayName,
   type DirectoryMember,
 } from '@/lib/members-discovery'
-import { memberPublicIntentBadgeVariant, memberPublicIntentLabel } from '@/lib/member-public-intent'
+import {
+  memberPublicIntentBadgeVariant,
+  memberPublicIntentLabel,
+} from '@/lib/member-public-intent'
 import { MemberCardBadges } from '@/components/members/member-badge-row'
 import { primaryMemberPhoto } from '@/lib/member-photos'
 import MemberPhotoDisplay from '@/components/members/member-photo-display'
@@ -18,7 +21,6 @@ import {
   MAX_MEMBER_MESSAGE_LENGTH,
   validateMemberMessageBody,
 } from '@/lib/member-message-limits'
-import { inputClassName } from '@/lib/event-labels'
 
 export default function MemberDiscoveryCard({
   member,
@@ -32,6 +34,7 @@ export default function MemberDiscoveryCard({
   const [isPending, startTransition] = useTransition()
   const displayName = memberDisplayName(member)
   const primaryPhoto = primaryMemberPhoto(member.photos)
+  const about = member.membership_intent?.trim() || null
 
   const handleIntro = (event: React.FormEvent) => {
     event.preventDefault()
@@ -93,9 +96,9 @@ export default function MemberDiscoveryCard({
               ))}
             </div>
           ) : null}
-          {member.membership_intent ? (
+          {about ? (
             <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-              {member.membership_intent}
+              {about}
             </p>
           ) : null}
         </div>

@@ -7,7 +7,16 @@ import ChipMultiSelect from '@/components/application/chip-multi-select'
 import Card from '@/components/ui/card'
 import Badge from '@/components/ui/badge'
 import type { ApplicationPhoto } from '@/lib/application'
-import { INTEREST_OPTIONS } from '@/lib/application-form-content'
+import {
+  CONNECTION_OPEN_TO_OPTIONS,
+  SOCIAL_VIBE_OPTIONS,
+} from '@/lib/application-fields'
+import {
+  EVENT_INTEREST_OPTIONS,
+  INTEREST_OPTIONS,
+  LIFESTYLE_TAG_OPTIONS,
+  PROMPT_MAX_CHARS,
+} from '@/lib/application-form-content'
 import type { ProfileRevisionStatus } from '@/lib/profile-revision'
 import { photosEqual } from '@/lib/profile-revision'
 import {
@@ -31,6 +40,15 @@ type ProfileFormProps = {
   locationArea: string
   memberPublicIntents: MemberPublicIntentValue[]
   interests: string[]
+  occupation: string
+  industry: string
+  lifestyleTags: string[]
+  eventInterests: string[]
+  socialVibe: string
+  connectionsOpenTo: string[]
+  perfectWeekend: string
+  favoriteLocalActivities: string
+  icebreaker: string
   livePhotos: ApplicationPhoto[]
   editorPhotos: ApplicationPhoto[]
   revisionStatus?: ProfileRevisionStatus
@@ -44,6 +62,15 @@ export default function ProfileForm({
   locationArea,
   memberPublicIntents,
   interests,
+  occupation,
+  industry,
+  lifestyleTags,
+  eventInterests,
+  socialVibe,
+  connectionsOpenTo,
+  perfectWeekend,
+  favoriteLocalActivities,
+  icebreaker,
   livePhotos,
   editorPhotos,
   revisionStatus = 'none',
@@ -57,6 +84,16 @@ export default function ProfileForm({
     memberPublicIntentLabelsFromValues(memberPublicIntents)
   )
   const [selectedInterests, setSelectedInterests] = useState(interests)
+  const [workTitle, setWorkTitle] = useState(occupation)
+  const [workIndustry, setWorkIndustry] = useState(industry)
+  const [selectedLifestyle, setSelectedLifestyle] = useState(lifestyleTags)
+  const [selectedEventInterests, setSelectedEventInterests] =
+    useState(eventInterests)
+  const [vibe, setVibe] = useState(socialVibe)
+  const [openTo, setOpenTo] = useState(connectionsOpenTo)
+  const [weekend, setWeekend] = useState(perfectWeekend)
+  const [localSpots, setLocalSpots] = useState(favoriteLocalActivities)
+  const [icebreakerText, setIcebreakerText] = useState(icebreaker)
   const [photos, setPhotos] = useState(editorPhotos)
   const [message, setMessage] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -76,6 +113,15 @@ export default function ProfileForm({
         locationArea: area,
         memberPublicIntents: memberPublicIntentValuesFromLabels(intentLabels),
         interests: selectedInterests,
+        occupation: workTitle,
+        industry: workIndustry,
+        lifestyleTags: selectedLifestyle,
+        eventInterests: selectedEventInterests,
+        socialVibe: vibe,
+        connectionsOpenTo: openTo,
+        perfectWeekend: weekend,
+        favoriteLocalActivities: localSpots,
+        icebreaker: icebreakerText,
         photos,
       })
 
@@ -176,14 +222,16 @@ export default function ProfileForm({
         </div>
 
         <div className="grid gap-1.5 text-sm">
-          <span className="font-medium text-foreground">Interests</span>
+          <span className="font-medium text-foreground">
+            {CONNECTION_TYPES_OPEN_TO_FIELD.label}
+          </span>
           <span className="text-xs text-muted-foreground">
-            Shown on your public profile and used in member discovery filters.
+            {CONNECTION_TYPES_OPEN_TO_FIELD.helper}
           </span>
           <ChipMultiSelect
-            options={INTEREST_OPTIONS}
-            selected={selectedInterests}
-            onChange={setSelectedInterests}
+            options={[...CONNECTION_OPEN_TO_OPTIONS]}
+            selected={openTo}
+            onChange={setOpenTo}
           />
         </div>
 
@@ -197,6 +245,126 @@ export default function ProfileForm({
             onChange={(e) => setAbout(e.target.value)}
             placeholder="e.g. Building thoughtful local connections outside of work..."
             rows={4}
+            className={`${inputClassName} resize-y`}
+            disabled={isPending}
+          />
+        </label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5 text-sm">
+            <span className="font-medium text-foreground">Work</span>
+            <input
+              type="text"
+              value={workTitle}
+              onChange={(e) => setWorkTitle(e.target.value)}
+              placeholder="Role or occupation"
+              className={inputClassName}
+              disabled={isPending}
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            <span className="font-medium text-foreground">Industry</span>
+            <input
+              type="text"
+              value={workIndustry}
+              onChange={(e) => setWorkIndustry(e.target.value)}
+              placeholder="e.g. Technology"
+              className={inputClassName}
+              disabled={isPending}
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-1.5 text-sm">
+          <span className="font-medium text-foreground">Interests</span>
+          <span className="text-xs text-muted-foreground">
+            Shown on your public profile and used in member discovery filters.
+          </span>
+          <ChipMultiSelect
+            options={INTEREST_OPTIONS}
+            selected={selectedInterests}
+            onChange={setSelectedInterests}
+          />
+        </div>
+
+        <div className="grid gap-1.5 text-sm">
+          <span className="font-medium text-foreground">Lifestyle</span>
+          <ChipMultiSelect
+            options={LIFESTYLE_TAG_OPTIONS}
+            selected={selectedLifestyle}
+            onChange={setSelectedLifestyle}
+          />
+        </div>
+
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium text-foreground">Event vibe</span>
+          <select
+            value={vibe}
+            onChange={(e) => setVibe(e.target.value)}
+            className={inputClassName}
+            disabled={isPending}
+          >
+            <option value="">Select a vibe</option>
+            {SOCIAL_VIBE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="grid gap-1.5 text-sm">
+          <span className="font-medium text-foreground">Event interests</span>
+          <ChipMultiSelect
+            options={EVENT_INTEREST_OPTIONS}
+            selected={selectedEventInterests}
+            onChange={setSelectedEventInterests}
+          />
+        </div>
+
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium text-foreground">
+            A perfect weekend in Huntsville looks like…
+          </span>
+          <textarea
+            value={weekend}
+            onChange={(e) =>
+              setWeekend(e.target.value.slice(0, PROMPT_MAX_CHARS))
+            }
+            rows={3}
+            maxLength={PROMPT_MAX_CHARS}
+            className={`${inputClassName} resize-y`}
+            disabled={isPending}
+          />
+        </label>
+
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium text-foreground">
+            Favorite local activities or spots
+          </span>
+          <textarea
+            value={localSpots}
+            onChange={(e) =>
+              setLocalSpots(e.target.value.slice(0, PROMPT_MAX_CHARS))
+            }
+            rows={3}
+            maxLength={PROMPT_MAX_CHARS}
+            className={`${inputClassName} resize-y`}
+            disabled={isPending}
+          />
+        </label>
+
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium text-foreground">
+            A quick icebreaker about you
+          </span>
+          <textarea
+            value={icebreakerText}
+            onChange={(e) =>
+              setIcebreakerText(e.target.value.slice(0, PROMPT_MAX_CHARS))
+            }
+            rows={3}
+            maxLength={PROMPT_MAX_CHARS}
             className={`${inputClassName} resize-y`}
             disabled={isPending}
           />

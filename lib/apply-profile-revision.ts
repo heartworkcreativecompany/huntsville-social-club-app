@@ -4,7 +4,9 @@ import {
   memberIntentColumns,
   profileColumnsFromDraft,
 } from '@/lib/application-draft-sync'
-import { memberPublicIntentLabelsFromValues } from '@/lib/member-public-intent'
+import {
+  sanitizeConnectionsOpenToForStorage,
+} from '@/lib/member-public-intent'
 import type { ProfilePendingRevision } from '@/lib/profile-revision'
 
 export function applyProfileRevisionToDraft(
@@ -20,6 +22,36 @@ export function applyProfileRevisionToDraft(
 
   if (revision.interests !== undefined) {
     next.workAndInterests.interests = [...revision.interests]
+  }
+  if (revision.occupation !== undefined) {
+    next.workAndInterests.occupation = revision.occupation
+  }
+  if (revision.industry !== undefined) {
+    next.workAndInterests.industry = revision.industry
+  }
+  if (revision.lifestyleTags !== undefined) {
+    next.workAndInterests.lifestyleTags = [...revision.lifestyleTags]
+  }
+  if (revision.eventInterests !== undefined) {
+    next.workAndInterests.eventInterests = [...revision.eventInterests]
+  }
+  if (revision.socialVibe !== undefined) {
+    next.workAndInterests.socialVibe = revision.socialVibe
+  }
+  if (revision.connectionsOpenTo !== undefined) {
+    next.profile.connectionsOpenTo = sanitizeConnectionsOpenToForStorage(
+      revision.connectionsOpenTo,
+      revision.memberPublicIntents
+    )
+  }
+  if (revision.perfectWeekend !== undefined) {
+    next.prompts.perfectWeekend = revision.perfectWeekend
+  }
+  if (revision.favoriteLocalActivities !== undefined) {
+    next.prompts.favoriteLocalActivities = revision.favoriteLocalActivities
+  }
+  if (revision.icebreaker !== undefined) {
+    next.prompts.icebreaker = revision.icebreaker
   }
 
   if (revision.photos !== undefined) {

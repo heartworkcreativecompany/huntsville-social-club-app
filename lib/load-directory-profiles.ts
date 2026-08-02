@@ -29,7 +29,6 @@ function finalizeMember(
   if (!isAdmin) {
     return {
       ...member,
-      membership_intent: null,
       location_city: null,
       location_zip: null,
       birth_year: null,

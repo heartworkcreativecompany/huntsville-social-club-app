@@ -82,7 +82,7 @@ export default async function YourProfilePage() {
   })
   const formValues =
     revisionStatus === 'pending' && pendingRevision
-      ? pendingProfileFormValues(pendingRevision)
+      ? pendingProfileFormValues(pendingRevision, liveFormValues)
       : liveFormValues
   const revisionDiff =
     revisionStatus === 'pending' && pendingRevision
@@ -188,7 +188,7 @@ export default async function YourProfilePage() {
                   isCurrentUser
                   href={`/members/${viewer.userId}`}
                 />
-                <MemberPublicDetails details={profilePreview} compact />
+                <MemberPublicDetails details={profilePreview} compact omitHeaderFields />
               </div>
             </Card>
           ) : null}
@@ -214,6 +214,15 @@ export default async function YourProfilePage() {
             locationArea={formValues.locationArea}
             memberPublicIntents={formValues.memberPublicIntents}
             interests={formValues.interests}
+            occupation={formValues.occupation}
+            industry={formValues.industry}
+            lifestyleTags={formValues.lifestyleTags}
+            eventInterests={formValues.eventInterests}
+            socialVibe={formValues.socialVibe}
+            connectionsOpenTo={formValues.connectionsOpenTo}
+            perfectWeekend={formValues.perfectWeekend}
+            favoriteLocalActivities={formValues.favoriteLocalActivities}
+            icebreaker={formValues.icebreaker}
             livePhotos={livePhotos}
             editorPhotos={editorPhotos}
             revisionStatus={revisionStatus}

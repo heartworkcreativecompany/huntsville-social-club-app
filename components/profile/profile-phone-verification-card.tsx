@@ -258,9 +258,7 @@ export default function ProfilePhoneVerificationCard({
 
         lastResetPhone.current = phoneE164
         clearOtpState()
-        setMessage(
-          'Phone verified. This counts toward your Verified member badge.'
-        )
+        setMessage('Phone verified. Thanks for confirming your number.')
         router.refresh()
       } catch (err) {
         const message =
@@ -284,10 +282,8 @@ export default function ProfilePhoneVerificationCard({
               Phone verification
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {/* User-facing: Phone verification. Implementation: Supabase Auth
-                  phone_change OTP; SMS provider is configured in Supabase (e.g. Twilio). */}
-              Optional for approval; required for the public Verified badge.
-              Your number is never shown on your member profile.
+              Verify your mobile number so staff can reach you if needed. Your
+              number is never shown on your member profile.
             </p>
           </div>
           {isVerified ? <Badge variant="success">Verified</Badge> : null}

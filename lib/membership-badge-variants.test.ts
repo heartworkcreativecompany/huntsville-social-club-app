@@ -55,7 +55,7 @@ describe('verification badge variants', () => {
 })
 
 describe('directory card badge composition', () => {
-  it('keeps premium and trust badges ahead of secondary labels', () => {
+  it('shows membership tier only on member-facing cards', () => {
     const badges = directoryCardBadges({
       id: 'member-1',
       contactEmail: null,
@@ -85,7 +85,9 @@ describe('directory card badge composition', () => {
       vendor_reviewed_badge: false,
     })
 
-    expect(badges[0]).toMatchObject({ label: 'Inner Circle', variant: 'premium' })
-    expect(badges.some((badge) => badge.label === 'Verified')).toBe(true)
+    expect(badges).toEqual([
+      { key: 'inner_circle', label: 'Inner Circle', variant: 'premium' },
+    ])
+    expect(badges.some((badge) => badge.label === 'Verified')).toBe(false)
   })
 })

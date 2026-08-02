@@ -10,11 +10,6 @@ export function MemberCardBadges({ member }: { member: DirectoryMember }) {
 }
 
 export function MemberProfileBadges({ member }: { member: DirectoryMember }) {
-  const { tier, verification, premium } = profilePageBadges(member)
-  const badges = [
-    tier,
-    ...verification,
-    ...(premium ? [premium] : []),
-  ]
-  return <MemberTrustBadges badges={badges} />
+  const { tier } = profilePageBadges(member)
+  return <MemberTrustBadges badges={[tier]} />
 }

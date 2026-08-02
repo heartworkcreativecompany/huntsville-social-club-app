@@ -54,18 +54,22 @@ export default function VerificationGateChecklist({
   showRequiredLabels = false,
   /** Application status should not surface optional phone OTP as a blocker. */
   requiredOnly = false,
+  hideSectionLabels = false,
 }: {
   gates: Partial<Record<ApprovalGateKey, ReviewStatus>>
   showRequiredLabels?: boolean
   requiredOnly?: boolean
+  hideSectionLabels?: boolean
 }) {
   return (
     <div className="grid gap-4">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Required for membership approval
-        </p>
-        <div className="mt-2">
+        {!hideSectionLabels ? (
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Required for membership approval
+          </p>
+        ) : null}
+        <div className={hideSectionLabels ? undefined : 'mt-2'}>
           <GateChecklist
             gates={gates}
             gateKeys={REQUIRED_APPROVAL_GATES}
