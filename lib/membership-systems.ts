@@ -154,7 +154,16 @@ export function parseVerificationState(value: unknown): VerificationState {
 export type DisplayBadge = {
   key: string
   label: string
-  variant: 'trust' | 'premium' | 'category' | 'success' | 'accent' | 'warning' | 'muted'
+  variant:
+    | 'trust'
+    | 'premium'
+    | 'premium_outline'
+    | 'elite'
+    | 'category'
+    | 'success'
+    | 'accent'
+    | 'warning'
+    | 'muted'
 }
 
 function badgeVariantForStatus(
@@ -239,19 +248,19 @@ export const MEMBERSHIP_TIER_DEFS: MembershipTierDef[] = [
   {
     key: 'inner_circle',
     label: 'Inner Circle',
-    variant: 'premium',
+    variant: 'premium_outline',
     cardPriority: 4,
   },
   {
     key: 'elite_circle',
     label: 'Elite Circle',
-    variant: 'premium',
+    variant: 'elite',
     cardPriority: 5,
   },
   {
     key: 'premium_member',
     label: 'Premium member',
-    variant: 'premium',
+    variant: 'elite',
     cardPriority: 6,
   },
   {
@@ -301,15 +310,27 @@ export function resolveMembershipTier(input: {
 export function membershipTierBadge(
   tier: MembershipTierKey
 ): DisplayBadge {
+  // Display cleanup only — do not surface Community partner as a public/admin badge.
+  const displayTier: MembershipTierKey =
+    tier === 'community_partner' ? 'member' : tier
   const def =
-    MEMBERSHIP_TIER_DEFS.find((d) => d.key === tier) ??
+    MEMBERSHIP_TIER_DEFS.find((d) => d.key === displayTier) ??
     MEMBERSHIP_TIER_DEFS[0]
   return { key: def.key, label: def.label, variant: def.variant }
 }
 
 export function cardTierBadges(tier: MembershipTierKey): DisplayBadge[] {
+  if (tier === 'community_partner') {
+    return [membershipTierBadge('member')]
+  }
   const badge = membershipTierBadge(tier)
-  if (tier === 'member' || tier === 'inner_circle' || tier === 'elite_circle' || tier === 'premium_member' || tier === 'vendor_reviewed' || tier === 'community_partner') {
+  if (
+    tier === 'member' ||
+    tier === 'inner_circle' ||
+    tier === 'elite_circle' ||
+    tier === 'premium_member' ||
+    tier === 'vendor_reviewed'
+  ) {
     return [badge]
   }
   return [badge]

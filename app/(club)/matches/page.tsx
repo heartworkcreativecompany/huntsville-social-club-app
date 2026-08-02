@@ -79,7 +79,8 @@ export default async function MatchesPage() {
         />
         <Card>
           <p className="text-sm text-muted-foreground">
-            Curated matches are not available right now.
+            Curated Matches are not available right now. This feature is only
+            available for paid members.
           </p>
         </Card>
       </>

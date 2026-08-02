@@ -8,13 +8,21 @@ import {
 import { directoryCardBadges } from '@/lib/members-discovery'
 
 describe('membership tier badge variants', () => {
-  it('uses gold for paid membership tiers', () => {
-    expect(membershipTierBadge('inner_circle').variant).toBe('premium')
-    expect(membershipTierBadge('elite_circle').variant).toBe('premium')
+  it('uses outline gold for Inner Circle and solid gold for Elite Circle', () => {
+    expect(membershipTierBadge('inner_circle').variant).toBe('premium_outline')
+    expect(membershipTierBadge('elite_circle').variant).toBe('elite')
   })
 
   it('uses muted category styling for the base member tier', () => {
     expect(membershipTierBadge('member').variant).toBe('category')
+  })
+
+  it('maps Community partner to the Member badge for display', () => {
+    expect(membershipTierBadge('community_partner')).toEqual({
+      key: 'member',
+      label: 'Member',
+      variant: 'category',
+    })
   })
 
   it('uses trust styling for vendor-reviewed tier labels', () => {
@@ -86,7 +94,7 @@ describe('directory card badge composition', () => {
     })
 
     expect(badges).toEqual([
-      { key: 'inner_circle', label: 'Inner Circle', variant: 'premium' },
+      { key: 'inner_circle', label: 'Inner Circle', variant: 'premium_outline' },
     ])
     expect(badges.some((badge) => badge.label === 'Verified')).toBe(false)
   })

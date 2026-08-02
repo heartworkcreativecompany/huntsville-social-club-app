@@ -2,6 +2,8 @@ type BadgeVariant =
   | 'default'
   | 'accent'
   | 'premium'
+  | 'premium_outline'
+  | 'elite'
   | 'trust'
   | 'category'
   | 'success'
@@ -14,6 +16,12 @@ const variantClass: Record<BadgeVariant, string> = {
   accent: 'bg-accent text-accent-foreground border border-accent font-brand',
   premium:
     'bg-accent-soft text-accent border border-accent/50 font-brand',
+  /** Inner Circle — gold outline on dark/transparent. */
+  premium_outline:
+    'bg-transparent text-accent border border-accent font-brand',
+  /** Elite Circle — solid gold with black text. */
+  elite:
+    'bg-accent text-accent-foreground border border-accent font-brand',
   trust: 'bg-success-soft text-success border border-success/25',
   category:
     'bg-surface-elevated text-muted border border-border-strong/70',

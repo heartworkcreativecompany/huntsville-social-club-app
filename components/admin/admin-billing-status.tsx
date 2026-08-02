@@ -49,7 +49,9 @@ export default function AdminBillingStatus({
         <span className="font-medium text-foreground">Membership tier</span>
         <select
           className={inputClassName}
-          value={billing.tier}
+          value={
+            billing.tier === 'community_partner' ? 'member' : billing.tier
+          }
           disabled={isPending}
           onChange={(e) => {
             const tier = e.target.value as MembershipBilling['tier']
@@ -69,7 +71,6 @@ export default function AdminBillingStatus({
           <option value="elite_circle">Elite Circle</option>
           <option value="premium_member">Premium member (legacy → Elite)</option>
           <option value="vendor_reviewed">Vendor reviewed</option>
-          <option value="community_partner">Community partner</option>
         </select>
       </label>
 

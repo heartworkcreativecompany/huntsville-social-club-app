@@ -50,6 +50,9 @@ function pauseReasonLabel(
   }
 }
 
+const CURATED_MATCHES_UNAVAILABLE_COPY =
+  'Curated Matches are not available right now. This feature is only available for paid members.'
+
 export function summarizeCompatibilityProfileStatus(input: {
   profile: CompatibilityProfileFields & {
     compatibility_questionnaire?: unknown
@@ -62,7 +65,7 @@ export function summarizeCompatibilityProfileStatus(input: {
     return {
       status: 'disabled',
       headline: 'Curated matches',
-      detail: 'Curated matches are not available right now.',
+      detail: CURATED_MATCHES_UNAVAILABLE_COPY,
       showCard: true,
       ctaHref: null,
       ctaLabel: null,
@@ -96,8 +99,7 @@ export function summarizeCompatibilityProfileStatus(input: {
     return {
       status: 'no_messaging',
       headline: 'Curated matches',
-      detail:
-        'Curated matches are included with Inner Circle and Elite Circle memberships. Upgrade to unlock private recommendations.',
+      detail: CURATED_MATCHES_UNAVAILABLE_COPY,
       showCard: true,
       ctaHref: '/upgrade',
       ctaLabel: 'View memberships',
