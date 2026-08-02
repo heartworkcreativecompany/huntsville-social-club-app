@@ -63,18 +63,51 @@ export async function createMembershipCheckoutSession(tierInput: string) {
 
     const baseUrl = appBaseUrl()
     const trialDays = optionalCheckoutTrialDays()
+    const priceId = stripePriceIdForTier(tier)
+    const successUrl = `${baseUrl}/upgrade?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+    const cancelUrl = `${baseUrl}/upgrade?checkout=cancelled`
+
+    const secretKey = process.env.STRIPE_SECRET_KEY?.trim() ?? ''
+    const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ?? ''
+    const secretMode = secretKey.startsWith('sk_live_')
+      ? 'sk_live_'
+      : secretKey.startsWith('sk_test_')
+        ? 'sk_test_'
+        : secretKey
+          ? `unknown_prefix:${secretKey.slice(0, 3)}_`
+          : 'missing'
+    const publishableMode = publishableKey.startsWith('pk_live_')
+      ? 'pk_live_'
+      : publishableKey.startsWith('pk_test_')
+        ? 'pk_test_'
+        : publishableKey
+          ? `unknown_prefix:${publishableKey.slice(0, 3)}_`
+          : 'missing'
+
+    // Temporary diagnostics — remove after checkout is verified.
+    console.info('[membership_checkout] before sessions.create', {
+      tier,
+      priceId,
+      customerId,
+      hasSecretKey: Boolean(secretKey),
+      secretMode,
+      publishableMode,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      trialDays: trialDays ?? null,
+    })
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       line_items: [
         {
-          price: stripePriceIdForTier(tier),
+          price: priceId,
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/upgrade?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/upgrade?checkout=cancelled`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       allow_promotion_codes: true,
       client_reference_id: viewer.userId,
       metadata: {
@@ -90,13 +123,40 @@ export async function createMembershipCheckoutSession(tierInput: string) {
       },
     })
 
+    console.info('[membership_checkout] after sessions.create', {
+      tier,
+      priceId,
+      sessionId: session.id,
+      hasUrl: Boolean(session.url),
+    })
+
     if (!session.url) {
       return { error: 'Could not start checkout.' }
     }
 
     return { url: session.url }
   } catch (error) {
-    console.error('[membership_checkout]', error)
+    const stripeError =
+      error && typeof error === 'object'
+        ? (error as {
+            message?: string
+            type?: string
+            code?: string
+            param?: string
+            statusCode?: number
+            raw?: { message?: string; type?: string; code?: string; param?: string }
+          })
+        : null
+
+    console.error('[membership_checkout] sessions.create failed', {
+      message: stripeError?.message ?? (error instanceof Error ? error.message : String(error)),
+      type: stripeError?.type ?? stripeError?.raw?.type ?? null,
+      code: stripeError?.code ?? stripeError?.raw?.code ?? null,
+      param: stripeError?.param ?? stripeError?.raw?.param ?? null,
+      statusCode: stripeError?.statusCode ?? null,
+      name: error instanceof Error ? error.name : typeof error,
+    })
+
     return { error: 'Could not start checkout.' }
   }
 }
