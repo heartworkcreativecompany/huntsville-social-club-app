@@ -5,8 +5,8 @@ let stripeClient: Stripe | null = null
 
 /**
  * Live-mode Stripe Price IDs from the production Stripe account.
- * These are the canonical membership / sponsorship mappings.
- * Env vars may override for local test-mode development only.
+ * Canonical membership / sponsorship mappings — checkout must not depend on
+ * STRIPE_PRICE_ID_* env vars being present in production.
  */
 export const STRIPE_LIVE_PRICE_IDS = {
   /** Inner Circle — $29.99/month (prod_UqPcL4boAOiMZT) */
@@ -24,20 +24,27 @@ export const STRIPE_LIVE_PRODUCT_IDS = {
   event_sponsorship: 'prod_UvwN6jDxbT9O28',
 } as const
 
-function isProductionRuntime(): boolean {
-  return (
-    process.env.VERCEL_ENV === 'production' ||
-    process.env.NODE_ENV === 'production'
-  )
+/** Bracket access avoids any accidental build-time env inlining issues. */
+function readEnv(name: string): string | undefined {
+  const value = process.env[name]
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function isDeployedProduction(): boolean {
+  // Prefer the host signal so local `next start` (NODE_ENV=production) can still
+  // use test keys when developing against Stripe test mode.
+  return readEnv('VERCEL_ENV') === 'production'
 }
 
 function stripeSecretKey(): string {
-  const secretKey = process.env.STRIPE_SECRET_KEY?.trim()
+  const secretKey = readEnv('STRIPE_SECRET_KEY')
   if (!secretKey) {
     throw new Error('STRIPE_SECRET_KEY is not configured.')
   }
 
-  if (isProductionRuntime() && secretKey.startsWith('sk_test_')) {
+  if (isDeployedProduction() && secretKey.startsWith('sk_test_')) {
     throw new Error(
       'Production must use a live Stripe secret key (sk_live_…), not a test key.'
     )
@@ -56,20 +63,23 @@ export function getStripe(): Stripe {
   return stripeClient
 }
 
+/**
+ * Checkout / portal gate. Requires only a Stripe secret key.
+ * Price IDs come from STRIPE_LIVE_PRICE_IDS (env overrides are optional for local test).
+ *
+ * Does NOT require:
+ * - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+ * - STRIPE_WEBHOOK_SECRET
+ * - STRIPE_PRICE_ID_INNER_CIRCLE
+ * - STRIPE_PRICE_ID_ELITE_CIRCLE
+ */
 export function isStripeConfigured(): boolean {
-  const secretKey = process.env.STRIPE_SECRET_KEY?.trim()
-  if (!secretKey) return false
-  if (isProductionRuntime() && secretKey.startsWith('sk_test_')) return false
-  // Live price IDs are baked in; local test mode may override via env.
-  return true
+  return Boolean(readEnv('STRIPE_SECRET_KEY'))
 }
 
 /** Stripe Identity needs the secret key plus a public app origin for return_url. */
 export function isStripeIdentityConfigured(): boolean {
-  if (!process.env.STRIPE_SECRET_KEY?.trim()) return false
-  if (isProductionRuntime() && process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
-    return false
-  }
+  if (!readEnv('STRIPE_SECRET_KEY')) return false
   try {
     appOrigin()
     return true
@@ -87,27 +97,20 @@ export function isPaidMembershipTier(value: string): value is PaidMembershipTier
 }
 
 function envPriceIdForTier(tier: PaidMembershipTier): string | undefined {
-  const raw =
-    tier === 'inner_circle'
-      ? process.env.STRIPE_PRICE_ID_INNER_CIRCLE
-      : process.env.STRIPE_PRICE_ID_ELITE_CIRCLE
-  const trimmed = raw?.trim()
-  return trimmed || undefined
+  return tier === 'inner_circle'
+    ? readEnv('STRIPE_PRICE_ID_INNER_CIRCLE')
+    : readEnv('STRIPE_PRICE_ID_ELITE_CIRCLE')
 }
 
 export function stripePriceIdForTier(tier: PaidMembershipTier): string {
-  // Production always uses live Stripe prices — never sandbox/test price IDs.
-  if (isProductionRuntime()) {
+  // Deployed production always uses live Stripe prices.
+  if (isDeployedProduction()) {
     return STRIPE_LIVE_PRICE_IDS[tier]
   }
 
+  // Local / preview: allow test-mode price overrides; otherwise use live IDs.
   const fromEnv = envPriceIdForTier(tier)
-  if (fromEnv) {
-    if (fromEnv.startsWith('price_') === false) {
-      throw new Error(
-        `Stripe price ID is invalid for ${tier}. Expected a price_… ID.`
-      )
-    }
+  if (fromEnv?.startsWith('price_')) {
     return fromEnv
   }
 
@@ -122,13 +125,13 @@ export function tierFromStripePriceId(
   const innerCandidates = new Set(
     [
       STRIPE_LIVE_PRICE_IDS.inner_circle,
-      process.env.STRIPE_PRICE_ID_INNER_CIRCLE?.trim(),
+      readEnv('STRIPE_PRICE_ID_INNER_CIRCLE'),
     ].filter(Boolean) as string[]
   )
   const eliteCandidates = new Set(
     [
       STRIPE_LIVE_PRICE_IDS.elite_circle,
-      process.env.STRIPE_PRICE_ID_ELITE_CIRCLE?.trim(),
+      readEnv('STRIPE_PRICE_ID_ELITE_CIRCLE'),
     ].filter(Boolean) as string[]
   )
 
@@ -138,21 +141,21 @@ export function tierFromStripePriceId(
 }
 
 export function optionalCheckoutTrialDays(): number | undefined {
-  const raw = process.env.STRIPE_CHECKOUT_TRIAL_DAYS
-  if (!raw?.trim()) return undefined
+  const raw = readEnv('STRIPE_CHECKOUT_TRIAL_DAYS')
+  if (!raw) return undefined
   const days = Number.parseInt(raw, 10)
   if (!Number.isFinite(days) || days <= 0) return undefined
   return days
 }
 
-/** Stripe Price ID for $199 event sponsorship (one-time). */
+/** Stripe Price ID for $199 event sponsorship (one-time). Always resolvable. */
 export function stripeSponsorshipPriceId(): string | null {
-  if (isProductionRuntime()) {
+  if (isDeployedProduction()) {
     return STRIPE_LIVE_PRICE_IDS.event_sponsorship
   }
 
-  const fromEnv = process.env.STRIPE_PRICE_ID_EVENT_SPONSORSHIP?.trim()
-  if (fromEnv) return fromEnv
+  const fromEnv = readEnv('STRIPE_PRICE_ID_EVENT_SPONSORSHIP')
+  if (fromEnv?.startsWith('price_')) return fromEnv
   return STRIPE_LIVE_PRICE_IDS.event_sponsorship
 }
 

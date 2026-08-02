@@ -24,6 +24,8 @@ function subscriptionBlocksNewCheckout(billing: ReturnType<typeof parseMembershi
 }
 
 export async function createMembershipCheckoutSession(tierInput: string) {
+  // Guard: only STRIPE_SECRET_KEY is required. Live price IDs are provided by
+  // lib/stripe/config.ts (STRIPE_LIVE_PRICE_IDS) and must not block checkout.
   if (!isStripeConfigured()) {
     return { error: 'Stripe billing is not configured yet.' }
   }
@@ -100,6 +102,7 @@ export async function createMembershipCheckoutSession(tierInput: string) {
 }
 
 export async function createBillingPortalSession() {
+  // Same gate as checkout — secret key only; no price-env requirement.
   if (!isStripeConfigured()) {
     return { error: 'Stripe billing is not configured yet.' }
   }

@@ -12,7 +12,8 @@ Paid memberships use **Stripe Checkout** (subscription mode), **webhooks** for a
 | Event sponsorship | `prod_UvwN6jDxbT9O28` | `price_1Tw4UjBei7W40myBOG1mkxQ5` | $199 one-time |
 
 Canonical live price IDs are defined in `lib/stripe/config.ts` as `STRIPE_LIVE_PRICE_IDS`.  
-**In production**, checkout always uses those live IDs (env overrides are ignored) so sandbox/test prices cannot be used by mistake.
+**Checkout only requires `STRIPE_SECRET_KEY`.** Missing `STRIPE_PRICE_ID_*` env vars must not block billing — production uses the live IDs from `config.ts`.  
+On Vercel production (`VERCEL_ENV=production`), checkout always uses those live IDs (env overrides are ignored).
 
 ### Environment variables
 
