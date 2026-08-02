@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { parseBusinessListingIndustry } from '@/lib/business-listing-industries'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { getViewer } from '@/lib/viewer'
 
@@ -29,9 +30,12 @@ export async function submitBusinessListingApplication(input: {
   }
 
   const businessName = input.businessName.trim()
-  const industry = input.industry.trim()
-  if (!businessName || !industry) {
-    return { error: 'Business name and industry are required.' }
+  const industry = parseBusinessListingIndustry(input.industry)
+  if (!businessName) {
+    return { error: 'Business name is required.' }
+  }
+  if (!industry) {
+    return { error: 'Please select a valid industry.' }
   }
 
   const supabase = await createClient()

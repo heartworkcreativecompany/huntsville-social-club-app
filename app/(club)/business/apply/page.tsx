@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import { buttonPrimaryClassName, inputClassName } from '@/lib/event-labels'
+import { BUSINESS_LISTING_INDUSTRIES } from '@/lib/business-listing-industries'
 import { submitBusinessListingApplication } from '@/app/(club)/business/actions'
 import { uploadBusinessListingHeaderImage } from '@/lib/business-listing-image-storage'
 
@@ -89,12 +90,22 @@ export default function BusinessListingApplyPage() {
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
           />
-          <input
+          <select
             className={inputClassName}
-            placeholder="Industry (e.g. Technology)"
             value={industry}
+            required
+            aria-label="Industry"
             onChange={(e) => setIndustry(e.target.value)}
-          />
+          >
+            <option value="" disabled>
+              Select industry
+            </option>
+            {BUSINESS_LISTING_INDUSTRIES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <input
             className={inputClassName}
             placeholder="City"

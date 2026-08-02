@@ -7,6 +7,10 @@ import EmptyState from '@/components/ui/empty-state'
 import { getViewer } from '@/lib/viewer'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { buttonPrimaryClassName } from '@/lib/event-labels'
+import {
+  compareBusinessListingIndustries,
+  formatBusinessListingIndustryLabel,
+} from '@/lib/business-listing-industries'
 import { FEATURE_GATE_COPY } from '@/lib/membership-pricing-copy'
 
 export default async function BusinessDirectoryPage() {
@@ -23,16 +27,21 @@ export default async function BusinessDirectoryPage() {
       'id, business_name, description, industry, website_url, city, phone, club_offer, header_image_url, status'
     )
     .eq('status', 'approved')
-    .order('industry', { ascending: true })
     .order('business_name', { ascending: true })
 
-  const byIndustry = new Map<string, typeof listings>()
+  const byIndustry = new Map<string, NonNullable<typeof listings>>()
   for (const listing of listings ?? []) {
-    const key = listing.industry || 'Other'
+    const key = formatBusinessListingIndustryLabel(listing.industry)
     const group = byIndustry.get(key) ?? []
     group.push(listing)
     byIndustry.set(key, group)
   }
+
+  const industrySections = [...byIndustry.entries()].sort(([a], [b]) => {
+    const sampleA = byIndustry.get(a)?.[0]?.industry
+    const sampleB = byIndustry.get(b)?.[0]?.industry
+    return compareBusinessListingIndustries(sampleA, sampleB)
+  })
 
   return (
     <>
@@ -69,7 +78,7 @@ export default async function BusinessDirectoryPage() {
         />
       ) : (
         <div className="grid gap-8">
-          {[...byIndustry.entries()].map(([industry, group]) => (
+          {industrySections.map(([industry, group]) => (
             <section key={industry}>
               <h2 className="text-display mb-3 text-xl font-medium">{industry}</h2>
               <div className="grid gap-3">

@@ -6,6 +6,7 @@ import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import { getViewer } from '@/lib/viewer'
 import AdminBusinessListingReview from '@/components/admin/admin-business-listing-review'
+import { formatBusinessListingIndustryLabel } from '@/lib/business-listing-industries'
 
 export default async function AdminBusinessListingsPage() {
   const viewer = await getViewer()
@@ -60,7 +61,7 @@ export default async function AdminBusinessListingsPage() {
                     {listing.business_name}
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {listing.industry}
+                    {formatBusinessListingIndustryLabel(listing.industry)}
                     {listing.city ? ` · ${listing.city}` : ''}
                   </p>
                   {listing.phone ? (
