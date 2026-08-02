@@ -20,7 +20,7 @@ export default async function BusinessDirectoryPage() {
   const { data: listings } = await supabase
     .from('business_listings')
     .select(
-      'id, business_name, description, industry, category, website_url, city, status'
+      'id, business_name, description, industry, website_url, city, phone, club_offer, header_image_url, status'
     )
     .eq('status', 'approved')
     .order('industry', { ascending: true })
@@ -75,20 +75,41 @@ export default async function BusinessDirectoryPage() {
               <div className="grid gap-3">
                 {(group ?? []).map((listing) => (
                   <Card key={listing.id} padding="sm">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-medium text-foreground">
-                          {listing.business_name}
-                        </h3>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {listing.category}
-                          {listing.city ? ` · ${listing.city}` : ''}
-                        </p>
-                        {listing.description ? (
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            {listing.description}
-                          </p>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex min-w-0 flex-1 gap-3">
+                        {listing.header_image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={listing.header_image_url}
+                            alt=""
+                            className="h-16 w-16 shrink-0 rounded-md object-cover"
+                          />
                         ) : null}
+                        <div className="min-w-0">
+                          <h3 className="font-medium text-foreground">
+                            {listing.business_name}
+                          </h3>
+                          {listing.city ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {listing.city}
+                            </p>
+                          ) : null}
+                          {listing.description ? (
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              {listing.description}
+                            </p>
+                          ) : null}
+                          {listing.club_offer ? (
+                            <p className="mt-2 text-sm text-foreground">
+                              Club offer: {listing.club_offer}
+                            </p>
+                          ) : null}
+                          {listing.phone ? (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {listing.phone}
+                            </p>
+                          ) : null}
+                        </div>
                       </div>
                       {listing.website_url ? (
                         <a

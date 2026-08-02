@@ -9,11 +9,12 @@ export async function submitBusinessListingApplication(input: {
   businessName: string
   description: string
   industry: string
-  category: string
   websiteUrl?: string
   contactEmail?: string
   phone?: string
   city?: string
+  clubOffer?: string
+  headerImageUrl?: string
 }) {
   const viewer = await getViewer()
   if (!viewer?.canAccessApp) {
@@ -29,9 +30,8 @@ export async function submitBusinessListingApplication(input: {
 
   const businessName = input.businessName.trim()
   const industry = input.industry.trim()
-  const category = input.category.trim()
-  if (!businessName || !industry || !category) {
-    return { error: 'Business name, industry, and category are required.' }
+  if (!businessName || !industry) {
+    return { error: 'Business name and industry are required.' }
   }
 
   const supabase = await createClient()
@@ -40,11 +40,13 @@ export async function submitBusinessListingApplication(input: {
     business_name: businessName,
     description: input.description.trim(),
     industry,
-    category,
+    category: '',
     website_url: input.websiteUrl?.trim() || null,
     contact_email: input.contactEmail?.trim() || viewer.email,
     phone: input.phone?.trim() || null,
     city: input.city?.trim() || null,
+    club_offer: input.clubOffer?.trim() || '',
+    header_image_url: input.headerImageUrl?.trim() || null,
     status: 'pending',
     submitted_at: new Date().toISOString(),
   })

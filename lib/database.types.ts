@@ -712,6 +712,8 @@ export interface Database {
           contact_email: string | null
           phone: string | null
           city: string | null
+          club_offer: string
+          header_image_url: string | null
           status: string
           admin_notes: string | null
           created_at: string
@@ -730,6 +732,8 @@ export interface Database {
           contact_email?: string | null
           phone?: string | null
           city?: string | null
+          club_offer?: string
+          header_image_url?: string | null
           status?: string
           admin_notes?: string | null
           created_at?: string
@@ -748,6 +752,8 @@ export interface Database {
           contact_email?: string | null
           phone?: string | null
           city?: string | null
+          club_offer?: string
+          header_image_url?: string | null
           status?: string
           admin_notes?: string | null
           created_at?: string
