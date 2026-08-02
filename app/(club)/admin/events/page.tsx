@@ -18,7 +18,7 @@ export default async function AdminEventsPage() {
 
   const { data: pendingEvents } = await supabase
     .from('events')
-    .select('id, title, starts_at, location, event_type, owner_id, created_at')
+    .select('id, title, starts_at, location, event_type, owner_id, created_at, attendance_max')
     .eq('status', 'pending_approval')
     .order('created_at', { ascending: true })
 
@@ -69,6 +69,9 @@ export default async function AdminEventsPage() {
                     <p className="mt-1 text-sm text-muted-foreground">
                       {new Date(event.starts_at).toLocaleString()}
                       {event.location ? ` · ${event.location}` : ''}
+                      {event.attendance_max
+                        ? ` · Max ${event.attendance_max} attending`
+                        : ''}
                     </p>
                   </div>
                   <AdminEventApprovalControls eventId={event.id} />

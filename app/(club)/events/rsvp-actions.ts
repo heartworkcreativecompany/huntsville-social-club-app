@@ -15,6 +15,10 @@ import {
   evaluateEventRegistration,
   shouldReturnFreeRegistrationOnCancellation,
 } from '@/lib/membership-entitlements'
+import {
+  EVENT_AT_CAPACITY_MESSAGE,
+  isEventAtCapacity,
+} from '@/lib/event-attendance'
 import type { EventAccessType } from '@/lib/membership-tier-config'
 import { getViewer } from '@/lib/viewer'
 
@@ -25,6 +29,7 @@ type EventRow = {
   starts_at: string
   status: string | null
   event_type: string | null
+  attendance_max?: number | null
 }
 
 type AttendeeRow = {
@@ -76,7 +81,7 @@ export async function updateEventRsvp(input: {
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'id, starts_at, status, event_type, priority_rsvp_opens_at, general_rsvp_opens_at'
+      'id, starts_at, status, event_type, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max'
     )
     .eq('id', input.eventId)
     .single()
@@ -88,6 +93,7 @@ export async function updateEventRsvp(input: {
   const eventRow = event as EventRow & {
     priority_rsvp_opens_at?: string | null
     general_rsvp_opens_at?: string | null
+    attendance_max?: number | null
   }
   const eventType = (eventRow.event_type ?? 'standard_event') as EventAccessType
   const isGoing = input.status === 'going'
@@ -155,6 +161,20 @@ export async function updateEventRsvp(input: {
   }
 
   if (isGoing && !wasGoing) {
+    const { count: goingCount, error: countError } = await supabase
+      .from('event_attendees')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('event_id', input.eventId)
+      .eq('status', 'going')
+
+    if (countError) {
+      return { error: countError.message }
+    }
+
+    if (isEventAtCapacity(goingCount ?? 0, eventRow.attendance_max)) {
+      return { error: EVENT_AT_CAPACITY_MESSAGE }
+    }
+
     const decision = evaluateEventRegistration({
       entitlements,
       eventType,

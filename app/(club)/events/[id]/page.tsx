@@ -13,7 +13,12 @@ import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import { formatEventDate } from '@/lib/event-labels'
 import { eventCoverImage } from '@/lib/event-images'
-import { isEventPast, memberGoingLabel } from '@/lib/event-display'
+import { isEventPast, memberGoingLabel, availabilityLabel } from '@/lib/event-display'
+import {
+  EVENT_AT_CAPACITY_MESSAGE,
+  formatAttendanceMaxLabel,
+  isEventAtCapacity,
+} from '@/lib/event-attendance'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { evaluateEventRegistration } from '@/lib/membership-entitlements'
 import type { EventAccessType } from '@/lib/membership-tier-config'
@@ -59,7 +64,7 @@ export default async function EventDetailPage({ params }: PageProps) {
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, sponsorship_eligible, priority_rsvp_opens_at, general_rsvp_opens_at, fee_cents'
+      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, sponsorship_eligible, priority_rsvp_opens_at, general_rsvp_opens_at, fee_cents, attendance_max'
     )
     .eq('id', id)
     .single()
@@ -163,6 +168,11 @@ export default async function EventDetailPage({ params }: PageProps) {
     not_going:
       attendeeRows?.filter((row) => row.status === 'not_going').length ?? 0,
   }
+  const atCapacity =
+    currentUserStatus !== 'going' &&
+    isEventAtCapacity(rsvpCounts.going, event.attendance_max)
+  const spotsLabel = availabilityLabel(rsvpCounts.going, event.attendance_max)
+  const attendanceMaxLabel = formatAttendanceMaxLabel(event.attendance_max)
 
   const goingRows =
     attendeeRows?.filter((row) => row.status === 'going') ?? []
@@ -272,6 +282,18 @@ export default async function EventDetailPage({ params }: PageProps) {
           Hosted by {isMine ? 'you' : memberLabel(creator ?? undefined)}
           <span className="mx-2 text-border">·</span>
           {memberGoingLabel(rsvpCounts.going)}
+          {spotsLabel ? (
+            <>
+              <span className="mx-2 text-border">·</span>
+              {spotsLabel}
+            </>
+          ) : null}
+          {attendanceMaxLabel && !spotsLabel ? (
+            <>
+              <span className="mx-2 text-border">·</span>
+              {attendanceMaxLabel}
+            </>
+          ) : null}
         </p>
       </div>
 
@@ -302,6 +324,12 @@ export default async function EventDetailPage({ params }: PageProps) {
           </p>
           <div className="mt-4">
             <EventRsvpCounts counts={rsvpCounts} showCaption={false} />
+            {attendanceMaxLabel ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {attendanceMaxLabel}
+                {spotsLabel ? ` · ${spotsLabel}` : ''}
+              </p>
+            ) : null}
           </div>
         </Card>
       ) : null}
@@ -319,7 +347,12 @@ export default async function EventDetailPage({ params }: PageProps) {
                   eventStatus={event.status ?? 'published'}
                   currentStatus={currentUserStatus}
                   registrationPreview={registrationPreview}
-                  canRegisterGoing={registrationPreview?.allowed !== false}
+                  canRegisterGoing={
+                    registrationPreview?.allowed !== false && !atCapacity
+                  }
+                  atCapacityMessage={
+                    atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null
+                  }
                 />
                 <EventGuestInviteControls
                   eventId={event.id}
@@ -386,11 +419,12 @@ export default async function EventDetailPage({ params }: PageProps) {
               initialStartsAt={event.starts_at}
               initialDescription={event.description}
               initialEndsAt={event.ends_at}
-              initialVisibility={event.visibility}
               initialEventType={event.event_type ?? 'standard_event'}
+              initialStatus={event.status}
               initialFeeCents={event.fee_cents}
               initialPriorityRsvpOpensAt={event.priority_rsvp_opens_at}
               initialGeneralRsvpOpensAt={event.general_rsvp_opens_at}
+              initialAttendanceMax={event.attendance_max}
               isAdminEditor={userRole === 'admin'}
             />
             <div className="mt-4 border-t border-border pt-4">

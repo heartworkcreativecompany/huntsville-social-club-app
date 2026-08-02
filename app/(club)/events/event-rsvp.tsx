@@ -20,6 +20,7 @@ type EventRsvpProps = {
   currentStatus?: string | null
   registrationPreview?: EventRegistrationDecision | null
   canRegisterGoing?: boolean
+  atCapacityMessage?: string | null
 }
 
 const RSVP_OPTIONS: { value: RsvpStatus; label: string }[] = [
@@ -34,6 +35,7 @@ export default function EventRsvp({
   currentStatus,
   registrationPreview,
   canRegisterGoing = true,
+  atCapacityMessage = null,
 }: EventRsvpProps) {
   const router = useRouter()
   const [message, setMessage] = useState('')
@@ -191,6 +193,12 @@ export default function EventRsvp({
               View membership options →
             </Link>
           ) : null}
+        </div>
+      ) : null}
+
+      {atCapacityMessage && currentStatus !== 'going' ? (
+        <div className="mb-4 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted-foreground">
+          {atCapacityMessage}
         </div>
       ) : null}
 

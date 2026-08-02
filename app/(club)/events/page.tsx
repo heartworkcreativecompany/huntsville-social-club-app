@@ -73,7 +73,7 @@ export default async function EventsPage() {
   const { data: events, error } = await supabase
     .from('events')
     .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, priority_rsvp_opens_at, general_rsvp_opens_at'
+      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max'
     )
     .order('starts_at', { ascending: true })
 
@@ -132,6 +132,7 @@ export default async function EventsPage() {
     description: event.description,
     status: event.status ?? 'published',
     event_type: event.event_type,
+    attendance_max: event.attendance_max ?? null,
     creatorLabel: creatorLabel(
       event.owner_id,
       profilesById,
@@ -167,7 +168,6 @@ export default async function EventsPage() {
         <section className="mb-10">
           <h2 className="text-display mb-4 text-xl font-semibold">Create event</h2>
           <EventForm
-            userId={user.id}
             isAdminCreator={isAdminCreator}
             canCreateStandardOnly={!isAdminCreator}
           />

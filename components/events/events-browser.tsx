@@ -19,6 +19,7 @@ export type EventBrowserItem = {
   description: string | null
   status: string
   event_type: string | null
+  attendance_max: number | null
   creatorLabel: string
   counts: { going: number; maybe: number; not_going: number }
   currentUserStatus: string | null
@@ -124,6 +125,7 @@ export default function EventsBrowser({ events }: { events: EventBrowserItem[] }
                 counts={event.counts}
                 currentUserStatus={event.currentUserStatus}
                 registrationPreview={event.registrationPreview}
+                capacity={event.attendance_max}
               />
             </li>
           ))}

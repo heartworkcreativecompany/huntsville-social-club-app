@@ -1,62 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import Card from '@/components/ui/card'
 import {
   buttonPrimaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
-import {
-  parseDatetimeLocalToIso,
-  parseFeeDollarsToCents,
-} from '@/lib/membership-tier-config'
+import { createEvent } from '@/app/(club)/events/actions'
 
 type EventFormProps = {
-  userId: string
-  /** Admin/host can create all types and publish immediately. */
+  /** Admin/host can create all types and choose publish status. */
   isAdminCreator?: boolean
   /** Paid members may only create standard events pending approval. */
   canCreateStandardOnly?: boolean
 }
 
-function getEventInsertErrorMessage(error: {
-  message: string
-  code?: string
-}): string {
-  const msg = error.message.toLowerCase()
-  const isPermissionDenied =
-    error.code === '42501' ||
-    error.code === 'PGRST301' ||
-    msg.includes('permission') ||
-    msg.includes('policy') ||
-    msg.includes('row-level security') ||
-    msg.includes('row level security') ||
-    msg.includes('not authorized') ||
-    msg.includes('violates')
-
-  if (isPermissionDenied) {
-    return 'You do not have permission to create events.'
-  }
-
-  return error.message
-}
-
 export default function EventForm({
-  userId,
   isAdminCreator = false,
   canCreateStandardOnly = false,
 }: EventFormProps) {
-  const supabase = createClient()
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
 
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
   const [startsAt, setStartsAt] = useState('')
   const [description, setDescription] = useState('')
   const [endsAt, setEndsAt] = useState('')
-  const [visibility, setVisibility] = useState('members')
   const [eventType, setEventType] = useState('standard_event')
   const [status, setStatus] = useState(
     isAdminCreator ? 'published' : 'pending_approval'
@@ -64,96 +35,53 @@ export default function EventForm({
   const [feeDollars, setFeeDollars] = useState('')
   const [priorityRsvpOpensAt, setPriorityRsvpOpensAt] = useState('')
   const [generalRsvpOpensAt, setGeneralRsvpOpensAt] = useState('')
+  const [attendanceMax, setAttendanceMax] = useState('')
   const [message, setMessage] = useState('')
 
-  const handleSave = async () => {
+  const handleSave = () => {
     setMessage('Saving...')
-
-    const resolvedType = canCreateStandardOnly ? 'standard_event' : eventType
-    const resolvedStatus = canCreateStandardOnly
-      ? 'pending_approval'
-      : isAdminCreator
-        ? status
-        : 'pending_approval'
-    const sponsorshipEligible =
-      resolvedType === 'circle_social' || resolvedType === 'premium_event'
-
-    let feeCents: number | null = null
-    let priorityIso: string | null = null
-    let generalIso: string | null = null
-
-    if (isAdminCreator) {
-      try {
-        feeCents = parseFeeDollarsToCents(feeDollars)
-        priorityIso = parseDatetimeLocalToIso(priorityRsvpOpensAt)
-        generalIso = parseDatetimeLocalToIso(generalRsvpOpensAt)
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : 'Invalid fee or RSVP window.')
-        return
-      }
-    }
-
-    const { data: newEvent, error: eventError } = await supabase
-      .from('events')
-      .insert({
-        owner_id: userId,
+    startTransition(async () => {
+      const result = await createEvent({
         title,
         location,
-        starts_at: startsAt,
-        description: description || null,
-        ends_at: endsAt || null,
-        visibility,
-        event_type: resolvedType,
-        status: resolvedStatus,
-        sponsorship_eligible: sponsorshipEligible,
+        startsAt,
+        description,
+        endsAt,
+        attendanceMax,
         ...(isAdminCreator
           ? {
-              fee_cents: feeCents,
-              priority_rsvp_opens_at: priorityIso,
-              general_rsvp_opens_at: generalIso,
+              eventType,
+              status,
+              feeDollars,
+              priorityRsvpOpensAt,
+              generalRsvpOpensAt,
             }
           : {}),
       })
-      .select('id')
-      .single()
 
-    if (eventError) {
-      setMessage(getEventInsertErrorMessage(eventError))
-      return
-    }
-
-    if (resolvedStatus === 'published') {
-      const { error: attendeeError } = await supabase.from('event_attendees').upsert({
-        event_id: newEvent.id,
-        user_id: userId,
-        status: 'going',
-      })
-
-      if (attendeeError) {
-        setMessage(
-          `Event created, but could not add you as an attendee: ${attendeeError.message}`
-        )
-        router.refresh()
+      if (result.error) {
+        setMessage(result.error)
         return
       }
-    }
 
-    setTitle('')
-    setLocation('')
-    setStartsAt('')
-    setDescription('')
-    setEndsAt('')
-    setVisibility('members')
-    setFeeDollars('')
-    setPriorityRsvpOpensAt('')
-    setGeneralRsvpOpensAt('')
-    setStatus(isAdminCreator ? 'published' : 'pending_approval')
-    setMessage(
-      resolvedStatus === 'pending_approval'
-        ? 'Event submitted for admin approval.'
-        : 'Event created successfully.'
-    )
-    router.refresh()
+      setTitle('')
+      setLocation('')
+      setStartsAt('')
+      setDescription('')
+      setEndsAt('')
+      setFeeDollars('')
+      setPriorityRsvpOpensAt('')
+      setGeneralRsvpOpensAt('')
+      setAttendanceMax('')
+      setEventType('standard_event')
+      setStatus(isAdminCreator ? 'published' : 'pending_approval')
+      setMessage(
+        result.status === 'pending_approval'
+          ? 'Event submitted for admin approval.'
+          : 'Event created successfully.'
+      )
+      router.refresh()
+    })
   }
 
   return (
@@ -203,11 +131,31 @@ export default function EventForm({
           className={inputClassName}
         />
 
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium text-foreground">
+            Attendance Max
+          </label>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            placeholder="e.g. 40"
+            value={attendanceMax}
+            onChange={(e) => setAttendanceMax(e.target.value)}
+            className={inputClassName}
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. Leave blank for unlimited attendance.
+          </p>
+        </div>
+
         {isAdminCreator ? (
           <select
             value={eventType}
             onChange={(e) => setEventType(e.target.value)}
             className={inputClassName}
+            aria-label="Event type"
           >
             <option value="standard_event">Standard event</option>
             <option value="circle_social">Circle Social (admin)</option>
@@ -215,21 +163,12 @@ export default function EventForm({
           </select>
         ) : null}
 
-        <select
-          value={visibility}
-          onChange={(e) => setVisibility(e.target.value)}
-          className={inputClassName}
-        >
-          <option value="private">Private</option>
-          <option value="members">Members</option>
-          <option value="public">Public</option>
-        </select>
-
         {isAdminCreator ? (
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             className={inputClassName}
+            aria-label="Event status"
           >
             <option value="draft">Draft</option>
             <option value="pending_approval">Pending approval</option>
@@ -279,8 +218,17 @@ export default function EventForm({
           </div>
         ) : null}
 
-        <button type="button" onClick={handleSave} className={buttonPrimaryClassName}>
-          {canCreateStandardOnly ? 'Submit for approval' : 'Save event'}
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isPending}
+          className={buttonPrimaryClassName}
+        >
+          {isPending
+            ? 'Saving…'
+            : canCreateStandardOnly
+              ? 'Submit for approval'
+              : 'Save event'}
         </button>
 
         {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}

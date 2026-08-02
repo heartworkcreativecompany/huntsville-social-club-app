@@ -50,8 +50,8 @@ export function memberGoingLabel(going: number): string {
 }
 
 /**
- * Spots-left messaging when capacity is tracked. Schema has no capacity column today —
- * pass null/undefined to omit spots-left copy and rely on going count only.
+ * Spots-left messaging when attendance_max is set.
+ * Pass null/undefined for unlimited attendance.
  */
 export function availabilityLabel(
   going: number,

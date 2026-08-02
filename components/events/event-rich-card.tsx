@@ -43,7 +43,7 @@ export default function EventRichCard({
   counts: RsvpCounts
   currentUserStatus: string | null
   registrationPreview?: EventRegistrationDecision | null
-  /** Optional capacity when schema supports it — omitted today. */
+  /** Optional attendance max when set on the event. */
   capacity?: number | null
 }) {
   const isPast = isEventPast(event.starts_at, event.ends_at)

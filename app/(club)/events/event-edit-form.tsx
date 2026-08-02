@@ -1,18 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import {
   buttonPrimaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
 import {
   formatFeeCents,
-  parseDatetimeLocalToIso,
-  parseFeeDollarsToCents,
   toDatetimeLocalValue,
 } from '@/lib/membership-tier-config'
+import { updateEvent } from '@/app/(club)/events/actions'
 
 type EventEditFormProps = {
   eventId: string
@@ -21,12 +19,13 @@ type EventEditFormProps = {
   initialStartsAt: string
   initialDescription: string | null
   initialEndsAt: string | null
-  initialVisibility: string
   initialEventType: string
+  initialStatus?: string | null
   initialFeeCents?: number | null
   initialPriorityRsvpOpensAt?: string | null
   initialGeneralRsvpOpensAt?: string | null
-  /** Only admins can edit fee and RSVP window fields. */
+  initialAttendanceMax?: number | null
+  /** Admins can edit type, status, fee, and RSVP windows. */
   isAdminEditor?: boolean
 }
 
@@ -37,23 +36,24 @@ export default function EventEditForm({
   initialStartsAt,
   initialDescription,
   initialEndsAt,
-  initialVisibility,
   initialEventType,
+  initialStatus = 'pending_approval',
   initialFeeCents = null,
   initialPriorityRsvpOpensAt = null,
   initialGeneralRsvpOpensAt = null,
+  initialAttendanceMax = null,
   isAdminEditor = false,
 }: EventEditFormProps) {
-  const supabase = createClient()
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
 
   const [title, setTitle] = useState(initialTitle)
   const [location, setLocation] = useState(initialLocation ?? '')
   const [startsAt, setStartsAt] = useState(toDatetimeLocalValue(initialStartsAt))
   const [description, setDescription] = useState(initialDescription ?? '')
   const [endsAt, setEndsAt] = useState(toDatetimeLocalValue(initialEndsAt))
-  const [visibility, setVisibility] = useState(initialVisibility)
   const [eventType, setEventType] = useState(initialEventType || 'standard_event')
+  const [status, setStatus] = useState(initialStatus || 'pending_approval')
   const [feeDollars, setFeeDollars] = useState(formatFeeCents(initialFeeCents))
   const [priorityRsvpOpensAt, setPriorityRsvpOpensAt] = useState(
     toDatetimeLocalValue(initialPriorityRsvpOpensAt)
@@ -61,58 +61,41 @@ export default function EventEditForm({
   const [generalRsvpOpensAt, setGeneralRsvpOpensAt] = useState(
     toDatetimeLocalValue(initialGeneralRsvpOpensAt)
   )
+  const [attendanceMax, setAttendanceMax] = useState(
+    initialAttendanceMax != null ? String(initialAttendanceMax) : ''
+  )
   const [message, setMessage] = useState('')
 
-  const handleSave = async () => {
+  const handleSave = () => {
     setMessage('Saving...')
-
-    const sponsorshipEligible =
-      eventType === 'circle_social' || eventType === 'premium_event'
-
-    let feeCents: number | null = null
-    let priorityIso: string | null = null
-    let generalIso: string | null = null
-
-    if (isAdminEditor) {
-      try {
-        feeCents = parseFeeDollarsToCents(feeDollars)
-        priorityIso = parseDatetimeLocalToIso(priorityRsvpOpensAt)
-        generalIso = parseDatetimeLocalToIso(generalRsvpOpensAt)
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : 'Invalid fee or RSVP window.')
-        return
-      }
-    }
-
-    const { error } = await supabase
-      .from('events')
-      .update({
+    startTransition(async () => {
+      const result = await updateEvent({
+        eventId,
         title,
-        location: location || null,
-        starts_at: startsAt,
-        description: description || null,
-        ends_at: endsAt || null,
-        visibility,
-        event_type: eventType,
-        sponsorship_eligible: sponsorshipEligible,
+        location,
+        startsAt,
+        description,
+        endsAt,
+        attendanceMax,
         ...(isAdminEditor
           ? {
-              fee_cents: feeCents,
-              priority_rsvp_opens_at: priorityIso,
-              general_rsvp_opens_at: generalIso,
+              eventType,
+              status,
+              feeDollars,
+              priorityRsvpOpensAt,
+              generalRsvpOpensAt,
             }
           : {}),
-        updated_at: new Date().toISOString(),
       })
-      .eq('id', eventId)
 
-    if (error) {
-      setMessage(error.message)
-      return
-    }
+      if (result.error) {
+        setMessage(result.error)
+        return
+      }
 
-    setMessage('Event updated successfully.')
-    router.refresh()
+      setMessage('Event updated successfully.')
+      router.refresh()
+    })
   }
 
   return (
@@ -155,70 +138,94 @@ export default function EventEditForm({
           className={inputClassName}
         />
 
-        <select
-          value={visibility}
-          onChange={(e) => setVisibility(e.target.value)}
-          className={inputClassName}
-        >
-          <option value="private">private</option>
-          <option value="members">members</option>
-          <option value="public">public</option>
-        </select>
-
-        <select
-          value={eventType}
-          onChange={(e) => setEventType(e.target.value)}
-          className={inputClassName}
-          disabled={!isAdminEditor}
-        >
-          <option value="standard_event">Standard event</option>
-          <option value="circle_social">Circle Social</option>
-          <option value="premium_event">Premium event</option>
-        </select>
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium text-foreground">
+            Attendance Max
+          </label>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            placeholder="e.g. 40"
+            value={attendanceMax}
+            onChange={(e) => setAttendanceMax(e.target.value)}
+            className={inputClassName}
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. Leave blank for unlimited attendance.
+          </p>
+        </div>
 
         {isAdminEditor ? (
-          <div className="grid gap-3 rounded-lg border border-border p-3">
-            <p className="text-sm font-medium text-foreground">Admin event controls</p>
-            <label className="grid gap-1 text-sm">
-              <span className="text-muted-foreground">Event fee (USD)</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="e.g. 25 or 25.00"
-                value={feeDollars}
-                onChange={(e) => setFeeDollars(e.target.value)}
-                className={inputClassName}
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="text-muted-foreground">
-                Priority RSVP opens (Elite)
-              </span>
-              <input
-                type="datetime-local"
-                value={priorityRsvpOpensAt}
-                onChange={(e) => setPriorityRsvpOpensAt(e.target.value)}
-                className={inputClassName}
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="text-muted-foreground">General RSVP opens</span>
-              <input
-                type="datetime-local"
-                value={generalRsvpOpensAt}
-                onChange={(e) => setGeneralRsvpOpensAt(e.target.value)}
-                className={inputClassName}
-              />
-            </label>
-          </div>
+          <>
+            <select
+              value={eventType}
+              onChange={(e) => setEventType(e.target.value)}
+              className={inputClassName}
+              aria-label="Event type"
+            >
+              <option value="standard_event">Standard event</option>
+              <option value="circle_social">Circle Social</option>
+              <option value="premium_event">Premium event</option>
+            </select>
+
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className={inputClassName}
+              aria-label="Event status"
+            >
+              <option value="draft">Draft</option>
+              <option value="pending_approval">Pending approval</option>
+              <option value="published">Published</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+
+            <div className="grid gap-3 rounded-lg border border-border p-3">
+              <p className="text-sm font-medium text-foreground">Admin event controls</p>
+              <label className="grid gap-1 text-sm">
+                <span className="text-muted-foreground">Event fee (USD)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="e.g. 25 or 25.00"
+                  value={feeDollars}
+                  onChange={(e) => setFeeDollars(e.target.value)}
+                  className={inputClassName}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-muted-foreground">
+                  Priority RSVP opens (Elite)
+                </span>
+                <input
+                  type="datetime-local"
+                  value={priorityRsvpOpensAt}
+                  onChange={(e) => setPriorityRsvpOpensAt(e.target.value)}
+                  className={inputClassName}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-muted-foreground">General RSVP opens</span>
+                <input
+                  type="datetime-local"
+                  value={generalRsvpOpensAt}
+                  onChange={(e) => setGeneralRsvpOpensAt(e.target.value)}
+                  className={inputClassName}
+                />
+              </label>
+            </div>
+          </>
         ) : null}
 
         <button
           type="button"
           onClick={handleSave}
+          disabled={isPending}
           className={buttonPrimaryClassName}
         >
-          Save Changes
+          {isPending ? 'Saving…' : 'Save Changes'}
         </button>
 
         {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
