@@ -20,6 +20,7 @@ export type EventBrowserItem = {
   status: string
   event_type: string | null
   attendance_max: number | null
+  cover_image_url: string | null
   creatorLabel: string
   counts: { going: number; maybe: number; not_going: number }
   currentUserStatus: string | null

@@ -12,7 +12,10 @@ import EventTypeBadge from '@/components/events/event-type-badge'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import { formatEventDate } from '@/lib/event-labels'
-import { eventCoverImage } from '@/lib/event-images'
+import {
+  eventCoverImage,
+  isRemoteEventCoverImage,
+} from '@/lib/event-images'
 import { isEventPast, memberGoingLabel, availabilityLabel } from '@/lib/event-display'
 import {
   EVENT_AT_CAPACITY_MESSAGE,
@@ -64,7 +67,7 @@ export default async function EventDetailPage({ params }: PageProps) {
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, sponsorship_eligible, priority_rsvp_opens_at, general_rsvp_opens_at, fee_cents, attendance_max'
+      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, sponsorship_eligible, priority_rsvp_opens_at, general_rsvp_opens_at, fee_cents, attendance_max, cover_image_url'
     )
     .eq('id', id)
     .single()
@@ -239,6 +242,8 @@ export default async function EventDetailPage({ params }: PageProps) {
     )
   }
 
+  const coverSrc = eventCoverImage(event.id, event.cover_image_url)
+
   return (
     <>
       <Link
@@ -250,12 +255,13 @@ export default async function EventDetailPage({ params }: PageProps) {
 
       <div className="relative mb-8 aspect-[21/9] w-full overflow-hidden rounded-xl bg-surface-elevated">
         <Image
-          src={eventCoverImage(event.id)}
+          src={coverSrc}
           alt=""
           fill
           priority
           sizes="100vw"
           className="object-cover"
+          unoptimized={isRemoteEventCoverImage(coverSrc)}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
         <div className="absolute right-0 bottom-0 left-0 p-6 sm:p-8">
@@ -425,6 +431,7 @@ export default async function EventDetailPage({ params }: PageProps) {
               initialPriorityRsvpOpensAt={event.priority_rsvp_opens_at}
               initialGeneralRsvpOpensAt={event.general_rsvp_opens_at}
               initialAttendanceMax={event.attendance_max}
+              initialCoverImageUrl={event.cover_image_url}
               isAdminEditor={userRole === 'admin'}
             />
             <div className="mt-4 border-t border-border pt-4">

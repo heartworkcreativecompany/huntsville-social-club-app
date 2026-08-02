@@ -603,6 +603,7 @@ export interface Database {
           priority_rsvp_opens_at: string | null
           general_rsvp_opens_at: string | null
           attendance_max: number | null
+          cover_image_url: string | null
           created_at: string
           updated_at: string
         }
@@ -622,6 +623,7 @@ export interface Database {
           priority_rsvp_opens_at?: string | null
           general_rsvp_opens_at?: string | null
           attendance_max?: number | null
+          cover_image_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -641,6 +643,7 @@ export interface Database {
           priority_rsvp_opens_at?: string | null
           general_rsvp_opens_at?: string | null
           attendance_max?: number | null
+          cover_image_url?: string | null
           created_at?: string
           updated_at?: string
         }

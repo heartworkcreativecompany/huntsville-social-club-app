@@ -73,7 +73,7 @@ export default async function EventsPage() {
   const { data: events, error } = await supabase
     .from('events')
     .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max'
+      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max, cover_image_url'
     )
     .order('starts_at', { ascending: true })
 
@@ -133,6 +133,7 @@ export default async function EventsPage() {
     status: event.status ?? 'published',
     event_type: event.event_type,
     attendance_max: event.attendance_max ?? null,
+    cover_image_url: event.cover_image_url ?? null,
     creatorLabel: creatorLabel(
       event.owner_id,
       profilesById,

@@ -4,7 +4,10 @@ import Card from '@/components/ui/card'
 import EventMetaBadges from '@/components/events/event-meta-badges'
 import EventTypeBadge from '@/components/events/event-type-badge'
 import { formatEventDate, buttonPrimaryClassName } from '@/lib/event-labels'
-import { eventCoverImage } from '@/lib/event-images'
+import {
+  eventCoverImage,
+  isRemoteEventCoverImage,
+} from '@/lib/event-images'
 import {
   availabilityLabel,
   eventRsvpActionLabel,
@@ -22,6 +25,7 @@ type EventRow = {
   ends_at: string | null
   status: string
   event_type?: string | null
+  cover_image_url?: string | null
 }
 
 type RsvpCounts = {
@@ -46,6 +50,7 @@ export default function EventRichCard({
   /** Optional attendance max when set on the event. */
   capacity?: number | null
 }) {
+  const coverSrc = eventCoverImage(event.id, event.cover_image_url)
   const isPast = isEventPast(event.starts_at, event.ends_at)
   const isCancelled = event.status === 'cancelled'
   const spotsLabel = availabilityLabel(counts.going, capacity)
@@ -60,11 +65,12 @@ export default function EventRichCard({
     <Card className="overflow-hidden p-0">
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-elevated">
         <Image
-          src={eventCoverImage(event.id)}
+          src={coverSrc}
           alt=""
           fill
           sizes="(max-width: 768px) 100vw, 50vw"
           className="object-cover"
+          unoptimized={isRemoteEventCoverImage(coverSrc)}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
         <div className="absolute top-4 left-4 flex flex-wrap gap-2">

@@ -62,6 +62,7 @@ export async function createEvent(input: {
   priorityRsvpOpensAt?: string
   generalRsvpOpensAt?: string
   attendanceMax?: string
+  coverImageUrl?: string
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -89,6 +90,11 @@ export async function createEvent(input: {
   const attendanceParsed = parseAttendanceMax(input.attendanceMax)
   if ('error' in attendanceParsed) {
     return { error: attendanceParsed.error }
+  }
+
+  const coverImageUrl = input.coverImageUrl?.trim() || null
+  if (coverImageUrl && !/^https?:\/\//i.test(coverImageUrl)) {
+    return { error: 'Event image URL is invalid.' }
   }
 
   let eventType = 'standard_event'
@@ -140,6 +146,7 @@ export async function createEvent(input: {
       status,
       sponsorship_eligible: sponsorshipEligible,
       attendance_max: attendanceParsed.value,
+      cover_image_url: coverImageUrl,
       ...(privileged
         ? {
             fee_cents: feeCents,
@@ -197,6 +204,7 @@ export async function updateEvent(input: {
   priorityRsvpOpensAt?: string
   generalRsvpOpensAt?: string
   attendanceMax?: string
+  coverImageUrl?: string
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -230,6 +238,14 @@ export async function updateEvent(input: {
   const attendanceParsed = parseAttendanceMax(input.attendanceMax)
   if ('error' in attendanceParsed) {
     return { error: attendanceParsed.error }
+  }
+
+  const coverImageUrl =
+    input.coverImageUrl === undefined
+      ? undefined
+      : input.coverImageUrl.trim() || null
+  if (coverImageUrl && !/^https?:\/\//i.test(coverImageUrl)) {
+    return { error: 'Event image URL is invalid.' }
   }
 
   // Match edit UI: only admins manage type, status, fee, and RSVP windows.
@@ -286,6 +302,7 @@ export async function updateEvent(input: {
       visibility: 'public',
       attendance_max: attendanceParsed.value,
       updated_at: new Date().toISOString(),
+      ...(coverImageUrl !== undefined ? { cover_image_url: coverImageUrl } : {}),
       ...(canManageTypeAndFee
         ? {
             event_type: eventType,

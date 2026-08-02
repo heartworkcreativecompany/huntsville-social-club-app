@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/card'
 import {
   buttonPrimaryClassName,
+  buttonSecondaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
 import { createEvent } from '@/app/(club)/events/actions'
+import { uploadEventCoverImage } from '@/lib/event-image-storage'
 
 type EventFormProps = {
   /** Admin/host can create all types and choose publish status. */
@@ -36,7 +38,34 @@ export default function EventForm({
   const [priorityRsvpOpensAt, setPriorityRsvpOpensAt] = useState('')
   const [generalRsvpOpensAt, setGeneralRsvpOpensAt] = useState('')
   const [attendanceMax, setAttendanceMax] = useState('')
+  const [coverImageUrl, setCoverImageUrl] = useState('')
+  const [coverImageName, setCoverImageName] = useState('')
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [message, setMessage] = useState('')
+
+  const onCoverImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setMessage('')
+    setIsUploadingImage(true)
+    const result = await uploadEventCoverImage(file)
+    setIsUploadingImage(false)
+
+    if (result.error) {
+      setMessage(result.error)
+      return
+    }
+
+    setCoverImageUrl(result.url ?? '')
+    setCoverImageName(file.name)
+  }
+
+  const clearCoverImage = () => {
+    setCoverImageUrl('')
+    setCoverImageName('')
+  }
 
   const handleSave = () => {
     setMessage('Saving...')
@@ -48,6 +77,7 @@ export default function EventForm({
         description,
         endsAt,
         attendanceMax,
+        coverImageUrl,
         ...(isAdminCreator
           ? {
               eventType,
@@ -73,6 +103,7 @@ export default function EventForm({
       setPriorityRsvpOpensAt('')
       setGeneralRsvpOpensAt('')
       setAttendanceMax('')
+      clearCoverImage()
       setEventType('standard_event')
       setStatus(isAdminCreator ? 'published' : 'pending_approval')
       setMessage(
@@ -130,6 +161,49 @@ export default function EventForm({
           onChange={(e) => setEndsAt(e.target.value)}
           className={inputClassName}
         />
+
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium text-foreground">
+            Event image
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Optional cover image for the event card and detail page. JPEG, PNG,
+            or WebP up to 5 MB.
+          </p>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground"
+            disabled={isUploadingImage || isPending}
+            onChange={onCoverImageChange}
+          />
+          {isUploadingImage ? (
+            <p className="text-xs text-muted-foreground">Uploading image…</p>
+          ) : null}
+          {coverImageUrl ? (
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={coverImageUrl}
+                alt="Event cover preview"
+                className="h-20 w-32 rounded-md object-cover"
+              />
+              <div className="grid gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {coverImageName || 'Image ready'}
+                </p>
+                <button
+                  type="button"
+                  className={buttonSecondaryClassName}
+                  disabled={isPending || isUploadingImage}
+                  onClick={clearCoverImage}
+                >
+                  Remove image
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <div className="grid gap-1.5">
           <label className="text-sm font-medium text-foreground">
@@ -221,7 +295,7 @@ export default function EventForm({
         <button
           type="button"
           onClick={handleSave}
-          disabled={isPending}
+          disabled={isPending || isUploadingImage}
           className={buttonPrimaryClassName}
         >
           {isPending
