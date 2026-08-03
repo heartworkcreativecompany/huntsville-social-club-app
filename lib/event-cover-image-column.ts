@@ -39,11 +39,10 @@ export type EventRowWithOptionalCover<T extends Record<string, unknown>> = T & {
 export function withNullCoverImage<T extends Record<string, unknown>>(
   row: T
 ): EventRowWithOptionalCover<T> {
+  const maybeCover = (row as { cover_image_url?: unknown }).cover_image_url
+
   return {
     ...row,
-    cover_image_url:
-      typeof (row as { cover_image_url?: unknown }).cover_image_url === 'string'
-        ? ((row as { cover_image_url: string }).cover_image_url ?? null)
-        : null,
+    cover_image_url: typeof maybeCover === 'string' ? maybeCover : null,
   }
 }
