@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 import { parseMembershipBilling } from '@/lib/membership-systems'
@@ -55,18 +56,6 @@ export async function createMembershipCheckoutSession(tierInput: string) {
   }
 
   try {
-    const stripe = getStripe()
-    const customerId = await getOrCreateStripeCustomer(supabase, {
-      userId: viewer.userId,
-      email: viewer.email,
-    })
-
-    const baseUrl = appBaseUrl()
-    const trialDays = optionalCheckoutTrialDays()
-    const priceId = stripePriceIdForTier(tier)
-    const successUrl = `${baseUrl}/upgrade?checkout=success&session_id={CHECKOUT_SESSION_ID}`
-    const cancelUrl = `${baseUrl}/upgrade?checkout=cancelled`
-
     const secretKey = process.env.STRIPE_SECRET_KEY?.trim() ?? ''
     const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ?? ''
     const secretMode = secretKey.startsWith('sk_live_')
@@ -84,7 +73,41 @@ export async function createMembershipCheckoutSession(tierInput: string) {
           ? `unknown_prefix:${publishableKey.slice(0, 3)}_`
           : 'missing'
 
+    const priceId = stripePriceIdForTier(tier)
+
     // Temporary diagnostics — remove after checkout is verified.
+    // Log before any Stripe / URL helper work so Vercel still captures key/price context
+    // when getOrCreateStripeCustomer or appBaseUrl throws.
+    let requestOrigin: string | null = null
+    try {
+      const headerStore = await headers()
+      requestOrigin =
+        headerStore.get('origin') ?? headerStore.get('referer') ?? null
+    } catch {
+      requestOrigin = null
+    }
+
+    console.info('[membership_checkout] start', {
+      tier,
+      priceId,
+      mode: 'subscription',
+      hasSecretKey: Boolean(secretKey),
+      secretMode,
+      publishableMode,
+      requestOrigin,
+    })
+
+    const stripe = getStripe()
+    const customerId = await getOrCreateStripeCustomer(supabase, {
+      userId: viewer.userId,
+      email: viewer.email,
+    })
+
+    const baseUrl = appBaseUrl()
+    const trialDays = optionalCheckoutTrialDays()
+    const successUrl = `${baseUrl}/upgrade?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+    const cancelUrl = `${baseUrl}/upgrade?checkout=cancelled`
+
     console.info('[membership_checkout] before sessions.create', {
       tier,
       priceId,
@@ -92,9 +115,12 @@ export async function createMembershipCheckoutSession(tierInput: string) {
       hasSecretKey: Boolean(secretKey),
       secretMode,
       publishableMode,
+      requestOrigin,
+      baseUrl,
       success_url: successUrl,
       cancel_url: cancelUrl,
       trialDays: trialDays ?? null,
+      mode: 'subscription',
     })
 
     const session = await stripe.checkout.sessions.create({
@@ -131,6 +157,11 @@ export async function createMembershipCheckoutSession(tierInput: string) {
     })
 
     if (!session.url) {
+      console.error('[membership_checkout] sessions.create returned no url', {
+        tier,
+        priceId,
+        sessionId: session.id,
+      })
       return { error: 'Could not start checkout.' }
     }
 
@@ -144,17 +175,23 @@ export async function createMembershipCheckoutSession(tierInput: string) {
             code?: string
             param?: string
             statusCode?: number
-            raw?: { message?: string; type?: string; code?: string; param?: string }
+            raw?: unknown
+            rawType?: string
           })
         : null
 
     console.error('[membership_checkout] sessions.create failed', {
-      message: stripeError?.message ?? (error instanceof Error ? error.message : String(error)),
-      type: stripeError?.type ?? stripeError?.raw?.type ?? null,
-      code: stripeError?.code ?? stripeError?.raw?.code ?? null,
-      param: stripeError?.param ?? stripeError?.raw?.param ?? null,
+      message:
+        stripeError?.message ??
+        (error instanceof Error ? error.message : String(error)),
+      type: stripeError?.type ?? null,
+      code: stripeError?.code ?? null,
+      param: stripeError?.param ?? null,
       statusCode: stripeError?.statusCode ?? null,
       name: error instanceof Error ? error.name : typeof error,
+      rawType: stripeError?.rawType ?? null,
+      raw: stripeError?.raw ?? null,
+      stack: error instanceof Error ? error.stack : null,
     })
 
     return { error: 'Could not start checkout.' }
