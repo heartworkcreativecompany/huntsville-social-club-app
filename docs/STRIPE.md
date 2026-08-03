@@ -27,7 +27,7 @@ Copy `.env.example` to `.env.local` and set:
 | `STRIPE_PRICE_ID_INNER_CIRCLE` | Override for local **test** mode only |
 | `STRIPE_PRICE_ID_ELITE_CIRCLE` | Override for local **test** mode only |
 | `STRIPE_PRICE_ID_EVENT_SPONSORSHIP` | Override for local **test** mode only |
-| `NEXT_PUBLIC_APP_URL` | App base URL for Checkout success/cancel and Portal return URLs |
+| `NEXT_PUBLIC_APP_URL` | **Required in Vercel Production.** Canonical origin for Checkout success/cancel and Portal return URLs (e.g. `https://huntsville-social-club-app.vercel.app`). Never a per-deployment `*.vercel.app` hash URL. |
 | `STRIPE_CHECKOUT_TRIAL_DAYS` | Optional default trial length for new checkouts |
 
 `SUPABASE_SERVICE_ROLE_KEY` is required for webhook processing and idempotency ledger writes.
