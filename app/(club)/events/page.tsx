@@ -12,6 +12,12 @@ import { getViewer } from '@/lib/viewer'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { evaluateEventRegistration } from '@/lib/membership-entitlements'
 import type { EventAccessType } from '@/lib/membership-tier-config'
+import {
+  EVENT_SELECT_FIELDS_BASE,
+  EVENT_SELECT_FIELDS_WITH_COVER,
+  isMissingCoverImageColumnError,
+  withNullCoverImage,
+} from '@/lib/event-cover-image-column'
 
 type ProfileRow = {
   id: string
@@ -70,12 +76,19 @@ export default async function EventsPage() {
   const canCreateEvents =
     isAdminCreator || Boolean(entitlements?.canCreateStandardEvents)
 
-  const { data: events, error } = await supabase
+  let { data: events, error } = await supabase
     .from('events')
-    .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max, cover_image_url'
-    )
+    .select(EVENT_SELECT_FIELDS_WITH_COVER)
     .order('starts_at', { ascending: true })
+
+  if (error && isMissingCoverImageColumnError(error)) {
+    const fallback = await supabase
+      .from('events')
+      .select(EVENT_SELECT_FIELDS_BASE)
+      .order('starts_at', { ascending: true })
+    events = (fallback.data ?? []).map((row) => withNullCoverImage(row))
+    error = fallback.error
+  }
 
   const visibleEvents =
     events?.filter((event) => canViewEvent(event, user.id, userRole)) ?? []

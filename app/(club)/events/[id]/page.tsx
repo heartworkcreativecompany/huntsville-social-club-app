@@ -16,6 +16,12 @@ import {
   eventCoverImage,
   isRemoteEventCoverImage,
 } from '@/lib/event-images'
+import {
+  EVENT_DETAIL_SELECT_FIELDS_BASE,
+  EVENT_DETAIL_SELECT_FIELDS_WITH_COVER,
+  isMissingCoverImageColumnError,
+  withNullCoverImage,
+} from '@/lib/event-cover-image-column'
 import { isEventPast, memberGoingLabel, availabilityLabel } from '@/lib/event-display'
 import {
   EVENT_AT_CAPACITY_MESSAGE,
@@ -64,13 +70,21 @@ export default async function EventDetailPage({ params }: PageProps) {
   const supabase = await createClient()
   const user = { id: viewer.userId }
 
-  const { data: event, error: eventError } = await supabase
+  let { data: event, error: eventError } = await supabase
     .from('events')
-    .select(
-      'id, owner_id, title, description, location, starts_at, ends_at, visibility, status, created_at, event_type, sponsorship_eligible, priority_rsvp_opens_at, general_rsvp_opens_at, fee_cents, attendance_max, cover_image_url'
-    )
+    .select(EVENT_DETAIL_SELECT_FIELDS_WITH_COVER)
     .eq('id', id)
     .single()
+
+  if (eventError && isMissingCoverImageColumnError(eventError)) {
+    const fallback = await supabase
+      .from('events')
+      .select(EVENT_DETAIL_SELECT_FIELDS_BASE)
+      .eq('id', id)
+      .single()
+    event = fallback.data ? withNullCoverImage(fallback.data) : null
+    eventError = fallback.error
+  }
 
   if (eventError || !event) {
     return (

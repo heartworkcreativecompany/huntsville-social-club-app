@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { isApprovedMember } from '@/lib/application'
 import { parseAttendanceMax } from '@/lib/event-attendance'
+import { isMissingCoverImageColumnError } from '@/lib/event-cover-image-column'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import {
   parseDatetimeLocalToIso,
@@ -132,31 +133,44 @@ export async function createEvent(input: {
     eventType === 'circle_social' || eventType === 'premium_event'
 
   const supabase = await createClient()
-  const { data: newEvent, error: eventError } = await supabase
+  const insertPayload = {
+    owner_id: viewer.userId,
+    title,
+    location,
+    starts_at: startsAt,
+    description: input.description?.trim() || null,
+    ends_at: input.endsAt?.trim() || null,
+    visibility: 'public' as const,
+    event_type: eventType,
+    status,
+    sponsorship_eligible: sponsorshipEligible,
+    attendance_max: attendanceParsed.value,
+    cover_image_url: coverImageUrl,
+    ...(privileged
+      ? {
+          fee_cents: feeCents,
+          priority_rsvp_opens_at: priorityIso,
+          general_rsvp_opens_at: generalIso,
+        }
+      : {}),
+  }
+
+  let { data: newEvent, error: eventError } = await supabase
     .from('events')
-    .insert({
-      owner_id: viewer.userId,
-      title,
-      location,
-      starts_at: startsAt,
-      description: input.description?.trim() || null,
-      ends_at: input.endsAt?.trim() || null,
-      visibility: 'public',
-      event_type: eventType,
-      status,
-      sponsorship_eligible: sponsorshipEligible,
-      attendance_max: attendanceParsed.value,
-      cover_image_url: coverImageUrl,
-      ...(privileged
-        ? {
-            fee_cents: feeCents,
-            priority_rsvp_opens_at: priorityIso,
-            general_rsvp_opens_at: generalIso,
-          }
-        : {}),
-    })
+    .insert(insertPayload)
     .select('id')
     .single()
+
+  if (eventError && isMissingCoverImageColumnError(eventError)) {
+    const { cover_image_url: _omit, ...withoutCover } = insertPayload
+    const retry = await supabase
+      .from('events')
+      .insert(withoutCover)
+      .select('id')
+      .single()
+    newEvent = retry.data
+    eventError = retry.error
+  }
 
   if (eventError) {
     return { error: getEventWriteErrorMessage(eventError) }
@@ -291,28 +305,41 @@ export async function updateEvent(input: {
   const sponsorshipEligible =
     eventType === 'circle_social' || eventType === 'premium_event'
 
-  const { error } = await supabase
+  const updatePayload = {
+    title,
+    location: location || null,
+    starts_at: startsAt,
+    description: input.description?.trim() || null,
+    ends_at: input.endsAt?.trim() || null,
+    visibility: 'public' as const,
+    attendance_max: attendanceParsed.value,
+    updated_at: new Date().toISOString(),
+    ...(coverImageUrl !== undefined ? { cover_image_url: coverImageUrl } : {}),
+    ...(canManageTypeAndFee
+      ? {
+          event_type: eventType,
+          status,
+          sponsorship_eligible: sponsorshipEligible,
+          ...feePatch,
+        }
+      : {}),
+  }
+
+  let { error } = await supabase
     .from('events')
-    .update({
-      title,
-      location: location || null,
-      starts_at: startsAt,
-      description: input.description?.trim() || null,
-      ends_at: input.endsAt?.trim() || null,
-      visibility: 'public',
-      attendance_max: attendanceParsed.value,
-      updated_at: new Date().toISOString(),
-      ...(coverImageUrl !== undefined ? { cover_image_url: coverImageUrl } : {}),
-      ...(canManageTypeAndFee
-        ? {
-            event_type: eventType,
-            status,
-            sponsorship_eligible: sponsorshipEligible,
-            ...feePatch,
-          }
-        : {}),
-    })
+    .update(updatePayload)
     .eq('id', input.eventId)
+
+  if (error && isMissingCoverImageColumnError(error)) {
+    const { cover_image_url: _omit, ...withoutCover } = updatePayload as {
+      cover_image_url?: string | null
+    } & typeof updatePayload
+    const retry = await supabase
+      .from('events')
+      .update(withoutCover)
+      .eq('id', input.eventId)
+    error = retry.error
+  }
 
   if (error) {
     return { error: getEventWriteErrorMessage(error) }
