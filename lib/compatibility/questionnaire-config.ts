@@ -4,8 +4,13 @@ export type CompatibilityQuestionnaireSectionId =
   | 'eligibility'
   | 'values'
   | 'family'
+  | 'lifestyle'
 
-export type CompatibilityQuestionFieldType = 'single' | 'multi' | 'text'
+export type CompatibilityQuestionFieldType =
+  | 'single'
+  | 'multi'
+  | 'text'
+  | 'scale'
 
 export type CompatibilityQuestionOption = {
   value: string | number
@@ -52,10 +57,24 @@ export const COMPATIBILITY_QUESTIONNAIRE_SECTIONS: CompatibilityQuestionnaireSec
       description:
         'These questions help us respect your family context and relationship preferences.',
     },
+    {
+      id: 'lifestyle',
+      title: 'Lifestyle',
+      description:
+        'Rate how much you agree with each statement (1 = Strongly disagree, 5 = Strongly agree).',
+    },
   ]
 
 const ORDINAL_5 = (labels: string[]): CompatibilityQuestionOption[] =>
   labels.map((label, index) => ({ value: index + 1, label }))
+
+const AGREE_DISAGREE_5 = ORDINAL_5([
+  'Strongly disagree',
+  'Disagree',
+  'Neutral',
+  'Agree',
+  'Strongly agree',
+])
 
 export const COMPATIBILITY_QUESTIONNAIRE_QUESTIONS: CompatibilityQuestionDefinition[] =
   [
@@ -299,9 +318,130 @@ export const COMPATIBILITY_QUESTIONNAIRE_QUESTIONS: CompatibilityQuestionDefinit
         'Relationship history is not important to me',
       ]),
     },
+    {
+      id: 'stayingActiveImportant',
+      section: 'lifestyle',
+      prompt: 'Staying active is an important part of who I am.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'enjoyDancingSocially',
+      section: 'lifestyle',
+      prompt: 'I enjoy dancing socially.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'enjoyEdgyHumor',
+      section: 'lifestyle',
+      prompt: 'I enjoy edgy or politically incorrect humor.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'preferLowKeyHangouts',
+      section: 'lifestyle',
+      prompt: 'I prefer low-key hangouts over high-energy nights out.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'needStructureOrganization',
+      section: 'lifestyle',
+      prompt: 'I need structure and organization in my life.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'spontaneousPlanReady',
+      section: 'lifestyle',
+      prompt: 'I’m usually down for a spontaneous plan.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'preferOneOnOne',
+      section: 'lifestyle',
+      prompt: 'I prefer one-on-one conversations to big group settings.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'sharedValuesOverHobbies',
+      section: 'lifestyle',
+      prompt: 'Shared values matter more to me than shared hobbies.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'likePlayfulBanter',
+      section: 'lifestyle',
+      prompt: 'I like playful banter.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'loveLanguagesImportant',
+      section: 'lifestyle',
+      prompt:
+        'I think the five love languages are important in relationships.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'extendedFamilyTimeImportant',
+      section: 'lifestyle',
+      prompt: 'Extended family time is important to me.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'enjoyHostingGatherings',
+      section: 'lifestyle',
+      prompt: 'I enjoy hosting gatherings at my home.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'drinkAlcoholRegularly',
+      section: 'lifestyle',
+      prompt: 'I drink alcohol regularly.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'smokeRegularly',
+      section: 'lifestyle',
+      prompt: 'I smoke regularly.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
+    {
+      id: 'animalCompanyImportant',
+      section: 'lifestyle',
+      prompt: 'Enjoying the company of animals is important to me.',
+      type: 'scale',
+      required: true,
+      options: AGREE_DISAGREE_5,
+    },
   ]
 
-export const COMPATIBILITY_ORDINAL_QUESTION_IDS = [
+export const COMPATIBILITY_CORE_ORDINAL_QUESTION_IDS = [
   'relationshipIntention',
   'faithValues',
   'valuesVsChemistry',
@@ -317,8 +457,34 @@ export const COMPATIBILITY_ORDINAL_QUESTION_IDS = [
   'partnerHistoryPreference',
 ] as const
 
+export const COMPATIBILITY_LIFESTYLE_ORDINAL_QUESTION_IDS = [
+  'stayingActiveImportant',
+  'enjoyDancingSocially',
+  'enjoyEdgyHumor',
+  'preferLowKeyHangouts',
+  'needStructureOrganization',
+  'spontaneousPlanReady',
+  'preferOneOnOne',
+  'sharedValuesOverHobbies',
+  'likePlayfulBanter',
+  'loveLanguagesImportant',
+  'extendedFamilyTimeImportant',
+  'enjoyHostingGatherings',
+  'drinkAlcoholRegularly',
+  'smokeRegularly',
+  'animalCompanyImportant',
+] as const
+
+export const COMPATIBILITY_ORDINAL_QUESTION_IDS = [
+  ...COMPATIBILITY_CORE_ORDINAL_QUESTION_IDS,
+  ...COMPATIBILITY_LIFESTYLE_ORDINAL_QUESTION_IDS,
+] as const
+
 export type CompatibilityOrdinalQuestionId =
   (typeof COMPATIBILITY_ORDINAL_QUESTION_IDS)[number]
+
+export type CompatibilityLifestyleOrdinalQuestionId =
+  (typeof COMPATIBILITY_LIFESTYLE_ORDINAL_QUESTION_IDS)[number]
 
 export function questionsForSection(
   sectionId: CompatibilityQuestionnaireSectionId

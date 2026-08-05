@@ -35,6 +35,21 @@ const ORDINAL_WEIGHTS: Partial<Record<CompatibilityOrdinalQuestionId, number>> =
     futureChildren: 4,
     openToDivorced: 3,
     maritalHistory: 2,
+    stayingActiveImportant: 2,
+    enjoyDancingSocially: 1,
+    enjoyEdgyHumor: 1,
+    preferLowKeyHangouts: 2,
+    needStructureOrganization: 1,
+    spontaneousPlanReady: 1,
+    preferOneOnOne: 1,
+    sharedValuesOverHobbies: 2,
+    likePlayfulBanter: 1,
+    loveLanguagesImportant: 1,
+    extendedFamilyTimeImportant: 2,
+    enjoyHostingGatherings: 1,
+    drinkAlcoholRegularly: 2,
+    smokeRegularly: 2,
+    animalCompanyImportant: 1,
   }
 
 function ordinalSimilarityPoints(

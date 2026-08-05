@@ -66,6 +66,21 @@ export type CompatibilityQuestionnaireV2 = {
   futureChildren: CompatibilityOrdinalAnswer
   openToDivorced: CompatibilityOrdinalAnswer
   partnerHistoryPreference: CompatibilityOrdinalAnswer
+  stayingActiveImportant: CompatibilityOrdinalAnswer
+  enjoyDancingSocially: CompatibilityOrdinalAnswer
+  enjoyEdgyHumor: CompatibilityOrdinalAnswer
+  preferLowKeyHangouts: CompatibilityOrdinalAnswer
+  needStructureOrganization: CompatibilityOrdinalAnswer
+  spontaneousPlanReady: CompatibilityOrdinalAnswer
+  preferOneOnOne: CompatibilityOrdinalAnswer
+  sharedValuesOverHobbies: CompatibilityOrdinalAnswer
+  likePlayfulBanter: CompatibilityOrdinalAnswer
+  loveLanguagesImportant: CompatibilityOrdinalAnswer
+  extendedFamilyTimeImportant: CompatibilityOrdinalAnswer
+  enjoyHostingGatherings: CompatibilityOrdinalAnswer
+  drinkAlcoholRegularly: CompatibilityOrdinalAnswer
+  smokeRegularly: CompatibilityOrdinalAnswer
+  animalCompanyImportant: CompatibilityOrdinalAnswer
   /** Preserved from the Phase 1 scaffold when upgrading in place. */
   legacyRelationshipGoals?: string
   legacyCommunicationStyle?: string

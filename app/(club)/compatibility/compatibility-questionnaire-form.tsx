@@ -173,6 +173,56 @@ export default function CompatibilityQuestionnaireForm({
       )
     }
 
+    if (question.type === 'scale') {
+      const raw = answers[question.id as keyof CompatibilityQuestionnaireAnswers]
+      const numericValue = typeof raw === 'number' ? raw : null
+      const displayValue = numericValue ?? 3
+      const selectedLabel =
+        question.options?.find((option) => option.value === numericValue)
+          ?.label ?? 'Not answered yet'
+
+      return (
+        <fieldset key={question.id} className="grid gap-3 text-sm">
+          <legend className="font-medium text-foreground">{question.prompt}</legend>
+          {question.helperText ? (
+            <p className="text-muted-foreground">{question.helperText}</p>
+          ) : null}
+          <div className="grid gap-2">
+            <input
+              type="range"
+              min={1}
+              max={5}
+              step={1}
+              value={displayValue}
+              aria-valuetext={selectedLabel}
+              onChange={(event) =>
+                setSingleValue(question.id, Number(event.target.value))
+              }
+              disabled={isPending}
+              className="w-full accent-accent"
+            />
+            <div className="flex justify-between gap-2 text-xs text-muted-foreground">
+              <span>Strongly disagree</span>
+              <span>Neutral</span>
+              <span>Strongly agree</span>
+            </div>
+            <p className="text-sm text-foreground">
+              {numericValue == null ? (
+                <span className="text-muted-foreground">
+                  Move the slider to answer · currently showing Neutral
+                </span>
+              ) : (
+                <>
+                  <span className="font-medium">{numericValue}</span>
+                  <span className="text-muted-foreground"> — {selectedLabel}</span>
+                </>
+              )}
+            </p>
+          </div>
+        </fieldset>
+      )
+    }
+
     const value = answers[question.id as keyof CompatibilityQuestionnaireAnswers]
 
     return (

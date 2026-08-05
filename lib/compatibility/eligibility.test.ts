@@ -26,6 +26,21 @@ const completeQuestionnaire = {
   futureChildren: 2 as const,
   openToDivorced: 4 as const,
   partnerHistoryPreference: 3 as const,
+  stayingActiveImportant: 3 as const,
+  enjoyDancingSocially: 3 as const,
+  enjoyEdgyHumor: 3 as const,
+  preferLowKeyHangouts: 3 as const,
+  needStructureOrganization: 3 as const,
+  spontaneousPlanReady: 3 as const,
+  preferOneOnOne: 3 as const,
+  sharedValuesOverHobbies: 3 as const,
+  likePlayfulBanter: 3 as const,
+  loveLanguagesImportant: 3 as const,
+  extendedFamilyTimeImportant: 3 as const,
+  enjoyHostingGatherings: 3 as const,
+  drinkAlcoholRegularly: 3 as const,
+  smokeRegularly: 3 as const,
+  animalCompanyImportant: 3 as const,
 }
 
 const innerCircleBilling = {

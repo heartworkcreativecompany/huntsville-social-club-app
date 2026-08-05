@@ -33,6 +33,21 @@ export type CompatibilityQuestionnaireAnswers = {
   futureChildren: number | null
   openToDivorced: number | null
   partnerHistoryPreference: number | null
+  stayingActiveImportant: number | null
+  enjoyDancingSocially: number | null
+  enjoyEdgyHumor: number | null
+  preferLowKeyHangouts: number | null
+  needStructureOrganization: number | null
+  spontaneousPlanReady: number | null
+  preferOneOnOne: number | null
+  sharedValuesOverHobbies: number | null
+  likePlayfulBanter: number | null
+  loveLanguagesImportant: number | null
+  extendedFamilyTimeImportant: number | null
+  enjoyHostingGatherings: number | null
+  drinkAlcoholRegularly: number | null
+  smokeRegularly: number | null
+  animalCompanyImportant: number | null
 }
 
 const GENDER_VALUES = new Set<CompatibilityGender>([
@@ -78,6 +93,21 @@ function emptyAnswers(): CompatibilityQuestionnaireAnswers {
     futureChildren: null,
     openToDivorced: null,
     partnerHistoryPreference: null,
+    stayingActiveImportant: null,
+    enjoyDancingSocially: null,
+    enjoyEdgyHumor: null,
+    preferLowKeyHangouts: null,
+    needStructureOrganization: null,
+    spontaneousPlanReady: null,
+    preferOneOnOne: null,
+    sharedValuesOverHobbies: null,
+    likePlayfulBanter: null,
+    loveLanguagesImportant: null,
+    extendedFamilyTimeImportant: null,
+    enjoyHostingGatherings: null,
+    drinkAlcoholRegularly: null,
+    smokeRegularly: null,
+    animalCompanyImportant: null,
   }
 }
 
@@ -149,20 +179,10 @@ export function questionnaireAnswersFromStored(
     }
     answers.genderSelfDescribe = record.genderSelfDescribe ?? ''
     answers.matchInterests = [...(record.matchInterests ?? [])]
-    answers.relationshipIntention = record.relationshipIntention ?? null
-    answers.faithValues = record.faithValues ?? null
-    answers.valuesVsChemistry = record.valuesVsChemistry ?? null
-    answers.partnershipDailyLife = record.partnershipDailyLife ?? null
-    answers.socialRhythm = record.socialRhythm ?? null
-    answers.saturdayStyle = record.saturdayStyle ?? null
-    answers.planningSpontaneity = record.planningSpontaneity ?? null
-    answers.ambition = record.ambition ?? null
-    answers.maritalHistory = record.maritalHistory ?? null
     answers.familySituation = [...(record.familySituation ?? [])]
-    answers.openToPartnerWithChildren = record.openToPartnerWithChildren ?? null
-    answers.futureChildren = record.futureChildren ?? null
-    answers.openToDivorced = record.openToDivorced ?? null
-    answers.partnerHistoryPreference = record.partnerHistoryPreference ?? null
+    for (const key of COMPATIBILITY_ORDINAL_QUESTION_IDS) {
+      answers[key] = record[key] ?? null
+    }
     return answers
   }
 
@@ -400,6 +420,14 @@ export function missingRequiredQuestionPrompts(
         )
       }
 
+      continue
+    }
+
+    if (question.type === 'single' || question.type === 'scale') {
+      const value = answers[question.id as keyof CompatibilityQuestionnaireAnswers]
+      if (value == null || value === '') {
+        missing.push(question.prompt)
+      }
       continue
     }
 

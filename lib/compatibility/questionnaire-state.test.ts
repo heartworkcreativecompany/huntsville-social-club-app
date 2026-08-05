@@ -48,6 +48,21 @@ const completeAnswers: CompatibilityQuestionnaireAnswers = {
   futureChildren: 2,
   openToDivorced: 4,
   partnerHistoryPreference: 3,
+  stayingActiveImportant: 3,
+  enjoyDancingSocially: 3,
+  enjoyEdgyHumor: 3,
+  preferLowKeyHangouts: 3,
+  needStructureOrganization: 3,
+  spontaneousPlanReady: 3,
+  preferOneOnOne: 3,
+  sharedValuesOverHobbies: 3,
+  likePlayfulBanter: 3,
+  loveLanguagesImportant: 3,
+  extendedFamilyTimeImportant: 3,
+  enjoyHostingGatherings: 3,
+  drinkAlcoholRegularly: 3,
+  smokeRegularly: 3,
+  animalCompanyImportant: 3,
 }
 
 const baseProfile = {
