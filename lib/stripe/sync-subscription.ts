@@ -9,9 +9,15 @@ import {
   type MembershipBilling,
   type SubscriptionStatus,
 } from '@/lib/membership-systems'
-import { getStripe, tierFromStripePriceId, type PaidMembershipTier } from '@/lib/stripe/config'
+import { getStripe, type PaidMembershipTier } from '@/lib/stripe/config'
+import {
+  primarySubscriptionPriceId,
+  resolvePaidTierForSubscription,
+} from '@/lib/stripe/resolve-paid-tier'
 import { subscriptionPeriod } from '@/lib/stripe/invoice-helpers'
 import { runCompatibilitySubscriptionLifecycle } from '@/lib/compatibility/subscription-sync-hook'
+
+export { resolvePaidTierForSubscription } from '@/lib/stripe/resolve-paid-tier'
 
 export function mapStripeSubscriptionStatus(
   status: Stripe.Subscription.Status
@@ -37,10 +43,6 @@ export function mapStripeSubscriptionStatus(
 
 function subscriptionGrantsPaidAccess(status: Stripe.Subscription.Status): boolean {
   return status === 'active' || status === 'trialing'
-}
-
-function primaryPriceId(subscription: Stripe.Subscription): string | null {
-  return subscription.items.data[0]?.price?.id ?? null
 }
 
 export function resolveUserIdFromStripeMetadata(
@@ -81,13 +83,28 @@ export async function syncStripeSubscription(
     userId: string
     subscription: Stripe.Subscription
     options?: SyncStripeSubscriptionOptions
+    /** Checkout session metadata.product_tier when price ID mapping is unavailable. */
+    productTierFallback?: string | null
   }
 ): Promise<MembershipBilling> {
-  const { userId, subscription, options } = input
-  const priceId = primaryPriceId(subscription)
-  const mappedTier = tierFromStripePriceId(priceId)
+  const { userId, subscription, options, productTierFallback } = input
+  const priceId = primarySubscriptionPriceId(subscription)
+  const mappedTier = resolvePaidTierForSubscription(
+    subscription,
+    productTierFallback
+  )
   const grantsAccess = subscriptionGrantsPaidAccess(subscription.status)
   const internalStatus = mapStripeSubscriptionStatus(subscription.status)
+
+  if (grantsAccess && !mappedTier) {
+    console.error('[stripe_sync] active subscription missing mapped paid tier', {
+      userId,
+      priceId,
+      subscriptionId: subscription.id,
+      subscriptionMetaTier: subscription.metadata?.product_tier ?? null,
+      productTierFallback: productTierFallback ?? null,
+    })
+  }
 
   const { periodStart, periodEnd } = subscriptionPeriod(subscription)
   const trialEnd = subscription.trial_end
@@ -239,5 +256,5 @@ export function paidTierFromSubscription(
   subscription: Stripe.Subscription
 ): PaidMembershipTier | null {
   if (!subscriptionGrantsPaidAccess(subscription.status)) return null
-  return tierFromStripePriceId(primaryPriceId(subscription))
+  return resolvePaidTierForSubscription(subscription)
 }

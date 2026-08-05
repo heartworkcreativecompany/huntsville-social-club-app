@@ -50,7 +50,10 @@ function pauseReasonLabel(
   }
 }
 
-const CURATED_MATCHES_UNAVAILABLE_COPY =
+const CURATED_MATCHES_FEATURE_DISABLED_COPY =
+  'Curated Matches are not available right now.'
+
+const CURATED_MATCHES_PAID_ONLY_COPY =
   'Curated Matches are not available right now. This feature is only available for paid members.'
 
 export function summarizeCompatibilityProfileStatus(input: {
@@ -65,7 +68,7 @@ export function summarizeCompatibilityProfileStatus(input: {
     return {
       status: 'disabled',
       headline: 'Curated matches',
-      detail: CURATED_MATCHES_UNAVAILABLE_COPY,
+      detail: CURATED_MATCHES_FEATURE_DISABLED_COPY,
       showCard: true,
       ctaHref: null,
       ctaLabel: null,
@@ -99,7 +102,7 @@ export function summarizeCompatibilityProfileStatus(input: {
     return {
       status: 'no_messaging',
       headline: 'Curated matches',
-      detail: CURATED_MATCHES_UNAVAILABLE_COPY,
+      detail: CURATED_MATCHES_PAID_ONLY_COPY,
       showCard: true,
       ctaHref: '/upgrade',
       ctaLabel: 'View memberships',

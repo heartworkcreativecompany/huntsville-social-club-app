@@ -68,6 +68,10 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         userId,
         subscription,
         options: { startEntitlementCycle: true },
+        productTierFallback:
+          typeof session.metadata?.product_tier === 'string'
+            ? session.metadata.product_tier
+            : null,
       })
       return
     }

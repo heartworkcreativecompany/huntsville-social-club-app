@@ -6,6 +6,7 @@ import HowCompatibilityWorksInlineSummary from '@/components/compatibility/how-c
 import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import { isCompatibilityFeatureEnabled } from '@/lib/compatibility/eligibility'
+import { healStaleSubscriptionInactivePause } from '@/lib/compatibility/heal-stale-subscription-pause'
 import { summarizeMemberMatchAvailability } from '@/lib/compatibility/member-match-availability'
 import { isDevRecommendationSeedAllowed } from '@/lib/compatibility/seed-dev-recommendations'
 import { compatibilityContextForViewer } from '@/lib/compatibility/viewer-context'
@@ -59,7 +60,9 @@ export default async function MatchesPage() {
   }
 
   const { entitlements } = await loadMemberEntitlementsForViewer()
-  const context = compatibilityContextForViewer(viewer, entitlements)
+  const healed = await healStaleSubscriptionInactivePause(viewer, entitlements)
+  const gatedViewer = healed ? (await getViewer()) ?? viewer : viewer
+  const context = compatibilityContextForViewer(gatedViewer, entitlements)
 
   if (!isCompatibilityFeatureEnabled()) {
     return (
@@ -79,8 +82,7 @@ export default async function MatchesPage() {
         />
         <Card>
           <p className="text-sm text-muted-foreground">
-            Curated Matches are not available right now. This feature is only
-            available for paid members.
+            Curated Matches are not available right now.
           </p>
         </Card>
       </>
@@ -117,16 +119,16 @@ export default async function MatchesPage() {
   }
 
   const supabase = await createClient()
-  await syncRecommendationLifecycleForMember(supabase, viewer.userId)
+  await syncRecommendationLifecycleForMember(supabase, gatedViewer.userId)
   const { items, error } = await loadCuratedMatchRecommendations(
     supabase,
-    viewer.userId,
-    { viewerInterests: viewer.profile?.discovery_interests ?? null }
+    gatedViewer.userId,
+    { viewerInterests: gatedViewer.profile?.discovery_interests ?? null }
   )
   const sortedItems = sortCuratedMatchItems(items)
-  const deliverySnapshot = await loadMemberDeliverySnapshot(supabase, viewer.userId, {
-    lastMatchGenerationAt: viewer.profile?.last_match_generation_at ?? null,
-    lastMatchReviewAt: viewer.profile?.last_match_review_at ?? null,
+  const deliverySnapshot = await loadMemberDeliverySnapshot(supabase, gatedViewer.userId, {
+    lastMatchGenerationAt: gatedViewer.profile?.last_match_generation_at ?? null,
+    lastMatchReviewAt: gatedViewer.profile?.last_match_review_at ?? null,
   })
   const inboxCounts = {
     active: deliverySnapshot.activeRecommendationCount,
@@ -135,11 +137,11 @@ export default async function MatchesPage() {
   const availability = summarizeMemberMatchAvailability({
     lastMatchGenerationAt: deliverySnapshot.lastMatchGenerationAt,
     lastMatchReviewAt: deliverySnapshot.lastMatchReviewAt,
-    compatibilityCompletedAt: viewer.profile?.compatibility_completed_at ?? null,
+    compatibilityCompletedAt: gatedViewer.profile?.compatibility_completed_at ?? null,
     latestBatch: deliverySnapshot.latestBatch,
     activeRecommendationCount: inboxCounts.active,
     archivedRecommendationCount: inboxCounts.archived,
-    messagingSuspended: isMessagingSuspended(viewer.profile),
+    messagingSuspended: isMessagingSuspended(gatedViewer.profile),
   })
 
   return (
