@@ -173,85 +173,40 @@ export default function CompatibilityQuestionnaireForm({
       )
     }
 
-    if (question.type === 'scale') {
-      const raw = answers[question.id as keyof CompatibilityQuestionnaireAnswers]
-      const numericValue = typeof raw === 'number' ? raw : null
-      const displayValue = numericValue ?? 3
-      const selectedLabel =
-        question.options?.find((option) => option.value === numericValue)
-          ?.label ?? 'Not answered yet'
+    if (question.type === 'scale' || question.type === 'single') {
+      const value = answers[question.id as keyof CompatibilityQuestionnaireAnswers]
 
       return (
-        <fieldset key={question.id} className="grid gap-3 text-sm">
+        <fieldset key={question.id} className="grid gap-2 text-sm">
           <legend className="font-medium text-foreground">{question.prompt}</legend>
           {question.helperText ? (
             <p className="text-muted-foreground">{question.helperText}</p>
           ) : null}
-          <div className="grid gap-2">
-            <input
-              type="range"
-              min={1}
-              max={5}
-              step={1}
-              value={displayValue}
-              aria-valuetext={selectedLabel}
-              onChange={(event) =>
-                setSingleValue(question.id, Number(event.target.value))
-              }
-              disabled={isPending}
-              className="w-full accent-accent"
-            />
-            <div className="flex justify-between gap-2 text-xs text-muted-foreground">
-              <span>Strongly disagree</span>
-              <span>Neutral</span>
-              <span>Strongly agree</span>
-            </div>
-            <p className="text-sm text-foreground">
-              {numericValue == null ? (
-                <span className="text-muted-foreground">
-                  Move the slider to answer · currently showing Neutral
-                </span>
-              ) : (
-                <>
-                  <span className="font-medium">{numericValue}</span>
-                  <span className="text-muted-foreground"> — {selectedLabel}</span>
-                </>
-              )}
-            </p>
+          <div className="grid gap-2" role="radiogroup" aria-label={question.prompt}>
+            {question.options?.map((option) => {
+              const optionValue = option.value
+              const checked = value === optionValue
+              return (
+                <label key={String(optionValue)} className={optionCardClassName}>
+                  <input
+                    type="radio"
+                    name={question.id}
+                    value={String(optionValue)}
+                    checked={checked}
+                    onChange={() => setSingleValue(question.id, optionValue)}
+                    disabled={isPending}
+                    className="mt-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2"
+                  />
+                  <span>{option.label}</span>
+                </label>
+              )
+            })}
           </div>
         </fieldset>
       )
     }
 
-    const value = answers[question.id as keyof CompatibilityQuestionnaireAnswers]
-
-    return (
-      <fieldset key={question.id} className="grid gap-2 text-sm">
-        <legend className="font-medium text-foreground">{question.prompt}</legend>
-        {question.helperText ? (
-          <p className="text-muted-foreground">{question.helperText}</p>
-        ) : null}
-        <div className="grid gap-2">
-          {question.options?.map((option) => {
-            const optionValue = option.value
-            const checked = value === optionValue
-            return (
-              <label key={String(optionValue)} className={optionCardClassName}>
-                <input
-                  type="radio"
-                  name={question.id}
-                  checked={checked}
-                  onChange={() => setSingleValue(question.id, optionValue)}
-                  disabled={isPending}
-                  className="mt-0.5"
-                />
-                <span>{option.label}</span>
-              </label>
-            )
-          })}
-        </div>
-      </fieldset>
-    )
+    return null
   }
 
   return (

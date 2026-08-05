@@ -231,7 +231,7 @@ export const COMPATIBILITY_QUESTIONNAIRE_QUESTIONS: CompatibilityQuestionDefinit
     },
     {
       id: 'maritalHistory',
-      section: 'values',
+      section: 'family',
       prompt: 'What best describes your own marital history?',
       type: 'single',
       required: true,

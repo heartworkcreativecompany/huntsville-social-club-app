@@ -45,7 +45,7 @@ describe('COMPATIBILITY_QUESTIONNAIRE_QUESTIONS', () => {
     }
   })
 
-  it('places Lifestyle after existing sections with agree/disagree sliders', () => {
+  it('places Lifestyle after existing sections with agree/disagree scale options', () => {
     expect(COMPATIBILITY_QUESTIONNAIRE_SECTIONS.map((section) => section.id)).toEqual(
       ['eligibility', 'values', 'family', 'lifestyle']
     )
@@ -63,5 +63,39 @@ describe('COMPATIBILITY_QUESTIONNAIRE_QUESTIONS', () => {
     expect(lifestyleQuestions.every((question) => question.type === 'scale')).toBe(
       true
     )
+    expect(
+      lifestyleQuestions.every(
+        (question) =>
+          question.options?.map((option) => option.label).join('|') ===
+          'Strongly disagree|Disagree|Neutral|Agree|Strongly agree'
+      )
+    ).toBe(true)
+  })
+
+  it('places marital history in the Family section', () => {
+    const maritalHistory = COMPATIBILITY_QUESTIONNAIRE_QUESTIONS.find(
+      (question) => question.id === 'maritalHistory'
+    )
+
+    expect(maritalHistory?.section).toBe('family')
+    expect(maritalHistory?.prompt).toBe(
+      'What best describes your own marital history?'
+    )
+
+    const familyQuestions = COMPATIBILITY_QUESTIONNAIRE_QUESTIONS.filter(
+      (question) => question.section === 'family'
+    )
+    const valuesQuestions = COMPATIBILITY_QUESTIONNAIRE_QUESTIONS.filter(
+      (question) => question.section === 'values'
+    )
+
+    expect(familyQuestions.map((question) => question.id)).toContain(
+      'maritalHistory'
+    )
+    expect(valuesQuestions.map((question) => question.id)).not.toContain(
+      'maritalHistory'
+    )
+    expect(familyQuestions).toHaveLength(6)
+    expect(valuesQuestions).toHaveLength(8)
   })
 })
