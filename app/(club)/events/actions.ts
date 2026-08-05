@@ -11,6 +11,10 @@ import {
   parseFeeDollarsToCents,
 } from '@/lib/membership-tier-config'
 import { getViewer } from '@/lib/viewer'
+import {
+  isSponsorshipEligibleEventType,
+  replaceEventSponsors,
+} from '@/lib/event-sponsors'
 
 const EVENT_TYPES = new Set([
   'standard_event',
@@ -64,6 +68,7 @@ export async function createEvent(input: {
   generalRsvpOpensAt?: string
   attendanceMax?: string
   coverImageUrl?: string
+  sponsorIds?: string[]
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -129,8 +134,7 @@ export async function createEvent(input: {
     }
   }
 
-  const sponsorshipEligible =
-    eventType === 'circle_social' || eventType === 'premium_event'
+  const sponsorshipEligible = isSponsorshipEligibleEventType(eventType)
 
   const supabase = await createClient()
   const insertPayload = {
@@ -176,6 +180,25 @@ export async function createEvent(input: {
     return { error: getEventWriteErrorMessage(eventError) }
   }
 
+  if (
+    privileged &&
+    viewer.role === 'admin' &&
+    sponsorshipEligible &&
+    newEvent?.id &&
+    input.sponsorIds
+  ) {
+    const sponsorResult = await replaceEventSponsors(supabase, {
+      eventId: newEvent.id,
+      sponsorIds: input.sponsorIds,
+    })
+    if (sponsorResult.error) {
+      return {
+        error: `Event created, but sponsors could not be saved: ${sponsorResult.error}`,
+        eventId: newEvent.id,
+      }
+    }
+  }
+
   if (status === 'published' && newEvent?.id) {
     const { error: attendeeError } = await supabase.from('event_attendees').upsert({
       event_id: newEvent.id,
@@ -219,6 +242,7 @@ export async function updateEvent(input: {
   generalRsvpOpensAt?: string
   attendanceMax?: string
   coverImageUrl?: string
+  sponsorIds?: string[]
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -302,8 +326,7 @@ export async function updateEvent(input: {
     }
   }
 
-  const sponsorshipEligible =
-    eventType === 'circle_social' || eventType === 'premium_event'
+  const sponsorshipEligible = isSponsorshipEligibleEventType(eventType)
 
   const updatePayload = {
     title,
@@ -343,6 +366,16 @@ export async function updateEvent(input: {
 
   if (error) {
     return { error: getEventWriteErrorMessage(error) }
+  }
+
+  if (isAdmin && input.sponsorIds !== undefined) {
+    const sponsorResult = await replaceEventSponsors(supabase, {
+      eventId: input.eventId,
+      sponsorIds: sponsorshipEligible ? input.sponsorIds : [],
+    })
+    if (sponsorResult.error) {
+      return { error: `Event updated, but sponsors could not be saved: ${sponsorResult.error}` }
+    }
   }
 
   revalidatePath('/events')

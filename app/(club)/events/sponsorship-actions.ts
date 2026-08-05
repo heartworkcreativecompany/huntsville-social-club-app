@@ -13,6 +13,11 @@ import {
 } from '@/lib/stripe/config'
 import { getOrCreateStripeCustomer } from '@/lib/stripe/customer'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  findOrCreateSponsor,
+  isSponsorshipEligibleEventType,
+  syncSponsorshipPurchaseToEventSponsors,
+} from '@/lib/event-sponsors'
 
 export async function createEventSponsorshipCheckout(input: {
   eventId: string
@@ -50,24 +55,36 @@ export async function createEventSponsorshipCheckout(input: {
 
   const eligible =
     event.sponsorship_eligible === true ||
-    event.event_type === 'circle_social' ||
-    event.event_type === 'premium_event'
+    isSponsorshipEligibleEventType(event.event_type)
 
   if (!eligible || event.event_type === 'standard_event') {
     return { error: 'This event is not eligible for sponsorship.' }
   }
 
-  const { data: existing } = await supabase
+  const { data: existingOwn } = await supabase
     .from('event_sponsorships')
     .select('id, status')
     .eq('event_id', input.eventId)
+    .eq('sponsor_user_id', viewer.userId)
     .in('status', ['pending_payment', 'paid', 'approved', 'claimed'])
     .maybeSingle()
 
-  if (existing) {
+  if (existingOwn) {
     return {
-      error: 'Sponsorship for this event has already been claimed or reserved.',
+      error:
+        'You already have an active sponsorship reservation or purchase for this event.',
     }
+  }
+
+  const admin = createAdminClient()
+  const sponsorClient = admin ?? supabase
+  const createdSponsor = await findOrCreateSponsor(sponsorClient, {
+    businessName,
+    contactEmail: input.contactEmail?.trim() || viewer.email,
+  })
+
+  if ('error' in createdSponsor) {
+    return { error: createdSponsor.error }
   }
 
   const { data: sponsorship, error: insertError } = await supabase
@@ -75,6 +92,7 @@ export async function createEventSponsorshipCheckout(input: {
     .insert({
       event_id: input.eventId,
       sponsor_user_id: viewer.userId,
+      sponsor_id: createdSponsor.sponsor.id,
       business_name: businessName,
       contact_email: input.contactEmail?.trim() || viewer.email,
       status: 'pending_payment',
@@ -88,7 +106,7 @@ export async function createEventSponsorshipCheckout(input: {
     return {
       error:
         insertError?.message ??
-        'Could not reserve sponsorship. It may already be claimed.',
+        'Could not reserve sponsorship. Please try again.',
     }
   }
 
@@ -181,7 +199,7 @@ export async function markSponsorshipPaidFromCheckout(session: {
         ? session.payment_intent.id
         : null
 
-  await admin
+  const { data: sponsorship } = await admin
     .from('event_sponsorships')
     .update({
       status: 'paid',
@@ -192,4 +210,27 @@ export async function markSponsorshipPaidFromCheckout(session: {
     })
     .eq('id', sponsorshipId)
     .in('status', ['pending_payment', 'paid'])
+    .select('id, event_id, business_name, contact_email, logo_url, sponsor_id')
+    .maybeSingle()
+
+  if (!sponsorship) {
+    return
+  }
+
+  const synced = await syncSponsorshipPurchaseToEventSponsors(admin, {
+    eventId: sponsorship.event_id,
+    businessName: sponsorship.business_name,
+    contactEmail: sponsorship.contact_email,
+    logoUrl: sponsorship.logo_url,
+  })
+
+  if ('sponsorId' in synced && sponsorship.sponsor_id !== synced.sponsorId) {
+    await admin
+      .from('event_sponsorships')
+      .update({
+        sponsor_id: synced.sponsorId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', sponsorship.id)
+  }
 }

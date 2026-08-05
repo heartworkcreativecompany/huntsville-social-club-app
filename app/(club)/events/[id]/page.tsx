@@ -36,6 +36,12 @@ import EventEditForm from '../event-edit-form'
 import EventRsvp from '../event-rsvp'
 import DeleteEventButton from './delete-event-button'
 import EventSponsorButton from '@/components/events/event-sponsor-button'
+import EventSponsorsList from '@/components/events/event-sponsors-list'
+import {
+  isSponsorshipEligibleEventType,
+  listSponsorsForAdmin,
+  loadEventSponsors,
+} from '@/lib/event-sponsors'
 import ExportAttendeesCsv, {
   type AttendeeExportRow,
 } from './export-attendees-csv'
@@ -160,22 +166,18 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   const sponsorshipEligible =
     event.sponsorship_eligible === true ||
-    eventType === 'circle_social' ||
-    eventType === 'premium_event'
+    isSponsorshipEligibleEventType(eventType)
 
-  const { data: activeSponsorship } = sponsorshipEligible
-    ? await supabase
-        .from('event_sponsorships')
-        .select('id, status')
-        .eq('event_id', event.id)
-        .in('status', ['pending_payment', 'paid', 'approved', 'claimed'])
-        .maybeSingle()
-    : { data: null }
+  const eventSponsors = sponsorshipEligible
+    ? await loadEventSponsors(supabase, event.id)
+    : []
+
+  const availableSponsors =
+    userRole === 'admin' ? await listSponsorsForAdmin(supabase) : []
 
   const sponsorshipAvailable =
     sponsorshipEligible &&
     eventType !== 'standard_event' &&
-    !activeSponsorship &&
     !isPast &&
     !isCancelled
 
@@ -336,6 +338,8 @@ export default async function EventDetailPage({ params }: PageProps) {
         </Card>
       ) : null}
 
+      <EventSponsorsList sponsors={eventSponsors} />
+
       {isMine ? (
         <Card className="mb-8">
           <h2 className="text-display text-lg font-semibold">Host dashboard</h2>
@@ -446,6 +450,8 @@ export default async function EventDetailPage({ params }: PageProps) {
               initialGeneralRsvpOpensAt={event.general_rsvp_opens_at}
               initialAttendanceMax={event.attendance_max}
               initialCoverImageUrl={event.cover_image_url}
+              initialSponsorIds={eventSponsors.map((sponsor) => sponsor.id)}
+              availableSponsors={availableSponsors}
               isAdminEditor={userRole === 'admin'}
             />
             <div className="mt-4 border-t border-border pt-4">

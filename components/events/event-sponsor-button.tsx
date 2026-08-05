@@ -23,7 +23,7 @@ export default function EventSponsorButton({
   if (!sponsorshipAvailable) {
     return (
       <p className="text-sm text-muted-foreground">
-        Sponsorship for this event has been claimed.
+        Sponsorship is not available for this event right now.
       </p>
     )
   }

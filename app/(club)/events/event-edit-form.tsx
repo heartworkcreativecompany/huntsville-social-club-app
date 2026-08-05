@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import EventSponsorsField from '@/components/events/event-sponsors-field'
 import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
@@ -12,7 +13,9 @@ import {
   toDatetimeLocalValue,
 } from '@/lib/membership-tier-config'
 import { updateEvent } from '@/app/(club)/events/actions'
+import { createSponsorForAdmin } from '@/app/(club)/events/sponsor-actions'
 import { uploadEventCoverImage } from '@/lib/event-image-storage'
+import type { SponsorOption } from '@/lib/event-sponsors'
 
 type EventEditFormProps = {
   eventId: string
@@ -28,7 +31,9 @@ type EventEditFormProps = {
   initialGeneralRsvpOpensAt?: string | null
   initialAttendanceMax?: number | null
   initialCoverImageUrl?: string | null
-  /** Admins can edit type, status, fee, and RSVP windows. */
+  initialSponsorIds?: string[]
+  availableSponsors?: SponsorOption[]
+  /** Admins can edit type, status, fee, RSVP windows, and sponsors. */
   isAdminEditor?: boolean
 }
 
@@ -46,6 +51,8 @@ export default function EventEditForm({
   initialGeneralRsvpOpensAt = null,
   initialAttendanceMax = null,
   initialCoverImageUrl = null,
+  initialSponsorIds = [],
+  availableSponsors: initialAvailableSponsors = [],
   isAdminEditor = false,
 }: EventEditFormProps) {
   const router = useRouter()
@@ -73,6 +80,11 @@ export default function EventEditForm({
     initialCoverImageUrl ? 'Current cover image' : ''
   )
   const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [availableSponsors, setAvailableSponsors] = useState<SponsorOption[]>(
+    initialAvailableSponsors
+  )
+  const [selectedSponsorIds, setSelectedSponsorIds] =
+    useState<string[]>(initialSponsorIds)
   const [message, setMessage] = useState('')
 
   const onCoverImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -118,6 +130,7 @@ export default function EventEditForm({
               feeDollars,
               priorityRsvpOpensAt,
               generalRsvpOpensAt,
+              sponsorIds: selectedSponsorIds,
             }
           : {}),
       })
@@ -292,6 +305,28 @@ export default function EventEditForm({
                 />
               </label>
             </div>
+
+            <EventSponsorsField
+              eventType={eventType}
+              availableSponsors={availableSponsors}
+              selectedSponsorIds={selectedSponsorIds}
+              onChange={setSelectedSponsorIds}
+              disabled={isPending}
+              onCreateSponsor={async (businessName) => {
+                const result = await createSponsorForAdmin({ businessName })
+                if ('sponsor' in result) {
+                  setAvailableSponsors((current) => {
+                    if (current.some((row) => row.id === result.sponsor.id)) {
+                      return current
+                    }
+                    return [...current, result.sponsor].sort((a, b) =>
+                      a.business_name.localeCompare(b.business_name)
+                    )
+                  })
+                }
+                return result
+              }}
+            />
           </>
         ) : null}
 

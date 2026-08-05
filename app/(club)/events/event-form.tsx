@@ -3,23 +3,31 @@
 import { useState, useTransition, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/card'
+import EventSponsorsField from '@/components/events/event-sponsors-field'
 import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
 import { createEvent } from '@/app/(club)/events/actions'
+import { createSponsorForAdmin } from '@/app/(club)/events/sponsor-actions'
 import { uploadEventCoverImage } from '@/lib/event-image-storage'
+import type { SponsorOption } from '@/lib/event-sponsors'
 
 type EventFormProps = {
   /** Admin/host can create all types and choose publish status. */
   isAdminCreator?: boolean
+  /** Admins can attach sponsors to Circle Social / Premium events. */
+  canManageSponsors?: boolean
+  availableSponsors?: SponsorOption[]
   /** Paid members may only create standard events pending approval. */
   canCreateStandardOnly?: boolean
 }
 
 export default function EventForm({
   isAdminCreator = false,
+  canManageSponsors = false,
+  availableSponsors: initialSponsors = [],
   canCreateStandardOnly = false,
 }: EventFormProps) {
   const router = useRouter()
@@ -41,6 +49,9 @@ export default function EventForm({
   const [coverImageUrl, setCoverImageUrl] = useState('')
   const [coverImageName, setCoverImageName] = useState('')
   const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [availableSponsors, setAvailableSponsors] =
+    useState<SponsorOption[]>(initialSponsors)
+  const [selectedSponsorIds, setSelectedSponsorIds] = useState<string[]>([])
   const [message, setMessage] = useState('')
 
   const onCoverImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -87,6 +98,7 @@ export default function EventForm({
               generalRsvpOpensAt,
             }
           : {}),
+        ...(canManageSponsors ? { sponsorIds: selectedSponsorIds } : {}),
       })
 
       if (result.error) {
@@ -104,6 +116,7 @@ export default function EventForm({
       setGeneralRsvpOpensAt('')
       setAttendanceMax('')
       clearCoverImage()
+      setSelectedSponsorIds([])
       setEventType('standard_event')
       setStatus(isAdminCreator ? 'published' : 'pending_approval')
       setMessage(
@@ -290,6 +303,30 @@ export default function EventForm({
               members. Entitlement rules are unchanged by these fields.
             </p>
           </div>
+        ) : null}
+
+        {canManageSponsors ? (
+          <EventSponsorsField
+            eventType={eventType}
+            availableSponsors={availableSponsors}
+            selectedSponsorIds={selectedSponsorIds}
+            onChange={setSelectedSponsorIds}
+            disabled={isPending}
+            onCreateSponsor={async (businessName) => {
+              const result = await createSponsorForAdmin({ businessName })
+              if ('sponsor' in result) {
+                setAvailableSponsors((current) => {
+                  if (current.some((row) => row.id === result.sponsor.id)) {
+                    return current
+                  }
+                  return [...current, result.sponsor].sort((a, b) =>
+                    a.business_name.localeCompare(b.business_name)
+                  )
+                })
+              }
+              return result
+            }}
+          />
         ) : null}
 
         <button

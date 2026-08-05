@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/page-header'
 import EventsBrowser, {
   type EventBrowserItem,
 } from '@/components/events/events-browser'
+import { listSponsorsForAdmin } from '@/lib/event-sponsors'
 import EventForm from './event-form'
 import { getViewer } from '@/lib/viewer'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
@@ -73,8 +74,12 @@ export default async function EventsPage() {
   const userRole = viewer.role
   const { entitlements } = await loadMemberEntitlementsForViewer()
   const isAdminCreator = userRole === 'host' || userRole === 'admin'
+  const canManageSponsors = userRole === 'admin'
   const canCreateEvents =
     isAdminCreator || Boolean(entitlements?.canCreateStandardEvents)
+  const availableSponsors = canManageSponsors
+    ? await listSponsorsForAdmin(supabase)
+    : []
 
   let { data: events, error } = await supabase
     .from('events')
@@ -183,6 +188,8 @@ export default async function EventsPage() {
           <h2 className="text-display mb-4 text-xl font-semibold">Create event</h2>
           <EventForm
             isAdminCreator={isAdminCreator}
+            canManageSponsors={canManageSponsors}
+            availableSponsors={availableSponsors}
             canCreateStandardOnly={!isAdminCreator}
           />
         </section>

@@ -654,6 +654,7 @@ export interface Database {
           id: string
           event_id: string
           sponsor_user_id: string | null
+          sponsor_id: string | null
           business_name: string
           contact_email: string | null
           status: string
@@ -663,6 +664,7 @@ export interface Database {
           stripe_payment_intent_id: string | null
           logo_url: string | null
           notes: string | null
+          sort_order: number
           created_at: string
           updated_at: string
           paid_at: string | null
@@ -672,6 +674,7 @@ export interface Database {
           id?: string
           event_id: string
           sponsor_user_id?: string | null
+          sponsor_id?: string | null
           business_name?: string
           contact_email?: string | null
           status?: string
@@ -681,6 +684,7 @@ export interface Database {
           stripe_payment_intent_id?: string | null
           logo_url?: string | null
           notes?: string | null
+          sort_order?: number
           created_at?: string
           updated_at?: string
           paid_at?: string | null
@@ -690,6 +694,7 @@ export interface Database {
           id?: string
           event_id?: string
           sponsor_user_id?: string | null
+          sponsor_id?: string | null
           business_name?: string
           contact_email?: string | null
           status?: string
@@ -699,12 +704,82 @@ export interface Database {
           stripe_payment_intent_id?: string | null
           logo_url?: string | null
           notes?: string | null
+          sort_order?: number
           created_at?: string
           updated_at?: string
           paid_at?: string | null
           approved_at?: string | null
         }
         Relationships: []
+      }
+      sponsors: {
+        Row: {
+          id: string
+          business_name: string
+          contact_email: string | null
+          logo_url: string | null
+          website_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_name: string
+          contact_email?: string | null
+          logo_url?: string | null
+          website_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_name?: string
+          contact_email?: string | null
+          logo_url?: string | null
+          website_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      event_sponsors: {
+        Row: {
+          id: string
+          event_id: string
+          sponsor_id: string
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          sponsor_id: string
+          sort_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          sponsor_id?: string
+          sort_order?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'event_sponsors_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'event_sponsors_sponsor_id_fkey'
+            columns: ['sponsor_id']
+            isOneToOne: false
+            referencedRelation: 'sponsors'
+            referencedColumns: ['id']
+          },
+        ]
       }
       business_listings: {
         Row: {
