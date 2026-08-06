@@ -8,6 +8,7 @@ import {
   type RsvpStatus,
 } from '@/app/(club)/events/rsvp-actions'
 import {
+  buttonDisabledMutedClassName,
   buttonPrimaryClassName,
   buttonSecondaryClassName,
 } from '@/lib/event-labels'
@@ -21,6 +22,9 @@ type EventRsvpProps = {
   registrationPreview?: EventRegistrationDecision | null
   canRegisterGoing?: boolean
   atCapacityMessage?: string | null
+  /** Membership credit / guest summary for premium events (shown in RSVP). */
+  creditSummary?: string | null
+  eventType?: string | null
 }
 
 const RSVP_OPTIONS: { value: RsvpStatus; label: string }[] = [
@@ -36,6 +40,8 @@ export default function EventRsvp({
   registrationPreview,
   canRegisterGoing = true,
   atCapacityMessage = null,
+  creditSummary = null,
+  eventType = null,
 }: EventRsvpProps) {
   const router = useRouter()
   const [message, setMessage] = useState('')
@@ -104,6 +110,18 @@ export default function EventRsvp({
 
   return (
     <div>
+      {creditSummary ? (
+        <div className="mb-4 rounded-lg border border-border bg-surface-elevated/60 px-3 py-3 text-sm">
+          <p className="text-foreground">{creditSummary}</p>
+          {eventType === 'premium_event' ? (
+            <p className="mt-1 text-muted-foreground">
+              Going may use a premium membership credit or the event fee,
+              depending on your membership and remaining credits.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {isRegisteredGoing ? (
         <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 p-4 text-sm">
           <p className="font-medium text-foreground">You&apos;re registered</p>
@@ -208,15 +226,23 @@ export default function EventRsvp({
       <div className="flex flex-wrap gap-2">
         {RSVP_OPTIONS.map((option) => {
           const isActive = currentStatus === option.value
+          const isGoingOption = option.value === 'going'
           const hideGoingForInnerChoice =
-            option.value === 'going' &&
+            isGoingOption &&
             (showInnerIncludedRemaining || showInnerIncludedExhausted)
-          const disabled =
-            isPending ||
-            hideGoingForInnerChoice ||
-            (option.value === 'going' && !canRegisterGoing && currentStatus !== 'going')
+          const goingBlocked =
+            isGoingOption && !canRegisterGoing && currentStatus !== 'going'
+          const disabled = isPending || hideGoingForInnerChoice || goingBlocked
 
           if (hideGoingForInnerChoice) return null
+
+          const className = goingBlocked
+            ? buttonDisabledMutedClassName
+            : isGoingOption
+              ? buttonPrimaryClassName
+              : isActive
+                ? `${buttonSecondaryClassName} border-accent bg-accent text-accent-foreground hover:brightness-110`
+                : buttonSecondaryClassName
 
           return (
             <button
@@ -224,11 +250,8 @@ export default function EventRsvp({
               type="button"
               onClick={() => submitRsvp(option.value)}
               disabled={disabled}
-              className={`${buttonSecondaryClassName} ${
-                isActive
-                  ? 'border-accent bg-accent text-accent-foreground'
-                  : ''
-              } disabled:cursor-not-allowed disabled:opacity-50`}
+              aria-pressed={isActive}
+              className={className}
             >
               {option.label}
             </button>

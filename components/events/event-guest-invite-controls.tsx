@@ -75,6 +75,10 @@ export default function EventGuestInviteControls({
   }
 
   if (!isGoing) {
+    if (guestInvitesRemaining <= 0) {
+      return null
+    }
+
     return (
       <p className="mt-4 text-sm text-muted-foreground">
         RSVP as Going to use your Elite guest invite on this premium event (

@@ -1,27 +1,21 @@
 import Link from 'next/link'
 import Card from '@/components/ui/card'
+import EventRsvpWindowCountdown from '@/components/events/event-rsvp-window-countdown'
 import { buttonPrimaryClassName } from '@/lib/event-labels'
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import type { EventAccessType } from '@/lib/membership-tier-config'
-import { eventCardAccessHint } from '@/lib/event-display'
+import { formatFeeCents } from '@/lib/membership-tier-config'
 import {
-  ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
-  formatFeeCents,
-  INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
-} from '@/lib/membership-tier-config'
-
-function formatWindow(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return null
-  return date.toLocaleString()
-}
+  formatEventWindowTimestamp,
+  resolveEventAccessMembershipCta,
+  resolveEventRsvpWindow,
+} from '@/lib/event-rsvp-window'
 
 export default function EventAccessInfo({
   eventType,
   entitlements,
-  registrationPreview,
+  registrationPreview: _registrationPreview,
   isPast,
   isCancelled,
   feeCents = null,
@@ -49,23 +43,33 @@ export default function EventAccessInfo({
     )
   }
 
-  const accessHint = eventCardAccessHint({
-    registrationPreview,
-    currentUserStatus: null,
-    isPast,
-    isCancelled,
-  })
-
-  const tier = entitlements?.productTier ?? 'member'
   const feeLabel = feeCents != null ? `$${formatFeeCents(feeCents)}` : null
-  const priorityLabel = formatWindow(priorityRsvpOpensAt)
-  const generalLabel = formatWindow(generalRsvpOpensAt)
+  const window = resolveEventRsvpWindow({
+    eventType,
+    priorityRsvpOpensAt,
+    generalRsvpOpensAt,
+  })
+  const membershipCta = resolveEventAccessMembershipCta({
+    productTier: entitlements?.productTier,
+    window,
+    eventType,
+  })
+  const priorityLabel = formatEventWindowTimestamp(window.priorityOpensAt)
+  const generalLabel = formatEventWindowTimestamp(window.generalOpensAt)
+  const showWindowDetails =
+    eventType === 'circle_social' || eventType === 'premium_event'
 
   return (
     <Card padding="sm" className="mb-8 border-accent/20 bg-accent-soft/20">
       <p className="eyebrow">Access</p>
-      {accessHint ? (
-        <p className="mt-2 text-sm font-medium text-foreground">{accessHint}</p>
+
+      {showWindowDetails ? (
+        <div className="mt-2">
+          <p className="text-sm font-medium text-foreground">{window.label}</p>
+          {window.countdownEndsAt ? (
+            <EventRsvpWindowCountdown endsAtIso={window.countdownEndsAt} />
+          ) : null}
+        </div>
       ) : null}
 
       <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
@@ -75,44 +79,24 @@ export default function EventAccessInfo({
         {eventType === 'circle_social' ? (
           <li>
             Circle Socials are free for Inner Circle and Elite Circle. Free
-            members can attend by paying the event fee. Elite gets priority RSVP
-            when a priority window is set.
-          </li>
-        ) : null}
-        {eventType === 'premium_event' ? (
-          <li>
-            Premium events use membership credits or an event fee. Inner Circle
-            includes {INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} credit per period;
-            Elite includes {ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD}.
+            members can attend by paying the event fee.
           </li>
         ) : null}
         {feeLabel ? <li>Event fee: {feeLabel}</li> : null}
-        {priorityLabel ? (
+        {window.showPriorityOpensLine && priorityLabel ? (
           <li>Priority RSVP opens (Elite): {priorityLabel}</li>
         ) : null}
-        {generalLabel ? <li>General RSVP opens: {generalLabel}</li> : null}
-        {tier === 'inner_circle' ? (
-          <li>
-            You have {entitlements?.premiumCreditsRemaining ?? 0} of{' '}
-            {INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium credit(s) remaining
-            this billing period.
-          </li>
-        ) : null}
-        {tier === 'elite_circle' ? (
-          <li>
-            You have {entitlements?.premiumCreditsRemaining ?? 0} of{' '}
-            {ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium credits and{' '}
-            {entitlements?.guestInvitesRemaining ?? 0} guest invite(s) remaining
-            this billing period.
-          </li>
+        {window.showGeneralOpensLine && generalLabel ? (
+          <li>General RSVP opens: {generalLabel}</li>
         ) : null}
       </ul>
 
-      {registrationPreview &&
-      !registrationPreview.allowed &&
-      registrationPreview.code === 'priority_window' ? (
-        <Link href="/upgrade" className={`${buttonPrimaryClassName} mt-4 inline-flex`}>
-          View memberships
+      {membershipCta ? (
+        <Link
+          href={membershipCta.href}
+          className={`${buttonPrimaryClassName} mt-4 inline-flex`}
+        >
+          {membershipCta.label}
         </Link>
       ) : null}
     </Card>

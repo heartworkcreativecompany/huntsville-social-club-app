@@ -31,6 +31,11 @@ import {
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { evaluateEventRegistration } from '@/lib/membership-entitlements'
 import type { EventAccessType } from '@/lib/membership-tier-config'
+import {
+  ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+  INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+} from '@/lib/membership-tier-config'
+import { premiumCreditsSummary } from '@/lib/event-rsvp-window'
 import { getViewer } from '@/lib/viewer'
 import EventEditForm from '../event-edit-form'
 import EventRsvp from '../event-rsvp'
@@ -163,6 +168,22 @@ export default async function EventDetailPage({ params }: PageProps) {
         generalRsvpOpensAt: event.general_rsvp_opens_at,
       })
     : null
+
+  const creditSummary =
+    entitlements && eventType === 'premium_event'
+      ? premiumCreditsSummary({
+          productTier: entitlements.productTier,
+          premiumCreditsRemaining: entitlements.premiumCreditsRemaining,
+          guestInvitesRemaining: entitlements.guestInvitesRemaining,
+          creditsGranted:
+            entitlements.activeCycle?.credits_granted ??
+            (entitlements.productTier === 'elite_circle'
+              ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+              : entitlements.productTier === 'inner_circle'
+                ? INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+                : null),
+        })
+      : null
 
   const sponsorshipEligible =
     event.sponsorship_eligible === true ||
@@ -377,6 +398,8 @@ export default async function EventDetailPage({ params }: PageProps) {
                   atCapacityMessage={
                     atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null
                   }
+                  creditSummary={creditSummary}
+                  eventType={eventType}
                 />
                 <EventGuestInviteControls
                   eventId={event.id}
