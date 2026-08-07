@@ -377,6 +377,44 @@ export default async function EventDetailPage({ params }: PageProps) {
         </p>
       ) : null}
 
+      {!isPast && !isCancelled && isPremiumEvent ? (
+        <section className="mb-8">
+          <EventPriorityRsvpBubble window={rsvpWindow} />
+          <EventRsvp
+            eventId={event.id}
+            eventStatus={event.status ?? 'published'}
+            currentStatus={currentUserStatus}
+            registrationPreview={registrationPreview}
+            canRegisterGoing={canRegisterGoing}
+            atCapacityMessage={atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null}
+            premiumLayout
+          />
+          {showMembershipPerks && creditSummary ? (
+            <EventMembershipPerksBubble
+              creditSummary={creditSummary}
+              eventId={event.id}
+              eventType={eventType}
+              isGoing={currentUserStatus === 'going'}
+              guestName={currentGuestName}
+              guestInviteConsumed={currentGuestInviteConsumed}
+              guestInvitesRemaining={entitlements?.guestInvitesRemaining ?? 0}
+              isElite={entitlements?.productTier === 'elite_circle'}
+            />
+          ) : null}
+          {sponsorshipEligible ? (
+            <div className="mb-6 rounded-2xl border border-border px-5 py-4">
+              <p className="mb-2 text-sm font-medium text-foreground">
+                Sponsor this event
+              </p>
+              <EventSponsorButton
+                eventId={event.id}
+                sponsorshipAvailable={sponsorshipAvailable}
+              />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       <EventSponsorsList sponsors={eventSponsors} />
 
       {isMine ? (
@@ -397,25 +435,25 @@ export default async function EventDetailPage({ params }: PageProps) {
         </Card>
       ) : null}
 
-      {!isPast && !isCancelled ? (
+      {!isPast && !isCancelled && !isPremiumEvent ? (
         <section className="mb-8">
-          {isPremiumEvent ? (
-            <>
-              <EventPriorityRsvpBubble window={rsvpWindow} />
-              <EventRsvp
-                eventId={event.id}
-                eventStatus={event.status ?? 'published'}
-                currentStatus={currentUserStatus}
-                registrationPreview={registrationPreview}
-                canRegisterGoing={canRegisterGoing}
-                atCapacityMessage={
-                  atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null
-                }
-                premiumLayout
-              />
-              {showMembershipPerks && creditSummary ? (
-                <EventMembershipPerksBubble
-                  creditSummary={creditSummary}
+          <h2 className="text-display mb-4 text-xl font-medium text-foreground">
+            Your RSVP
+          </h2>
+          <Card>
+            <div className="grid gap-6 sm:grid-cols-[1fr_auto] sm:items-start">
+              <div>
+                <EventRsvp
+                  eventId={event.id}
+                  eventStatus={event.status ?? 'published'}
+                  currentStatus={currentUserStatus}
+                  registrationPreview={registrationPreview}
+                  canRegisterGoing={canRegisterGoing}
+                  atCapacityMessage={
+                    atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null
+                  }
+                />
+                <EventGuestInviteControls
                   eventId={event.id}
                   eventType={eventType}
                   isGoing={currentUserStatus === 'going'}
@@ -426,9 +464,9 @@ export default async function EventDetailPage({ params }: PageProps) {
                   }
                   isElite={entitlements?.productTier === 'elite_circle'}
                 />
-              ) : null}
-              {sponsorshipEligible ? (
-                <div className="mb-6 rounded-2xl border border-border px-5 py-4">
+              </div>
+              {sponsorshipEligible && eventType !== 'standard_event' ? (
+                <div className="min-w-[200px] border-t border-border pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
                   <p className="mb-2 text-sm font-medium text-foreground">
                     Sponsor this event
                   </p>
@@ -438,52 +476,8 @@ export default async function EventDetailPage({ params }: PageProps) {
                   />
                 </div>
               ) : null}
-            </>
-          ) : (
-            <>
-              <h2 className="text-display mb-4 text-xl font-medium text-foreground">
-                Your RSVP
-              </h2>
-              <Card>
-                <div className="grid gap-6 sm:grid-cols-[1fr_auto] sm:items-start">
-                  <div>
-                    <EventRsvp
-                      eventId={event.id}
-                      eventStatus={event.status ?? 'published'}
-                      currentStatus={currentUserStatus}
-                      registrationPreview={registrationPreview}
-                      canRegisterGoing={canRegisterGoing}
-                      atCapacityMessage={
-                        atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null
-                      }
-                    />
-                    <EventGuestInviteControls
-                      eventId={event.id}
-                      eventType={eventType}
-                      isGoing={currentUserStatus === 'going'}
-                      guestName={currentGuestName}
-                      guestInviteConsumed={currentGuestInviteConsumed}
-                      guestInvitesRemaining={
-                        entitlements?.guestInvitesRemaining ?? 0
-                      }
-                      isElite={entitlements?.productTier === 'elite_circle'}
-                    />
-                  </div>
-                  {sponsorshipEligible && eventType !== 'standard_event' ? (
-                    <div className="min-w-[200px] border-t border-border pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
-                      <p className="mb-2 text-sm font-medium text-foreground">
-                        Sponsor this event
-                      </p>
-                      <EventSponsorButton
-                        eventId={event.id}
-                        sponsorshipAvailable={sponsorshipAvailable}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </Card>
-            </>
-          )}
+            </div>
+          </Card>
         </section>
       ) : null}
 

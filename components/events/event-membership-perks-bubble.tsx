@@ -1,4 +1,5 @@
 import EventGuestInviteControls from '@/components/events/event-guest-invite-controls'
+import { PREMIUM_BUBBLE_GOLD_CLASSNAME } from '@/lib/event-rsvp-window'
 
 export default function EventMembershipPerksBubble({
   creditSummary,
@@ -20,7 +21,7 @@ export default function EventMembershipPerksBubble({
   isElite: boolean
 }) {
   return (
-    <div className="mb-6 rounded-2xl border border-accent/40 bg-surface-elevated/40 px-5 py-4">
+    <div className={PREMIUM_BUBBLE_GOLD_CLASSNAME}>
       <p className="text-base font-semibold text-accent">Membership Perks</p>
       <p className="mt-2 text-sm leading-relaxed text-foreground">
         {creditSummary}

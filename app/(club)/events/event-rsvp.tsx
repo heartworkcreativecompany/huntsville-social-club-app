@@ -13,6 +13,7 @@ import {
   buttonSecondaryClassName,
 } from '@/lib/event-labels'
 import { resolveGoingButtonState } from '@/lib/event-rsvp-going'
+import { PREMIUM_BUBBLE_GREY_CLASSNAME } from '@/lib/event-rsvp-window'
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import { FEATURE_GATE_COPY } from '@/lib/membership-pricing-copy'
 
@@ -23,7 +24,7 @@ type EventRsvpProps = {
   registrationPreview?: EventRegistrationDecision | null
   canRegisterGoing?: boolean
   atCapacityMessage?: string | null
-  /** Compact premium bubble: gold RSVP header + fee/credit body copy. */
+  /** Compact premium bubble: grey RSVP card with fee/credit body copy. */
   premiumLayout?: boolean
 }
 
@@ -260,8 +261,8 @@ export default function EventRsvp({
 
   if (premiumLayout) {
     return (
-      <div className="mb-6 rounded-2xl border-2 border-accent bg-accent-soft/15 px-5 py-4">
-        <p className="text-base font-semibold text-accent">RSVP</p>
+      <div className={PREMIUM_BUBBLE_GREY_CLASSNAME}>
+        <p className="text-base font-semibold text-foreground">RSVP</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           Going may use a premium membership credit or an event fee, depending
           on your membership and remaining credits.

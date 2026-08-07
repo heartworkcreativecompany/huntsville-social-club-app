@@ -196,3 +196,35 @@ export function premiumCreditsSummary(input: {
 
   return `You have ${remaining} of ${granted} premium credit(s) remaining this billing period.`
 }
+
+export function isElitePriorityWindowActive(
+  window: EventRsvpWindowInfo
+): boolean {
+  return window.phase === 'elite_priority' && Boolean(window.countdownEndsAt)
+}
+
+/** Shared bubble surface styles for premium event layout. */
+export const PREMIUM_BUBBLE_GOLD_CLASSNAME =
+  'mb-6 rounded-2xl border-2 border-accent bg-accent-soft/20 px-5 py-4'
+
+export const PREMIUM_BUBBLE_GREY_CLASSNAME =
+  'mb-6 rounded-2xl border border-border bg-surface-elevated/60 px-5 py-4'
+
+/**
+ * Layout order for premium event bubbles.
+ * Priority is included only while Elite priority is active.
+ */
+export function premiumEventBubbleOrder(input: {
+  window: EventRsvpWindowInfo
+  showMembershipPerks: boolean
+}): Array<'priority' | 'rsvp' | 'perks'> {
+  const order: Array<'priority' | 'rsvp' | 'perks'> = []
+  if (isElitePriorityWindowActive(input.window)) {
+    order.push('priority')
+  }
+  order.push('rsvp')
+  if (input.showMembershipPerks) {
+    order.push('perks')
+  }
+  return order
+}

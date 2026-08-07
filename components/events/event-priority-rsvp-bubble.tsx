@@ -1,6 +1,8 @@
 import EventRsvpWindowCountdown from '@/components/events/event-rsvp-window-countdown'
 import {
+  PREMIUM_BUBBLE_GOLD_CLASSNAME,
   formatEventWindowTimestamp,
+  isElitePriorityWindowActive,
   type EventRsvpWindowInfo,
 } from '@/lib/event-rsvp-window'
 
@@ -9,14 +11,14 @@ export default function EventPriorityRsvpBubble({
 }: {
   window: EventRsvpWindowInfo
 }) {
-  if (window.phase !== 'elite_priority' || !window.countdownEndsAt) {
+  if (!isElitePriorityWindowActive(window) || !window.countdownEndsAt) {
     return null
   }
 
   const generalLabel = formatEventWindowTimestamp(window.generalOpensAt)
 
   return (
-    <div className="mb-6 rounded-2xl border-2 border-accent bg-accent-soft/20 px-5 py-4">
+    <div className={PREMIUM_BUBBLE_GOLD_CLASSNAME}>
       <p className="text-base font-semibold text-foreground">
         Priority RSVP window
       </p>

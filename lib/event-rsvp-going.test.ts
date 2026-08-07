@@ -5,6 +5,8 @@ import {
 } from '@/lib/event-rsvp-going'
 import {
   premiumCreditsSummary,
+  premiumEventBubbleOrder,
+  isElitePriorityWindowActive,
   resolveEventRsvpWindow,
 } from '@/lib/event-rsvp-window'
 
@@ -75,6 +77,7 @@ describe('premium event layout helpers', () => {
       now: new Date('2026-08-09T12:00:00.000Z'),
     })
     expect(active.phase).toBe('elite_priority')
+    expect(isElitePriorityWindowActive(active)).toBe(true)
 
     const after = resolveEventRsvpWindow({
       eventType: 'premium_event',
@@ -83,6 +86,39 @@ describe('premium event layout helpers', () => {
       now: new Date('2026-08-11T00:00:00.000Z'),
     })
     expect(after.phase).not.toBe('elite_priority')
+    expect(isElitePriorityWindowActive(after)).toBe(false)
+  })
+
+  it('orders bubbles as Priority → RSVP → Perks when Elite priority is active', () => {
+    const window = resolveEventRsvpWindow({
+      eventType: 'premium_event',
+      priorityRsvpOpensAt: '2026-08-08T18:00:00.000Z',
+      generalRsvpOpensAt: '2026-08-10T23:30:00.000Z',
+      now: new Date('2026-08-09T12:00:00.000Z'),
+    })
+
+    expect(
+      premiumEventBubbleOrder({
+        window,
+        showMembershipPerks: true,
+      })
+    ).toEqual(['priority', 'rsvp', 'perks'])
+  })
+
+  it('omits Priority bubble once general RSVP is open', () => {
+    const window = resolveEventRsvpWindow({
+      eventType: 'premium_event',
+      priorityRsvpOpensAt: '2026-08-08T18:00:00.000Z',
+      generalRsvpOpensAt: '2026-08-10T23:30:00.000Z',
+      now: new Date('2026-08-11T00:00:00.000Z'),
+    })
+
+    expect(
+      premiumEventBubbleOrder({
+        window,
+        showMembershipPerks: true,
+      })
+    ).toEqual(['rsvp', 'perks'])
   })
 
   it('shows membership perks copy for paid members only', () => {
@@ -103,5 +139,15 @@ describe('premium event layout helpers', () => {
         creditsGranted: 2,
       })
     ).toContain('guest invite(s) remaining')
+
+    expect(
+      premiumEventBubbleOrder({
+        window: resolveEventRsvpWindow({
+          eventType: 'premium_event',
+          generalRsvpOpensAt: null,
+        }),
+        showMembershipPerks: false,
+      })
+    ).toEqual(['rsvp'])
   })
 })
