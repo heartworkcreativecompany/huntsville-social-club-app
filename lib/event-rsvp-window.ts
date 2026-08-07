@@ -276,6 +276,10 @@ export function membershipPerksSummaryFromSnapshot(
  * Apply RSVP action result to Membership Perks state.
  * Credits never increase on Not going (no refund). Prefer the server
  * snapshot when present; otherwise decrement only when a credit was used.
+ *
+ * If usedCredit is true but the snapshot did not decrease remaining credits
+ * (stale read / failed persist), force a local decrement so UI cannot claim
+ * a credit was used while still showing the prior remaining count.
  */
 export function applyRsvpPerksSnapshot(input: {
   previous: MembershipPerksSnapshot
@@ -296,6 +300,20 @@ export function applyRsvpPerksSnapshot(input: {
     }
   } else {
     next = input.previous
+  }
+
+  if (
+    input.usedCredit &&
+    next.premiumCreditsRemaining >= input.previous.premiumCreditsRemaining
+  ) {
+    next = {
+      ...next,
+      hasPaidMembership: next.hasPaidMembership || input.previous.hasPaidMembership,
+      premiumCreditsRemaining: Math.max(
+        0,
+        input.previous.premiumCreditsRemaining - 1
+      ),
+    }
   }
 
   // Hard rule: RSVP changes never refund credits in the UI either.

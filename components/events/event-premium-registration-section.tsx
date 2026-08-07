@@ -11,7 +11,8 @@ import {
 import {
   applyRsvpResultToMemberPerksStore,
   hydrateMemberPerksFromServer,
-  useMemberPerksWithFallback,
+  updateMemberPerksFromSnapshot,
+  useMemberPerks,
 } from '@/lib/member-perks-store'
 
 type EventPremiumRegistrationSectionProps = {
@@ -49,10 +50,13 @@ export default function EventPremiumRegistrationSection({
     guestInviteConsumed
   )
 
+  // Seed once from server; later updates come from RSVP/guest store mutations.
+  // Hydrate merges use min(credits) so stale RSC refresh cannot restore spent credits.
   useEffect(() => {
     hydrateMemberPerksFromServer(initialPerks)
   }, [
     initialPerks.productTier,
+    initialPerks.hasPaidMembership,
     initialPerks.premiumCreditsRemaining,
     initialPerks.creditsGranted,
     initialPerks.guestInvitesRemaining,
@@ -69,10 +73,9 @@ export default function EventPremiumRegistrationSection({
     setLocalGuestConsumed(guestInviteConsumed)
   }, [guestName, guestInviteConsumed])
 
-  const perks = useMemberPerksWithFallback(initialPerks)
-  const creditSummary = perks
-    ? membershipPerksSummaryFromSnapshot(perks)
-    : null
+  const livePerks = useMemberPerks()
+  const perks = livePerks ?? initialPerks
+  const creditSummary = membershipPerksSummaryFromSnapshot(perks)
 
   return (
     <>
@@ -89,13 +92,15 @@ export default function EventPremiumRegistrationSection({
           if (result.status) {
             setIsGoing(result.status === 'going')
           }
+          // EventRsvp already applied the store; re-apply is idempotent and
+          // covers older call sites that only used this callback.
           applyRsvpResultToMemberPerksStore({
             usedCredit: result.usedCredit,
             perks: result.perks,
           })
         }}
       />
-      {creditSummary && perks ? (
+      {creditSummary ? (
         <EventMembershipPerksBubble
           creditSummary={creditSummary}
           eventId={eventId}
@@ -105,14 +110,15 @@ export default function EventPremiumRegistrationSection({
           guestInviteConsumed={localGuestConsumed}
           guestInvitesRemaining={perks.guestInvitesRemaining}
           isElite={isElite}
-          onGuestInviteChange={({ guestName: nextName, consumed, perks: nextPerks }) => {
+          onGuestInviteChange={({
+            guestName: nextName,
+            consumed,
+            perks: nextPerks,
+          }) => {
             setLocalGuestName(nextName)
             setLocalGuestConsumed(consumed)
             if (nextPerks) {
-              applyRsvpResultToMemberPerksStore({
-                usedCredit: false,
-                perks: nextPerks,
-              })
+              updateMemberPerksFromSnapshot(nextPerks)
             }
           }}
         />

@@ -12,6 +12,7 @@ import {
   type MembershipBilling,
   type MembershipPlan,
 } from '@/lib/membership-systems'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 type CycleRow = {
   id: string
@@ -24,6 +25,17 @@ type CycleRow = {
   guest_invites_granted?: number
   guest_invites_used?: number
   is_active: boolean
+}
+
+/**
+ * Entitlement cycle writes require a client that can UPDATE the table.
+ * RLS historically only allowed SELECT for authenticated members, so the
+ * user-scoped client silently no-ops updates. Prefer the service-role client.
+ */
+function entitlementWriteClient(
+  fallback: SupabaseClient<Database>
+): SupabaseClient<Database> {
+  return createAdminClient() ?? fallback
 }
 
 function defaultPeriodEnd(plan: MembershipPlan, from = new Date()): Date {
@@ -275,8 +287,10 @@ export async function renewEntitlementCycle(
 export async function consumeEventCredit(
   supabase: SupabaseClient<Database>,
   cycleId: string
-): Promise<{ creditsRemaining: number }> {
-  const { data: cycle, error: readError } = await supabase
+): Promise<{ creditsRemaining: number; creditsGranted: number; creditsUsed: number }> {
+  const db = entitlementWriteClient(supabase)
+
+  const { data: cycle, error: readError } = await db
     .from('membership_entitlement_cycles')
     .select('id, credits_granted, credits_used, is_active')
     .eq('id', cycleId)
@@ -298,23 +312,40 @@ export async function consumeEventCredit(
     )
   }
 
-  const { error: updateError } = await supabase
+  const nextUsed = used + 1
+  const { data: updated, error: updateError } = await db
     .from('membership_entitlement_cycles')
-    .update({ credits_used: used + 1 })
+    .update({ credits_used: nextUsed })
     .eq('id', cycleId)
+    .eq('is_active', true)
+    .select('id, credits_granted, credits_used')
+    .maybeSingle()
 
   if (updateError) {
     throw new Error(updateError.message)
   }
 
-  return { creditsRemaining: Math.max(0, granted - used - 1) }
+  // RLS can silently no-op updates (0 rows). Never report success without a row.
+  if (!updated || updated.credits_used !== nextUsed) {
+    throw new Error(
+      'Credit consumption did not persist. Check entitlement-cycle update permissions (service role / RLS).'
+    )
+  }
+
+  const creditsGranted = updated.credits_granted ?? granted
+  return {
+    creditsRemaining: Math.max(0, creditsGranted - updated.credits_used),
+    creditsGranted,
+    creditsUsed: updated.credits_used,
+  }
 }
 
 export async function returnGuestInvite(
   supabase: SupabaseClient<Database>,
   cycleId: string
 ): Promise<void> {
-  const { data: cycle } = await supabase
+  const db = entitlementWriteClient(supabase)
+  const { data: cycle } = await db
     .from('membership_entitlement_cycles')
     .select('guest_invites_used')
     .eq('id', cycleId)
@@ -322,19 +353,30 @@ export async function returnGuestInvite(
 
   if (!cycle || (cycle.guest_invites_used ?? 0) <= 0) return
 
-  await supabase
+  const nextUsed = Math.max(0, (cycle.guest_invites_used ?? 0) - 1)
+  const { data: updated, error } = await db
     .from('membership_entitlement_cycles')
-    .update({
-      guest_invites_used: Math.max(0, (cycle.guest_invites_used ?? 0) - 1),
-    })
+    .update({ guest_invites_used: nextUsed })
     .eq('id', cycleId)
+    .select('guest_invites_used')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+  if (!updated || updated.guest_invites_used !== nextUsed) {
+    throw new Error(
+      'Guest invite return did not persist. Check entitlement-cycle update permissions.'
+    )
+  }
 }
 
 export async function consumeGuestInvite(
   supabase: SupabaseClient<Database>,
   cycleId: string
 ): Promise<{ guestInvitesRemaining: number }> {
-  const { data: cycle, error: readError } = await supabase
+  const db = entitlementWriteClient(supabase)
+  const { data: cycle, error: readError } = await db
     .from('membership_entitlement_cycles')
     .select('id, guest_invites_granted, guest_invites_used, is_active')
     .eq('id', cycleId)
@@ -354,23 +396,36 @@ export async function consumeGuestInvite(
     throw new Error('No guest invites remaining this billing period.')
   }
 
-  const { error: updateError } = await supabase
+  const nextUsed = used + 1
+  const { data: updated, error: updateError } = await db
     .from('membership_entitlement_cycles')
-    .update({ guest_invites_used: used + 1 })
+    .update({ guest_invites_used: nextUsed })
     .eq('id', cycleId)
+    .eq('is_active', true)
+    .select('id, guest_invites_granted, guest_invites_used')
+    .maybeSingle()
 
   if (updateError) {
     throw new Error(updateError.message)
   }
+  if (!updated || updated.guest_invites_used !== nextUsed) {
+    throw new Error(
+      'Guest invite consumption did not persist. Check entitlement-cycle update permissions.'
+    )
+  }
 
-  return { guestInvitesRemaining: Math.max(0, granted - used - 1) }
+  const invitesGranted = updated.guest_invites_granted ?? granted
+  return {
+    guestInvitesRemaining: Math.max(0, invitesGranted - updated.guest_invites_used),
+  }
 }
 
 export async function returnEventCredit(
   supabase: SupabaseClient<Database>,
   cycleId: string
 ): Promise<void> {
-  const { data: cycle } = await supabase
+  const db = entitlementWriteClient(supabase)
+  const { data: cycle } = await db
     .from('membership_entitlement_cycles')
     .select('credits_used')
     .eq('id', cycleId)
@@ -378,10 +433,22 @@ export async function returnEventCredit(
 
   if (!cycle || (cycle.credits_used ?? 0) <= 0) return
 
-  await supabase
+  const nextUsed = Math.max(0, (cycle.credits_used ?? 0) - 1)
+  const { data: updated, error } = await db
     .from('membership_entitlement_cycles')
-    .update({ credits_used: Math.max(0, (cycle.credits_used ?? 0) - 1) })
+    .update({ credits_used: nextUsed })
     .eq('id', cycleId)
+    .select('credits_used')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+  if (!updated || updated.credits_used !== nextUsed) {
+    throw new Error(
+      'Credit return did not persist. Check entitlement-cycle update permissions.'
+    )
+  }
 }
 
 export async function appendRegistrationLedger(
@@ -396,7 +463,8 @@ export async function appendRegistrationLedger(
     metadata?: Record<string, unknown>
   }
 ) {
-  await supabase.from('event_registration_ledger').insert({
+  const db = entitlementWriteClient(supabase)
+  const { error } = await db.from('event_registration_ledger').insert({
     user_id: entry.userId,
     event_id: entry.eventId,
     action: entry.action,
@@ -405,6 +473,10 @@ export async function appendRegistrationLedger(
     credit_delta: entry.creditDelta ?? 0,
     metadata: (entry.metadata ?? {}) as Json,
   })
+
+  if (error) {
+    throw new Error(error.message)
+  }
 }
 
 export function mapLegacyTierToProduct(tier: string | null | undefined): ProductTier {

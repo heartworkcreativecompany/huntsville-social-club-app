@@ -19,6 +19,10 @@ import {
 } from '@/lib/event-rsvp-going'
 import { PREMIUM_BUBBLE_GREY_CLASSNAME } from '@/lib/event-rsvp-window'
 import type { MembershipPerksSnapshot } from '@/lib/event-rsvp-window'
+import {
+  applyRsvpResultToMemberPerksStore,
+  getMemberPerksSnapshot,
+} from '@/lib/member-perks-store'
 import { formatFeeCents } from '@/lib/membership-tier-config'
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import { FEATURE_GATE_COPY } from '@/lib/membership-pricing-copy'
@@ -121,6 +125,28 @@ export default function EventRsvp({
         result && typeof result === 'object' && 'perks' in result
           ? (result.perks as MembershipPerksSnapshot | null | undefined)
           : null
+
+      // Apply shared perks store on the same path that shows the credit-used
+      // message — before router.refresh() can race with stale RSC props.
+      const before = getMemberPerksSnapshot()
+      const after = applyRsvpResultToMemberPerksStore({
+        usedCredit,
+        perks: perks ?? null,
+      })
+
+      if (
+        usedCredit &&
+        (!perks ||
+          typeof perks.premiumCreditsRemaining !== 'number' ||
+          !perks.hasPaidMembership)
+      ) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error(
+            '[rsvp] usedCredit=true but perks snapshot missing/invalid',
+            { perks, before, after }
+          )
+        }
+      }
 
       onRsvpSuccess?.({
         status: rsvpStatus,

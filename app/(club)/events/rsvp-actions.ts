@@ -322,6 +322,8 @@ export async function updateEventRsvp(input: {
     let paymentStatus: string | null = null
     let entitlementCycleId: string | null = null
     let creditConsumed = false
+    let consumedCreditsRemaining: number | null = null
+    let consumedCreditsGranted: number | null = null
 
     if (decision.method === 'paid_per_event') {
       // Fee missing/zero — never grant free Going on a paid decision.
@@ -334,17 +336,42 @@ export async function updateEventRsvp(input: {
       if (!entitlements.activeCycle?.id) {
         return { error: 'No active billing cycle found for free registrations.' }
       }
-      await consumeEventCredit(supabase, entitlements.activeCycle.id)
-      entitlementCycleId = entitlements.activeCycle.id
-      creditConsumed = true
-      await appendRegistrationLedger(supabase, {
-        userId,
-        eventId: input.eventId,
-        action: 'credit_consume',
-        registrationMethod: 'credit',
-        entitlementCycleId,
-        creditDelta: -1,
-      })
+      try {
+        const consumed = await consumeEventCredit(
+          supabase,
+          entitlements.activeCycle.id
+        )
+        entitlementCycleId = entitlements.activeCycle.id
+        creditConsumed = true
+        consumedCreditsRemaining = consumed.creditsRemaining
+        consumedCreditsGranted = consumed.creditsGranted
+      } catch (error) {
+        return {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not consume a premium event credit.',
+        }
+      }
+      try {
+        await appendRegistrationLedger(supabase, {
+          userId,
+          eventId: input.eventId,
+          action: 'credit_consume',
+          registrationMethod: 'credit',
+          entitlementCycleId,
+          creditDelta: -1,
+        })
+      } catch (error) {
+        // Credit already persisted — surface ledger failure without rolling back
+        // the durable credit (no-refund product rule still applies on cancel).
+        return {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Credit was used but registration ledger failed.',
+        }
+      }
     } else if (decision.method === 'included_unlimited') {
       paymentStatus = 'not_required'
       await appendRegistrationLedger(supabase, {
@@ -379,7 +406,11 @@ export async function updateEventRsvp(input: {
 
     if (error) {
       if (creditConsumed && entitlementCycleId) {
-        await returnEventCredit(supabase, entitlementCycleId)
+        try {
+          await returnEventCredit(supabase, entitlementCycleId)
+        } catch {
+          // best-effort rollback of a failed Going write
+        }
       }
       return { error: error.message }
     }
@@ -389,12 +420,41 @@ export async function updateEventRsvp(input: {
     revalidatePath('/profile')
     revalidatePath('/members')
 
+    // Fresh post-write entitlements (same source of truth as consumeEventCredit).
     const perks = await loadMembershipPerksSnapshot(supabase, viewer)
+
+    if (creditConsumed) {
+      const expectedRemaining = consumedCreditsRemaining ?? perks.premiumCreditsRemaining
+      const expectedGranted =
+        consumedCreditsGranted ?? perks.creditsGranted ?? 2
+
+      // Authoritative response must reflect the durable decrement.
+      const durablePerks = {
+        ...perks,
+        hasPaidMembership: true as const,
+        premiumCreditsRemaining: expectedRemaining,
+        creditsGranted: expectedGranted,
+      }
+
+      if (durablePerks.premiumCreditsRemaining !== expectedRemaining) {
+        return {
+          error:
+            'Credit was consumed but membership perks could not be refreshed.',
+        }
+      }
+
+      return {
+        success: true as const,
+        decision,
+        usedCredit: true as const,
+        perks: durablePerks,
+      }
+    }
 
     return {
       success: true as const,
       decision,
-      usedCredit: creditConsumed,
+      usedCredit: false as const,
       perks,
     }
   }

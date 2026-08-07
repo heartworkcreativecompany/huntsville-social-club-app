@@ -162,6 +162,23 @@ describe('shared member perks store', () => {
     )
   })
 
+  it('force-decrements shared store when usedCredit and perks are stale', () => {
+    hydrateMemberPerksFromServer(eliteFull)
+
+    applyRsvpResultToMemberPerksStore({
+      usedCredit: true,
+      perks: {
+        ...eliteFull,
+        premiumCreditsRemaining: 2,
+      },
+    })
+
+    const live = getMemberPerksSnapshot()
+    expect(live?.premiumCreditsRemaining).toBe(1)
+    expect(dashboardCreditsSummaryFromSnapshot(live!)).toContain('1 of 2')
+    expect(membershipPerksSummaryFromSnapshot(live!)).toContain('1 of 2')
+  })
+
   it('builds a free snapshot from member entitlements even with a leftover cycle', () => {
     const entitlements = buildMemberEntitlements({
       role: 'member',
