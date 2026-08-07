@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyRsvpPerksSnapshot,
   formatCountdownRemaining,
+  membershipPerksSummaryFromSnapshot,
   premiumCreditsSummary,
   resolveEventAccessMembershipCta,
   resolveEventRsvpWindow,
+  type MembershipPerksSnapshot,
 } from '@/lib/event-rsvp-window'
 
 describe('resolveEventRsvpWindow', () => {
@@ -160,5 +163,75 @@ describe('premiumCreditsSummary and countdown', () => {
       new Date('2026-08-10T10:30:15.000Z')
     )
     expect(label).toBe('1h 29m 45s')
+  })
+})
+
+describe('Membership Perks after RSVP credit changes', () => {
+  const eliteFull: MembershipPerksSnapshot = {
+    productTier: 'elite_circle',
+    premiumCreditsRemaining: 2,
+    creditsGranted: 2,
+    guestInvitesRemaining: 1,
+  }
+
+  it('shows 1 of 2 after Elite Going consumes a credit', () => {
+    const afterGoing = applyRsvpPerksSnapshot({
+      previous: eliteFull,
+      usedCredit: true,
+      perks: {
+        productTier: 'elite_circle',
+        premiumCreditsRemaining: 1,
+        creditsGranted: 2,
+        guestInvitesRemaining: 1,
+      },
+    })
+
+    expect(afterGoing.premiumCreditsRemaining).toBe(1)
+    expect(membershipPerksSummaryFromSnapshot(afterGoing)).toBe(
+      'You have 1 of 2 premium credits and 1 guest invite(s) remaining this billing period.'
+    )
+  })
+
+  it('does not refund credits when changing Going → Not going', () => {
+    const afterCredit: MembershipPerksSnapshot = {
+      productTier: 'elite_circle',
+      premiumCreditsRemaining: 1,
+      creditsGranted: 2,
+      guestInvitesRemaining: 1,
+    }
+
+    const afterNotGoing = applyRsvpPerksSnapshot({
+      previous: afterCredit,
+      usedCredit: false,
+      perks: {
+        productTier: 'elite_circle',
+        // Server snapshot still 1 — no credit refund
+        premiumCreditsRemaining: 1,
+        creditsGranted: 2,
+        guestInvitesRemaining: 1,
+      },
+    })
+
+    expect(afterNotGoing.premiumCreditsRemaining).toBe(1)
+    expect(membershipPerksSummaryFromSnapshot(afterNotGoing)).toBe(
+      'You have 1 of 2 premium credits and 1 guest invite(s) remaining this billing period.'
+    )
+  })
+
+  it('decrements locally when usedCredit is true and perks snapshot is missing', () => {
+    const after = applyRsvpPerksSnapshot({
+      previous: eliteFull,
+      usedCredit: true,
+    })
+    expect(after.premiumCreditsRemaining).toBe(1)
+    expect(membershipPerksSummaryFromSnapshot(after)).toContain('1 of 2')
+  })
+
+  it('leaves credits unchanged for fee/checkout path (usedCredit false)', () => {
+    const after = applyRsvpPerksSnapshot({
+      previous: eliteFull,
+      usedCredit: false,
+    })
+    expect(after.premiumCreditsRemaining).toBe(2)
   })
 })

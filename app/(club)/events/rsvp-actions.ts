@@ -24,6 +24,7 @@ import {
   resolveRsvpCancelRefund,
   shouldUseEventFeeCheckout,
 } from '@/lib/event-rsvp-going'
+import type { MembershipPerksSnapshot } from '@/lib/event-rsvp-window'
 import { createEventFeeCheckoutSession } from '@/lib/stripe/event-fee-checkout'
 import { getViewer } from '@/lib/viewer'
 
@@ -70,6 +71,41 @@ async function requireEntitledViewer() {
   })
 
   return { viewer, supabase, entitlements }
+}
+
+async function loadMembershipPerksSnapshot(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  viewer: NonNullable<Awaited<ReturnType<typeof getViewer>>>,
+  applicationApproved = true
+): Promise<MembershipPerksSnapshot> {
+  const activeCycle = await loadActiveEntitlementCycle(supabase, viewer.userId)
+  const entitlements = buildMemberEntitlements({
+    role: viewer.role,
+    billing: viewer.profile?.membership_billing,
+    applicationApproved,
+    activeCycle,
+  })
+
+  return {
+    productTier: entitlements.productTier,
+    premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
+    creditsGranted: entitlements.activeCycle?.credits_granted ?? null,
+    guestInvitesRemaining: entitlements.guestInvitesRemaining,
+  }
+}
+
+function perksFromEntitlements(entitlements: {
+  productTier: MembershipPerksSnapshot['productTier']
+  premiumCreditsRemaining: number | null
+  guestInvitesRemaining: number
+  activeCycle: { credits_granted: number | null } | null
+}): MembershipPerksSnapshot {
+  return {
+    productTier: entitlements.productTier,
+    premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
+    creditsGranted: entitlements.activeCycle?.credits_granted ?? null,
+    guestInvitesRemaining: entitlements.guestInvitesRemaining,
+  }
 }
 
 export async function updateEventRsvp(input: {
@@ -263,6 +299,7 @@ export async function updateEventRsvp(input: {
         decision,
         checkoutUrl: checkout.url,
         usedCredit: false as const,
+        perks: perksFromEntitlements(entitlements),
       }
     }
 
@@ -334,11 +371,15 @@ export async function updateEventRsvp(input: {
 
     revalidatePath(`/events/${input.eventId}`)
     revalidatePath('/events')
+    revalidatePath('/profile')
+
+    const perks = await loadMembershipPerksSnapshot(supabase, viewer)
 
     return {
       success: true as const,
       decision,
       usedCredit: creditConsumed,
+      perks,
     }
   }
 
@@ -372,11 +413,17 @@ export async function updateEventRsvp(input: {
 
   revalidatePath(`/events/${input.eventId}`)
   revalidatePath('/events')
+  revalidatePath('/profile')
+
+  // Reload after possible guest-invite return; credits are never refunded.
+  const perks = await loadMembershipPerksSnapshot(supabase, viewer)
 
   return {
     success: true as const,
     status: input.status,
     refunded: false as const,
+    usedCredit: false as const,
+    perks,
   }
 }
 

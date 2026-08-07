@@ -5,8 +5,8 @@ import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
 import EventGuestInviteControls from '@/components/events/event-guest-invite-controls'
-import EventMembershipPerksBubble from '@/components/events/event-membership-perks-bubble'
 import EventMetaBadges from '@/components/events/event-meta-badges'
+import EventPremiumRegistrationSection from '@/components/events/event-premium-registration-section'
 import EventPriorityRsvpBubble from '@/components/events/event-priority-rsvp-bubble'
 import EventRsvpCounts from '@/components/events/event-rsvp-counts'
 import EventTypeBadge from '@/components/events/event-type-badge'
@@ -45,6 +45,7 @@ import {
 import {
   premiumCreditsSummary,
   resolveEventRsvpWindow,
+  type MembershipPerksSnapshot,
 } from '@/lib/event-rsvp-window'
 import { getViewer } from '@/lib/viewer'
 import EventEditForm from '../event-edit-form'
@@ -195,6 +196,22 @@ export default async function EventDetailPage({ params }: PageProps) {
         })
       : null
 
+  const membershipPerksSnapshot: MembershipPerksSnapshot | null =
+    entitlements &&
+    (entitlements.productTier === 'inner_circle' ||
+      entitlements.productTier === 'elite_circle')
+      ? {
+          productTier: entitlements.productTier,
+          premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
+          creditsGranted:
+            entitlements.activeCycle?.credits_granted ??
+            (entitlements.productTier === 'elite_circle'
+              ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+              : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD),
+          guestInvitesRemaining: entitlements.guestInvitesRemaining,
+        }
+      : null
+
   const sponsorshipEligible =
     event.sponsorship_eligible === true ||
     isSponsorshipEligibleEventType(eventType)
@@ -241,6 +258,7 @@ export default async function EventDetailPage({ params }: PageProps) {
   const showMembershipPerks =
     isPremiumEvent &&
     Boolean(creditSummary) &&
+    Boolean(membershipPerksSnapshot) &&
     (entitlements?.productTier === 'inner_circle' ||
       entitlements?.productTier === 'elite_circle')
 
@@ -385,28 +403,33 @@ export default async function EventDetailPage({ params }: PageProps) {
       {!isPast && !isCancelled && isPremiumEvent ? (
         <section className="mb-8">
           <EventPriorityRsvpBubble window={rsvpWindow} />
-          <EventRsvp
-            eventId={event.id}
-            eventStatus={event.status ?? 'published'}
-            currentStatus={currentUserStatus}
-            registrationPreview={registrationPreview}
-            canRegisterGoing={canRegisterGoing}
-            atCapacityMessage={atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null}
-            feeCents={event.fee_cents}
-            premiumLayout
-          />
-          {showMembershipPerks && creditSummary ? (
-            <EventMembershipPerksBubble
-              creditSummary={creditSummary}
+          {showMembershipPerks && membershipPerksSnapshot ? (
+            <EventPremiumRegistrationSection
               eventId={event.id}
+              eventStatus={event.status ?? 'published'}
+              currentStatus={currentUserStatus}
+              registrationPreview={registrationPreview}
+              canRegisterGoing={canRegisterGoing}
+              atCapacityMessage={atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null}
+              feeCents={event.fee_cents}
               eventType={eventType}
-              isGoing={currentUserStatus === 'going'}
               guestName={currentGuestName}
               guestInviteConsumed={currentGuestInviteConsumed}
-              guestInvitesRemaining={entitlements?.guestInvitesRemaining ?? 0}
               isElite={entitlements?.productTier === 'elite_circle'}
+              initialPerks={membershipPerksSnapshot}
             />
-          ) : null}
+          ) : (
+            <EventRsvp
+              eventId={event.id}
+              eventStatus={event.status ?? 'published'}
+              currentStatus={currentUserStatus}
+              registrationPreview={registrationPreview}
+              canRegisterGoing={canRegisterGoing}
+              atCapacityMessage={atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null}
+              feeCents={event.fee_cents}
+              premiumLayout
+            />
+          )}
           {sponsorshipEligible ? (
             <div className="mb-6 rounded-2xl border border-border px-5 py-4">
               <p className="mb-2 text-sm font-medium text-foreground">

@@ -18,9 +18,16 @@ import {
   PREMIUM_RSVP_NO_REFUND_COPY,
 } from '@/lib/event-rsvp-going'
 import { PREMIUM_BUBBLE_GREY_CLASSNAME } from '@/lib/event-rsvp-window'
+import type { MembershipPerksSnapshot } from '@/lib/event-rsvp-window'
 import { formatFeeCents } from '@/lib/membership-tier-config'
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import { FEATURE_GATE_COPY } from '@/lib/membership-pricing-copy'
+
+export type RsvpSuccessPayload = {
+  status?: RsvpStatus
+  usedCredit?: boolean
+  perks?: MembershipPerksSnapshot | null
+}
 
 type EventRsvpProps = {
   eventId: string
@@ -33,6 +40,8 @@ type EventRsvpProps = {
   feeCents?: number | null
   /** Compact premium bubble: grey RSVP card with fee/credit body copy. */
   premiumLayout?: boolean
+  /** Called after a successful RSVP so Membership Perks can update credits. */
+  onRsvpSuccess?: (result: RsvpSuccessPayload) => void
 }
 
 const RSVP_OPTIONS: { value: RsvpStatus; label: string }[] = [
@@ -50,6 +59,7 @@ export default function EventRsvp({
   atCapacityMessage = null,
   feeCents = null,
   premiumLayout = false,
+  onRsvpSuccess,
 }: EventRsvpProps) {
   const router = useRouter()
   const [message, setMessage] = useState('')
@@ -102,9 +112,25 @@ export default function EventRsvp({
 
       setLocalStatus(rsvpStatus)
 
+      const usedCredit =
+        result &&
+        typeof result === 'object' &&
+        'usedCredit' in result &&
+        Boolean(result.usedCredit)
+      const perks =
+        result && typeof result === 'object' && 'perks' in result
+          ? (result.perks as MembershipPerksSnapshot | null | undefined)
+          : null
+
+      onRsvpSuccess?.({
+        status: rsvpStatus,
+        usedCredit,
+        perks: perks ?? null,
+      })
+
       if (rsvpStatus === 'not_going' || rsvpStatus === 'maybe') {
         setMessage('RSVP updated.')
-      } else if ('usedCredit' in result && result.usedCredit) {
+      } else if (usedCredit) {
         setMessage('RSVP saved. One premium credit was used.')
       } else {
         setMessage('RSVP saved.')

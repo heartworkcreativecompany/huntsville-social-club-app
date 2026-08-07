@@ -223,6 +223,13 @@ export function formatCountdownRemaining(
   return `${seconds}s`
 }
 
+export type MembershipPerksSnapshot = {
+  productTier: ProductTier
+  premiumCreditsRemaining: number
+  creditsGranted: number | null
+  guestInvitesRemaining: number
+}
+
 export function premiumCreditsSummary(input: {
   productTier: ProductTier
   premiumCreditsRemaining: number | null
@@ -244,6 +251,37 @@ export function premiumCreditsSummary(input: {
   }
 
   return `You have ${remaining} of ${granted} premium credit(s) remaining this billing period.`
+}
+
+export function membershipPerksSummaryFromSnapshot(
+  snapshot: MembershipPerksSnapshot
+): string | null {
+  return premiumCreditsSummary(snapshot)
+}
+
+/**
+ * Apply RSVP action result to local Membership Perks state.
+ * Credits never increase on Not going (no refund). Prefer the server
+ * snapshot when present; otherwise decrement only when a credit was used.
+ */
+export function applyRsvpPerksSnapshot(input: {
+  previous: MembershipPerksSnapshot
+  usedCredit?: boolean
+  perks?: MembershipPerksSnapshot | null
+}): MembershipPerksSnapshot {
+  if (input.perks) {
+    return input.perks
+  }
+  if (input.usedCredit) {
+    return {
+      ...input.previous,
+      premiumCreditsRemaining: Math.max(
+        0,
+        input.previous.premiumCreditsRemaining - 1
+      ),
+    }
+  }
+  return input.previous
 }
 
 /** Elite priority RSVP is currently live (Going open for Elite only). */
