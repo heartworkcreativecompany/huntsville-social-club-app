@@ -3,6 +3,8 @@
  *
  * Production (VERCEL_ENV=production):
  *   Prefer NEXT_PUBLIC_APP_URL (canonical production domain).
+ *   For the dual-domain launch this should be the members portal origin
+ *   (https://members.huntsvillesocialclub.com), not the marketing apex.
  *   Fallbacks: SITE_URL, APP_URL, then VERCEL_PROJECT_PRODUCTION_URL.
  *   Never use VERCEL_URL (that is the ephemeral per-deployment host).
  *
@@ -10,6 +12,8 @@
  *   Prefer NEXT_PUBLIC_APP_URL if set; otherwise VERCEL_URL is OK for testing.
  *
  * Local: defaults to http://localhost:3000 when unset.
+ *
+ * Hostname routing (marketing vs members vs www) lives in lib/hostnames.ts.
  */
 export const SUPPORT_EMAIL =
   process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? 'hello@huntsvillesocialclub.com'

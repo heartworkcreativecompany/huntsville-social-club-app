@@ -1,9 +1,16 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import BrandLogo from '@/components/brand/brand-logo'
 import PublicFeatureCard from '@/components/marketing/public-feature-card'
 import SiteFooter from '@/components/shell/site-footer'
+import {
+  classifyHost,
+  membersOrigin,
+  resolveRequestHost,
+  rootRouteAction,
+} from '@/lib/hostnames'
 import { createClient } from '@/lib/supabase/server'
 import {
   marketingButtonPrimaryClassName,
@@ -12,14 +19,24 @@ import {
 } from '@/lib/event-labels'
 
 export default async function PublicHomePage() {
+  const headersList = await headers()
+  const hostKind = classifyHost(resolveRequestHost(headersList))
+
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (user) {
-    redirect('/members')
+  const action = rootRouteAction(hostKind, Boolean(user))
+  if (action.type === 'redirect') {
+    redirect(action.location)
   }
+
+  // On the marketing apex, send auth CTAs to the members host so sessions
+  // stay on the portal domain. Preview/local keep relative paths.
+  const portalOrigin = hostKind === 'marketing' ? membersOrigin() : ''
+  const loginHref = `${portalOrigin}/login`
+  const signupHref = `${portalOrigin}/signup`
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -38,10 +55,10 @@ export default async function PublicHomePage() {
         <header className="absolute top-0 right-0 left-0 z-20 flex items-center justify-between px-6 py-6 md:px-10">
           <BrandLogo href="/" variant="wordmark" size="xl" priority />
           <nav className="flex items-center gap-2 md:gap-3">
-            <Link href="/login" className={marketingNavLinkClassName}>
+            <Link href={loginHref} className={marketingNavLinkClassName}>
               Sign in
             </Link>
-            <Link href="/signup" className={marketingButtonPrimaryClassName}>
+            <Link href={signupHref} className={marketingButtonPrimaryClassName}>
               Join the club
             </Link>
           </nav>
@@ -63,10 +80,10 @@ export default async function PublicHomePage() {
             Bringing singles and social seekers together in Rocket City.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
-            <Link href="/signup" className={marketingButtonPrimaryClassName}>
+            <Link href={signupHref} className={marketingButtonPrimaryClassName}>
               Get started
             </Link>
-            <Link href="/login" className={marketingButtonSecondaryClassName}>
+            <Link href={loginHref} className={marketingButtonSecondaryClassName}>
               Sign in
             </Link>
           </div>
