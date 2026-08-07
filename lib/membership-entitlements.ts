@@ -206,6 +206,16 @@ export function evaluatePriorityRsvpWindow(input: {
     return null
   }
 
+  if (!priorityOpen && priorityAt) {
+    return {
+      allowed: false,
+      code: 'priority_window',
+      message: `Priority RSVP opens for Elite Circle at ${priorityAt.toLocaleString()}. General RSVP opens ${generalAt.toLocaleString()}.`,
+      generalRsvpOpensAt: general,
+      upgradeTier: 'elite_circle',
+    }
+  }
+
   return {
     allowed: false,
     code: 'priority_window',
@@ -223,6 +233,7 @@ export function evaluateEventRegistration(input: {
   registrationPreference?: 'included' | 'paid'
   priorityRsvpOpensAt?: string | null
   generalRsvpOpensAt?: string | null
+  now?: Date
 }): EventRegistrationDecision {
   const {
     entitlements,
@@ -266,6 +277,7 @@ export function evaluateEventRegistration(input: {
     eventType,
     priorityRsvpOpensAt: input.priorityRsvpOpensAt,
     generalRsvpOpensAt: input.generalRsvpOpensAt,
+    now: input.now,
   })
   if (priorityBlock) return priorityBlock
 

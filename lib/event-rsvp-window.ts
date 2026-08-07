@@ -7,15 +7,29 @@ export type EventRsvpWindowPhase =
   | 'open'
 
 export type EventRsvpWindowInfo = {
+  /** Same as phase — stable machine code for UI conditions (e.g. 'elite_priority'). */
+  code: EventRsvpWindowPhase
   phase: EventRsvpWindowPhase
-  /** Short label shown under Access, e.g. "Elite priority RSVP window". */
+  /** Short label, e.g. "Elite priority RSVP window". */
   label: string
-  /** ISO timestamp when the current window ends (for countdown), if any. */
+  /** ISO timestamp for the active countdown, if any. */
   countdownEndsAt: string | null
+  /** Countdown label prefix: "Opens in" before priority, "Ends in" while Elite priority is live. */
+  countdownLabel: 'Opens in' | 'Ends in' | null
   /** Whether to show “Priority RSVP opens (Elite): …” (only before it opens). */
   showPriorityOpensLine: boolean
   /** Whether to show “General RSVP opens: …” (only while still upcoming). */
   showGeneralOpensLine: boolean
+  /**
+   * True while Elite priority RSVP is live
+   * (at/after priority open, before general open).
+   */
+  isElitePriorityActive: boolean
+  /**
+   * True for the Priority RSVP bubble: waiting on priority open, or Elite priority live.
+   * Hidden once general RSVP is open (or windows are unset).
+   */
+  showPriorityBubble: boolean
   priorityOpensAt: string | null
   generalOpensAt: string | null
 }
@@ -24,6 +38,35 @@ function parseDate(iso: string | null | undefined): Date | null {
   if (!iso) return null
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+function windowBase(input: {
+  phase: EventRsvpWindowPhase
+  label: string
+  countdownEndsAt: string | null
+  countdownLabel: EventRsvpWindowInfo['countdownLabel']
+  showPriorityOpensLine: boolean
+  showGeneralOpensLine: boolean
+  priorityOpensAt: string | null
+  generalOpensAt: string | null
+}): EventRsvpWindowInfo {
+  const isElitePriorityActive = input.phase === 'elite_priority'
+  const showPriorityBubble =
+    input.phase === 'elite_priority' || input.phase === 'before_priority'
+
+  return {
+    code: input.phase,
+    phase: input.phase,
+    label: input.label,
+    countdownEndsAt: input.countdownEndsAt,
+    countdownLabel: input.countdownLabel,
+    showPriorityOpensLine: input.showPriorityOpensLine,
+    showGeneralOpensLine: input.showGeneralOpensLine,
+    isElitePriorityActive,
+    showPriorityBubble,
+    priorityOpensAt: input.priorityOpensAt,
+    generalOpensAt: input.generalOpensAt,
+  }
 }
 
 export function isPriorityEligibleEventType(
@@ -46,53 +89,59 @@ export function resolveEventRsvpWindow(input: {
   const now = input.now ?? new Date()
   const priorityAt = parseDate(input.priorityRsvpOpensAt)
   const generalAt = parseDate(input.generalRsvpOpensAt)
+  const priorityOpensAt = input.priorityRsvpOpensAt ?? null
+  const generalOpensAt = input.generalRsvpOpensAt ?? null
 
   if (!isPriorityEligibleEventType(input.eventType) || !generalAt) {
-    return {
+    return windowBase({
       phase: 'open',
       label: 'General RSVP window',
       countdownEndsAt: null,
+      countdownLabel: null,
       showPriorityOpensLine: false,
       showGeneralOpensLine: false,
-      priorityOpensAt: input.priorityRsvpOpensAt ?? null,
-      generalOpensAt: input.generalRsvpOpensAt ?? null,
-    }
+      priorityOpensAt,
+      generalOpensAt,
+    })
   }
 
   if (now >= generalAt) {
-    return {
+    return windowBase({
       phase: 'general',
       label: 'General RSVP window',
       countdownEndsAt: null,
+      countdownLabel: null,
       showPriorityOpensLine: false,
       showGeneralOpensLine: false,
-      priorityOpensAt: input.priorityRsvpOpensAt ?? null,
-      generalOpensAt: input.generalRsvpOpensAt ?? null,
-    }
+      priorityOpensAt,
+      generalOpensAt,
+    })
   }
 
   // Before general open — either waiting on priority, or Elite priority is live.
   if (priorityAt && now < priorityAt) {
-    return {
+    return windowBase({
       phase: 'before_priority',
       label: 'Priority RSVP window',
       countdownEndsAt: priorityAt.toISOString(),
+      countdownLabel: 'Opens in',
       showPriorityOpensLine: true,
       showGeneralOpensLine: true,
-      priorityOpensAt: input.priorityRsvpOpensAt ?? null,
-      generalOpensAt: input.generalRsvpOpensAt ?? null,
-    }
+      priorityOpensAt,
+      generalOpensAt,
+    })
   }
 
-  return {
+  return windowBase({
     phase: 'elite_priority',
     label: 'Elite priority RSVP window',
     countdownEndsAt: generalAt.toISOString(),
+    countdownLabel: 'Ends in',
     showPriorityOpensLine: false,
     showGeneralOpensLine: true,
-    priorityOpensAt: input.priorityRsvpOpensAt ?? null,
-    generalOpensAt: input.generalRsvpOpensAt ?? null,
-  }
+    priorityOpensAt,
+    generalOpensAt,
+  })
 }
 
 export type EventAccessMembershipCta =
@@ -127,7 +176,7 @@ export function resolveEventAccessMembershipCta(input: {
     }
   }
 
-  if (input.window.phase === 'elite_priority' && tier === 'inner_circle') {
+  if (input.window.code === 'elite_priority' && tier === 'inner_circle') {
     return {
       kind: 'upgrade_elite_priority',
       label: 'Upgrade to Elite for priority access',
@@ -197,10 +246,18 @@ export function premiumCreditsSummary(input: {
   return `You have ${remaining} of ${granted} premium credit(s) remaining this billing period.`
 }
 
+/** Elite priority RSVP is currently live (Going open for Elite only). */
 export function isElitePriorityWindowActive(
   window: EventRsvpWindowInfo
 ): boolean {
-  return window.phase === 'elite_priority' && Boolean(window.countdownEndsAt)
+  return window.code === 'elite_priority' && Boolean(window.countdownEndsAt)
+}
+
+/** Priority bubble for the pre-general window (waiting or live). */
+export function shouldShowPriorityRsvpBubble(
+  window: EventRsvpWindowInfo
+): boolean {
+  return window.showPriorityBubble
 }
 
 /** Shared bubble surface styles for premium event layout. */
@@ -212,14 +269,14 @@ export const PREMIUM_BUBBLE_GREY_CLASSNAME =
 
 /**
  * Layout order for premium event bubbles.
- * Priority is included only while Elite priority is active.
+ * Priority is included while waiting on / during Elite priority (before general).
  */
 export function premiumEventBubbleOrder(input: {
   window: EventRsvpWindowInfo
   showMembershipPerks: boolean
 }): Array<'priority' | 'rsvp' | 'perks'> {
   const order: Array<'priority' | 'rsvp' | 'perks'> = []
-  if (isElitePriorityWindowActive(input.window)) {
+  if (shouldShowPriorityRsvpBubble(input.window)) {
     order.push('priority')
   }
   order.push('rsvp')

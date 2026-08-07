@@ -121,20 +121,6 @@ export default function EventRsvp({
             })
           : { goingBlocked: false, disabled: isPending }
 
-        if (
-          process.env.NODE_ENV === 'development' &&
-          isGoingOption
-        ) {
-          // eslint-disable-next-line no-console
-          console.debug('[event-rsvp] Going state', {
-            canRegisterGoing,
-            goingBlocked,
-            disabled,
-            currentStatus,
-            previewAllowed: preview?.allowed,
-          })
-        }
-
         const className = goingBlocked
           ? buttonDisabledMutedClassName
           : isGoingOption
@@ -181,7 +167,7 @@ export default function EventRsvp({
         </div>
       ) : null}
 
-      {isPriorityLocked && !premiumLayout ? (
+      {isPriorityLocked ? (
         <div className="mb-4 rounded-lg border border-warning/30 bg-warning-soft/40 p-4 text-sm">
           <p className="font-medium text-foreground">Priority RSVP window</p>
           <p className="mt-1 text-muted-foreground">

@@ -18,7 +18,11 @@ describe('resolveEventRsvpWindow', () => {
       now: new Date('2026-08-09T12:00:00.000Z'),
     })
 
+    expect(window.code).toBe('elite_priority')
     expect(window.phase).toBe('elite_priority')
+    expect(window.isElitePriorityActive).toBe(true)
+    expect(window.showPriorityBubble).toBe(true)
+    expect(window.countdownLabel).toBe('Ends in')
     expect(window.label).toBe('Elite priority RSVP window')
     expect(window.showPriorityOpensLine).toBe(false)
     expect(window.showGeneralOpensLine).toBe(true)
@@ -33,7 +37,11 @@ describe('resolveEventRsvpWindow', () => {
       now: new Date('2026-08-07T12:00:00.000Z'),
     })
 
+    expect(window.code).toBe('before_priority')
     expect(window.phase).toBe('before_priority')
+    expect(window.isElitePriorityActive).toBe(false)
+    expect(window.showPriorityBubble).toBe(true)
+    expect(window.countdownLabel).toBe('Opens in')
     expect(window.showPriorityOpensLine).toBe(true)
     expect(window.showGeneralOpensLine).toBe(true)
     expect(window.countdownEndsAt).toBe(priority)
@@ -47,7 +55,10 @@ describe('resolveEventRsvpWindow', () => {
       now: new Date('2026-08-11T00:00:00.000Z'),
     })
 
+    expect(window.code).toBe('general')
     expect(window.phase).toBe('general')
+    expect(window.showPriorityBubble).toBe(false)
+    expect(window.isElitePriorityActive).toBe(false)
     expect(window.label).toBe('General RSVP window')
     expect(window.showPriorityOpensLine).toBe(false)
     expect(window.showGeneralOpensLine).toBe(false)
