@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import ClubShell from '@/components/shell/club-shell'
+import MemberPerksHydrator from '@/components/membership/member-perks-hydrator'
 import { compatibilityContextForViewer } from '@/lib/compatibility/viewer-context'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { loadMemberNotifications } from '@/lib/load-member-notifications'
@@ -39,6 +40,7 @@ export default async function ClubLayout({
       notifications={notificationResult.items}
       unreadNotificationCount={notificationResult.unreadCount}
     >
+      <MemberPerksHydrator entitlements={entitlements} />
       {children}
     </ClubShell>
   )

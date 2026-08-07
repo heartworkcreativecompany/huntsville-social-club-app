@@ -218,6 +218,26 @@ describe('Membership Perks after RSVP credit changes', () => {
     )
   })
 
+  it('clamps a buggy Not going payload that tries to restore credits', () => {
+    const afterCredit: MembershipPerksSnapshot = {
+      productTier: 'elite_circle',
+      premiumCreditsRemaining: 1,
+      creditsGranted: 2,
+      guestInvitesRemaining: 1,
+    }
+
+    const clamped = applyRsvpPerksSnapshot({
+      previous: afterCredit,
+      usedCredit: false,
+      perks: {
+        ...afterCredit,
+        premiumCreditsRemaining: 2,
+      },
+    })
+
+    expect(clamped.premiumCreditsRemaining).toBe(1)
+  })
+
   it('decrements locally when usedCredit is true and perks snapshot is missing', () => {
     const after = applyRsvpPerksSnapshot({
       previous: eliteFull,

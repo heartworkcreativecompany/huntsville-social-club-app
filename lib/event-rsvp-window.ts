@@ -228,6 +228,10 @@ export type MembershipPerksSnapshot = {
   premiumCreditsRemaining: number
   creditsGranted: number | null
   guestInvitesRemaining: number
+  /** Active entitlement cycle start (ISO), when known. */
+  periodStart?: string | null
+  /** Active entitlement cycle end (ISO), when known. */
+  periodEnd?: string | null
 }
 
 export function premiumCreditsSummary(input: {
@@ -260,7 +264,7 @@ export function membershipPerksSummaryFromSnapshot(
 }
 
 /**
- * Apply RSVP action result to local Membership Perks state.
+ * Apply RSVP action result to Membership Perks state.
  * Credits never increase on Not going (no refund). Prefer the server
  * snapshot when present; otherwise decrement only when a credit was used.
  */
@@ -269,19 +273,30 @@ export function applyRsvpPerksSnapshot(input: {
   usedCredit?: boolean
   perks?: MembershipPerksSnapshot | null
 }): MembershipPerksSnapshot {
+  let next: MembershipPerksSnapshot
   if (input.perks) {
-    return input.perks
-  }
-  if (input.usedCredit) {
-    return {
+    next = input.perks
+  } else if (input.usedCredit) {
+    next = {
       ...input.previous,
       premiumCreditsRemaining: Math.max(
         0,
         input.previous.premiumCreditsRemaining - 1
       ),
     }
+  } else {
+    next = input.previous
   }
-  return input.previous
+
+  // Hard rule: RSVP changes never refund credits in the UI either.
+  if (next.premiumCreditsRemaining > input.previous.premiumCreditsRemaining) {
+    next = {
+      ...next,
+      premiumCreditsRemaining: input.previous.premiumCreditsRemaining,
+    }
+  }
+
+  return next
 }
 
 /** Elite priority RSVP is currently live (Going open for Elite only). */

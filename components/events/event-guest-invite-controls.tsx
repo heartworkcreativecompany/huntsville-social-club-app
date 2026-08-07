@@ -11,6 +11,8 @@ import {
   buttonSecondaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
+import type { MembershipPerksSnapshot } from '@/lib/event-rsvp-window'
+import { updateMemberPerksFromSnapshot } from '@/lib/member-perks-store'
 
 export default function EventGuestInviteControls({
   eventId,
@@ -21,6 +23,7 @@ export default function EventGuestInviteControls({
   guestInvitesRemaining,
   isElite,
   compactPrompt = false,
+  onGuestInviteChange,
 }: {
   eventId: string
   eventType: string | null
@@ -31,6 +34,11 @@ export default function EventGuestInviteControls({
   isElite: boolean
   /** When true, hide the non-Going prompt (shown by Membership Perks instead). */
   compactPrompt?: boolean
+  onGuestInviteChange?: (input: {
+    guestName: string | null
+    consumed: boolean
+    perks?: MembershipPerksSnapshot | null
+  }) => void
 }) {
   const router = useRouter()
   const [name, setName] = useState('')
@@ -62,6 +70,14 @@ export default function EventGuestInviteControls({
                 setError(result.error)
                 return
               }
+              if (result.perks) {
+                updateMemberPerksFromSnapshot(result.perks)
+              }
+              onGuestInviteChange?.({
+                guestName: null,
+                consumed: false,
+                perks: result.perks ?? null,
+              })
               setMessage('Guest invite returned to your billing period.')
               router.refresh()
             })
@@ -136,6 +152,14 @@ export default function EventGuestInviteControls({
               setError(result.error)
               return
             }
+            if (result.perks) {
+              updateMemberPerksFromSnapshot(result.perks)
+            }
+            onGuestInviteChange?.({
+              guestName: result.guestName ?? name.trim(),
+              consumed: true,
+              perks: result.perks ?? null,
+            })
             setName('')
             setMessage('Guest added.')
             router.refresh()

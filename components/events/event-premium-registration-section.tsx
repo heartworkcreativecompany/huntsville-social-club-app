@@ -5,10 +5,14 @@ import EventMembershipPerksBubble from '@/components/events/event-membership-per
 import EventRsvp from '@/app/(club)/events/event-rsvp'
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import {
-  applyRsvpPerksSnapshot,
   membershipPerksSummaryFromSnapshot,
   type MembershipPerksSnapshot,
 } from '@/lib/event-rsvp-window'
+import {
+  applyRsvpResultToMemberPerksStore,
+  hydrateMemberPerksFromServer,
+  useMemberPerksWithFallback,
+} from '@/lib/member-perks-store'
 
 type EventPremiumRegistrationSectionProps = {
   eventId: string
@@ -39,35 +43,36 @@ export default function EventPremiumRegistrationSection({
   isElite,
   initialPerks,
 }: EventPremiumRegistrationSectionProps) {
-  const [perks, setPerks] = useState(initialPerks)
   const [isGoing, setIsGoing] = useState(currentStatus === 'going')
+  const [localGuestName, setLocalGuestName] = useState(guestName)
+  const [localGuestConsumed, setLocalGuestConsumed] = useState(
+    guestInviteConsumed
+  )
 
   useEffect(() => {
-    // Merge server props after refresh, but never let a stale RSC payload
-    // bump premium credits back up (e.g. still showing 2 after a credit was used).
-    setPerks((previous) => {
-      if (
-        initialPerks.premiumCreditsRemaining > previous.premiumCreditsRemaining
-      ) {
-        return {
-          ...initialPerks,
-          premiumCreditsRemaining: previous.premiumCreditsRemaining,
-        }
-      }
-      return initialPerks
-    })
+    hydrateMemberPerksFromServer(initialPerks)
   }, [
     initialPerks.productTier,
     initialPerks.premiumCreditsRemaining,
     initialPerks.creditsGranted,
     initialPerks.guestInvitesRemaining,
+    initialPerks.periodStart,
+    initialPerks.periodEnd,
   ])
 
   useEffect(() => {
     setIsGoing(currentStatus === 'going')
   }, [currentStatus])
 
-  const creditSummary = membershipPerksSummaryFromSnapshot(perks)
+  useEffect(() => {
+    setLocalGuestName(guestName)
+    setLocalGuestConsumed(guestInviteConsumed)
+  }, [guestName, guestInviteConsumed])
+
+  const perks = useMemberPerksWithFallback(initialPerks)
+  const creditSummary = perks
+    ? membershipPerksSummaryFromSnapshot(perks)
+    : null
 
   return (
     <>
@@ -84,25 +89,32 @@ export default function EventPremiumRegistrationSection({
           if (result.status) {
             setIsGoing(result.status === 'going')
           }
-          setPerks((previous) =>
-            applyRsvpPerksSnapshot({
-              previous,
-              usedCredit: result.usedCredit,
-              perks: result.perks,
-            })
-          )
+          applyRsvpResultToMemberPerksStore({
+            usedCredit: result.usedCredit,
+            perks: result.perks,
+          })
         }}
       />
-      {creditSummary ? (
+      {creditSummary && perks ? (
         <EventMembershipPerksBubble
           creditSummary={creditSummary}
           eventId={eventId}
           eventType={eventType}
           isGoing={isGoing}
-          guestName={guestName}
-          guestInviteConsumed={guestInviteConsumed}
+          guestName={localGuestName}
+          guestInviteConsumed={localGuestConsumed}
           guestInvitesRemaining={perks.guestInvitesRemaining}
           isElite={isElite}
+          onGuestInviteChange={({ guestName: nextName, consumed, perks: nextPerks }) => {
+            setLocalGuestName(nextName)
+            setLocalGuestConsumed(consumed)
+            if (nextPerks) {
+              applyRsvpResultToMemberPerksStore({
+                usedCredit: false,
+                perks: nextPerks,
+              })
+            }
+          }}
         />
       ) : null}
     </>

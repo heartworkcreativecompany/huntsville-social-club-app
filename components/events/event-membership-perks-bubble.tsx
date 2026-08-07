@@ -1,5 +1,8 @@
+'use client'
+
 import EventGuestInviteControls from '@/components/events/event-guest-invite-controls'
 import { PREMIUM_BUBBLE_GOLD_CLASSNAME } from '@/lib/event-rsvp-window'
+import type { MembershipPerksSnapshot } from '@/lib/event-rsvp-window'
 
 export default function EventMembershipPerksBubble({
   creditSummary,
@@ -10,6 +13,7 @@ export default function EventMembershipPerksBubble({
   guestInviteConsumed,
   guestInvitesRemaining,
   isElite,
+  onGuestInviteChange,
 }: {
   creditSummary: string
   eventId: string
@@ -19,6 +23,11 @@ export default function EventMembershipPerksBubble({
   guestInviteConsumed: boolean
   guestInvitesRemaining: number
   isElite: boolean
+  onGuestInviteChange?: (input: {
+    guestName: string | null
+    consumed: boolean
+    perks?: MembershipPerksSnapshot | null
+  }) => void
 }) {
   return (
     <div className={PREMIUM_BUBBLE_GOLD_CLASSNAME}>
@@ -40,6 +49,7 @@ export default function EventMembershipPerksBubble({
         guestInvitesRemaining={guestInvitesRemaining}
         isElite={isElite}
         compactPrompt
+        onGuestInviteChange={onGuestInviteChange}
       />
     </div>
   )

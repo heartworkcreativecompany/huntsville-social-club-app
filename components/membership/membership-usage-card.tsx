@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect } from 'react'
 import Link from 'next/link'
 import Card from '@/components/ui/card'
 import Badge from '@/components/ui/badge'
@@ -8,6 +11,12 @@ import {
 } from '@/lib/event-labels'
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
 import { freeRegistrationsSummary } from '@/lib/membership-entitlements'
+import {
+  dashboardCreditsSummaryFromSnapshot,
+  hydrateMemberPerksFromServer,
+  membershipPerksSnapshotFromEntitlements,
+  useMemberPerksWithFallback,
+} from '@/lib/member-perks-store'
 import type { SubscriptionStatus } from '@/lib/membership-systems'
 
 function subscriptionStatusLabel(status: SubscriptionStatus): string {
@@ -32,8 +41,54 @@ export default function MembershipUsageCard({
   entitlements: MemberEntitlements
   className?: string
 }) {
+  useEffect(() => {
+    if (
+      entitlements.productTier === 'inner_circle' ||
+      entitlements.productTier === 'elite_circle'
+    ) {
+      hydrateMemberPerksFromServer(
+        membershipPerksSnapshotFromEntitlements(entitlements)
+      )
+    }
+  }, [
+    entitlements.productTier,
+    entitlements.premiumCreditsRemaining,
+    entitlements.guestInvitesRemaining,
+    entitlements.activeCycle?.credits_granted,
+    entitlements.activeCycle?.period_start,
+    entitlements.activeCycle?.period_end,
+  ])
+
+  const livePerks = useMemberPerksWithFallback(
+    entitlements.productTier === 'inner_circle' ||
+      entitlements.productTier === 'elite_circle'
+      ? membershipPerksSnapshotFromEntitlements(entitlements)
+      : null
+  )
+
   const billing = entitlements.billing
-  const summary = freeRegistrationsSummary(entitlements)
+  const creditsRemaining =
+    livePerks?.premiumCreditsRemaining ??
+    entitlements.premiumCreditsRemaining ??
+    0
+  const guestInvitesRemaining =
+    livePerks?.guestInvitesRemaining ?? entitlements.guestInvitesRemaining
+  const periodEnd =
+    livePerks?.periodEnd ??
+    entitlements.activeCycle?.period_end ??
+    billing.billing_period_end
+
+  const usageLine =
+    livePerks &&
+    (livePerks.productTier === 'inner_circle' ||
+      livePerks.productTier === 'elite_circle')
+      ? dashboardCreditsSummaryFromSnapshot(livePerks)
+      : freeRegistrationsSummary({
+          ...entitlements,
+          premiumCreditsRemaining: creditsRemaining,
+          guestInvitesRemaining,
+        })
+
   const hasPaidSubscription =
     Boolean(billing.stripe_subscription_id) &&
     (billing.subscription_status === 'active' ||
@@ -42,11 +97,6 @@ export default function MembershipUsageCard({
 
   const onTrial =
     billing.trial_end && new Date(billing.trial_end).getTime() > Date.now()
-
-  const periodEnd =
-    entitlements.activeCycle?.period_end ?? billing.billing_period_end
-
-  const usageLine = summary
 
   const statusVariant =
     billing.payment_failure.active || billing.subscription_status === 'past_due'
@@ -85,8 +135,7 @@ export default function MembershipUsageCard({
 
       {entitlements.productTier === 'elite_circle' ? (
         <p className="mt-2 text-sm text-muted-foreground">
-          Guest invites remaining this period:{' '}
-          {entitlements.guestInvitesRemaining}
+          Guest invites remaining this period: {guestInvitesRemaining}
         </p>
       ) : null}
 

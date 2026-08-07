@@ -209,6 +209,8 @@ export default async function EventDetailPage({ params }: PageProps) {
               ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
               : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD),
           guestInvitesRemaining: entitlements.guestInvitesRemaining,
+          periodStart: entitlements.activeCycle?.period_start ?? null,
+          periodEnd: entitlements.activeCycle?.period_end ?? null,
         }
       : null
 

@@ -91,6 +91,8 @@ async function loadMembershipPerksSnapshot(
     premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
     creditsGranted: entitlements.activeCycle?.credits_granted ?? null,
     guestInvitesRemaining: entitlements.guestInvitesRemaining,
+    periodStart: entitlements.activeCycle?.period_start ?? null,
+    periodEnd: entitlements.activeCycle?.period_end ?? null,
   }
 }
 
@@ -98,13 +100,19 @@ function perksFromEntitlements(entitlements: {
   productTier: MembershipPerksSnapshot['productTier']
   premiumCreditsRemaining: number | null
   guestInvitesRemaining: number
-  activeCycle: { credits_granted: number | null } | null
+  activeCycle: {
+    credits_granted: number | null
+    period_start?: string | null
+    period_end?: string | null
+  } | null
 }): MembershipPerksSnapshot {
   return {
     productTier: entitlements.productTier,
     premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
     creditsGranted: entitlements.activeCycle?.credits_granted ?? null,
     guestInvitesRemaining: entitlements.guestInvitesRemaining,
+    periodStart: entitlements.activeCycle?.period_start ?? null,
+    periodEnd: entitlements.activeCycle?.period_end ?? null,
   }
 }
 
@@ -372,6 +380,7 @@ export async function updateEventRsvp(input: {
     revalidatePath(`/events/${input.eventId}`)
     revalidatePath('/events')
     revalidatePath('/profile')
+    revalidatePath('/members')
 
     const perks = await loadMembershipPerksSnapshot(supabase, viewer)
 
@@ -414,6 +423,7 @@ export async function updateEventRsvp(input: {
   revalidatePath(`/events/${input.eventId}`)
   revalidatePath('/events')
   revalidatePath('/profile')
+  revalidatePath('/members')
 
   // Reload after possible guest-invite return; credits are never refunded.
   const perks = await loadMembershipPerksSnapshot(supabase, viewer)
