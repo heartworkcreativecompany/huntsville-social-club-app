@@ -40,6 +40,21 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return
       }
 
+      if (
+        session.mode === 'payment' &&
+        (session.metadata?.type === 'event_fee' ||
+          session.metadata?.checkout_type === 'event_fee')
+      ) {
+        const { markEventFeePaidFromCheckout } = await import(
+          '@/lib/stripe/event-fee-checkout'
+        )
+        const result = await markEventFeePaidFromCheckout(session)
+        if ('error' in result) {
+          throw new Error(result.error)
+        }
+        return
+      }
+
       if (session.mode !== 'subscription') return
 
       const userId =

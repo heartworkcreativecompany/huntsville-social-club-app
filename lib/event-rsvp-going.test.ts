@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  effectiveAttendeeStatus,
+  isConfirmedGoingAttendee,
   isGoingRegistrationEligible,
+  resolveGoingButtonClassName,
   resolveGoingButtonState,
+  resolveRsvpCancelRefund,
+  shouldUseEventFeeCheckout,
+  PREMIUM_RSVP_NO_REFUND_COPY,
 } from '@/lib/event-rsvp-going'
 import {
   buildMemberEntitlements,
@@ -112,6 +118,171 @@ describe('isGoingRegistrationEligible', () => {
         },
         false
       )
+    ).toBe(false)
+  })
+})
+
+
+describe('free member premium event fee checkout', () => {
+  it('selects paid_per_event for free members on premium events', () => {
+    const decision = evaluateEventRegistration({
+      entitlements: entitlementsFor('member'),
+      eventType: 'premium_event',
+      eventStatus: 'published',
+      isGoingRsvp: true,
+    })
+
+    expect(decision.allowed).toBe(true)
+    if (decision.allowed) {
+      expect(decision.method).toBe('paid_per_event')
+      expect(decision.uiState).toBe('member_paid')
+    }
+  })
+
+  it('requires Stripe Checkout for free members when fee_cents > 0', () => {
+    const decision = evaluateEventRegistration({
+      entitlements: entitlementsFor('member'),
+      eventType: 'premium_event',
+      eventStatus: 'published',
+      isGoingRsvp: true,
+    })
+
+    expect(
+      shouldUseEventFeeCheckout({
+        eventType: 'premium_event',
+        feeCents: 2500,
+        productTier: 'member',
+        decision,
+      })
+    ).toBe(true)
+  })
+
+  it('does not treat unpaid pending placeholders as confirmed Going', () => {
+    expect(
+      isConfirmedGoingAttendee({
+        status: 'going',
+        payment_status: 'pending',
+      })
+    ).toBe(false)
+    expect(
+      effectiveAttendeeStatus({
+        status: 'going',
+        payment_status: 'pending',
+      })
+    ).toBeNull()
+    expect(
+      isConfirmedGoingAttendee({
+        status: 'going',
+        payment_status: 'paid',
+      })
+    ).toBe(true)
+  })
+})
+
+describe('premium RSVP Not going / no-refund policy', () => {
+  it('never refunds credits or event fees when changing RSVP', () => {
+    expect(resolveRsvpCancelRefund()).toEqual({
+      refundCredit: false,
+      refundPayment: false,
+      creditDelta: 0,
+    })
+  })
+
+  it('shows non-refund copy for premium events', () => {
+    expect(PREMIUM_RSVP_NO_REFUND_COPY).toBe(
+      'Changing your RSVP will not refund membership credits or event fees.'
+    )
+  })
+
+  it('returns Going to a non-selected style after Not going', () => {
+    expect(
+      resolveGoingButtonClassName({
+        isActive: false,
+        goingBlocked: false,
+        hasExistingStatus: true,
+        primaryClassName: 'primary',
+        secondaryClassName: 'secondary',
+        disabledClassName: 'disabled',
+      })
+    ).toBe('secondary')
+
+    expect(
+      resolveGoingButtonClassName({
+        isActive: true,
+        goingBlocked: false,
+        hasExistingStatus: true,
+        primaryClassName: 'primary',
+        secondaryClassName: 'secondary',
+        disabledClassName: 'disabled',
+      })
+    ).toBe('primary')
+  })
+})
+
+describe('Not going → Going re-registration', () => {
+  it('treats not_going as not confirmed Going so Going re-enters registration', () => {
+    const notGoing = {
+      status: 'not_going',
+      payment_status: null as string | null,
+    }
+    expect(isConfirmedGoingAttendee(notGoing)).toBe(false)
+    expect(effectiveAttendeeStatus(notGoing)).toBe('not_going')
+  })
+
+  it('routes free members on premium events back through Stripe Checkout', () => {
+    const decision = evaluateEventRegistration({
+      entitlements: entitlementsFor('member'),
+      eventType: 'premium_event',
+      eventStatus: 'published',
+      isGoingRsvp: true,
+    })
+
+    expect(decision.allowed).toBe(true)
+    if (decision.allowed) {
+      expect(decision.method).toBe('paid_per_event')
+    }
+
+    // Existing not_going row must still use Checkout (UPDATE path after payment /
+    // placeholder clear relies on event_attendees.updated_at + set_updated_at trigger).
+    expect(
+      shouldUseEventFeeCheckout({
+        eventType: 'premium_event',
+        feeCents: 2500,
+        productTier: 'member',
+        decision,
+      })
+    ).toBe(true)
+  })
+
+  it('routes paid members with credits through credit registration (update path)', () => {
+    const decision = evaluateEventRegistration({
+      entitlements: entitlementsFor('inner_circle', 1),
+      eventType: 'premium_event',
+      eventStatus: 'published',
+      isGoingRsvp: true,
+    })
+
+    expect(decision.allowed).toBe(true)
+    if (decision.allowed) {
+      expect(decision.method).toBe('credit')
+    }
+
+    expect(
+      shouldUseEventFeeCheckout({
+        eventType: 'premium_event',
+        feeCents: 2500,
+        productTier: 'inner_circle',
+        decision,
+      })
+    ).toBe(false)
+
+    // Re-RSVP from not_going updates the existing (event_id, user_id) row —
+    // unique constraint is satisfied; updated_at is set by DB trigger.
+    expect(
+      isConfirmedGoingAttendee({
+        status: 'not_going',
+        payment_status: null,
+      })
     ).toBe(false)
   })
 })

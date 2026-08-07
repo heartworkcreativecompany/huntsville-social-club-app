@@ -37,7 +37,11 @@ import {
   INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
   formatFeeCents,
 } from '@/lib/membership-tier-config'
-import { isGoingRegistrationEligible } from '@/lib/event-rsvp-going'
+import {
+  effectiveAttendeeStatus,
+  isConfirmedGoingAttendee,
+  isGoingRegistrationEligible,
+} from '@/lib/event-rsvp-going'
 import {
   premiumCreditsSummary,
   resolveEventRsvpWindow,
@@ -130,7 +134,7 @@ export default async function EventDetailPage({ params }: PageProps) {
   const { data: attendeeRows } = await supabase
     .from('event_attendees')
     .select(
-      'event_id, user_id, status, created_at, guest_name, guest_invite_consumed'
+      'event_id, user_id, status, payment_status, created_at, guest_name, guest_invite_consumed'
     )
     .eq('event_id', event.id)
 
@@ -153,7 +157,7 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   const currentUserAttendee =
     attendeeRows?.find((row) => row.user_id === user.id) ?? null
-  const currentUserStatus = currentUserAttendee?.status ?? null
+  const currentUserStatus = effectiveAttendeeStatus(currentUserAttendee)
   const currentGuestName = currentUserAttendee?.guest_name ?? null
   const currentGuestInviteConsumed =
     currentUserAttendee?.guest_invite_consumed === true
@@ -209,7 +213,8 @@ export default async function EventDetailPage({ params }: PageProps) {
     !isCancelled
 
   const rsvpCounts = {
-    going: attendeeRows?.filter((row) => row.status === 'going').length ?? 0,
+    going:
+      attendeeRows?.filter((row) => isConfirmedGoingAttendee(row)).length ?? 0,
     maybe: attendeeRows?.filter((row) => row.status === 'maybe').length ?? 0,
     not_going:
       attendeeRows?.filter((row) => row.status === 'not_going').length ?? 0,
@@ -240,7 +245,7 @@ export default async function EventDetailPage({ params }: PageProps) {
       entitlements?.productTier === 'elite_circle')
 
   const goingRows =
-    attendeeRows?.filter((row) => row.status === 'going') ?? []
+    attendeeRows?.filter((row) => isConfirmedGoingAttendee(row)) ?? []
   const maybeRows =
     attendeeRows?.filter((row) => row.status === 'maybe') ?? []
   const notGoingRows =
@@ -387,6 +392,7 @@ export default async function EventDetailPage({ params }: PageProps) {
             registrationPreview={registrationPreview}
             canRegisterGoing={canRegisterGoing}
             atCapacityMessage={atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null}
+            feeCents={event.fee_cents}
             premiumLayout
           />
           {showMembershipPerks && creditSummary ? (
@@ -452,6 +458,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                   atCapacityMessage={
                     atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null
                   }
+                  feeCents={event.fee_cents}
                 />
                 <EventGuestInviteControls
                   eventId={event.id}

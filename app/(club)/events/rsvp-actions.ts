@@ -13,13 +13,18 @@ import {
 import {
   buildMemberEntitlements,
   evaluateEventRegistration,
-  shouldReturnFreeRegistrationOnCancellation,
 } from '@/lib/membership-entitlements'
 import {
   EVENT_AT_CAPACITY_MESSAGE,
   isEventAtCapacity,
 } from '@/lib/event-attendance'
 import type { EventAccessType } from '@/lib/membership-tier-config'
+import {
+  isConfirmedGoingAttendee,
+  resolveRsvpCancelRefund,
+  shouldUseEventFeeCheckout,
+} from '@/lib/event-rsvp-going'
+import { createEventFeeCheckoutSession } from '@/lib/stripe/event-fee-checkout'
 import { getViewer } from '@/lib/viewer'
 
 export type RsvpStatus = 'going' | 'maybe' | 'not_going'
@@ -29,6 +34,8 @@ type EventRow = {
   starts_at: string
   status: string | null
   event_type: string | null
+  title?: string | null
+  fee_cents?: number | null
   attendance_max?: number | null
 }
 
@@ -81,7 +88,7 @@ export async function updateEventRsvp(input: {
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'id, starts_at, status, event_type, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max'
+      'id, title, starts_at, status, event_type, fee_cents, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max'
     )
     .eq('id', input.eventId)
     .single()
@@ -108,40 +115,40 @@ export async function updateEventRsvp(input: {
     .maybeSingle()
 
   const existingRow = existing as AttendeeRow | null
-  const wasGoing = existingRow?.status === 'going'
+  // Legacy unpaid placeholders used status=going + payment_status=pending.
+  // Those must not skip Checkout on a later Going click.
+  const wasGoing = isConfirmedGoingAttendee(existingRow)
+  const hasUnpaidGoingPlaceholder =
+    existingRow?.status === 'going' && existingRow.payment_status === 'pending'
+  const leavingGoing =
+    !isGoing && (wasGoing || hasUnpaidGoingPlaceholder)
 
-  if (!isGoing && wasGoing && existingRow?.credit_consumed && existingRow.entitlement_cycle_id) {
-    const returnFreeRegistration = shouldReturnFreeRegistrationOnCancellation(
-      eventRow.starts_at,
-      true
-    )
-
-    if (returnFreeRegistration && !existingRow.credit_returned) {
-      await returnEventCredit(supabase, existingRow.entitlement_cycle_id)
-      await appendRegistrationLedger(supabase, {
-        userId,
-        eventId: input.eventId,
-        action: 'credit_return',
-        registrationMethod: existingRow.registration_method,
-        entitlementCycleId: existingRow.entitlement_cycle_id,
-        creditDelta: 1,
-        metadata: { reason: 'cancelled_before_cutoff' },
-      })
-    } else if (!returnFreeRegistration) {
-      await appendRegistrationLedger(supabase, {
-        userId,
-        eventId: input.eventId,
-        action: 'cancel',
-        registrationMethod: existingRow.registration_method,
-        entitlementCycleId: existingRow.entitlement_cycle_id,
-        creditDelta: 0,
-        metadata: { reason: 'within_cutoff_no_return' },
-      })
-    }
+  // Changing away from Going never refunds premium credits or event fees.
+  if (leavingGoing) {
+    const refund = resolveRsvpCancelRefund()
+    await appendRegistrationLedger(supabase, {
+      userId,
+      eventId: input.eventId,
+      action: 'cancel',
+      registrationMethod: existingRow?.registration_method ?? null,
+      entitlementCycleId: existingRow?.entitlement_cycle_id ?? null,
+      creditDelta: refund.creditDelta,
+      metadata: {
+        reason: 'rsvp_changed_no_refund',
+        previous_status: existingRow?.status ?? 'going',
+        next_status: input.status,
+        registration_method: existingRow?.registration_method ?? null,
+        payment_status: existingRow?.payment_status ?? null,
+        credit_consumed: existingRow?.credit_consumed ?? false,
+        refund_credit: refund.refundCredit,
+        refund_payment: refund.refundPayment,
+      },
+    })
   }
 
   // Cancelling Going also returns a spent guest invite to the active cycle.
-  if (!isGoing && wasGoing && existingRow?.guest_invite_consumed) {
+  // (Guest invites are not membership credits or event fees.)
+  if (leavingGoing && existingRow?.guest_invite_consumed) {
     const cycleId =
       existingRow.entitlement_cycle_id ?? entitlements.activeCycle?.id ?? null
     if (cycleId) {
@@ -161,9 +168,9 @@ export async function updateEventRsvp(input: {
   }
 
   if (isGoing && !wasGoing) {
-    const { count: goingCount, error: countError } = await supabase
+    const { data: goingRows, error: countError } = await supabase
       .from('event_attendees')
-      .select('user_id', { count: 'exact', head: true })
+      .select('user_id, payment_status')
       .eq('event_id', input.eventId)
       .eq('status', 'going')
 
@@ -171,7 +178,11 @@ export async function updateEventRsvp(input: {
       return { error: countError.message }
     }
 
-    if (isEventAtCapacity(goingCount ?? 0, eventRow.attendance_max)) {
+    const goingCount = (goingRows ?? []).filter((row) =>
+      isConfirmedGoingAttendee(row)
+    ).length
+
+    if (isEventAtCapacity(goingCount, eventRow.attendance_max)) {
       return { error: EVENT_AT_CAPACITY_MESSAGE }
     }
 
@@ -193,22 +204,81 @@ export async function updateEventRsvp(input: {
       }
     }
 
-    let registrationMethod = decision.method
-    let paymentStatus: string | null = null
-    let entitlementCycleId: string | null = null
-    let creditConsumed = false
+    // Paid registration: start Stripe Checkout and only mark Going after webhook.
+    // Free members on premium events with a fee always take this path.
+    if (
+      shouldUseEventFeeCheckout({
+        eventType,
+        feeCents: eventRow.fee_cents,
+        productTier: entitlements.productTier,
+        decision,
+      })
+    ) {
+      const feeCents = eventRow.fee_cents ?? 0
+      const checkout = await createEventFeeCheckoutSession({
+        supabase,
+        eventId: input.eventId,
+        eventTitle: eventRow.title?.trim() || 'Event registration',
+        feeCents,
+        userId,
+        email: viewer.email,
+      })
 
-    if (decision.method === 'paid_per_event') {
-      paymentStatus = 'pending'
+      if ('error' in checkout) {
+        return { error: checkout.error }
+      }
+
+      // Clear legacy unpaid Going placeholders so UI/capacity stay honest
+      // until checkout.session.completed confirms payment.
+      if (hasUnpaidGoingPlaceholder && existingRow) {
+        await supabase
+          .from('event_attendees')
+          .update({
+            status: 'not_going',
+            payment_status: 'pending',
+            registration_method: 'paid_per_event',
+            cancelled_at: new Date().toISOString(),
+          })
+          .eq('event_id', input.eventId)
+          .eq('user_id', userId)
+      }
+
       await appendRegistrationLedger(supabase, {
         userId,
         eventId: input.eventId,
         action: 'payment_required',
         registrationMethod: 'paid_per_event',
         creditDelta: 0,
-        metadata: { payment_status: 'pending' },
+        metadata: {
+          payment_status: 'pending',
+          stripe_checkout_session_id: checkout.sessionId,
+          fee_cents: feeCents,
+          product_tier: entitlements.productTier,
+          decision_method: decision.allowed ? decision.method : null,
+        },
       })
-    } else if (decision.method === 'credit') {
+
+      return {
+        success: true as const,
+        decision,
+        checkoutUrl: checkout.url,
+        usedCredit: false as const,
+      }
+    }
+
+    let registrationMethod = decision.method
+    let paymentStatus: string | null = null
+    let entitlementCycleId: string | null = null
+    let creditConsumed = false
+
+    if (decision.method === 'paid_per_event') {
+      // Fee missing/zero — never grant free Going on a paid decision.
+      return {
+        error: 'This event does not have a registration fee configured.',
+      }
+    }
+
+    if (decision.method === 'credit') {
       if (!entitlements.activeCycle?.id) {
         return { error: 'No active billing cycle found for free registrations.' }
       }
@@ -262,19 +332,24 @@ export async function updateEventRsvp(input: {
       return { error: error.message }
     }
 
-    return { success: true as const, decision }
+    revalidatePath(`/events/${input.eventId}`)
+    revalidatePath('/events')
+
+    return {
+      success: true as const,
+      decision,
+      usedCredit: creditConsumed,
+    }
   }
 
   const simplePayload = {
     status: input.status,
     cancelled_at: isGoing ? null : new Date().toISOString(),
-    credit_returned: Boolean(
-      !isGoing && wasGoing && existingRow?.credit_consumed
-        ? shouldReturnFreeRegistrationOnCancellation(eventRow.starts_at, true) ||
-            existingRow?.credit_returned
-        : existingRow?.credit_returned
-    ),
-    ...(!isGoing && wasGoing && existingRow?.guest_invite_consumed
+    // Never mark credits as returned when changing RSVP — no refunds.
+    credit_returned: existingRow?.credit_returned ?? false,
+    ...(!isGoing &&
+    (wasGoing || hasUnpaidGoingPlaceholder) &&
+    existingRow?.guest_invite_consumed
       ? { guest_name: null, guest_invite_consumed: false }
       : {}),
   }
@@ -295,7 +370,14 @@ export async function updateEventRsvp(input: {
     return { error: error.message }
   }
 
-  return { success: true as const }
+  revalidatePath(`/events/${input.eventId}`)
+  revalidatePath('/events')
+
+  return {
+    success: true as const,
+    status: input.status,
+    refunded: false as const,
+  }
 }
 
 export async function getEventRegistrationPreview(eventId: string) {

@@ -850,6 +850,7 @@ export interface Database {
           user_id: string
           status: string
           created_at: string | null
+          updated_at: string
           registration_method: string | null
           payment_status: string | null
           entitlement_cycle_id: string | null
@@ -865,6 +866,7 @@ export interface Database {
           user_id: string
           status?: string
           created_at?: string | null
+          updated_at?: string
           registration_method?: string | null
           payment_status?: string | null
           entitlement_cycle_id?: string | null
@@ -880,6 +882,7 @@ export interface Database {
           user_id?: string
           status?: string
           created_at?: string | null
+          updated_at?: string
           registration_method?: string | null
           payment_status?: string | null
           entitlement_cycle_id?: string | null

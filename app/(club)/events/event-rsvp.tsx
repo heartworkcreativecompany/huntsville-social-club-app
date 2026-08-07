@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -12,8 +12,13 @@ import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
 } from '@/lib/event-labels'
-import { resolveGoingButtonState } from '@/lib/event-rsvp-going'
+import {
+  resolveGoingButtonClassName,
+  resolveGoingButtonState,
+  PREMIUM_RSVP_NO_REFUND_COPY,
+} from '@/lib/event-rsvp-going'
 import { PREMIUM_BUBBLE_GREY_CLASSNAME } from '@/lib/event-rsvp-window'
+import { formatFeeCents } from '@/lib/membership-tier-config'
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import { FEATURE_GATE_COPY } from '@/lib/membership-pricing-copy'
 
@@ -24,6 +29,8 @@ type EventRsvpProps = {
   registrationPreview?: EventRegistrationDecision | null
   canRegisterGoing?: boolean
   atCapacityMessage?: string | null
+  /** Event fee in cents — shown when Going will charge instead of using a credit. */
+  feeCents?: number | null
   /** Compact premium bubble: grey RSVP card with fee/credit body copy. */
   premiumLayout?: boolean
 }
@@ -41,11 +48,19 @@ export default function EventRsvp({
   registrationPreview,
   canRegisterGoing = true,
   atCapacityMessage = null,
+  feeCents = null,
   premiumLayout = false,
 }: EventRsvpProps) {
   const router = useRouter()
   const [message, setMessage] = useState('')
   const [isPending, startTransition] = useTransition()
+  const [localStatus, setLocalStatus] = useState<string | null | undefined>(
+    currentStatus
+  )
+
+  useEffect(() => {
+    setLocalStatus(currentStatus)
+  }, [currentStatus])
 
   const status = eventStatus ?? 'published'
 
@@ -74,7 +89,27 @@ export default function EventRsvp({
         return
       }
 
-      setMessage('RSVP saved.')
+      // Paid path: redirect to Stripe. Do not treat this as a saved Going RSVP.
+      const checkoutUrl =
+        result && typeof result === 'object' && 'checkoutUrl' in result
+          ? result.checkoutUrl
+          : null
+      if (typeof checkoutUrl === 'string' && checkoutUrl.length > 0) {
+        setMessage('Redirecting to secure checkout…')
+        window.location.assign(checkoutUrl)
+        return
+      }
+
+      setLocalStatus(rsvpStatus)
+
+      if (rsvpStatus === 'not_going' || rsvpStatus === 'maybe') {
+        setMessage('RSVP updated.')
+      } else if ('usedCredit' in result && result.usedCredit) {
+        setMessage('RSVP saved. One premium credit was used.')
+      } else {
+        setMessage('RSVP saved.')
+      }
+
       router.refresh()
     })
   }
@@ -103,31 +138,48 @@ export default function EventRsvp({
       preview.uiState === 'inner_circle_social_included' ||
       preview.uiState === 'member_standard_free')
 
+  const willChargeEventFee =
+    !!preview &&
+    preview.allowed === true &&
+    preview.method === 'paid_per_event' &&
+    feeCents != null &&
+    feeCents > 0
+
+  const feeLabel =
+    feeCents != null && feeCents > 0 ? `$${formatFeeCents(feeCents)}` : null
+
   const isPriorityLocked =
     preview && !preview.allowed && preview.code === 'priority_window'
 
-  const isRegisteredGoing = currentStatus === 'going'
+  const isRegisteredGoing = localStatus === 'going'
 
   const buttons = (
     <div className="flex flex-wrap gap-2">
       {RSVP_OPTIONS.map((option) => {
-        const isActive = currentStatus === option.value
+        const isActive = localStatus === option.value
         const isGoingOption = option.value === 'going'
         const { goingBlocked, disabled } = isGoingOption
           ? resolveGoingButtonState({
               canRegisterGoing,
-              currentStatus,
+              currentStatus: localStatus,
               isPending,
             })
           : { goingBlocked: false, disabled: isPending }
 
-        const className = goingBlocked
-          ? buttonDisabledMutedClassName
-          : isGoingOption
-            ? buttonPrimaryClassName
-            : isActive
-              ? `${buttonSecondaryClassName} border-accent bg-accent text-accent-foreground hover:brightness-110`
-              : buttonSecondaryClassName
+        // Going uses primary only while selected (or as CTA when no RSVP yet).
+        // After Not going / Maybe, Going returns to the secondary non-selected look.
+        const className = isGoingOption
+          ? resolveGoingButtonClassName({
+              isActive,
+              goingBlocked,
+              hasExistingStatus: Boolean(localStatus),
+              primaryClassName: buttonPrimaryClassName,
+              secondaryClassName: buttonSecondaryClassName,
+              disabledClassName: buttonDisabledMutedClassName,
+            })
+          : isActive
+            ? `${buttonSecondaryClassName} border-accent bg-accent text-accent-foreground hover:brightness-110`
+            : buttonSecondaryClassName
 
         return (
           <button
@@ -214,7 +266,10 @@ export default function EventRsvp({
       ) : null}
 
       {showStandardPaywall ? (
-        <p className="mb-3 text-sm text-muted-foreground">{preview.description}</p>
+        <p className="mb-3 text-sm text-muted-foreground">
+          {preview.description}
+          {feeLabel ? ` Event fee: ${feeLabel}.` : ''}
+        </p>
       ) : null}
 
       {showIncludedInfo && !premiumLayout ? (
@@ -237,7 +292,7 @@ export default function EventRsvp({
         </div>
       ) : null}
 
-      {atCapacityMessage && currentStatus !== 'going' ? (
+      {atCapacityMessage && localStatus !== 'going' ? (
         <div className="mb-4 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted-foreground">
           {atCapacityMessage}
         </div>
@@ -253,8 +308,27 @@ export default function EventRsvp({
           Going may use a premium membership credit or an event fee, depending
           on your membership and remaining credits.
         </p>
+        {willChargeEventFee && feeLabel ? (
+          <p className="mt-2 text-sm leading-relaxed text-foreground">
+            Going will take you to a secure checkout to pay the {feeLabel}{' '}
+            event fee. Your RSVP is confirmed only after payment succeeds.
+          </p>
+        ) : null}
+        {showStandardPaywall && !willChargeEventFee ? (
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            {preview.description}
+          </p>
+        ) : null}
         <div className="mt-4">{notices}</div>
         <div className="mt-4">{buttons}</div>
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+          {PREMIUM_RSVP_NO_REFUND_COPY}
+        </p>
+        {willChargeEventFee && !feeLabel ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            You&apos;ll be taken to a secure checkout to pay the event fee.
+          </p>
+        ) : null}
         {message ? (
           <p className="mt-2 text-sm text-muted-foreground" role="alert">
             {message}
@@ -270,7 +344,7 @@ export default function EventRsvp({
       <p className="mb-3 text-sm text-muted-foreground">
         {isRegisteredGoing
           ? 'Change your RSVP'
-          : currentStatus
+          : localStatus
             ? 'Your RSVP'
             : 'RSVP to this event'}
       </p>
