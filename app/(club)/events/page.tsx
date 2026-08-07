@@ -183,18 +183,6 @@ export default async function EventsPage() {
         description="Mixers, speed dating, and curated socials worth showing up for."
       />
 
-      {canCreateEvents ? (
-        <section className="mb-10">
-          <h2 className="text-display mb-4 text-xl font-semibold">Create event</h2>
-          <EventForm
-            isAdminCreator={isAdminCreator}
-            canManageSponsors={canManageSponsors}
-            availableSponsors={availableSponsors}
-            canCreateStandardOnly={!isAdminCreator}
-          />
-        </section>
-      ) : null}
-
       {error ? (
         <p className="text-sm text-danger">Could not load events: {error.message}</p>
       ) : visibleEvents.length === 0 ? (
@@ -205,6 +193,18 @@ export default async function EventsPage() {
       ) : (
         <EventsBrowser events={browserEvents} />
       )}
+
+      {canCreateEvents ? (
+        <section className="mt-12">
+          <h2 className="text-display mb-4 text-xl font-semibold">Create event</h2>
+          <EventForm
+            isAdminCreator={isAdminCreator}
+            canManageSponsors={canManageSponsors}
+            availableSponsors={availableSponsors}
+            canCreateStandardOnly={!isAdminCreator}
+          />
+        </section>
+      ) : null}
     </>
   )
 }

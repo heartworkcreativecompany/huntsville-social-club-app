@@ -9,7 +9,6 @@ import {
   type MembershipPerksSnapshot,
 } from '@/lib/event-rsvp-window'
 import {
-  applyRsvpResultToMemberPerksStore,
   hydrateMemberPerksFromServer,
   updateMemberPerksFromSnapshot,
   useMemberPerks,
@@ -92,12 +91,8 @@ export default function EventPremiumRegistrationSection({
           if (result.status) {
             setIsGoing(result.status === 'going')
           }
-          // EventRsvp already applied the store; re-apply is idempotent and
-          // covers older call sites that only used this callback.
-          applyRsvpResultToMemberPerksStore({
-            usedCredit: result.usedCredit,
-            perks: result.perks,
-          })
+          // Store is applied once in EventRsvp — do not re-apply here
+          // (a second apply with usedCredit + remaining 1 was force-decrementing to 0).
         }}
       />
       {creditSummary ? (

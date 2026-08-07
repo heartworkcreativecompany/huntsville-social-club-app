@@ -274,23 +274,41 @@ export function membershipPerksSummaryFromSnapshot(
 
 /**
  * Apply RSVP action result to Membership Perks state.
- * Credits never increase on Not going (no refund). Prefer the server
- * snapshot when present; otherwise decrement only when a credit was used.
  *
- * If usedCredit is true but the snapshot did not decrease remaining credits
- * (stale read / failed persist), force a local decrement so UI cannot claim
- * a credit was used while still showing the prior remaining count.
+ * When the server returns a valid paid perks snapshot, that snapshot is the
+ * sole source of truth (never force-decrement again on re-apply).
+ * Optimistic `currentRemaining - 1` runs only when usedCredit is true and
+ * perks are absent/invalid.
  */
 export function applyRsvpPerksSnapshot(input: {
   previous: MembershipPerksSnapshot
   usedCredit?: boolean
   perks?: MembershipPerksSnapshot | null
 }): MembershipPerksSnapshot {
-  let next: MembershipPerksSnapshot
-  if (input.perks) {
-    next = input.perks
-  } else if (input.usedCredit) {
-    next = {
+  const perks = input.perks
+  const hasValidPaidPerks =
+    !!perks &&
+    perks.hasPaidMembership === true &&
+    typeof perks.premiumCreditsRemaining === 'number' &&
+    Number.isFinite(perks.premiumCreditsRemaining) &&
+    perks.premiumCreditsRemaining >= 0 &&
+    (typeof perks.creditsGranted === 'number' ||
+      perks.creditsGranted === null)
+
+  if (hasValidPaidPerks && perks) {
+    let next = perks
+    // Hard rule: RSVP changes never refund credits in the UI.
+    if (next.premiumCreditsRemaining > input.previous.premiumCreditsRemaining) {
+      next = {
+        ...next,
+        premiumCreditsRemaining: input.previous.premiumCreditsRemaining,
+      }
+    }
+    return next
+  }
+
+  if (input.usedCredit) {
+    return {
       ...input.previous,
       hasPaidMembership: input.previous.hasPaidMembership,
       premiumCreditsRemaining: Math.max(
@@ -298,33 +316,9 @@ export function applyRsvpPerksSnapshot(input: {
         input.previous.premiumCreditsRemaining - 1
       ),
     }
-  } else {
-    next = input.previous
   }
 
-  if (
-    input.usedCredit &&
-    next.premiumCreditsRemaining >= input.previous.premiumCreditsRemaining
-  ) {
-    next = {
-      ...next,
-      hasPaidMembership: next.hasPaidMembership || input.previous.hasPaidMembership,
-      premiumCreditsRemaining: Math.max(
-        0,
-        input.previous.premiumCreditsRemaining - 1
-      ),
-    }
-  }
-
-  // Hard rule: RSVP changes never refund credits in the UI either.
-  if (next.premiumCreditsRemaining > input.previous.premiumCreditsRemaining) {
-    next = {
-      ...next,
-      premiumCreditsRemaining: input.previous.premiumCreditsRemaining,
-    }
-  }
-
-  return next
+  return input.previous
 }
 
 /** Elite priority RSVP is currently live (Going open for Elite only). */

@@ -260,18 +260,46 @@ describe('Membership Perks after RSVP credit changes', () => {
     expect(after.premiumCreditsRemaining).toBe(2)
   })
 
-  it('force-decrements when usedCredit is true but perks snapshot is stale', () => {
+  it('trusts a valid server snapshot of 1 and does not force-decrement again', () => {
     const after = applyRsvpPerksSnapshot({
       previous: eliteFull,
       usedCredit: true,
       perks: {
         ...eliteFull,
-        // Stale post-write read still shows 2
-        premiumCreditsRemaining: 2,
+        premiumCreditsRemaining: 1,
+        creditsGranted: 2,
       },
     })
     expect(after.premiumCreditsRemaining).toBe(1)
     expect(membershipPerksSummaryFromSnapshot(after)).toContain('1 of 2')
+  })
+
+  it('stays at 1 when the same valid snapshot is applied twice (no double decrement)', () => {
+    const snapshot = {
+      ...eliteFull,
+      premiumCreditsRemaining: 1,
+      creditsGranted: 2,
+    }
+    const first = applyRsvpPerksSnapshot({
+      previous: eliteFull,
+      usedCredit: true,
+      perks: snapshot,
+    })
+    const second = applyRsvpPerksSnapshot({
+      previous: first,
+      usedCredit: true,
+      perks: snapshot,
+    })
+    expect(first.premiumCreditsRemaining).toBe(1)
+    expect(second.premiumCreditsRemaining).toBe(1)
+  })
+
+  it('optimistically decrements only when usedCredit and perks are absent', () => {
+    const after = applyRsvpPerksSnapshot({
+      previous: eliteFull,
+      usedCredit: true,
+    })
+    expect(after.premiumCreditsRemaining).toBe(1)
   })
 
   it('returns null Membership Perks summary for free members', () => {
