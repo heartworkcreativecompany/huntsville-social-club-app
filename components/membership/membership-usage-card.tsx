@@ -10,10 +10,11 @@ import {
   buttonSecondaryClassName,
 } from '@/lib/event-labels'
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
-import { freeRegistrationsSummary } from '@/lib/membership-entitlements'
 import {
+  FREE_MEMBER_PREMIUM_CREDITS_COPY,
   dashboardCreditsSummaryFromSnapshot,
   hydrateMemberPerksFromServer,
+  isPaidPerksTier,
   membershipPerksSnapshotFromEntitlements,
   useMemberPerksWithFallback,
 } from '@/lib/member-perks-store'
@@ -41,15 +42,12 @@ export default function MembershipUsageCard({
   entitlements: MemberEntitlements
   className?: string
 }) {
+  const hasPaidMembership = isPaidPerksTier(entitlements.productTier)
+  const serverPerks = membershipPerksSnapshotFromEntitlements(entitlements)
+
   useEffect(() => {
-    if (
-      entitlements.productTier === 'inner_circle' ||
-      entitlements.productTier === 'elite_circle'
-    ) {
-      hydrateMemberPerksFromServer(
-        membershipPerksSnapshotFromEntitlements(entitlements)
-      )
-    }
+    // Always hydrate — free members must clear any stale paid store snapshot.
+    hydrateMemberPerksFromServer(serverPerks)
   }, [
     entitlements.productTier,
     entitlements.premiumCreditsRemaining,
@@ -59,35 +57,24 @@ export default function MembershipUsageCard({
     entitlements.activeCycle?.period_end,
   ])
 
-  const livePerks = useMemberPerksWithFallback(
-    entitlements.productTier === 'inner_circle' ||
-      entitlements.productTier === 'elite_circle'
-      ? membershipPerksSnapshotFromEntitlements(entitlements)
-      : null
-  )
+  const livePerks = useMemberPerksWithFallback(serverPerks)
 
   const billing = entitlements.billing
-  const creditsRemaining =
-    livePerks?.premiumCreditsRemaining ??
-    entitlements.premiumCreditsRemaining ??
-    0
-  const guestInvitesRemaining =
-    livePerks?.guestInvitesRemaining ?? entitlements.guestInvitesRemaining
-  const periodEnd =
-    livePerks?.periodEnd ??
-    entitlements.activeCycle?.period_end ??
-    billing.billing_period_end
+  // Prefer server paid/free flag so a stale Elite store cannot override a free member.
+  const showPaidUsage = hasPaidMembership && livePerks?.hasPaidMembership === true
 
-  const usageLine =
-    livePerks &&
-    (livePerks.productTier === 'inner_circle' ||
-      livePerks.productTier === 'elite_circle')
-      ? dashboardCreditsSummaryFromSnapshot(livePerks)
-      : freeRegistrationsSummary({
-          ...entitlements,
-          premiumCreditsRemaining: creditsRemaining,
-          guestInvitesRemaining,
-        })
+  const guestInvitesRemaining = showPaidUsage
+    ? (livePerks?.guestInvitesRemaining ?? entitlements.guestInvitesRemaining)
+    : 0
+  const periodEnd = showPaidUsage
+    ? (livePerks?.periodEnd ??
+      entitlements.activeCycle?.period_end ??
+      billing.billing_period_end)
+    : null
+
+  const usageLine = showPaidUsage
+    ? dashboardCreditsSummaryFromSnapshot(livePerks!)
+    : FREE_MEMBER_PREMIUM_CREDITS_COPY
 
   const hasPaidSubscription =
     Boolean(billing.stripe_subscription_id) &&
@@ -124,30 +111,23 @@ export default function MembershipUsageCard({
           There is a payment issue on your account. Update your billing details
           to keep membership access.
         </p>
-      ) : usageLine ? (
-        <p className="mt-3 text-sm text-muted-foreground">{usageLine}</p>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">
-          Upgrade to Inner Circle or Elite Circle for messaging, free Circle
-          Socials, and premium event credits.
-        </p>
+        <p className="mt-3 text-sm text-muted-foreground">{usageLine}</p>
       )}
 
-      {entitlements.productTier === 'elite_circle' ? (
+      {showPaidUsage && entitlements.productTier === 'elite_circle' ? (
         <p className="mt-2 text-sm text-muted-foreground">
           Guest invites remaining this period: {guestInvitesRemaining}
         </p>
       ) : null}
 
-      {periodEnd &&
-      (entitlements.productTier === 'inner_circle' ||
-        entitlements.productTier === 'elite_circle') ? (
+      {showPaidUsage && periodEnd ? (
         <p className="mt-2 text-xs text-muted">
           Current period ends: {new Date(periodEnd).toLocaleDateString()}
         </p>
       ) : null}
 
-      {billing.renewal_at || billing.trial_end ? (
+      {showPaidUsage && (billing.renewal_at || billing.trial_end) ? (
         <p className="mt-2 text-xs text-muted">
           {onTrial ? 'Trial ends' : 'Renews'}:{' '}
           {new Date(
@@ -157,7 +137,7 @@ export default function MembershipUsageCard({
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-3">
-        {entitlements.productTier === 'member' ? (
+        {!hasPaidMembership ? (
           <Link href="/upgrade" className={buttonPrimaryClassName}>
             View memberships
           </Link>

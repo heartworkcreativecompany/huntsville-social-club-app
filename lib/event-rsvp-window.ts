@@ -225,6 +225,8 @@ export function formatCountdownRemaining(
 
 export type MembershipPerksSnapshot = {
   productTier: ProductTier
+  /** True only for Inner/Elite with an active paid entitlement period. */
+  hasPaidMembership: boolean
   premiumCreditsRemaining: number
   creditsGranted: number | null
   guestInvitesRemaining: number
@@ -239,7 +241,13 @@ export function premiumCreditsSummary(input: {
   premiumCreditsRemaining: number | null
   guestInvitesRemaining: number
   creditsGranted: number | null
+  hasPaidMembership?: boolean
 }): string | null {
+  const hasPaid =
+    input.hasPaidMembership ??
+    (input.productTier === 'inner_circle' || input.productTier === 'elite_circle')
+  if (!hasPaid) return null
+
   const { productTier, premiumCreditsRemaining, guestInvitesRemaining } = input
   if (productTier !== 'inner_circle' && productTier !== 'elite_circle') {
     return null
@@ -260,6 +268,7 @@ export function premiumCreditsSummary(input: {
 export function membershipPerksSummaryFromSnapshot(
   snapshot: MembershipPerksSnapshot
 ): string | null {
+  if (!snapshot.hasPaidMembership) return null
   return premiumCreditsSummary(snapshot)
 }
 
@@ -279,6 +288,7 @@ export function applyRsvpPerksSnapshot(input: {
   } else if (input.usedCredit) {
     next = {
       ...input.previous,
+      hasPaidMembership: input.previous.hasPaidMembership,
       premiumCreditsRemaining: Math.max(
         0,
         input.previous.premiumCreditsRemaining - 1

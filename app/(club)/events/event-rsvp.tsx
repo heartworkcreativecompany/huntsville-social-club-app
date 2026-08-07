@@ -334,6 +334,12 @@ export default function EventRsvp({
           Going may use a premium membership credit or an event fee, depending
           on your membership and remaining credits.
         </p>
+        {showStandardPaywall ? (
+          <p className="mt-2 text-sm leading-relaxed text-foreground">
+            Premium events are available to free members by paying the event
+            fee.
+          </p>
+        ) : null}
         {willChargeEventFee && feeLabel ? (
           <p className="mt-2 text-sm leading-relaxed text-foreground">
             Going will take you to a secure checkout to pay the {feeLabel}{' '}

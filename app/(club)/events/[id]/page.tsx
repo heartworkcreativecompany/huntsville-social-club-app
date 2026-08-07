@@ -202,6 +202,7 @@ export default async function EventDetailPage({ params }: PageProps) {
       entitlements.productTier === 'elite_circle')
       ? {
           productTier: entitlements.productTier,
+          hasPaidMembership: true,
           premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
           creditsGranted:
             entitlements.activeCycle?.credits_granted ??

@@ -23,13 +23,27 @@ function perksSnapshotFromEntitlements(entitlements: {
     period_end?: string | null
   } | null
 }): MembershipPerksSnapshot {
+  const hasPaidMembership =
+    entitlements.productTier === 'inner_circle' ||
+    entitlements.productTier === 'elite_circle'
   return {
     productTier: entitlements.productTier,
-    premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
-    creditsGranted: entitlements.activeCycle?.credits_granted ?? null,
-    guestInvitesRemaining: entitlements.guestInvitesRemaining,
-    periodStart: entitlements.activeCycle?.period_start ?? null,
-    periodEnd: entitlements.activeCycle?.period_end ?? null,
+    hasPaidMembership,
+    premiumCreditsRemaining: hasPaidMembership
+      ? (entitlements.premiumCreditsRemaining ?? 0)
+      : 0,
+    creditsGranted: hasPaidMembership
+      ? (entitlements.activeCycle?.credits_granted ?? null)
+      : 0,
+    guestInvitesRemaining: hasPaidMembership
+      ? entitlements.guestInvitesRemaining
+      : 0,
+    periodStart: hasPaidMembership
+      ? (entitlements.activeCycle?.period_start ?? null)
+      : null,
+    periodEnd: hasPaidMembership
+      ? (entitlements.activeCycle?.period_end ?? null)
+      : null,
   }
 }
 

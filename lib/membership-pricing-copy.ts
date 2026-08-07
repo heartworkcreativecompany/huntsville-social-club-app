@@ -226,3 +226,8 @@ export function eliteUnlimitedSummary(): string {
 export function memberFreeSummary(): string {
   return 'Standard events are free. Circle Socials and premium events require payment. Upgrade for messaging, free Circle Socials, and premium credits.'
 }
+
+/** MembershipUsageCard copy for free / no-subscription members (no credit counts). */
+export const FREE_MEMBER_PREMIUM_CREDITS_COPY =
+  'Premium event credits are included with Inner Circle and Elite Circle memberships.'
+

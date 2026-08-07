@@ -122,13 +122,22 @@ export function buildMemberEntitlements(input: {
 }): MemberEntitlements {
   const billing = parseMembershipBilling(input.billing)
   const productTier = resolveProductTier(input)
-  const activeCycle = input.activeCycle ?? null
-  const premiumCreditsRemaining = remainingPremiumCredits(productTier, activeCycle)
-  const guestGranted =
-    activeCycle?.guest_invites_granted ?? guestInvitesForTier(productTier)
-  const guestUsed = activeCycle?.guest_invites_used ?? 0
   const isPaid =
     productTier === 'inner_circle' || productTier === 'elite_circle'
+
+  // Free / expired members must not inherit leftover paid cycle credit rows.
+  const activeCycle =
+    isPaid && input.activeCycle?.is_active !== false
+      ? (input.activeCycle ?? null)
+      : null
+
+  const premiumCreditsRemaining = isPaid
+    ? remainingPremiumCredits(productTier, activeCycle)
+    : null
+  const guestGranted = isPaid
+    ? (activeCycle?.guest_invites_granted ?? guestInvitesForTier(productTier))
+    : 0
+  const guestUsed = isPaid ? (activeCycle?.guest_invites_used ?? 0) : 0
 
   return {
     productTier,

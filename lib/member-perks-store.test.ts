@@ -3,11 +3,16 @@ import {
   membershipPerksSummaryFromSnapshot,
   type MembershipPerksSnapshot,
 } from '@/lib/event-rsvp-window'
+import { buildMemberEntitlements } from '@/lib/membership-entitlements'
+import { FREE_MEMBER_PREMIUM_CREDITS_COPY } from '@/lib/membership-pricing-copy'
 import {
   applyRsvpResultToMemberPerksStore,
   dashboardCreditsSummaryFromSnapshot,
+  freeMemberPerksSnapshot,
   getMemberPerksSnapshot,
   hydrateMemberPerksFromServer,
+  membershipPerksSnapshotFromEntitlements,
+  normalizeMemberPerksSnapshot,
   resetMemberPerksStoreForTests,
   updateMemberPerksFromSnapshot,
 } from '@/lib/member-perks-store'
@@ -19,6 +24,7 @@ const period = {
 
 const eliteFull: MembershipPerksSnapshot = {
   productTier: 'elite_circle',
+  hasPaidMembership: true,
   premiumCreditsRemaining: 2,
   creditsGranted: 2,
   guestInvitesRemaining: 1,
@@ -63,8 +69,6 @@ describe('shared member perks store', () => {
       usedCredit: false,
       perks: {
         ...eliteFull,
-        // Server correctly keeps credits at 1; if a buggy payload tried to
-        // restore 2, the store must still refuse a refund.
         premiumCreditsRemaining: 2,
         guestInvitesRemaining: 1,
       },
@@ -121,5 +125,79 @@ describe('shared member perks store', () => {
 
     hydrateMemberPerksFromServer(eliteFull)
     expect(getMemberPerksSnapshot()?.premiumCreditsRemaining).toBe(1)
+  })
+
+  it('normalizes free / no-subscription members to zero credits and invites', () => {
+    const free = normalizeMemberPerksSnapshot({
+      productTier: 'member',
+      hasPaidMembership: false,
+      // Spoofed Elite defaults must not stick
+      premiumCreditsRemaining: 2,
+      creditsGranted: 2,
+      guestInvitesRemaining: 1,
+      ...period,
+    })
+
+    expect(free).toEqual(freeMemberPerksSnapshot())
+    expect(free.premiumCreditsRemaining).toBe(0)
+    expect(free.creditsGranted).toBe(0)
+    expect(free.guestInvitesRemaining).toBe(0)
+    expect(membershipPerksSummaryFromSnapshot(free)).toBeNull()
+    expect(dashboardCreditsSummaryFromSnapshot(free)).toBe(
+      FREE_MEMBER_PREMIUM_CREDITS_COPY
+    )
+  })
+
+  it('clears a stale Elite store when hydrating a free member', () => {
+    hydrateMemberPerksFromServer(eliteFull)
+    expect(getMemberPerksSnapshot()?.premiumCreditsRemaining).toBe(2)
+
+    hydrateMemberPerksFromServer(freeMemberPerksSnapshot())
+    const live = getMemberPerksSnapshot()
+    expect(live?.hasPaidMembership).toBe(false)
+    expect(live?.premiumCreditsRemaining).toBe(0)
+    expect(live?.guestInvitesRemaining).toBe(0)
+    expect(dashboardCreditsSummaryFromSnapshot(live!)).toBe(
+      FREE_MEMBER_PREMIUM_CREDITS_COPY
+    )
+  })
+
+  it('builds a free snapshot from member entitlements even with a leftover cycle', () => {
+    const entitlements = buildMemberEntitlements({
+      role: 'member',
+      billing: {
+        tier: 'member',
+        plan: null,
+        subscription_status: 'none',
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+        renewal_at: null,
+        trial_end: null,
+        billing_period_end: null,
+        payment_failure: { active: false, failed_at: null, reason: null },
+      },
+      applicationApproved: true,
+      activeCycle: {
+        id: 'stale-cycle',
+        product_tier: 'elite_circle',
+        period_start: period.periodStart,
+        period_end: period.periodEnd,
+        credits_granted: 2,
+        credits_used: 0,
+        guest_invites_granted: 1,
+        guest_invites_used: 0,
+        is_active: true,
+      },
+    })
+
+    expect(entitlements.productTier).toBe('member')
+    expect(entitlements.activeCycle).toBeNull()
+    expect(entitlements.premiumCreditsRemaining).toBeNull()
+    expect(entitlements.guestInvitesRemaining).toBe(0)
+
+    const snapshot = membershipPerksSnapshotFromEntitlements(entitlements)
+    expect(snapshot.hasPaidMembership).toBe(false)
+    expect(snapshot.premiumCreditsRemaining).toBe(0)
+    expect(snapshot.creditsGranted).toBe(0)
   })
 })

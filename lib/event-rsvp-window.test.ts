@@ -169,6 +169,7 @@ describe('premiumCreditsSummary and countdown', () => {
 describe('Membership Perks after RSVP credit changes', () => {
   const eliteFull: MembershipPerksSnapshot = {
     productTier: 'elite_circle',
+    hasPaidMembership: true,
     premiumCreditsRemaining: 2,
     creditsGranted: 2,
     guestInvitesRemaining: 1,
@@ -180,6 +181,7 @@ describe('Membership Perks after RSVP credit changes', () => {
       usedCredit: true,
       perks: {
         productTier: 'elite_circle',
+        hasPaidMembership: true,
         premiumCreditsRemaining: 1,
         creditsGranted: 2,
         guestInvitesRemaining: 1,
@@ -195,6 +197,7 @@ describe('Membership Perks after RSVP credit changes', () => {
   it('does not refund credits when changing Going → Not going', () => {
     const afterCredit: MembershipPerksSnapshot = {
       productTier: 'elite_circle',
+      hasPaidMembership: true,
       premiumCreditsRemaining: 1,
       creditsGranted: 2,
       guestInvitesRemaining: 1,
@@ -205,6 +208,7 @@ describe('Membership Perks after RSVP credit changes', () => {
       usedCredit: false,
       perks: {
         productTier: 'elite_circle',
+        hasPaidMembership: true,
         // Server snapshot still 1 — no credit refund
         premiumCreditsRemaining: 1,
         creditsGranted: 2,
@@ -221,6 +225,7 @@ describe('Membership Perks after RSVP credit changes', () => {
   it('clamps a buggy Not going payload that tries to restore credits', () => {
     const afterCredit: MembershipPerksSnapshot = {
       productTier: 'elite_circle',
+      hasPaidMembership: true,
       premiumCreditsRemaining: 1,
       creditsGranted: 2,
       guestInvitesRemaining: 1,
@@ -253,5 +258,17 @@ describe('Membership Perks after RSVP credit changes', () => {
       usedCredit: false,
     })
     expect(after.premiumCreditsRemaining).toBe(2)
+  })
+
+  it('returns null Membership Perks summary for free members', () => {
+    expect(
+      membershipPerksSummaryFromSnapshot({
+        productTier: 'member',
+        hasPaidMembership: false,
+        premiumCreditsRemaining: 0,
+        creditsGranted: 0,
+        guestInvitesRemaining: 0,
+      })
+    ).toBeNull()
   })
 })

@@ -8,8 +8,8 @@ import {
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
 
 /**
- * Keeps the shared member-perks store in sync with server entitlements
- * loaded in the club layout / pages (without clobbering fresher client updates).
+ * Keeps the shared member-perks store in sync with server entitlements.
+ * Free members hydrate a zeroed snapshot so stale Elite/Inner credits cannot linger.
  */
 export default function MemberPerksHydrator({
   entitlements,
@@ -18,23 +18,17 @@ export default function MemberPerksHydrator({
 }) {
   useEffect(() => {
     if (!entitlements) return
-    if (
-      entitlements.productTier !== 'inner_circle' &&
-      entitlements.productTier !== 'elite_circle'
-    ) {
-      return
-    }
     hydrateMemberPerksFromServer(
       membershipPerksSnapshotFromEntitlements(entitlements)
     )
   }, [
-    entitlements,
     entitlements?.productTier,
     entitlements?.premiumCreditsRemaining,
     entitlements?.guestInvitesRemaining,
     entitlements?.activeCycle?.credits_granted,
     entitlements?.activeCycle?.period_start,
     entitlements?.activeCycle?.period_end,
+    entitlements?.subscriptionActive,
   ])
 
   return null

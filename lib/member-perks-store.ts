@@ -6,8 +6,8 @@ import {
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
 import {
   elitePremiumRemainingHeadline,
+  FREE_MEMBER_PREMIUM_CREDITS_COPY,
   innerIncludedSummary,
-  memberFreeSummary,
 } from '@/lib/membership-pricing-copy'
 import type { ProductTier } from '@/lib/membership-tier-config'
 import {
@@ -43,6 +43,57 @@ export function resetMemberPerksStoreForTests() {
   emit()
 }
 
+export function isPaidPerksTier(
+  tier: ProductTier
+): tier is 'inner_circle' | 'elite_circle' {
+  return tier === 'inner_circle' || tier === 'elite_circle'
+}
+
+/** Explicit zeroed snapshot for free / cancelled / no-subscription members. */
+export function freeMemberPerksSnapshot(
+  _productTier: ProductTier = 'member'
+): MembershipPerksSnapshot {
+  return {
+    productTier: 'member',
+    hasPaidMembership: false,
+    premiumCreditsRemaining: 0,
+    creditsGranted: 0,
+    guestInvitesRemaining: 0,
+    periodStart: null,
+    periodEnd: null,
+  }
+}
+
+/**
+ * Normalize any snapshot: free members never carry paid credit defaults
+ * (e.g. Elite's 2-credit fallback).
+ */
+export function normalizeMemberPerksSnapshot(
+  snapshot: MembershipPerksSnapshot
+): MembershipPerksSnapshot {
+  const hasPaidMembership =
+    snapshot.hasPaidMembership === true &&
+    isPaidPerksTier(snapshot.productTier)
+
+  if (!hasPaidMembership) {
+    return freeMemberPerksSnapshot(
+      snapshot.productTier === 'member' ? 'member' : 'member'
+    )
+  }
+
+  return {
+    ...snapshot,
+    hasPaidMembership: true,
+    premiumCreditsRemaining: Math.max(0, snapshot.premiumCreditsRemaining),
+    creditsGranted:
+      snapshot.creditsGranted ??
+      (snapshot.productTier === 'elite_circle'
+        ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+        : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD),
+    guestInvitesRemaining: Math.max(0, snapshot.guestInvitesRemaining),
+  }
+}
+
 export function membershipPerksSnapshotFromEntitlements(
   entitlements: Pick<
     MemberEntitlements,
@@ -50,45 +101,58 @@ export function membershipPerksSnapshotFromEntitlements(
     | 'premiumCreditsRemaining'
     | 'guestInvitesRemaining'
     | 'activeCycle'
+    | 'subscriptionActive'
   >
 ): MembershipPerksSnapshot {
+  if (!isPaidPerksTier(entitlements.productTier)) {
+    return freeMemberPerksSnapshot('member')
+  }
+
   const grantedDefault =
     entitlements.productTier === 'elite_circle'
       ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-      : entitlements.productTier === 'inner_circle'
-        ? INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-        : null
+      : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
 
-  return {
+  return normalizeMemberPerksSnapshot({
     productTier: entitlements.productTier,
+    hasPaidMembership: true,
     premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
     creditsGranted: entitlements.activeCycle?.credits_granted ?? grantedDefault,
     guestInvitesRemaining: entitlements.guestInvitesRemaining,
     periodStart: entitlements.activeCycle?.period_start ?? null,
     periodEnd: entitlements.activeCycle?.period_end ?? null,
-  }
+  })
 }
 
 /**
  * Authoritative update after RSVP / guest-invite mutations.
- * Always applies the server snapshot (with no-credit-refund guard).
+ * Always applies the server snapshot (with no-credit-refund guard for paid).
  */
 export function updateMemberPerksFromSnapshot(
   next: MembershipPerksSnapshot
 ): MembershipPerksSnapshot {
+  const normalized = normalizeMemberPerksSnapshot(next)
+
+  if (!normalized.hasPaidMembership) {
+    currentSnapshot = normalized
+    emit()
+    return currentSnapshot
+  }
+
   if (
-    currentSnapshot &&
-    next.premiumCreditsRemaining > currentSnapshot.premiumCreditsRemaining &&
-    next.periodEnd === currentSnapshot.periodEnd
+    currentSnapshot?.hasPaidMembership &&
+    normalized.premiumCreditsRemaining >
+      currentSnapshot.premiumCreditsRemaining &&
+    normalized.periodEnd === currentSnapshot.periodEnd
   ) {
     // Same billing period: never bump credits from a mutation result
     // that would look like a refund.
     currentSnapshot = {
-      ...next,
+      ...normalized,
       premiumCreditsRemaining: currentSnapshot.premiumCreditsRemaining,
     }
   } else {
-    currentSnapshot = next
+    currentSnapshot = normalized
   }
   emit()
   return currentSnapshot
@@ -109,6 +173,10 @@ export function applyRsvpResultToMemberPerksStore(input: {
     currentSnapshot ??
     (input.perks as MembershipPerksSnapshot)
 
+  if (!previous.hasPaidMembership && !(input.perks?.hasPaidMembership)) {
+    return updateMemberPerksFromSnapshot(freeMemberPerksSnapshot())
+  }
+
   const next = applyRsvpPerksSnapshot({
     previous,
     usedCredit: input.usedCredit,
@@ -120,35 +188,41 @@ export function applyRsvpResultToMemberPerksStore(input: {
 
 /**
  * Hydrate from server props (layout / page load).
- * Within the same billing period, never increase credits from a possibly-stale
- * RSC payload — mutations call updateMemberPerksFromSnapshot.
- * Guest invites are owned by mutation updates once the store is live (so a
- * stale refresh cannot undo a just-returned invite, or restore a just-used one).
- * A new periodEnd trusts the server fully (rollover).
+ * Free members always replace the store with a zeroed snapshot (clears any
+ * stale Elite/Inner credits from a prior session).
+ * Paid members: never increase credits from a possibly-stale RSC payload.
  */
 export function hydrateMemberPerksFromServer(
   server: MembershipPerksSnapshot
 ): MembershipPerksSnapshot {
-  if (!currentSnapshot) {
-    currentSnapshot = server
+  const normalized = normalizeMemberPerksSnapshot(server)
+
+  if (!normalized.hasPaidMembership) {
+    currentSnapshot = normalized
+    emit()
+    return currentSnapshot
+  }
+
+  if (!currentSnapshot || !currentSnapshot.hasPaidMembership) {
+    currentSnapshot = normalized
     emit()
     return currentSnapshot
   }
 
   if (
-    server.periodEnd &&
+    normalized.periodEnd &&
     currentSnapshot.periodEnd &&
-    server.periodEnd !== currentSnapshot.periodEnd
+    normalized.periodEnd !== currentSnapshot.periodEnd
   ) {
-    currentSnapshot = server
+    currentSnapshot = normalized
     emit()
     return currentSnapshot
   }
 
   currentSnapshot = {
-    ...server,
+    ...normalized,
     premiumCreditsRemaining: Math.min(
-      server.premiumCreditsRemaining,
+      normalized.premiumCreditsRemaining,
       currentSnapshot.premiumCreditsRemaining
     ),
     guestInvitesRemaining: currentSnapshot.guestInvitesRemaining,
@@ -161,19 +235,20 @@ export function hydrateMemberPerksFromServer(
 export function dashboardCreditsSummaryFromSnapshot(
   snapshot: MembershipPerksSnapshot
 ): string | null {
-  if (snapshot.productTier === 'elite_circle') {
+  const normalized = normalizeMemberPerksSnapshot(snapshot)
+  if (!normalized.hasPaidMembership) {
+    return FREE_MEMBER_PREMIUM_CREDITS_COPY
+  }
+  if (normalized.productTier === 'elite_circle') {
     return elitePremiumRemainingHeadline(
-      snapshot.premiumCreditsRemaining,
-      snapshot.creditsGranted ?? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+      normalized.premiumCreditsRemaining,
+      normalized.creditsGranted ?? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
     )
   }
-  if (snapshot.productTier === 'inner_circle') {
-    return innerIncludedSummary(snapshot.premiumCreditsRemaining)
+  if (normalized.productTier === 'inner_circle') {
+    return innerIncludedSummary(normalized.premiumCreditsRemaining)
   }
-  if (snapshot.productTier === 'member') {
-    return memberFreeSummary()
-  }
-  return null
+  return FREE_MEMBER_PREMIUM_CREDITS_COPY
 }
 
 export function useMemberPerks(): MembershipPerksSnapshot | null {
@@ -184,16 +259,21 @@ export function useMemberPerks(): MembershipPerksSnapshot | null {
   )
 }
 
-/** Resolve live perks, falling back to a server-provided snapshot. */
+/**
+ * Resolve live perks, falling back to a server-provided snapshot.
+ * Never prefer a stale paid store over an explicit free fallback.
+ */
 export function useMemberPerksWithFallback(
   fallback: MembershipPerksSnapshot | null
 ): MembershipPerksSnapshot | null {
   const live = useMemberPerks()
-  return live ?? fallback
+  if (fallback && !fallback.hasPaidMembership) {
+    return normalizeMemberPerksSnapshot(fallback)
+  }
+  if (live) {
+    return normalizeMemberPerksSnapshot(live)
+  }
+  return fallback ? normalizeMemberPerksSnapshot(fallback) : null
 }
 
-export function isPaidPerksTier(
-  tier: ProductTier
-): tier is 'inner_circle' | 'elite_circle' {
-  return tier === 'inner_circle' || tier === 'elite_circle'
-}
+export { FREE_MEMBER_PREMIUM_CREDITS_COPY }
