@@ -20,6 +20,7 @@ export default function EventGuestInviteControls({
   guestInviteConsumed,
   guestInvitesRemaining,
   isElite,
+  compactPrompt = false,
 }: {
   eventId: string
   eventType: string | null
@@ -28,6 +29,8 @@ export default function EventGuestInviteControls({
   guestInviteConsumed: boolean
   guestInvitesRemaining: number
   isElite: boolean
+  /** When true, hide the non-Going prompt (shown by Membership Perks instead). */
+  compactPrompt?: boolean
 }) {
   const router = useRouter()
   const [name, setName] = useState('')
@@ -75,14 +78,13 @@ export default function EventGuestInviteControls({
   }
 
   if (!isGoing) {
-    if (guestInvitesRemaining <= 0) {
+    if (compactPrompt || guestInvitesRemaining <= 0) {
       return null
     }
 
     return (
       <p className="mt-4 text-sm text-muted-foreground">
-        RSVP as Going to use your Elite guest invite on this premium event (
-        {guestInvitesRemaining} remaining this period).
+        RSVP as Going to use your Elite guest invite on this premium event.
       </p>
     )
   }
