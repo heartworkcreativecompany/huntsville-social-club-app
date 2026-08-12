@@ -32,11 +32,9 @@ export default async function PublicHomePage() {
     redirect(action.location)
   }
 
-  // On the marketing apex, send auth CTAs to the members host so sessions
-  // stay on the portal domain. Preview/local keep relative paths.
-  const portalOrigin = hostKind === 'marketing' ? membersOrigin() : ''
-  const loginHref = `${portalOrigin}/login`
-  const signupHref = `${portalOrigin}/signup`
+  // Absolute portal CTAs so login/signup always land on the members host.
+  const loginHref = `${membersOrigin()}/login`
+  const signupHref = `${membersOrigin()}/signup`
 
   return (
     <div className="min-h-screen bg-background text-foreground">

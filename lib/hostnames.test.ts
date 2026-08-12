@@ -72,8 +72,8 @@ describe('rootRouteAction — marketing apex `/`', () => {
   })
 
   it('sends authenticated visitors to the members portal', () => {
-    delete process.env.NEXT_PUBLIC_MEMBERS_URL
-    delete process.env.NEXT_PUBLIC_APP_URL
+    process.env.NEXT_PUBLIC_MEMBERS_URL =
+      'https://members.huntsvillesocialclub.com'
     expect(rootRouteAction('marketing', true)).toEqual({
       type: 'redirect',
       location: 'https://members.huntsvillesocialclub.com/members',
@@ -105,18 +105,27 @@ describe('marketing apex route gate', () => {
     ]) {
       expect(isMarketingPassthroughPath(path)).toBe(true)
       expect(proxyHostAction('marketing', path)).toEqual({ type: 'next' })
+      expect(proxyHostAction('marketing', path, '?utm=home')).toEqual({
+        type: 'next',
+      })
     }
   })
 
-  it('redirects portal browser routes to members with query preserved', () => {
-    delete process.env.NEXT_PUBLIC_MEMBERS_URL
-    delete process.env.NEXT_PUBLIC_APP_URL
+  it('redirects member/auth browser routes to members with query preserved', () => {
+    process.env.NEXT_PUBLIC_MEMBERS_URL =
+      'https://members.huntsvillesocialclub.com'
 
     const cases = [
       ['/login', '?next=%2Fmembers'],
       ['/signup', '?ref=cta'],
       ['/members', '?tab=directory'],
       ['/events', '?when=upcoming'],
+      ['/messages', '?box=inbox'],
+      ['/profile', '?edit=1'],
+      ['/application', '?step=2'],
+      ['/admin', '?view=queue'],
+      ['/events/abc-123', '?rsvp=1'],
+      ['/admin/users', ''],
     ] as const
 
     for (const [path, search] of cases) {
@@ -150,18 +159,50 @@ describe('marketing apex route gate', () => {
       })
     }
   })
+})
 
-  it('does not gate members or preview hosts', () => {
-    expect(proxyHostAction('members', '/login')).toEqual({ type: 'next' })
-    expect(proxyHostAction('preview', '/events', '?q=1')).toEqual({
-      type: 'next',
-    })
+describe('members host keeps full application behavior', () => {
+  it('does not redirect portal, auth, or infrastructure paths', () => {
+    for (const path of [
+      '/',
+      '/login',
+      '/signup',
+      '/members',
+      '/events',
+      '/messages',
+      '/profile',
+      '/application',
+      '/admin',
+      '/auth/callback',
+      '/api/stripe/webhook',
+      '/api/cron/curated-matches',
+    ]) {
+      expect(proxyHostAction('members', path, '?x=1')).toEqual({ type: 'next' })
+    }
+  })
+})
+
+describe('vercel.app preview keeps full member app behavior', () => {
+  it('does not apply marketing or www redirects', () => {
+    for (const path of [
+      '/',
+      '/login',
+      '/signup',
+      '/members',
+      '/events',
+      '/messages',
+      '/profile',
+      '/application',
+      '/admin',
+    ]) {
+      expect(proxyHostAction('preview', path, '?q=1')).toEqual({ type: 'next' })
+    }
   })
 })
 
 describe('www → apex redirect (proxy only, exactly once)', () => {
   it('permanently targets apex while preserving path and query', () => {
-    delete process.env.NEXT_PUBLIC_MARKETING_URL
+    process.env.NEXT_PUBLIC_MARKETING_URL = 'https://huntsvillesocialclub.com'
     expect(wwwToApexRedirectUrl('/', '')).toBe(
       'https://huntsvillesocialclub.com/'
     )
@@ -174,7 +215,7 @@ describe('www → apex redirect (proxy only, exactly once)', () => {
   })
 
   it('is emitted by proxyHostAction as a single 308', () => {
-    delete process.env.NEXT_PUBLIC_MARKETING_URL
+    process.env.NEXT_PUBLIC_MARKETING_URL = 'https://huntsvillesocialclub.com'
     expect(proxyHostAction('www', '/pricing', '?ref=nav')).toEqual({
       type: 'redirect',
       location: 'https://huntsvillesocialclub.com/pricing?ref=nav',
@@ -191,18 +232,21 @@ describe('www → apex redirect (proxy only, exactly once)', () => {
 })
 
 describe('membersOrigin / marketingOrigin', () => {
-  it('defaults to production hosts', () => {
-    delete process.env.NEXT_PUBLIC_MEMBERS_URL
-    delete process.env.NEXT_PUBLIC_MARKETING_URL
-    delete process.env.NEXT_PUBLIC_APP_URL
+  it('uses the configured dual-domain production env values', () => {
+    process.env.NEXT_PUBLIC_APP_URL =
+      'https://members.huntsvillesocialclub.com'
+    process.env.NEXT_PUBLIC_MEMBERS_URL =
+      'https://members.huntsvillesocialclub.com'
+    process.env.NEXT_PUBLIC_MARKETING_URL =
+      'https://huntsvillesocialclub.com'
     expect(membersOrigin()).toBe('https://members.huntsvillesocialclub.com')
     expect(marketingOrigin()).toBe('https://huntsvillesocialclub.com')
   })
 
-  it('prefers explicit env overrides', () => {
-    process.env.NEXT_PUBLIC_MEMBERS_URL =
-      'https://members.huntsvillesocialclub.com/'
-    process.env.NEXT_PUBLIC_MARKETING_URL = 'https://huntsvillesocialclub.com/'
+  it('defaults to production hosts when unset', () => {
+    delete process.env.NEXT_PUBLIC_MEMBERS_URL
+    delete process.env.NEXT_PUBLIC_MARKETING_URL
+    delete process.env.NEXT_PUBLIC_APP_URL
     expect(membersOrigin()).toBe('https://members.huntsvillesocialclub.com')
     expect(marketingOrigin()).toBe('https://huntsvillesocialclub.com')
   })
