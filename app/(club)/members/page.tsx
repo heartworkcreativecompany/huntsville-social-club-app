@@ -82,10 +82,7 @@ export default async function MembersPage() {
               Could not load directory: {directoryError}
             </p>
           ) : canBrowseDiscovery ? (
-            <MemberDirectorySection
-              members={directoryMembers}
-              limited={!isAdmin}
-            />
+            <MemberDirectorySection members={directoryMembers} />
           ) : (
             <EmptyState
               title="Membership approval required"

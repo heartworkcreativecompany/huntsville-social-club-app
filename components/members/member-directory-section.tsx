@@ -14,10 +14,8 @@ import MemberIntentFilterPills from './member-intent-filter-pills'
 
 export default function MemberDirectorySection({
   members,
-  limited,
 }: {
   members: DirectoryMember[]
-  limited: boolean
 }) {
   const [intentFilter, setIntentFilter] = useState<IntentFilterValue>('all')
 
@@ -60,7 +58,7 @@ export default function MemberDirectorySection({
         <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((member) => (
             <li key={member.id}>
-              <MemberDiscoveryCard member={member} limited={limited} />
+              <MemberDiscoveryCard member={member} />
             </li>
           ))}
         </ul>

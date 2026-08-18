@@ -1,10 +1,6 @@
-'use client'
-
-import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import Badge from '@/components/ui/badge'
 import Card from '@/components/ui/card'
-import { buttonSecondaryClassName, inputClassName } from '@/lib/event-labels'
 import {
   memberDisplayName,
   type DirectoryMember,
@@ -16,54 +12,26 @@ import {
 import { MemberCardBadges } from '@/components/members/member-badge-row'
 import { primaryMemberPhoto } from '@/lib/member-photos'
 import MemberPhotoDisplay from '@/components/members/member-photo-display'
-import { requestMemberIntro } from '@/app/(club)/members/intro-actions'
-import {
-  MAX_MEMBER_MESSAGE_LENGTH,
-  validateMemberMessageBody,
-} from '@/lib/member-message-limits'
 
+/**
+ * Directory preview card — navigates to the member profile.
+ * Messaging lives on the profile page only (no composer here).
+ */
 export default function MemberDiscoveryCard({
   member,
-  limited,
 }: {
   member: DirectoryMember
-  limited: boolean
 }) {
-  const [introBody, setIntroBody] = useState('')
-  const [introMessage, setIntroMessage] = useState('')
-  const [isPending, startTransition] = useTransition()
   const displayName = memberDisplayName(member)
   const primaryPhoto = primaryMemberPhoto(member.photos)
   const about = member.membership_intent?.trim() || null
 
-  const handleIntro = (event: React.FormEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    setIntroMessage('')
-    const validationError = validateMemberMessageBody(introBody)
-    if (validationError) {
-      setIntroMessage(validationError)
-      return
-    }
-
-    startTransition(async () => {
-      const result = await requestMemberIntro(member.id, introBody)
-      if (result.error) {
-        setIntroMessage(result.error)
-        return
-      }
-      setIntroBody('')
-      setIntroMessage('Message request sent.')
-    })
-  }
-
-  const bodyValidationError = introBody.trim()
-    ? validateMemberMessageBody(introBody)
-    : null
-
   return (
     <Card className="flex h-full flex-col transition hover:border-accent/25 hover:shadow-md">
-      <Link href={`/members/${member.id}`} className="block flex-1 no-underline text-inherit">
+      <Link
+        href={`/members/${member.id}`}
+        className="block flex-1 no-underline text-inherit"
+      >
         <div className="relative aspect-[4/5] overflow-hidden rounded-lg bg-surface-elevated">
           {primaryPhoto ? (
             <MemberPhotoDisplay
@@ -82,7 +50,9 @@ export default function MemberDiscoveryCard({
         <div className="mt-4">
           <p className="text-display text-lg font-semibold">{displayName}</p>
           {member.location_area ? (
-            <p className="mt-1 text-sm text-muted-foreground">{member.location_area}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {member.location_area}
+            </p>
           ) : null}
           <div className="mt-3">
             <MemberCardBadges member={member} />
@@ -101,47 +71,11 @@ export default function MemberDiscoveryCard({
               {about}
             </p>
           ) : null}
+          <p className="mt-4 font-brand text-sm font-medium text-accent">
+            View profile →
+          </p>
         </div>
       </Link>
-
-      <div className="mt-4 border-t border-border pt-4">
-        <form onSubmit={handleIntro} className="grid gap-3">
-          <label className="grid gap-1.5 text-sm">
-            <span className="font-medium text-foreground">Opening message</span>
-            <textarea
-              value={introBody}
-              onChange={(event) =>
-                setIntroBody(
-                  event.target.value.slice(0, MAX_MEMBER_MESSAGE_LENGTH)
-                )
-              }
-              rows={3}
-              maxLength={MAX_MEMBER_MESSAGE_LENGTH}
-              className={`${inputClassName} min-h-[5rem]`}
-              placeholder={`Say hello to ${displayName}…`}
-              disabled={isPending || limited}
-              onClick={(event) => event.stopPropagation()}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={
-              isPending ||
-              limited ||
-              !introBody.trim() ||
-              Boolean(bodyValidationError)
-            }
-            className={`${buttonSecondaryClassName} w-full`}
-          >
-            {isPending ? 'Sending…' : 'Send message request'}
-          </button>
-        </form>
-        {introMessage ? (
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            {introMessage}
-          </p>
-        ) : null}
-      </div>
     </Card>
   )
 }

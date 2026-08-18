@@ -7,7 +7,7 @@ import { assertMessagingAllowed } from '@/lib/require-messaging'
 export async function requestCuratedIntro(note?: string) {
   return {
     error:
-      'Concierge intro requests are paused. Message members directly from the directory when you have messaging access.',
+      'Concierge intro requests are paused. Message members directly from their profile when you have messaging access.',
   }
 }
 
