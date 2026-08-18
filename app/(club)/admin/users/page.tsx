@@ -103,7 +103,7 @@ export default async function AdminUsersPage() {
 
                 {profile.membership_intent ? (
                   <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                    <span className="font-medium text-foreground">Intent: </span>
+                    <span className="font-medium text-foreground">Bio: </span>
                     {profile.membership_intent}
                   </p>
                 ) : null}

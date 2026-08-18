@@ -18,7 +18,8 @@ export type QueueApplicant = {
   email: string | null
   full_name: string | null
   application_status: ApplicationStatus
-  membership_intent: string | null
+  /** Public bio snippet from profiles.membership_intent (legacy column name). */
+  bio: string | null
   application_submitted_at: string | null
   displayName: string
   photoCount: number
@@ -49,7 +50,7 @@ export default function AdminApplicationQueue({
         row.full_name,
         row.email,
         row.displayName,
-        row.membership_intent,
+        row.bio,
       ]
         .filter(Boolean)
         .join(' ')
@@ -124,9 +125,10 @@ export default function AdminApplicationQueue({
                   </div>
                   <ApplicationStatusBadge status={applicant.application_status} />
                 </div>
-                {applicant.membership_intent ? (
+                {applicant.bio ? (
                   <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
-                    {applicant.membership_intent}
+                    <span className="font-medium text-foreground">Bio: </span>
+                    {applicant.bio}
                   </p>
                 ) : null}
                 <p className="mt-3 text-xs text-muted-foreground">

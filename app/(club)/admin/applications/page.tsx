@@ -79,7 +79,7 @@ export default async function AdminApplicationsPage() {
       email: applicant.email,
       full_name: applicant.full_name,
       application_status: status,
-      membership_intent: applicant.membership_intent,
+      bio: draft.profile.aboutMe.trim() || applicant.membership_intent,
       application_submitted_at: applicant.application_submitted_at,
       displayName: draft.profile.displayName,
       photoCount: draft.photos.length,

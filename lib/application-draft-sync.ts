@@ -19,7 +19,9 @@ import {
   normalizeDiscoveryIntent,
 } from '@/lib/membership-systems'
 
-/** Short public bio for member cards — dedicated About Me field only. */
+/** Short public bio for member cards — dedicated About Me field only.
+ * Stored in profiles.membership_intent (legacy column name — not connection intent).
+ */
 export function membershipIntentFromDraft(draft: ApplicationDraft): string {
   return draft.profile.aboutMe.trim()
 }
