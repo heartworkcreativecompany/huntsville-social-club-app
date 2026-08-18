@@ -22,6 +22,7 @@ import AdminLocalityReview from '@/components/admin/admin-locality-review'
 import AdminMemberVouches from '@/components/admin/admin-member-vouches'
 import { loadAdminVouchesForMember } from '@/lib/load-member-vouches'
 import {
+  identityVerificationDisplayLabel,
   parseApprovalGates,
   parseLocalityConfirmation,
   parseMembershipBilling,
@@ -332,13 +333,17 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
             </p>
             <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
               <div>
-                <dt className="text-muted-foreground">Stripe Identity status</dt>
+                <dt className="text-muted-foreground">
+                  Identity &amp; location status
+                </dt>
                 <dd className="font-medium text-foreground">
-                  {applicant.identity_verification_status ?? 'not_started'}
+                  {identityVerificationDisplayLabel(
+                    applicant.identity_verification_status
+                  )}
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Identity session</dt>
+                <dt className="text-muted-foreground">Identity session ID</dt>
                 <dd className="font-medium break-all text-foreground">
                   {applicant.identity_verification_session_id ?? '—'}
                 </dd>
@@ -352,14 +357,24 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Identity last error</dt>
+                <dt className="text-muted-foreground">Retry guidance</dt>
                 <dd className="font-medium text-foreground">
                   {applicant.identity_verification_last_error ?? '—'}
                 </dd>
               </div>
             </dl>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Stripe Identity updates this status automatically. Document images,
+              selfies, and extracted ID values are not stored or shown here.
+              Membership approval remains a separate manual action below.
+            </p>
             <div className="mt-4">
-              <AdminApprovalGates applicantId={applicant.id} gates={gates} />
+              <AdminApprovalGates
+                applicantId={applicant.id}
+                gates={gates}
+                identityStripeStatus={applicant.identity_verification_status}
+                identityVerifiedAt={applicant.identity_verified_at}
+              />
             </div>
           </Card>
         ) : null}

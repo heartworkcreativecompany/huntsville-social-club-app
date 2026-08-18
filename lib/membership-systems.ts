@@ -539,6 +539,9 @@ export function applicantVerificationRowState(
   tone: 'success' | 'warning' | 'muted' | 'danger'
 } {
   if (status === 'approved') {
+    if (gateKey === 'identity_verified') {
+      return { label: 'Verified', tone: 'success' }
+    }
     return { label: 'Complete', tone: 'success' }
   }
 
@@ -577,9 +580,9 @@ export function applicantVerificationRowState(
       return { label: 'Processing', tone: 'warning' }
     }
     if (status === 'needs_followup') {
-      return { label: 'Action required', tone: 'warning' }
+      return { label: 'Needs retry', tone: 'warning' }
     }
-    return { label: 'Action required', tone: 'warning' }
+    return { label: 'Not started', tone: 'muted' }
   }
 
   return { label: reviewStatusLabel(status), tone: 'muted' }
@@ -619,6 +622,29 @@ export function applicantVerificationGateTitle(
 }
 
 /**
+ * Explicit Identity & location status labels (admin + member).
+ * Prefer these over generic gate "Pending review".
+ */
+export function identityVerificationDisplayLabel(
+  stripeStatus: string | null | undefined
+): string {
+  switch (stripeStatus) {
+    case 'verified':
+      return 'Verified'
+    case 'processing':
+    case 'pending':
+      return 'Processing'
+    case 'requires_input':
+      return 'Needs retry'
+    case 'canceled':
+      return 'Canceled'
+    case 'not_started':
+    default:
+      return 'Not started'
+  }
+}
+
+/**
  * Member-facing identity row state from Stripe Identity session status
  * (source of truth for this step once a session exists).
  */
@@ -642,11 +668,16 @@ export function identityVerificationRowState(
       : 'not_started'
 
   if (gateStatus === 'approved' || status === 'verified') {
-    return { label: 'Complete', tone: 'success', approved: true, cta: null }
+    return {
+      label: identityVerificationDisplayLabel('verified'),
+      tone: 'success',
+      approved: true,
+      cta: null,
+    }
   }
   if (status === 'processing' || status === 'pending') {
     return {
-      label: 'Processing',
+      label: identityVerificationDisplayLabel(status),
       tone: 'warning',
       approved: false,
       cta: 'continue',
@@ -654,7 +685,7 @@ export function identityVerificationRowState(
   }
   if (status === 'requires_input') {
     return {
-      label: 'Action required',
+      label: identityVerificationDisplayLabel(status),
       tone: 'warning',
       approved: false,
       cta: 'retry',
@@ -662,15 +693,15 @@ export function identityVerificationRowState(
   }
   if (status === 'canceled') {
     return {
-      label: 'Incomplete',
+      label: identityVerificationDisplayLabel(status),
       tone: 'muted',
       approved: false,
       cta: 'start',
     }
   }
   return {
-    label: 'Action required',
-    tone: 'warning',
+    label: identityVerificationDisplayLabel('not_started'),
+    tone: 'muted',
     approved: false,
     cta: 'start',
   }

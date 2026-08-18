@@ -6,6 +6,7 @@ import Badge from '@/components/ui/badge'
 import {
   APPROVAL_GATE_DEFS,
   canApproveMember,
+  identityVerificationDisplayLabel,
   reviewStatusLabel,
   type ApprovalGates,
   type ApprovalGateKey,
@@ -32,9 +33,14 @@ const GATE_STATUS_OPTIONS: ReviewStatus[] = [
 export default function AdminApprovalGates({
   applicantId,
   gates,
+  identityStripeStatus = null,
+  identityVerifiedAt = null,
 }: {
   applicantId: string
   gates: ApprovalGates
+  /** Stripe Identity session status — preferred over generic gate "Pending review". */
+  identityStripeStatus?: string | null
+  identityVerifiedAt?: string | null
 }) {
   const router = useRouter()
   const [message, setMessage] = useState('')
@@ -81,13 +87,32 @@ export default function AdminApprovalGates({
 
       <p className="text-sm text-muted-foreground">
         Required gates must be approved before membership approval. Stripe
-        Identity is the required member ID check. Phone verification is optional and
+        Identity sync updates identity status only — final membership approval
+        stays a separate manual action. Phone verification is optional and
         completed by the member via Supabase Auth SMS.
       </p>
 
       <ul className="grid gap-3">
         {APPROVAL_GATE_DEFS.map((def) => {
           const status = gates[def.key] ?? 'incomplete'
+          const isIdentity = def.key === 'identity_verified'
+          const identityLabel = isIdentity
+            ? identityVerificationDisplayLabel(identityStripeStatus)
+            : null
+          const badgeLabel = identityLabel ?? reviewStatusLabel(status)
+          const badgeTone = isIdentity
+            ? identityStripeStatus === 'verified'
+              ? 'success'
+              : identityStripeStatus === 'requires_input' ||
+                  identityStripeStatus === 'processing' ||
+                  identityStripeStatus === 'pending'
+                ? 'warning'
+                : 'muted'
+            : status === 'approved'
+              ? 'success'
+              : status === 'pending_review' || status === 'needs_followup'
+                ? 'warning'
+                : 'muted'
           return (
             <li
               key={def.key}
@@ -107,18 +132,14 @@ export default function AdminApprovalGates({
                   <p className="mt-1 text-xs text-muted-foreground">
                     {def.description}
                   </p>
+                  {isIdentity && identityVerifiedAt ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Identity verified{' '}
+                      {new Date(identityVerifiedAt).toLocaleString()}
+                    </p>
+                  ) : null}
                 </div>
-                <Badge
-                  variant={
-                    status === 'approved'
-                      ? 'success'
-                      : status === 'pending_review' || status === 'needs_followup'
-                        ? 'warning'
-                        : 'muted'
-                  }
-                >
-                  {reviewStatusLabel(status)}
-                </Badge>
+                <Badge variant={badgeTone}>{badgeLabel}</Badge>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <select

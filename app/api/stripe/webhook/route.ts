@@ -13,6 +13,7 @@ import {
   hasProcessedStripeEvent,
   markStripeEventProcessed,
 } from '@/lib/stripe/webhook-idempotency'
+import { constructVerifiedStripeEvent } from '@/lib/stripe/verify-webhook-signature'
 import { subscriptionIdFromInvoice } from '@/lib/stripe/invoice-helpers'
 
 export const runtime = 'nodejs'
@@ -181,7 +182,12 @@ export async function POST(request: Request) {
 
   let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+    event = constructVerifiedStripeEvent({
+      rawBody: body,
+      signatureHeader: signature,
+      webhookSecret,
+      stripe,
+    })
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Invalid webhook signature.'

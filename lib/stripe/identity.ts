@@ -2,74 +2,50 @@ import type Stripe from 'stripe'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { appBaseUrl, getStripe } from '@/lib/stripe/config'
-import { resolveUserIdFromStripeMetadata } from '@/lib/stripe/sync-subscription'
+import {
+  buildIdentityProfilePatch,
+  mapStripeIdentityStatus,
+  resolveUserIdFromIdentityMetadata,
+  type IdentityVerificationStatus,
+} from '@/lib/stripe/identity-status'
 import {
   parseApprovalGates,
   parseVerificationState,
   verificationStateFromGates,
-  type ReviewStatus,
 } from '@/lib/membership-systems'
 
-export type IdentityVerificationStatus =
-  | 'not_started'
-  | 'pending'
-  | 'processing'
-  | 'verified'
-  | 'requires_input'
-  | 'canceled'
+export type { IdentityVerificationStatus, IdentityProfilePatch } from '@/lib/stripe/identity-status'
+export {
+  IDENTITY_FORBIDDEN_PROFILE_KEYS,
+  IDENTITY_SAFE_PROFILE_KEYS,
+  buildIdentityProfilePatch,
+  gateStatusForIdentity,
+  identityLastErrorMessage,
+  mapStripeIdentityStatus,
+  memberFacingIdentityRetryReason,
+  resolveUserIdFromIdentityMetadata,
+} from '@/lib/stripe/identity-status'
 
 type Supabase = SupabaseClient<Database>
 
-export function mapStripeIdentityStatus(
-  status: Stripe.Identity.VerificationSession.Status
-): IdentityVerificationStatus {
-  switch (status) {
-    case 'verified':
-      return 'verified'
-    case 'requires_input':
-      return 'requires_input'
-    case 'processing':
-      return 'processing'
-    case 'canceled':
-      return 'canceled'
-    default:
-      return 'pending'
-  }
-}
-
-function gateStatusForIdentity(
-  status: IdentityVerificationStatus
-): ReviewStatus {
-  switch (status) {
-    case 'verified':
-      return 'approved'
-    case 'requires_input':
-      return 'needs_followup'
-    case 'processing':
-    case 'pending':
-      return 'pending_review'
-    case 'canceled':
-    case 'not_started':
-    default:
-      return 'incomplete'
-  }
-}
-
-const IDENTITY_ERROR_MAX_LENGTH = 280
-
-/** Short code/reason only — never store verification reports or image payloads. */
-export function identityLastErrorMessage(
+/**
+ * Map VerificationSession → applicant id via trusted Stripe metadata, then
+ * durable session_id on profiles. Never by name/email/browser input alone.
+ */
+export async function resolveIdentityApplicantId(
+  supabase: Supabase,
   session: Stripe.Identity.VerificationSession
-): string | null {
-  const lastError = session.last_error
-  if (!lastError) return null
-  const code = lastError.code ? String(lastError.code) : null
-  const reason = lastError.reason?.trim() || null
-  const message = code && reason ? `${code}: ${reason}` : (reason ?? code)
-  if (!message) return null
-  return message.length > IDENTITY_ERROR_MAX_LENGTH
-    ? `${message.slice(0, IDENTITY_ERROR_MAX_LENGTH - 1)}…`
-    : message
+): Promise<string | null> {
+  const fromMeta = resolveUserIdFromIdentityMetadata(session.metadata)
+  if (fromMeta) return fromMeta
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('identity_verification_session_id', session.id)
+    .maybeSingle()
+
+  return data?.id ?? null
 }
 
 /**
@@ -124,17 +100,16 @@ export async function createIdentityVerificationSession(input: {
   }
 }
 
+/**
+ * Apply a Stripe Identity VerificationSession to the mapped applicant.
+ * Does not set application_status to approved, change role, or grant paid access.
+ */
 export async function applyIdentityVerificationSession(
   supabase: Supabase,
   session: Stripe.Identity.VerificationSession
 ): Promise<string | null> {
-  const userId = resolveUserIdFromStripeMetadata(session.metadata)
+  const userId = await resolveIdentityApplicantId(supabase, session)
   if (!userId) return null
-
-  const status = mapStripeIdentityStatus(session.status)
-  const now = new Date().toISOString()
-  const lastError =
-    status === 'requires_input' ? identityLastErrorMessage(session) : null
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -144,35 +119,13 @@ export async function applyIdentityVerificationSession(
 
   if (!profile) return null
 
-  const gates = parseApprovalGates(profile.approval_gates)
-  gates.identity_verified = gateStatusForIdentity(status)
+  const patch = buildIdentityProfilePatch({
+    session,
+    existingGates: profile.approval_gates,
+    existingVerification: profile.verification_state,
+  })
 
-  const verification_state = verificationStateFromGates(
-    gates,
-    parseVerificationState(profile.verification_state)
-  )
-  if (status === 'verified') {
-    verification_state.id_verified = 'approved'
-  } else if (status === 'requires_input') {
-    verification_state.id_verified = 'needs_followup'
-  } else if (status === 'processing' || status === 'pending') {
-    verification_state.id_verified = 'pending_review'
-  } else {
-    verification_state.id_verified = 'incomplete'
-  }
-
-  await supabase
-    .from('profiles')
-    .update({
-      identity_verification_status: status,
-      identity_verification_session_id: session.id,
-      identity_verified_at: status === 'verified' ? now : null,
-      identity_verification_last_error: lastError,
-      approval_gates: gates,
-      verification_state,
-      updated_at: now,
-    })
-    .eq('id', userId)
+  await supabase.from('profiles').update(patch).eq('id', userId)
 
   return userId
 }
