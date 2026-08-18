@@ -26,6 +26,13 @@ export type ViewerProfile = {
   contact_email: string | null
   show_contact_email: boolean | null
   verified_phone_e164: string | null
+  phone_verified_at: string | null
+  sms_marketing_opt_in: boolean | null
+  sms_marketing_opt_in_at: string | null
+  sms_marketing_consent_version: string | null
+  sms_marketing_consent_source: string | null
+  sms_marketing_consent_phone_e164: string | null
+  sms_marketing_opted_out_at: string | null
   identity_verification_status: string | null
   identity_verification_session_id: string | null
   identity_verified_at: string | null

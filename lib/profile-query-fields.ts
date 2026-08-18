@@ -10,7 +10,17 @@ export const DIRECTORY_PROFILE_BASE_FIELDS =
 
 export const PROFILE_CONTACT_EMAIL_FIELDS = 'contact_email, show_contact_email'
 
-export const PROFILE_VERIFIED_PHONE_FIELDS = 'verified_phone_e164'
+export const PROFILE_VERIFIED_PHONE_FIELDS =
+  'verified_phone_e164, phone_verified_at'
+
+export const PROFILE_SMS_MARKETING_CONSENT_FIELDS = [
+  'sms_marketing_opt_in',
+  'sms_marketing_opt_in_at',
+  'sms_marketing_consent_version',
+  'sms_marketing_consent_source',
+  'sms_marketing_consent_phone_e164',
+  'sms_marketing_opted_out_at',
+].join(', ')
 
 export const PROFILE_IDENTITY_VERIFICATION_FIELDS = [
   'identity_verification_status',
@@ -33,6 +43,7 @@ export const PROFILE_APPLICATION_FIELDS = [
   'referral_source',
   PROFILE_CONTACT_EMAIL_FIELDS,
   PROFILE_VERIFIED_PHONE_FIELDS,
+  PROFILE_SMS_MARKETING_CONSENT_FIELDS,
   PROFILE_IDENTITY_VERIFICATION_FIELDS,
 ].join(', ')
 
@@ -118,6 +129,7 @@ export const MEMBER_PROFILE_APPLICATION_FIELDS = [
   'referral_source',
   PROFILE_CONTACT_EMAIL_FIELDS,
   PROFILE_VERIFIED_PHONE_FIELDS,
+  PROFILE_SMS_MARKETING_CONSENT_FIELDS,
   PROFILE_IDENTITY_VERIFICATION_FIELDS,
 ].join(', ')
 

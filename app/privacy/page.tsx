@@ -1,5 +1,11 @@
+import Link from 'next/link'
 import LegalPageShell from '@/components/legal/legal-page-shell'
 import { SUPPORT_EMAIL } from '@/lib/site'
+import {
+  PRIVACY_MOBILE_SECTION_TITLE,
+  PRIVACY_POLICY_LAST_UPDATED,
+  privacyMobileSectionParagraphs,
+} from '@/lib/privacy-mobile-copy'
 
 export default function PrivacyPage() {
   return (
@@ -18,6 +24,10 @@ export default function PrivacyPage() {
         <li>Membership application responses you submit</li>
         <li>Profile photos uploaded for membership review</li>
         <li>Event RSVPs and host activity within the club app</li>
+        <li>
+          Mobile phone numbers when provided for verification or optional text
+          messaging
+        </li>
       </ul>
 
       <h2 className="text-display text-lg font-semibold">
@@ -38,6 +48,16 @@ export default function PrivacyPage() {
         generated at view time and are never stored in our database.
       </p>
 
+      <h2
+        id="mobile-numbers-and-text-messages"
+        className="text-display text-lg font-semibold"
+      >
+        {PRIVACY_MOBILE_SECTION_TITLE}
+      </h2>
+      {privacyMobileSectionParagraphs.map((paragraph) => (
+        <p key={paragraph.slice(0, 48)}>{paragraph}</p>
+      ))}
+
       <h2 className="text-display text-lg font-semibold">
         Contact
       </h2>
@@ -48,7 +68,13 @@ export default function PrivacyPage() {
         </a>
       </p>
 
-      <p className="text-xs">Last updated: May 2026</p>
+      <p className="text-xs">
+        Last updated: {PRIVACY_POLICY_LAST_UPDATED}. Public policy URL:{' '}
+        <Link href="/privacy" className="text-accent underline">
+          /privacy
+        </Link>
+        .
+      </p>
     </LegalPageShell>
   )
 }

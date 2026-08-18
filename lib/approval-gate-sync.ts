@@ -14,7 +14,10 @@ async function updateGatesAndVerification(
   supabase: Supabase,
   userId: string,
   gates: ReturnType<typeof parseApprovalGates>,
-  extra?: { verified_phone_e164?: string | null }
+  extra?: {
+    verified_phone_e164?: string | null
+    phone_verified_at?: string | null
+  }
 ) {
   const { data: profile } = await supabase
     .from('profiles')
@@ -90,6 +93,7 @@ export async function syncPhoneApprovalGateForUser(
 
   await updateGatesAndVerification(supabase, userId, gates, {
     verified_phone_e164: phoneE164,
+    phone_verified_at: new Date().toISOString(),
   })
 
   return {}
@@ -132,6 +136,7 @@ export async function resetPhoneApprovalGateForUser(
       approval_gates: gates,
       verification_state: verificationStateFromGates(gates, verification),
       verified_phone_e164: null,
+      phone_verified_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId)
