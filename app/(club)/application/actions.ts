@@ -24,6 +24,7 @@ import {
   verificationStateFromGates,
 } from '@/lib/membership-systems'
 import { runCompatibilityConnectionsLifecycle } from '@/lib/compatibility/sync-server'
+import { syncAuthDisplayNameBestEffort } from '@/lib/sync-auth-display-name'
 
 export async function saveApplicationDraft(draft: ApplicationDraft) {
   const supabase = await createClient()
@@ -63,6 +64,11 @@ export async function saveApplicationDraft(draft: ApplicationDraft) {
   if (error) {
     return { error: error.message }
   }
+
+  await syncAuthDisplayNameBestEffort({
+    userId: user.id,
+    publicFacingName: columns.full_name,
+  })
 
   await runCompatibilityConnectionsLifecycle(
     user.id,
@@ -145,6 +151,11 @@ export async function submitApplication() {
     captureOperationalError('application_submit', error)
     return { error: error.message }
   }
+
+  await syncAuthDisplayNameBestEffort({
+    userId: user.id,
+    publicFacingName: columns.full_name,
+  })
 
   await runCompatibilityConnectionsLifecycle(
     user.id,

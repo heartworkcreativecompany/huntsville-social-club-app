@@ -29,6 +29,23 @@ async function requireAdmin() {
   return { error: null, userId: user.id }
 }
 
+/**
+ * Admin-only: mirror profiles.full_name into Auth user_metadata for Users list.
+ * Idempotent. Returns counts only (updated / skipped / failed).
+ */
+export async function backfillAuthDisplayNamesAction() {
+  const auth = await requireAdmin()
+  if (auth.error || !auth.userId) {
+    return { error: auth.error ?? 'Unauthorized' }
+  }
+
+  const { backfillAuthDisplayNames } = await import(
+    '@/lib/sync-auth-display-name'
+  )
+  const counts = await backfillAuthDisplayNames()
+  return { success: true as const, counts }
+}
+
 export async function removeMember(input: {
   targetUserId: string
   confirmationText: string

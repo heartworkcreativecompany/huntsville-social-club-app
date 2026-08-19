@@ -30,6 +30,7 @@ import {
   sendProfileRevisionApprovedEmail,
   sendProfileRevisionRejectedEmail,
 } from '@/lib/transactional-email'
+import { syncAuthDisplayNameBestEffort } from '@/lib/sync-auth-display-name'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -138,6 +139,11 @@ export async function approveProfileRevision(
   if (error) {
     return { error: error.message }
   }
+
+  await syncAuthDisplayNameBestEffort({
+    userId: memberId,
+    publicFacingName: liveColumns.full_name,
+  })
 
   const cleanupCandidates = approveRevisionPhotoCleanupCandidates({
     applicationDraft: member?.application_draft,

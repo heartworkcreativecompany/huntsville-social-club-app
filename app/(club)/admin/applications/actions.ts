@@ -21,6 +21,7 @@ import {
 } from '@/lib/transactional-email'
 import { queueAutoGenerateCuratedMatches } from '@/lib/compatibility/auto-generate-matches'
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
+import { syncAuthDisplayNameBestEffort } from '@/lib/sync-auth-display-name'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -58,7 +59,7 @@ export async function updateApplicationStatus(
   const admin = requireAdminClient()
   const { data: applicant } = await admin
     .from('profiles')
-    .select('email, approval_gates, verification_state, membership_billing')
+    .select('email, full_name, approval_gates, verification_state, membership_billing')
     .eq('id', applicantId)
     .single()
 
@@ -123,6 +124,10 @@ export async function updateApplicationStatus(
 
   if (status === 'approved') {
     trackServerEvent('application_approved')
+    await syncAuthDisplayNameBestEffort({
+      userId: applicantId,
+      publicFacingName: applicant?.full_name,
+    })
     queueAutoGenerateCuratedMatches(applicantId, 'membership_approved')
     revalidateCuratedMatchMemberRoutes()
   }

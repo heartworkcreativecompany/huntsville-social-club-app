@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "backfill:auth-display-names": "npx --yes tsx scripts/backfill-auth-display-names.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
