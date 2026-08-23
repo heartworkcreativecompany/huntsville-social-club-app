@@ -42,6 +42,7 @@ export function compatibilityEntitlementInputFromViewer(
     billing: viewer.profile?.membership_billing,
     applicationApproved: viewer.canAccessApp,
     activeCycle: entitlements?.activeCycle ?? null,
+    accessOverride: entitlements?.accessOverride ?? null,
   }
 }
 

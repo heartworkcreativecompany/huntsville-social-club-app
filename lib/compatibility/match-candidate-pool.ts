@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { loadActiveMembershipAccessOverridesByUserIds } from '@/lib/membership-access-override/admin'
 import {
   canGenerateMatches,
   isCompatibilityFeatureEnabled,
@@ -15,6 +18,7 @@ export type MatchPoolProfile = CompatibilityProfileFields &
     messaging_suspended_at: string | null
     last_match_generation_at: string | null
     last_match_review_at: string | null
+    accessOverride?: SlimMembershipAccessOverride | null
   }
 
 const MATCH_POOL_SELECT =
@@ -25,6 +29,7 @@ export function isCandidateAvailable(
   options?: {
     excludeUserIds?: Set<string>
     blockedUserIds?: Set<string>
+    accessOverride?: SlimMembershipAccessOverride | null
   }
 ): boolean {
   if (options?.excludeUserIds?.has(profile.id)) {
@@ -43,6 +48,8 @@ export function isCandidateAvailable(
     role: profile.role,
     billing: profile.membership_billing,
     applicationApproved: profile.application_status === 'approved',
+    accessOverride:
+      options?.accessOverride ?? profile.accessOverride ?? null,
   })
 }
 
@@ -72,7 +79,18 @@ export async function loadMatchPoolProfiles(
     return { profiles: [], error: error.message }
   }
 
-  return { profiles: (data ?? []) as MatchPoolProfile[], error: null }
+  const profiles = (data ?? []) as MatchPoolProfile[]
+  const overrides = await loadActiveMembershipAccessOverridesByUserIds(
+    createAdminClient(),
+    profiles.map((profile) => profile.id)
+  )
+  return {
+    profiles: profiles.map((profile) => ({
+      ...profile,
+      accessOverride: overrides.get(profile.id) ?? null,
+    })),
+    error: null,
+  }
 }
 
 export async function loadMatchPoolProfileForUser(
@@ -92,7 +110,16 @@ export async function loadMatchPoolProfileForUser(
     throw new Error(error.message)
   }
 
-  return (data as MatchPoolProfile | null) ?? null
+  if (!data) return null
+  const profile = data as MatchPoolProfile
+  const overrides = await loadActiveMembershipAccessOverridesByUserIds(
+    createAdminClient(),
+    [profile.id]
+  )
+  return {
+    ...profile,
+    accessOverride: overrides.get(profile.id) ?? null,
+  }
 }
 
 export async function loadBlockedUserIdsForMember(
@@ -124,7 +151,10 @@ export async function loadBlockedUserIdsForMember(
   return blocked
 }
 
-export function isEligibleRecipient(profile: MatchPoolProfile): boolean {
+export function isEligibleRecipient(
+  profile: MatchPoolProfile,
+  accessOverride?: SlimMembershipAccessOverride | null
+): boolean {
   if (isMessagingSuspended(profile)) {
     return false
   }
@@ -133,11 +163,24 @@ export function isEligibleRecipient(profile: MatchPoolProfile): boolean {
     role: profile.role,
     billing: profile.membership_billing,
     applicationApproved: profile.application_status === 'approved',
+    accessOverride: accessOverride ?? profile.accessOverride ?? null,
   })
 }
 
 export function listEligibleRecipients(
-  profiles: MatchPoolProfile[]
+  profiles: MatchPoolProfile[],
+  overridesByUser?: Map<string, SlimMembershipAccessOverride>
 ): MatchPoolProfile[] {
-  return profiles.filter((profile) => isEligibleRecipient(profile))
+  return profiles.filter((profile) =>
+    isEligibleRecipient(profile, overridesByUser?.get(profile.id) ?? null)
+  )
+}
+
+export async function loadMatchPoolAccessOverrides(
+  userIds: string[]
+): Promise<Map<string, SlimMembershipAccessOverride>> {
+  return loadActiveMembershipAccessOverridesByUserIds(
+    createAdminClient(),
+    userIds
+  )
 }

@@ -1,3 +1,4 @@
+import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
 import {
   buildMemberEntitlements,
   canUseMessaging,
@@ -27,6 +28,8 @@ export type MessagingEntitlementInput = {
   billing?: unknown
   applicationApproved?: boolean
   activeCycle?: EntitlementCycle | null
+  accessOverride?: SlimMembershipAccessOverride | null
+  now?: Date
 }
 
 export function hasMessagingEntitlement(input: MessagingEntitlementInput): boolean {
@@ -35,6 +38,8 @@ export function hasMessagingEntitlement(input: MessagingEntitlementInput): boole
     billing: input.billing,
     applicationApproved: input.applicationApproved ?? true,
     activeCycle: input.activeCycle ?? null,
+    accessOverride: input.accessOverride ?? null,
+    now: input.now,
   })
   return canUseMessaging(entitlements)
 }

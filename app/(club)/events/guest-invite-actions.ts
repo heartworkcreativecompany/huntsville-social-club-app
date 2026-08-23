@@ -9,7 +9,7 @@ import {
   loadActiveEntitlementCycle,
   returnGuestInvite,
 } from '@/lib/membership-billing-cycles'
-import { buildMemberEntitlements } from '@/lib/membership-entitlements'
+import { buildMemberEntitlementsWithOverride } from '@/lib/load-member-entitlements'
 import type { MembershipPerksSnapshot } from '@/lib/event-rsvp-window'
 import { getViewer } from '@/lib/viewer'
 
@@ -52,7 +52,8 @@ async function loadGuestInvitePerksSnapshot(
   viewer: NonNullable<Awaited<ReturnType<typeof getViewer>>>
 ): Promise<MembershipPerksSnapshot> {
   const activeCycle = await loadActiveEntitlementCycle(supabase, viewer.userId)
-  const entitlements = buildMemberEntitlements({
+  const entitlements = await buildMemberEntitlementsWithOverride({
+    userId: viewer.userId,
     role: viewer.role,
     billing: viewer.profile?.membership_billing,
     applicationApproved: true,
@@ -91,7 +92,8 @@ export async function addPremiumEventGuestInvite(input: {
 
   const supabase = await createClient()
   const activeCycle = await loadActiveEntitlementCycle(supabase, viewer.userId)
-  const entitlements = buildMemberEntitlements({
+  const entitlements = await buildMemberEntitlementsWithOverride({
+    userId: viewer.userId,
     role: viewer.role,
     billing: viewer.profile?.membership_billing,
     applicationApproved: true,

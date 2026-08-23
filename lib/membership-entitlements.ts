@@ -20,6 +20,10 @@ import {
   memberFreeSummary,
 } from '@/lib/membership-pricing-copy'
 import {
+  isActiveMembershipAccessOverride,
+  type SlimMembershipAccessOverride,
+} from '@/lib/membership-access-override'
+import {
   parseMembershipBilling,
   type MembershipBilling,
 } from '@/lib/membership-systems'
@@ -54,6 +58,8 @@ export type MemberEntitlements = {
   canBrowseBusinessDirectory: boolean
   hasPriorityRsvp: boolean
   subscriptionActive: boolean
+  /** Slim override used for entitlements only. Never includes reason or admin actors. */
+  accessOverride: SlimMembershipAccessOverride | null
 }
 
 export function normalizeBillingTier(
@@ -71,12 +77,18 @@ export function resolveProductTier(input: {
   role?: string | null
   billing?: MembershipBilling | unknown
   applicationApproved?: boolean
+  accessOverride?: SlimMembershipAccessOverride | null
+  now?: Date
 }): ProductTier {
   const role = input.role ?? 'member'
   const billing = parseMembershipBilling(input.billing)
 
   if (role === 'admin' || role === 'host') {
     return 'elite_circle'
+  }
+
+  if (isActiveMembershipAccessOverride(input.accessOverride, input.now)) {
+    return input.accessOverride.tier
   }
 
   const normalized = normalizeBillingTier(billing.tier)
@@ -119,9 +131,22 @@ export function buildMemberEntitlements(input: {
   billing?: MembershipBilling | unknown
   applicationApproved?: boolean
   activeCycle?: EntitlementCycle | null
+  accessOverride?: SlimMembershipAccessOverride | null
+  now?: Date
 }): MemberEntitlements {
   const billing = parseMembershipBilling(input.billing)
-  const productTier = resolveProductTier(input)
+  const accessOverride = isActiveMembershipAccessOverride(
+    input.accessOverride,
+    input.now
+  )
+    ? {
+        tier: input.accessOverride.tier,
+        startsAt: input.accessOverride.startsAt,
+        expiresAt: input.accessOverride.expiresAt,
+        revokedAt: input.accessOverride.revokedAt ?? null,
+      }
+    : null
+  const productTier = resolveProductTier({ ...input, accessOverride })
   const isPaid =
     productTier === 'inner_circle' || productTier === 'elite_circle'
 
@@ -155,6 +180,7 @@ export function buildMemberEntitlements(input: {
     canBrowseBusinessDirectory: true,
     hasPriorityRsvp: productTier === 'elite_circle',
     subscriptionActive: subscriptionIsActive(billing),
+    accessOverride,
   }
 }
 

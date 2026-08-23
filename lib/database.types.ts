@@ -436,6 +436,111 @@ export interface Database {
         }
         Relationships: []
       }
+      recognition_badges: {
+        Row: {
+          slug: string
+          public_label: string
+          public_description: string
+          display_order: number
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          slug: string
+          public_label: string
+          public_description: string
+          display_order: number
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          slug?: string
+          public_label?: string
+          public_description?: string
+          display_order?: number
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      member_recognition_badge_awards: {
+        Row: {
+          id: string
+          user_id: string
+          badge_slug: string
+          awarded_at: string
+          awarded_by: string
+          admin_note: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          badge_slug: string
+          awarded_at?: string
+          awarded_by: string
+          admin_note?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          badge_slug?: string
+          awarded_at?: string
+          awarded_by?: string
+          admin_note?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+        }
+        Relationships: []
+      }
+      membership_access_overrides: {
+        Row: {
+          id: string
+          user_id: string
+          tier: string
+          starts_at: string
+          expires_at: string | null
+          reason: string | null
+          granted_by: string
+          revoked_at: string | null
+          revoked_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          tier: string
+          starts_at?: string
+          expires_at?: string | null
+          reason?: string | null
+          granted_by: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          tier?: string
+          starts_at?: string
+          expires_at?: string | null
+          reason?: string | null
+          granted_by?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       member_member_blocks: {
         Row: {
           id: string
@@ -1112,6 +1217,15 @@ export interface Database {
           Database['public']['Tables']['profiles']['Row'],
           'email'
         >
+        Relationships: []
+      }
+      member_public_recognition_badges: {
+        Row: {
+          user_id: string
+          badge_slug: string
+          public_label: string
+          display_order: number
+        }
         Relationships: []
       }
     }

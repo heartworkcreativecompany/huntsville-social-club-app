@@ -38,6 +38,26 @@ describe('friendship questionnaire access', () => {
     expect(access.status).toBe('no_friends')
   })
 
+  it('treats an active complimentary override as paid friendship access', () => {
+    const access = evaluateFriendshipAccess({
+      signedIn: true,
+      approved: true,
+      friendsIntent: true,
+      entitlementInput: {
+        billing: freeMemberBilling,
+        applicationApproved: true,
+        accessOverride: {
+          tier: 'inner_circle',
+          startsAt: '2026-01-01T00:00:00.000Z',
+          expiresAt: null,
+        },
+      },
+      questionnaire: null,
+    })
+    expect(access.status).not.toBe('no_messaging')
+    expect(access.canViewForm).toBe(true)
+  })
+
   it('shows the paid lock for eligible Friends-intent Free Members', () => {
     const access = evaluateFriendshipAccess({
       signedIn: true,

@@ -8,6 +8,11 @@ export type ModerationActionType =
   | 'messaging_unsuspended'
   | 'admin_member_block'
   | 'member_deleted'
+  | 'recognition_badge_awarded'
+  | 'recognition_badge_revoked'
+  | 'membership_access_override_granted'
+  | 'membership_access_override_updated'
+  | 'membership_access_override_revoked'
 
 export async function logModerationAction(
   supabase: SupabaseClient<Database>,

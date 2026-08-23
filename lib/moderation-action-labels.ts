@@ -6,6 +6,8 @@ export const MODERATION_ACTION_TYPES: ModerationActionType[] = [
   'messaging_suspended',
   'messaging_unsuspended',
   'admin_member_block',
+  'recognition_badge_awarded',
+  'recognition_badge_revoked',
 ]
 
 export function moderationActionLabel(actionType: string): string {
@@ -20,6 +22,10 @@ export function moderationActionLabel(actionType: string): string {
       return 'Messaging restored'
     case 'admin_member_block':
       return 'Admin block'
+    case 'recognition_badge_awarded':
+      return 'Recognition badge awarded'
+    case 'recognition_badge_revoked':
+      return 'Recognition badge revoked'
     default:
       return actionType
   }
@@ -27,6 +33,7 @@ export function moderationActionLabel(actionType: string): string {
 
 export const MODERATION_SOURCE_TYPES = [
   'member_conversation_report',
+  'recognition_badge',
 ] as const
 
 export type ModerationSourceType = (typeof MODERATION_SOURCE_TYPES)[number]
@@ -35,6 +42,8 @@ export function moderationSourceLabel(sourceType: string | null): string {
   switch (sourceType) {
     case 'member_conversation_report':
       return 'Message report'
+    case 'recognition_badge':
+      return 'Recognition badge'
     case null:
       return '—'
     default:

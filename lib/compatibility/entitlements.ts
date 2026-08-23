@@ -1,6 +1,6 @@
 import { loadActiveEntitlementCycle } from '@/lib/membership-billing-cycles'
+import { buildMemberEntitlementsWithOverride } from '@/lib/load-member-entitlements'
 import {
-  buildMemberEntitlements,
   canUseMessaging,
   type MemberEntitlements,
 } from '@/lib/membership-entitlements'
@@ -17,7 +17,8 @@ export async function loadMemberEntitlementsForUser(
   }
 ): Promise<MemberEntitlements> {
   const activeCycle = await loadActiveEntitlementCycle(supabase, input.userId)
-  return buildMemberEntitlements({
+  return buildMemberEntitlementsWithOverride({
+    userId: input.userId,
     role: input.role,
     billing: input.billing,
     applicationApproved: input.applicationApproved ?? true,

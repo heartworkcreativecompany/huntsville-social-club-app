@@ -9,7 +9,7 @@ import { MembersDashboardLayout } from '@/components/members/members-dashboard-l
 import RecentMessagesPreview from '@/components/messages/recent-messages-preview'
 import { loadDirectoryProfiles } from '@/lib/load-directory-profiles'
 import { loadRecentMessagePreviews } from '@/lib/member-messages'
-import { buildMemberEntitlements } from '@/lib/membership-entitlements'
+import { buildMemberEntitlementsWithOverride } from '@/lib/load-member-entitlements'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -26,12 +26,15 @@ export default async function MembersPage() {
     await loadDirectoryProfiles(viewer.userId, canBrowseDiscovery, isAdmin)
 
   // Messaging gate only — membership usage (credits/tier) lives on Your Profile.
-  const canMessage = buildMemberEntitlements({
-    role: viewer.role,
-    billing: viewer.profile?.membership_billing,
-    applicationApproved: viewer.canAccessApp,
-    activeCycle: null,
-  }).canMessage
+  const canMessage = (
+    await buildMemberEntitlementsWithOverride({
+      userId: viewer.userId,
+      role: viewer.role,
+      billing: viewer.profile?.membership_billing,
+      applicationApproved: viewer.canAccessApp,
+      activeCycle: null,
+    })
+  ).canMessage
 
   const supabase = await createClient()
   const { previews: messagePreviews, error: messagesError } =

@@ -28,6 +28,7 @@ import ProfilePhoneVerificationCard from '@/components/profile/profile-phone-ver
 import ProfileForm from '@/app/(club)/members/profile-form'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { createClient } from '@/lib/supabase/server'
+import { attachPublicRecognitionBadges } from '@/lib/recognition-badges/public'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
 import { loadOwnFriendshipQuestionnaire } from '@/lib/friendship/candidate-pool'
 import { friendshipContextForViewer } from '@/lib/friendship/viewer-context'
@@ -119,6 +120,12 @@ export default async function YourProfilePage() {
     entitlements
   )
   const supabase = await createClient()
+  if (currentMember) {
+    const [withBadges] = await attachPublicRecognitionBadges(supabase, [
+      currentMember,
+    ])
+    currentMember.recognitionBadges = withBadges.recognitionBadges ?? []
+  }
   const friendshipQuestionnaire = await loadOwnFriendshipQuestionnaire(
     supabase,
     viewer.userId

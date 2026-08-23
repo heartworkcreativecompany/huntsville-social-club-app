@@ -1,13 +1,39 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { loadActiveMembershipAccessOverride } from '@/lib/membership-access-override/admin'
 import { loadActiveEntitlementCycle } from '@/lib/membership-billing-cycles'
 import {
   buildMemberEntitlements,
+  type EntitlementCycle,
   type MemberEntitlements,
 } from '@/lib/membership-entitlements'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { getViewer } from '@/lib/viewer'
+
+export async function buildMemberEntitlementsWithOverride(input: {
+  userId: string
+  role?: string | null
+  billing?: unknown
+  applicationApproved?: boolean
+  activeCycle?: EntitlementCycle | null
+  now?: Date
+}): Promise<MemberEntitlements> {
+  const accessOverride = await loadActiveMembershipAccessOverride(
+    createAdminClient(),
+    input.userId,
+    input.now
+  )
+  return buildMemberEntitlements({
+    role: input.role,
+    billing: input.billing,
+    applicationApproved: input.applicationApproved,
+    activeCycle: input.activeCycle,
+    accessOverride,
+    now: input.now,
+  })
+}
 
 export async function loadMemberEntitlementsForViewer(): Promise<{
   entitlements: MemberEntitlements | null
@@ -19,7 +45,8 @@ export async function loadMemberEntitlementsForViewer(): Promise<{
   const supabase = await createClient()
   const activeCycle = await loadActiveEntitlementCycle(supabase, viewer.userId)
 
-  const entitlements = buildMemberEntitlements({
+  const entitlements = await buildMemberEntitlementsWithOverride({
+    userId: viewer.userId,
     role: viewer.role,
     billing: viewer.profile?.membership_billing,
     applicationApproved: viewer.canAccessApp,
@@ -49,7 +76,8 @@ export async function loadMemberEntitlementsForUserId(
   }
 
   const activeCycle = await loadActiveEntitlementCycle(client, userId)
-  return buildMemberEntitlements({
+  return buildMemberEntitlementsWithOverride({
+    userId,
     role: data.role,
     billing: data.membership_billing,
     applicationApproved: data.application_status === 'approved',

@@ -10,10 +10,8 @@ import {
   returnEventCredit,
   returnGuestInvite,
 } from '@/lib/membership-billing-cycles'
-import {
-  buildMemberEntitlements,
-  evaluateEventRegistration,
-} from '@/lib/membership-entitlements'
+import { buildMemberEntitlementsWithOverride } from '@/lib/load-member-entitlements'
+import { evaluateEventRegistration } from '@/lib/membership-entitlements'
 import {
   EVENT_AT_CAPACITY_MESSAGE,
   isEventAtCapacity,
@@ -63,7 +61,8 @@ async function requireEntitledViewer() {
 
   const supabase = await createClient()
   const activeCycle = await loadActiveEntitlementCycle(supabase, viewer.userId)
-  const entitlements = buildMemberEntitlements({
+  const entitlements = await buildMemberEntitlementsWithOverride({
+    userId: viewer.userId,
     role: viewer.role,
     billing: viewer.profile?.membership_billing,
     applicationApproved: true,
@@ -79,7 +78,8 @@ async function loadMembershipPerksSnapshot(
   applicationApproved = true
 ): Promise<MembershipPerksSnapshot> {
   const activeCycle = await loadActiveEntitlementCycle(supabase, viewer.userId)
-  const entitlements = buildMemberEntitlements({
+  const entitlements = await buildMemberEntitlementsWithOverride({
+    userId: viewer.userId,
     role: viewer.role,
     billing: viewer.profile?.membership_billing,
     applicationApproved,

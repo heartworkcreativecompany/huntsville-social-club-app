@@ -14,6 +14,7 @@ import {
   isMissingSchemaColumnError,
 } from '@/lib/profile-query-fields'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import { attachPublicRecognitionBadges } from '@/lib/recognition-badges/public'
 
 type RawProfile = Parameters<typeof buildDirectoryMember>[0] & {
   application_draft?: unknown
@@ -98,9 +99,13 @@ export async function loadDirectoryProfiles(
   }
 
   const rows = (Array.isArray(data) ? data : [data]) as unknown as RawProfile[]
+  const members = await attachPublicRecognitionBadges(
+    supabase,
+    rows.map((profile) => finalizeMember(profile, isAdmin))
+  )
 
   return {
-    members: rows.map((profile) => finalizeMember(profile, isAdmin)),
+    members,
     error: null,
   }
 }
@@ -143,9 +148,12 @@ export async function loadMemberProfile(
     ? parseApplicationDraft(profile.application_draft)
     : null
   const profileDetails = draft ? publicProfileDetailsFromDraft(draft) : null
+  const [member] = await attachPublicRecognitionBadges(supabase, [
+    finalizeMember(profile, isAdmin),
+  ])
 
   return {
-    member: finalizeMember(profile, isAdmin),
+    member,
     profileDetails,
     error: null,
   }

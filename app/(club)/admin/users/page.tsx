@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { requireAdminClient } from '@/lib/supabase/require-admin-client'
 import Badge from '@/components/ui/badge'
 import Card from '@/components/ui/card'
@@ -108,31 +107,39 @@ export default async function AdminUsersPage() {
                   </p>
                 ) : null}
 
-                {profile.id === viewer.userId ? (
-                  <p className="mt-4 text-sm font-medium text-muted-foreground">
-                    Current account — role changes disabled
-                  </p>
-                ) : (
-                  <div className="mt-4 space-y-4 border-t border-border pt-4">
-                    <RoleUpdate
-                      userId={profile.id}
-                      currentRole={profile.role ?? 'member'}
-                    />
-                    <RemoveMemberButton
-                      userId={profile.id}
-                      memberName={
-                        profile.full_name ?? profile.email ?? 'Unknown member'
-                      }
-                      memberEmail={profile.email}
-                      disabled={profile.role === 'admin'}
-                      disabledReason={
-                        profile.role === 'admin'
-                          ? 'Administrator accounts cannot be removed here.'
-                          : undefined
-                      }
-                    />
-                  </div>
-                )}
+                <div className="mt-4 space-y-4 border-t border-border pt-4">
+                  <Link
+                    href={`/admin/users/${profile.id}`}
+                    className="inline-flex text-sm font-medium text-accent underline"
+                  >
+                    Manage profile
+                  </Link>
+                  {profile.id === viewer.userId ? (
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Current account — role changes disabled
+                    </p>
+                  ) : (
+                    <>
+                      <RoleUpdate
+                        userId={profile.id}
+                        currentRole={profile.role ?? 'member'}
+                      />
+                      <RemoveMemberButton
+                        userId={profile.id}
+                        memberName={
+                          profile.full_name ?? profile.email ?? 'Unknown member'
+                        }
+                        memberEmail={profile.email}
+                        disabled={profile.role === 'admin'}
+                        disabledReason={
+                          profile.role === 'admin'
+                            ? 'Administrator accounts cannot be removed here.'
+                            : undefined
+                        }
+                      />
+                    </>
+                  )}
+                </div>
               </Card>
             </li>
           ))}

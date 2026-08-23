@@ -9,8 +9,10 @@ import {
   loadViewerVouchesForMember,
   loadVouchSummaryForMember,
 } from '@/lib/load-member-vouches'
-import { loadMemberEntitlementsForUserId } from '@/lib/load-member-entitlements'
-import { buildMemberEntitlements } from '@/lib/membership-entitlements'
+import {
+  buildMemberEntitlementsWithOverride,
+  loadMemberEntitlementsForUserId,
+} from '@/lib/load-member-entitlements'
 import {
   memberFirstNameForMessaging,
   resolveProfileMessageRecipientId,
@@ -90,7 +92,8 @@ export default async function MemberDetailPage({ params }: PageProps) {
     ? await loadViewerVouchesForMember(viewer.userId, member.id)
     : []
 
-  const senderEntitlements = buildMemberEntitlements({
+  const senderEntitlements = await buildMemberEntitlementsWithOverride({
+    userId: viewer.userId,
     role: viewer.role,
     billing: viewer.profile?.membership_billing,
     applicationApproved: viewer.canAccessApp,

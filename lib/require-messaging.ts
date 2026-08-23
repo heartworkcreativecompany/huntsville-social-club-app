@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { isCuratedIntroConversationForMember } from '@/lib/curated-intro-messaging-access'
-import { loadMemberEntitlementsForUserId } from '@/lib/load-member-entitlements'
-import { loadActiveEntitlementCycle } from '@/lib/membership-billing-cycles'
 import {
-  buildMemberEntitlements,
+  buildMemberEntitlementsWithOverride,
+  loadMemberEntitlementsForUserId,
+} from '@/lib/load-member-entitlements'
+import {
   canStartMessageRequest,
   canUseMessaging,
   messagingUpgradeMessage,
@@ -38,14 +39,14 @@ async function loadViewerMessagingEntitlements(): Promise<
     return { ok: false, error: MESSAGING_SUSPENDED_SEND_ERROR }
   }
 
-  const supabase = await createClient()
-  const activeCycle = await loadActiveEntitlementCycle(supabase, viewer.userId)
-  const entitlements = buildMemberEntitlements({
-    role: viewer.role,
-    billing: viewer.profile?.membership_billing,
-    applicationApproved: true,
-    activeCycle,
-  })
+  const entitlements =
+    (await loadMemberEntitlementsForUserId(viewer.userId)) ??
+    (await buildMemberEntitlementsWithOverride({
+      userId: viewer.userId,
+      role: viewer.role,
+      billing: viewer.profile?.membership_billing,
+      applicationApproved: true,
+    }))
 
   return { ok: true, userId: viewer.userId, entitlements }
 }

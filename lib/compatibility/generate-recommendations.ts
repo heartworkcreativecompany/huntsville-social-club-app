@@ -75,6 +75,7 @@ function recipientEligibilityReason(profile: MatchPoolProfile | null): string | 
       role: profile.role,
       billing: profile.membership_billing,
       applicationApproved: profile.application_status === 'approved',
+      accessOverride: profile.accessOverride ?? null,
     })
   ) {
     return 'Member is not eligible for new recommendations.'

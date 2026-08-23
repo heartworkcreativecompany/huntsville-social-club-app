@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { loadActiveMembershipAccessOverridesByUserIds } from '@/lib/membership-access-override/admin'
+import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
 import {
   buildMemberEntitlements,
   canUseMessaging,
@@ -76,12 +79,14 @@ export function memberHasPaidFriendshipEntitlement(profile: {
   role: string | null
   membership_billing: unknown
   application_status: string | null
+  accessOverride?: SlimMembershipAccessOverride | null
 }): boolean {
   return canUseMessaging(
     buildMemberEntitlements({
       role: profile.role,
       billing: profile.membership_billing,
       applicationApproved: profile.application_status === 'approved',
+      accessOverride: profile.accessOverride ?? null,
     })
   )
 }
@@ -97,6 +102,7 @@ export function isFriendshipMatchPoolCandidate(input: {
     status?: string | null
     completed_at?: string | null
   } | null
+  accessOverride?: SlimMembershipAccessOverride | null
 }): boolean {
   if (!isFriendshipMatchingEnabled()) {
     return false
@@ -115,6 +121,7 @@ export function isFriendshipMatchPoolCandidate(input: {
       role: input.role,
       membership_billing: input.membership_billing,
       application_status: input.application_status,
+      accessOverride: input.accessOverride ?? null,
     })
   ) {
     return false
@@ -169,6 +176,10 @@ export async function loadFriendshipMatchPool(
   const questionnaireByUser = new Map(
     submitted.map((row) => [row.user_id, row as FriendshipQuestionnaireRow])
   )
+  const overridesByUser = await loadActiveMembershipAccessOverridesByUserIds(
+    createAdminClient(),
+    (profiles ?? []).map((profile) => profile.id)
+  )
   const pool: FriendshipPoolProfile[] = []
 
   for (const profile of profiles ?? []) {
@@ -182,6 +193,7 @@ export async function loadFriendshipMatchPool(
         membership_billing: profile.membership_billing,
         messaging_suspended_at: profile.messaging_suspended_at,
         questionnaire,
+        accessOverride: overridesByUser.get(profile.id) ?? null,
       })
     ) {
       continue

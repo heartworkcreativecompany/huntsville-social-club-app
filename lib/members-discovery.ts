@@ -36,6 +36,7 @@ import {
   resolveMemberPublicIntents,
   type MemberPublicIntentValue,
 } from '@/lib/member-public-intent'
+import type { PublicRecognitionBadge } from '@/lib/recognition-badges/catalog'
 
 export type DirectoryMember = {
   id: string
@@ -58,6 +59,7 @@ export type DirectoryMember = {
   verification_state: VerificationState
   membership_tier: MembershipTierKey
   vendor_reviewed_badge: boolean
+  recognitionBadges?: PublicRecognitionBadge[]
 }
 
 /**
@@ -196,6 +198,7 @@ export function buildDirectoryMember(
     verification_state: parseVerificationState(enriched.verification_state),
     membership_tier: tier,
     vendor_reviewed_badge: vendorBadge,
+    recognitionBadges: [],
   }
 }
 
