@@ -3,6 +3,7 @@ import ApplicationStatusBadge from '@/components/application/application-status-
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
+import AdminMemberManagementCard from '@/components/admin/admin-member-management-card'
 import CuratedIntroCard from '@/components/members/curated-intro-card'
 import MemberDirectorySection from '@/components/members/member-directory-section'
 import { MembersDashboardLayout } from '@/components/members/members-dashboard-layout'
@@ -103,20 +104,7 @@ export default async function MembersPage() {
         </section>
       }
       admin={
-        viewer.role === 'admin' ? (
-          <Card className="mb-10" padding="sm">
-            <h2 className="text-display text-lg font-semibold">Administrator</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Manage member roles and review the roster.
-            </p>
-            <Link
-              href="/admin/users"
-              className="mt-4 inline-block text-sm font-medium text-accent underline"
-            >
-              Manage users →
-            </Link>
-          </Card>
-        ) : undefined
+        viewer.role === 'admin' ? <AdminMemberManagementCard /> : undefined
       }
       recentMessages={
         showRecentMessages ? (
