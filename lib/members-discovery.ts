@@ -11,20 +11,22 @@ import {
 } from '@/lib/membership'
 import {
   ageFromBirthYear,
-  cardTierBadges,
   isMemberPubliclyVerified,
-  membershipTierBadge,
   parseMembershipBilling,
   parsePremiumVerification,
   parseVerificationState,
   publicPremiumBadge,
-  resolveMembershipTier,
   type DiscoveryIntent,
   type DisplayBadge,
   type MembershipTierKey,
   type VerificationState,
   discoveryIntentLabel,
 } from '@/lib/membership-systems'
+import {
+  resolvePublicMembershipTier,
+  visiblePublicMemberBadges,
+} from '@/lib/public-member-badges'
+import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
 
 export { discoveryIntentLabel }
 
@@ -117,22 +119,14 @@ export function trustBadges(member: DirectoryMember): TrustBadge[] {
   return directoryCardBadges(member)
 }
 
-/** Member-facing directory cards: membership tier only (no Verified / trust badges). */
+/** Directory cards and public profiles share this exact visible-badge list. */
 export function directoryCardBadges(member: DirectoryMember): DisplayBadge[] {
-  return cardTierBadges(member.membership_tier).slice(0, 1)
+  return visiblePublicMemberBadges(member)
 }
 
-/** Member-facing profile pages: membership tier only. */
-export function profilePageBadges(member: DirectoryMember): {
-  tier: DisplayBadge
-  verification: DisplayBadge[]
-  premium: DisplayBadge | null
-} {
-  return {
-    tier: membershipTierBadge(member.membership_tier),
-    verification: [],
-    premium: null,
-  }
+/** Same helper as directory cards so the two surfaces cannot disagree. */
+export function profilePageBadges(member: DirectoryMember): DisplayBadge[] {
+  return visiblePublicMemberBadges(member)
 }
 
 export function buildDirectoryMember(
@@ -159,16 +153,22 @@ export function buildDirectoryMember(
     verification_state?: unknown
     premium_verification?: unknown
     membership_billing?: unknown
+  },
+  options?: {
+    accessOverride?: SlimMembershipAccessOverride | null
+    now?: Date
   }
 ): DirectoryMember {
   const enriched = enrichProfileFromDraft(profile)
   const billing = parseMembershipBilling(enriched.membership_billing)
   const premium = parsePremiumVerification(enriched.premium_verification)
-  const tier = resolveMembershipTier({
-    application_status: enriched.application_status,
+  const tier = resolvePublicMembershipTier({
+    applicationStatus: enriched.application_status,
     role: enriched.role,
     billing,
     premium,
+    accessOverride: options?.accessOverride,
+    now: options?.now,
   })
   const vendorBadge = publicPremiumBadge(premium) !== null
   const publicIntents = resolveMemberPublicIntents({

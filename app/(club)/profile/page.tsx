@@ -103,18 +103,20 @@ export default async function YourProfilePage() {
     revisionStatus === 'pending' &&
     revisionDiff?.photos.changed === true
 
+  const { entitlements } = await loadMemberEntitlementsForViewer()
   const currentMember = profile
-    ? buildDirectoryMember({
-        ...profile,
-        application_status: profile.application_status,
-      })
+    ? buildDirectoryMember(
+        {
+          ...profile,
+          application_status: profile.application_status,
+        },
+        { accessOverride: entitlements?.accessOverride ?? null }
+      )
     : null
 
   if (currentMember) {
     currentMember.photos = livePhotos
   }
-
-  const { entitlements } = await loadMemberEntitlementsForViewer()
   const { summary: compatibilitySummary } = compatibilityContextForViewer(
     viewer,
     entitlements

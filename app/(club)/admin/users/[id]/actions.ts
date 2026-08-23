@@ -12,6 +12,7 @@ import {
 } from '@/lib/recognition-badges/admin'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdminClient } from '@/lib/supabase/require-admin-client'
+import { publicMemberDisplayRevalidatePaths } from '@/lib/public-member-badges'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -40,9 +41,9 @@ function revalidateMemberAdminPaths(memberId: string) {
   revalidatePath('/admin/users')
   revalidatePath(`/admin/users/${memberId}`)
   revalidatePath(`/admin/users/${memberId}/badges`)
-  revalidatePath('/members')
-  revalidatePath(`/members/${memberId}`)
-  revalidatePath('/profile')
+  for (const path of publicMemberDisplayRevalidatePaths(memberId)) {
+    revalidatePath(path)
+  }
 }
 
 export async function awardMemberRecognitionBadgesAction(input: {

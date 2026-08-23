@@ -15,6 +15,9 @@ import {
 } from '@/lib/profile-query-fields'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { attachPublicRecognitionBadges } from '@/lib/recognition-badges/public'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { loadActiveMembershipAccessOverridesByUserIds } from '@/lib/membership-access-override/admin'
+import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
 
 type RawProfile = Parameters<typeof buildDirectoryMember>[0] & {
   application_draft?: unknown
@@ -22,10 +25,11 @@ type RawProfile = Parameters<typeof buildDirectoryMember>[0] & {
 
 function finalizeMember(
   profile: RawProfile,
-  isAdmin: boolean
+  isAdmin: boolean,
+  accessOverride?: SlimMembershipAccessOverride | null
 ): DirectoryMember {
   const enriched = enrichProfileFromDraft(profile)
-  const member = buildDirectoryMember(enriched)
+  const member = buildDirectoryMember(enriched, { accessOverride })
   member.photos = photosFromApplicationDraft(enriched.application_draft)
   if (!isAdmin) {
     return {
@@ -99,9 +103,15 @@ export async function loadDirectoryProfiles(
   }
 
   const rows = (Array.isArray(data) ? data : [data]) as unknown as RawProfile[]
+  const overrides = await loadActiveMembershipAccessOverridesByUserIds(
+    createAdminClient(),
+    rows.map((profile) => profile.id)
+  )
   const members = await attachPublicRecognitionBadges(
     supabase,
-    rows.map((profile) => finalizeMember(profile, isAdmin))
+    rows.map((profile) =>
+      finalizeMember(profile, isAdmin, overrides.get(profile.id) ?? null)
+    )
   )
 
   return {
@@ -148,8 +158,12 @@ export async function loadMemberProfile(
     ? parseApplicationDraft(profile.application_draft)
     : null
   const profileDetails = draft ? publicProfileDetailsFromDraft(draft) : null
+  const overrides = await loadActiveMembershipAccessOverridesByUserIds(
+    createAdminClient(),
+    [profile.id]
+  )
   const [member] = await attachPublicRecognitionBadges(supabase, [
-    finalizeMember(profile, isAdmin),
+    finalizeMember(profile, isAdmin, overrides.get(profile.id) ?? null),
   ])
 
   return {
