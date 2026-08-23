@@ -1,8 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import { logModerationAction } from '@/lib/moderation-actions'
+import { captureOperationalError } from '@/lib/capture-error'
+import { logModerationAction, uuidOrNull } from '@/lib/moderation-actions'
 import {
   ADMIN_NOT_AUTHORIZED_ERROR,
+  BADGE_MUTATION_FAILED_ERROR,
   recognitionBadgeAuditDetails,
   type AdminRecognitionBadgeAward,
   type RecognitionBadgeCatalogEntry,
@@ -141,7 +143,7 @@ export async function awardRecognitionBadges(
     .in('slug', uniqueSlugs)
 
   if (catalogError) {
-    return { ok: false, error: catalogError.message }
+    return badgeMutationFailure('recognition-badge-award-catalog', catalogError)
   }
 
   const catalogBySlug = new Map(
@@ -165,7 +167,7 @@ export async function awardRecognitionBadges(
     .is('revoked_at', null)
 
   if (existingError) {
-    return { ok: false, error: existingError.message }
+    return badgeMutationFailure('recognition-badge-award-existing', existingError)
   }
 
   const alreadyAwarded = new Set(
@@ -179,7 +181,7 @@ export async function awardRecognitionBadges(
     const entry = catalogBySlug.get(slug)
     if (!entry) continue
 
-    const { error: insertError } = await admin
+    const { data: insertedRows, error: insertError } = await admin
       .from('member_recognition_badge_awards')
       .insert({
         user_id: input.memberId,
@@ -187,21 +189,23 @@ export async function awardRecognitionBadges(
         awarded_by: input.actorId,
         admin_note: note,
       })
+      .select('id')
 
     if (insertError) {
       if (insertError.code === '23505') {
         alreadyAwarded.add(slug)
         continue
       }
-      return { ok: false, error: insertError.message }
+      return badgeMutationFailure('recognition-badge-award-insert', insertError)
     }
 
+    const awardId = insertedAwardId(insertedRows)
     const audit = await logModerationAction(admin, {
       actorId: input.actorId,
       targetMemberId: input.memberId,
       actionType: 'recognition_badge_awarded',
       sourceType: 'recognition_badge',
-      sourceId: slug,
+      sourceId: uuidOrNull(awardId),
       reason: 'Admin awarded public recognition badge',
       details: recognitionBadgeAuditDetails({
         slug,
@@ -210,7 +214,13 @@ export async function awardRecognitionBadges(
       }),
     })
     if (!audit.ok) {
-      return { ok: false, error: `Could not write moderation audit log: ${audit.error}` }
+      await compensateFailedAward(admin, {
+        memberId: input.memberId,
+        slug,
+        awardId,
+        auditError: audit.error,
+      })
+      return { ok: false, error: BADGE_MUTATION_FAILED_ERROR }
     }
     awarded.push(slug)
   }
@@ -248,7 +258,7 @@ export async function revokeRecognitionBadge(
     .maybeSingle()
 
   if (catalogError) {
-    return { ok: false, error: catalogError.message }
+    return badgeMutationFailure('recognition-badge-revoke-catalog', catalogError)
   }
   if (!catalogRow) {
     return { ok: false, error: `Unknown badge: ${slug}` }
@@ -266,19 +276,20 @@ export async function revokeRecognitionBadge(
     .select('id')
 
   if (updateError) {
-    return { ok: false, error: updateError.message }
+    return badgeMutationFailure('recognition-badge-revoke-update', updateError)
   }
 
   if (!updated?.length) {
     return { ok: true, revoked: false }
   }
 
+  const awardId = insertedAwardId(updated)
   const audit = await logModerationAction(admin, {
     actorId: input.actorId,
     targetMemberId: input.memberId,
     actionType: 'recognition_badge_revoked',
     sourceType: 'recognition_badge',
-    sourceId: slug,
+    sourceId: uuidOrNull(awardId),
     reason: 'Admin revoked public recognition badge',
     details: recognitionBadgeAuditDetails({
       slug,
@@ -286,8 +297,99 @@ export async function revokeRecognitionBadge(
     }),
   })
   if (!audit.ok) {
-    return { ok: false, error: `Could not write moderation audit log: ${audit.error}` }
+    await compensateFailedRevoke(admin, {
+      memberId: input.memberId,
+      slug,
+      awardId,
+      auditError: audit.error,
+    })
+    return { ok: false, error: BADGE_MUTATION_FAILED_ERROR }
   }
 
   return { ok: true, revoked: true }
+}
+
+function insertedAwardId(
+  rows: Array<{ id?: string | null }> | { id?: string | null } | null | undefined
+): string | null {
+  if (!rows) return null
+  const row = Array.isArray(rows) ? rows[0] : rows
+  return row?.id ?? null
+}
+
+function badgeMutationFailure(
+  context: string,
+  error: unknown
+): { ok: false; error: string } {
+  captureOperationalError(context, error)
+  console.error(`[${context}]`, error)
+  return { ok: false, error: BADGE_MUTATION_FAILED_ERROR }
+}
+
+async function compensateFailedAward(
+  admin: SupabaseClient<Database>,
+  input: {
+    memberId: string
+    slug: string
+    awardId: string | null
+    auditError: string
+  }
+) {
+  captureOperationalError('recognition-badge-award-audit', input.auditError, {
+    slug: input.slug,
+  })
+  console.error('[recognition-badge-award-audit]', input.auditError, {
+    slug: input.slug,
+  })
+
+  let query = admin.from('member_recognition_badge_awards').delete()
+  if (input.awardId) {
+    query = query.eq('id', input.awardId)
+  } else {
+    query = query
+      .eq('user_id', input.memberId)
+      .eq('badge_slug', input.slug)
+      .is('revoked_at', null)
+  }
+  const { error } = await query
+  if (error) {
+    captureOperationalError('recognition-badge-award-compensate', error, {
+      slug: input.slug,
+    })
+    console.error('[recognition-badge-award-compensate]', error)
+  }
+}
+
+async function compensateFailedRevoke(
+  admin: SupabaseClient<Database>,
+  input: {
+    memberId: string
+    slug: string
+    awardId: string | null
+    auditError: string
+  }
+) {
+  captureOperationalError('recognition-badge-revoke-audit', input.auditError, {
+    slug: input.slug,
+  })
+  console.error('[recognition-badge-revoke-audit]', input.auditError, {
+    slug: input.slug,
+  })
+
+  let query = admin.from('member_recognition_badge_awards').update({
+    revoked_at: null,
+    revoked_by: null,
+  })
+  if (input.awardId) {
+    query = query.eq('id', input.awardId)
+  } else {
+    query = query.eq('user_id', input.memberId).eq('badge_slug', input.slug)
+  }
+  const { error } = await query
+  if (error) {
+    captureOperationalError('recognition-badge-revoke-compensate', error, {
+      slug: input.slug,
+    })
+    console.error('[recognition-badge-revoke-compensate]', error)
+  }
 }

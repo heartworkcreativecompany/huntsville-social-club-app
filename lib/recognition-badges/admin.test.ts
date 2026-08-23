@@ -9,9 +9,11 @@ import {
 } from '@/lib/recognition-badges/admin'
 import {
   ADMIN_NOT_AUTHORIZED_ERROR,
+  BADGE_MUTATION_FAILED_ERROR,
   RECOGNITION_BADGE_SLUGS,
   SEEDED_RECOGNITION_BADGES,
 } from '@/lib/recognition-badges/catalog'
+import { uuidOrNull } from '@/lib/moderation-actions'
 
 type QueryResult = {
   data?: unknown
@@ -22,6 +24,7 @@ type TableCall = {
   table: string
   inserts: unknown[]
   updates: unknown[]
+  deletes: number
 }
 
 function createQuery(result: QueryResult, call: TableCall) {
@@ -40,6 +43,10 @@ function createQuery(result: QueryResult, call: TableCall) {
   }
   query.update = (payload: unknown) => {
     call.updates.push(payload)
+    return query
+  }
+  query.delete = () => {
+    call.deletes += 1
     return query
   }
   query.then = (resolve: (value: QueryResult) => unknown) =>
@@ -63,7 +70,7 @@ function createClient(
       from(table: string) {
         const queue = unused[table] ?? []
         const next = queue.shift() ?? { data: null, error: null }
-        const call: TableCall = { table, inserts: [], updates: [] }
+        const call: TableCall = { table, inserts: [], updates: [], deletes: 0 }
         calls.push(call)
         return createQuery(next, call)
       },
@@ -81,6 +88,37 @@ const catalogRows = SEEDED_RECOGNITION_BADGES.map((badge) => ({
 
 function auditCalls(calls: TableCall[]) {
   return calls.filter((call) => call.table === 'moderation_actions')
+}
+
+const MEMBER_ID = '11111111-1111-4111-8111-111111111111'
+const ADMIN_ID = '22222222-2222-4222-8222-222222222222'
+const AWARD_IDS = [
+  '33333333-3333-4333-8333-333333333331',
+  '33333333-3333-4333-8333-333333333332',
+  '33333333-3333-4333-8333-333333333333',
+] as const
+
+function auditRows(calls: TableCall[]) {
+  return auditCalls(calls).flatMap((call) => call.inserts) as Array<
+    Record<string, unknown>
+  >
+}
+
+function parseDetails(row: Record<string, unknown>) {
+  return JSON.parse(String(row.details ?? '{}')) as {
+    slug?: string
+    public_label?: string
+    has_admin_note?: boolean
+    admin_note?: string
+  }
+}
+
+function assertNoBadgeSlugInUuidColumns(row: Record<string, unknown>) {
+  for (const slug of RECOGNITION_BADGE_SLUGS) {
+    expect(row.actor_id).not.toBe(slug)
+    expect(row.target_member_id).not.toBe(slug)
+    expect(row.source_id).not.toBe(slug)
+  }
 }
 
 describe('admin recognition badge authorization', () => {
@@ -120,14 +158,66 @@ describe('admin recognition badge authorization', () => {
 })
 
 describe('admin recognition badge mutations', () => {
+  it('awards Founding Member with the member UUID as target and slug in metadata', async () => {
+    const { client, calls } = createClient({
+      recognition_badges: [{ data: catalogRows, error: null }],
+      member_recognition_badge_awards: [
+        { data: [], error: null },
+        { data: [{ id: AWARD_IDS[0] }], error: null },
+      ],
+      moderation_actions: [{ data: null, error: null }],
+    })
+
+    const result = await awardRecognitionBadges(client, {
+      isAdmin: true,
+      actorId: ADMIN_ID,
+      memberId: MEMBER_ID,
+      slugs: ['founding_member'],
+      adminNote: 'Private founding packet',
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      awarded: ['founding_member'],
+      alreadyAwarded: [],
+    })
+    expect(
+      calls
+        .filter((call) => call.table === 'member_recognition_badge_awards')
+        .flatMap((call) => call.inserts)
+    ).toEqual([
+      {
+        user_id: MEMBER_ID,
+        badge_slug: 'founding_member',
+        awarded_by: ADMIN_ID,
+        admin_note: 'Private founding packet',
+      },
+    ])
+    const audit = auditRows(calls)[0]
+    expect(audit).toMatchObject({
+      actor_id: ADMIN_ID,
+      target_member_id: MEMBER_ID,
+      action_type: 'recognition_badge_awarded',
+      source_type: 'recognition_badge',
+      source_id: AWARD_IDS[0],
+    })
+    assertNoBadgeSlugInUuidColumns(audit!)
+    expect(parseDetails(audit!)).toEqual({
+      slug: 'founding_member',
+      public_label: 'Founding Member',
+      has_admin_note: true,
+    })
+    expect(String(audit?.details)).not.toContain('Private founding packet')
+  })
+
   it('awards each seeded catalog badge and writes an audit event', async () => {
     const { client, calls } = createClient({
       recognition_badges: [{ data: catalogRows, error: null }],
       member_recognition_badge_awards: [
         { data: [], error: null },
-        { data: [{ id: 'award-1' }], error: null },
-        { data: [{ id: 'award-2' }], error: null },
-        { data: [{ id: 'award-3' }], error: null },
+        { data: [{ id: AWARD_IDS[0] }], error: null },
+        { data: [{ id: AWARD_IDS[1] }], error: null },
+        { data: [{ id: AWARD_IDS[2] }], error: null },
       ],
       moderation_actions: [
         { data: null, error: null },
@@ -138,8 +228,8 @@ describe('admin recognition badge mutations', () => {
 
     const result = await awardRecognitionBadges(client, {
       isAdmin: true,
-      actorId: 'admin-1',
-      memberId: 'member-1',
+      actorId: ADMIN_ID,
+      memberId: MEMBER_ID,
       slugs: [...RECOGNITION_BADGE_SLUGS],
       adminNote: 'Private sponsor packet',
     })
@@ -155,20 +245,31 @@ describe('admin recognition badge mutations', () => {
     expect(awardInserts).toHaveLength(3)
     expect(awardInserts).toEqual(
       RECOGNITION_BADGE_SLUGS.map((slug) => ({
-        user_id: 'member-1',
+        user_id: MEMBER_ID,
         badge_slug: slug,
-        awarded_by: 'admin-1',
+        awarded_by: ADMIN_ID,
         admin_note: 'Private sponsor packet',
       }))
     )
-    expect(auditCalls(calls)).toHaveLength(3)
-    expect(auditCalls(calls)[0]?.inserts[0]).toMatchObject({
-      actor_id: 'admin-1',
-      target_member_id: 'member-1',
-      action_type: 'recognition_badge_awarded',
-      source_type: 'recognition_badge',
-      source_id: 'founding_member',
-    })
+    const audits = auditRows(calls)
+    expect(audits).toHaveLength(3)
+    for (const [index, slug] of RECOGNITION_BADGE_SLUGS.entries()) {
+      expect(audits[index]).toMatchObject({
+        actor_id: ADMIN_ID,
+        target_member_id: MEMBER_ID,
+        action_type: 'recognition_badge_awarded',
+        source_type: 'recognition_badge',
+        source_id: AWARD_IDS[index],
+      })
+      expect(uuidOrNull(String(audits[index]?.source_id))).toBe(AWARD_IDS[index])
+      assertNoBadgeSlugInUuidColumns(audits[index]!)
+      expect(parseDetails(audits[index]!)).toEqual({
+        slug,
+        public_label: SEEDED_RECOGNITION_BADGES[index]?.publicLabel,
+        has_admin_note: true,
+      })
+      expect(String(audits[index]?.details)).not.toContain('Private sponsor packet')
+    }
   })
 
   it('treats a duplicate active award as idempotent and does not write another audit', async () => {
@@ -235,14 +336,14 @@ describe('admin recognition badge mutations', () => {
           error: null,
         },
       ],
-      member_recognition_badge_awards: [{ data: [{ id: 'award-3' }], error: null }],
+      member_recognition_badge_awards: [{ data: [{ id: AWARD_IDS[2] }], error: null }],
       moderation_actions: [{ data: null, error: null }],
     })
 
     const result = await revokeRecognitionBadge(client, {
       isAdmin: true,
-      actorId: 'admin-1',
-      memberId: 'member-1',
+      actorId: ADMIN_ID,
+      memberId: MEMBER_ID,
       slug: 'experience_partner',
     })
 
@@ -250,12 +351,21 @@ describe('admin recognition badge mutations', () => {
     expect(
       calls.find((call) => call.table === 'member_recognition_badge_awards')?.updates[0]
     ).toMatchObject({
-      revoked_by: 'admin-1',
+      revoked_by: ADMIN_ID,
     })
-    expect(auditCalls(calls)[0]?.inserts[0]).toMatchObject({
+    const audit = auditRows(calls)[0]
+    expect(audit).toMatchObject({
+      actor_id: ADMIN_ID,
+      target_member_id: MEMBER_ID,
       action_type: 'recognition_badge_revoked',
-      source_id: 'experience_partner',
       source_type: 'recognition_badge',
+      source_id: AWARD_IDS[2],
+    })
+    assertNoBadgeSlugInUuidColumns(audit!)
+    expect(parseDetails(audit!)).toEqual({
+      slug: 'experience_partner',
+      public_label: 'Experience Partner',
+      has_admin_note: false,
     })
   })
 
@@ -279,5 +389,96 @@ describe('admin recognition badge mutations', () => {
 
     expect(result).toEqual({ ok: true, revoked: false })
     expect(auditCalls(calls)).toHaveLength(0)
+  })
+
+  it('does not keep an award when audit logging fails', async () => {
+    const { client, calls } = createClient({
+      recognition_badges: [{ data: catalogRows, error: null }],
+      member_recognition_badge_awards: [
+        { data: [], error: null },
+        { data: [{ id: AWARD_IDS[0] }], error: null },
+        { data: null, error: null },
+      ],
+      moderation_actions: [
+        {
+          data: null,
+          error: {
+            message: 'invalid input syntax for type uuid: "founding_member"',
+          },
+        },
+      ],
+    })
+
+    const result = await awardRecognitionBadges(client, {
+      isAdmin: true,
+      actorId: ADMIN_ID,
+      memberId: MEMBER_ID,
+      slugs: ['founding_member'],
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: BADGE_MUTATION_FAILED_ERROR,
+    })
+    expect(result.ok === false && result.error).not.toContain('invalid input syntax')
+    expect(result.ok === false && result.error).not.toContain('founding_member')
+    expect(
+      calls.filter((call) => call.table === 'member_recognition_badge_awards').at(-1)
+        ?.deletes
+    ).toBe(1)
+  })
+
+  it('restores the badge when revoke audit logging fails', async () => {
+    const { client, calls } = createClient({
+      recognition_badges: [
+        {
+          data: { slug: 'founding_member', public_label: 'Founding Member' },
+          error: null,
+        },
+      ],
+      member_recognition_badge_awards: [
+        { data: [{ id: AWARD_IDS[0] }], error: null },
+        { data: null, error: null },
+      ],
+      moderation_actions: [
+        {
+          data: null,
+          error: {
+            message: 'invalid input syntax for type uuid: "founding_member"',
+          },
+        },
+      ],
+    })
+
+    const result = await revokeRecognitionBadge(client, {
+      isAdmin: true,
+      actorId: ADMIN_ID,
+      memberId: MEMBER_ID,
+      slug: 'founding_member',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: BADGE_MUTATION_FAILED_ERROR,
+    })
+    expect(result.ok === false && result.error).not.toContain('invalid input syntax')
+    const awardCalls = calls.filter(
+      (call) => call.table === 'member_recognition_badge_awards'
+    )
+    expect(awardCalls[0]?.updates[0]).toMatchObject({
+      revoked_by: ADMIN_ID,
+    })
+    expect(awardCalls[1]?.updates[0]).toEqual({
+      revoked_at: null,
+      revoked_by: null,
+    })
+  })
+
+  it('never writes a badge slug into uuid-typed audit columns', async () => {
+    expect(uuidOrNull('founding_member')).toBeNull()
+    expect(uuidOrNull(MEMBER_ID)).toBe(MEMBER_ID)
+    for (const slug of RECOGNITION_BADGE_SLUGS) {
+      expect(uuidOrNull(slug)).toBeNull()
+    }
   })
 })

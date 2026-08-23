@@ -90,7 +90,7 @@ describe('recognition badge catalog', () => {
     )
   })
 
-  it('includes admin notes only in audit details, not public copy', () => {
+  it('stores an admin-note indicator in audit details, never the note text', () => {
     const details = recognitionBadgeAuditDetails({
       slug: 'founding_member',
       publicLabel: 'Founding Member',
@@ -99,8 +99,9 @@ describe('recognition badge catalog', () => {
     expect(JSON.parse(details)).toEqual({
       slug: 'founding_member',
       public_label: 'Founding Member',
-      admin_note: 'Internal sponsor review',
+      has_admin_note: true,
     })
+    expect(details).not.toContain('Internal sponsor review')
     expect(ADMIN_NOT_AUTHORIZED_ERROR).toBe('Administrator access required.')
   })
 

@@ -130,9 +130,12 @@ export function recognitionBadgeAuditDetails(input: {
   return JSON.stringify({
     slug: input.slug,
     public_label: input.publicLabel,
-    admin_note: input.adminNote?.trim() || null,
+    has_admin_note: Boolean(input.adminNote?.trim()),
   })
 }
 
 export const ADMIN_NOT_AUTHORIZED_ERROR =
   'Administrator access required.' as const
+
+export const BADGE_MUTATION_FAILED_ERROR =
+  'Could not complete this badge update. Please try again.' as const
