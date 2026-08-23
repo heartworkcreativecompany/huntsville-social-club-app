@@ -31,8 +31,9 @@ function isStaffRole(role: string | null | undefined): boolean {
 }
 
 /**
- * Paid public tier only. Admin/Host keep existing public role-label behavior
- * (they are not shown as Elite Circle from entitlements).
+ * Paid public tier only.
+ * Active complimentary overrides win for every role, including Admin/Host.
+ * Admin/Host still do not inherit Elite Circle from role entitlements.
  */
 export function effectivePublicTier(input: {
   role?: string | null
@@ -42,11 +43,12 @@ export function effectivePublicTier(input: {
   accessOverride?: SlimMembershipAccessOverride | null
   now?: Date
 }): PublicPaidTier | null {
-  if (isStaffRole(input.role)) return null
-
   if (isActiveMembershipAccessOverride(input.accessOverride, input.now)) {
     return input.accessOverride.tier
   }
+
+  // Role entitlements (admin/host → Elite) must not become a public paid badge.
+  if (isStaffRole(input.role)) return null
 
   const billing = parseMembershipBilling(input.billing)
   if (billing.tier === 'elite_circle' || billing.tier === 'premium_member') {

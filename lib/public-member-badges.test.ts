@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import MemberDiscoveryCard from '@/components/members/member-discovery-card'
+import MemberProfileCard from '@/components/members/member-profile-card'
 import MemberProfileDetailsPanel from '@/components/members/member-profile-details-panel'
 import type { DirectoryMember } from '@/lib/members-discovery'
 import {
@@ -140,12 +141,11 @@ describe('effective public tier', () => {
     ).toBeNull()
   })
 
-  it('does not treat Admin or Host as a public paid tier', () => {
+  it('does not treat Admin or Host role entitlements as a public paid tier', () => {
     expect(
       effectivePublicTier({
         role: 'admin',
         billing: freeMemberBilling,
-        accessOverride: activeEliteOverride,
         now,
       })
     ).toBeNull()
@@ -156,6 +156,17 @@ describe('effective public tier', () => {
         now,
       })
     ).toBeNull()
+  })
+
+  it('still shows an active Elite override on Admin/Host public profiles', () => {
+    expect(
+      effectivePublicTier({
+        role: 'admin',
+        billing: freeMemberBilling,
+        accessOverride: activeEliteOverride,
+        now,
+      })
+    ).toBe('elite_circle')
   })
 })
 
@@ -332,6 +343,71 @@ describe('override-aware directory member display', () => {
   })
 })
 
+describe('own-profile preview, public profile, and directory card', () => {
+  it('show Elite Circle then Founding Member for an active Elite override', () => {
+    const built = buildDirectoryMember(
+      {
+        id: 'member-1',
+        full_name: 'Alex Rivera',
+        role: 'member',
+        created_at: null,
+        application_status: 'approved',
+        membership_billing: freeMemberBilling,
+      },
+      { accessOverride: activeEliteOverride, now }
+    )
+    built.recognitionBadges = [
+      { slug: 'founding_member', publicLabel: 'Founding Member' },
+    ]
+
+    const expected = ['Elite Circle', 'Founding Member']
+    expect(visiblePublicBadgeLabels(built)).toEqual(expected)
+    expect(directoryCardBadges(built).map((badge) => badge.label)).toEqual(expected)
+    expect(profilePageBadges(built).map((badge) => badge.label)).toEqual(expected)
+    expect(toPublicVisibleBadgeDto(visiblePublicMemberBadges(built))).toEqual([
+      { key: 'elite_circle', label: 'Elite Circle' },
+      { key: 'founding_member', label: 'Founding Member' },
+    ])
+
+    const ownPreview = renderToStaticMarkup(
+      createElement(MemberProfileCard, { member: built, isCurrentUser: true })
+    )
+    const directoryCard = renderToStaticMarkup(
+      createElement(MemberDiscoveryCard, { member: built })
+    )
+    const publicProfile = renderToStaticMarkup(
+      createElement(MemberProfileDetailsPanel, { member: built })
+    )
+    for (const html of [ownPreview, directoryCard, publicProfile]) {
+      expect(html).toContain('Elite Circle')
+      expect(html).toContain('Founding Member')
+      expect(html).not.toMatch(/>Member</)
+    }
+  })
+
+  it('keeps Elite Circle on Admin profiles when a complimentary override is active', () => {
+    const built = buildDirectoryMember(
+      {
+        id: 'member-1',
+        full_name: 'Alex Rivera',
+        role: 'admin',
+        created_at: null,
+        application_status: 'approved',
+        membership_billing: freeMemberBilling,
+      },
+      { accessOverride: activeEliteOverride, now }
+    )
+    built.recognitionBadges = [
+      { slug: 'founding_member', publicLabel: 'Founding Member' },
+    ]
+    expect(directoryCardBadges(built).map((badge) => badge.label)).toEqual([
+      'Elite Circle',
+      'Founding Member',
+    ])
+    expect(profilePageBadges(built)).toEqual(directoryCardBadges(built))
+  })
+})
+
 describe('directory card and public profile labels', () => {
   it('render identical visible labels', () => {
     const alex = member({
@@ -370,5 +446,7 @@ describe('override grant/update/revoke revalidation', () => {
     expect(source).toContain('grantMembershipAccessOverrideAction')
     expect(source).toContain('revokeMembershipAccessOverrideAction')
     expect(source).toContain('revalidateMemberAdminPaths(input.memberId)')
+    expect(source).toContain("revalidatePath('/members', 'layout')")
+    expect(source).toContain("revalidatePath('/profile', 'layout')")
   })
 })

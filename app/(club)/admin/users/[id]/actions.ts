@@ -41,6 +41,9 @@ function revalidateMemberAdminPaths(memberId: string) {
   revalidatePath('/admin/users')
   revalidatePath(`/admin/users/${memberId}`)
   revalidatePath(`/admin/users/${memberId}/badges`)
+  revalidatePath('/members', 'layout')
+  revalidatePath(`/members/${memberId}`, 'page')
+  revalidatePath('/profile', 'layout')
   for (const path of publicMemberDisplayRevalidatePaths(memberId)) {
     revalidatePath(path)
   }
