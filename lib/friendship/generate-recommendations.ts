@@ -230,9 +230,15 @@ export async function rescoreFriendshipRecommendationsInvolving(
 
 export async function refreshFriendshipRecommendationsForAllEligible(
   supabase: SupabaseClient<Database>
-): Promise<{ processed: number; delivered: number; empty: number; skipped: number }> {
+): Promise<{
+  processed: number
+  delivered: number
+  empty: number
+  skipped: number
+  created: number
+}> {
   if (!isFriendshipMatchingEnabled()) {
-    return { processed: 0, delivered: 0, empty: 0, skipped: 0 }
+    return { processed: 0, delivered: 0, empty: 0, skipped: 0, created: 0 }
   }
   const { profiles, error } = await loadFriendshipMatchPool(supabase)
   if (error) {
@@ -242,11 +248,13 @@ export async function refreshFriendshipRecommendationsForAllEligible(
   let delivered = 0
   let empty = 0
   let skipped = 0
+  let created = 0
 
   for (const profile of profiles) {
     const result = await refreshFriendshipRecommendationsForUser(supabase, profile.id, {
       pool: profiles,
     })
+    created += result.created
     if (result.outcome === 'delivered') delivered += 1
     else if (result.outcome === 'empty') empty += 1
     else skipped += 1
@@ -257,5 +265,6 @@ export async function refreshFriendshipRecommendationsForAllEligible(
     delivered,
     empty,
     skipped,
+    created,
   }
 }

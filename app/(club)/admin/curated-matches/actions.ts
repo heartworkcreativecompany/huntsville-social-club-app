@@ -1,5 +1,13 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
+import { getViewer } from '@/lib/viewer'
+import { requireAdminClient } from '@/lib/supabase/require-admin-client'
+import { revalidateFriendshipRoutes } from '@/lib/friendship/revalidate-routes'
+import {
+  executeAdminFriendshipRefresh,
+  isAdminViewer,
+} from '@/lib/friendship/load-admin-match-operations'
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import {
   generateCuratedRecommendationsForAllEligible,
@@ -154,4 +162,34 @@ export async function runCuratedMatchGenerationForMember(input: {
           : 'Failed to generate recommendations.',
     }
   }
+}
+
+
+export async function refreshFriendshipRecommendationsAction() {
+  const viewer = await getViewer()
+  if (!isAdminViewer(viewer)) {
+    return { error: 'Administrator access required.' }
+  }
+
+  let admin
+  try {
+    admin = requireAdminClient()
+  } catch {
+    return { error: 'Administrator database access is unavailable.' }
+  }
+
+  const outcome = await executeAdminFriendshipRefresh({
+    isAdmin: true,
+    supabase: admin,
+  })
+
+  if (!outcome.ok) {
+    return { error: outcome.error }
+  }
+
+  revalidateFriendshipRoutes()
+  revalidatePath('/admin/curated-matches')
+  revalidatePath('/friendship/matches')
+
+  return { success: true as const, result: outcome.result }
 }

@@ -131,6 +131,7 @@ describe('FRIENDSHIP_MATCHING_ENABLED', () => {
       delivered: 0,
       empty: 0,
       skipped: 0,
+      created: 0,
     })
     await expect(rescoreFriendshipRecommendationsInvolving(client, 'user-1')).resolves.toBe(
       0

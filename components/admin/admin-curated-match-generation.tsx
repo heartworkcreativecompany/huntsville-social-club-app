@@ -145,10 +145,10 @@ export default function AdminCuratedMatchGenerationPanel({
           </div>
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Match pool
+              Dating pool
             </dt>
             <dd className="mt-1 text-foreground">
-              {poolSize} approved members with completed questionnaires
+              {poolSize} approved members with completed Dating questionnaires
             </dd>
           </div>
           <div>
