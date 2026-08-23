@@ -9,6 +9,7 @@ export default function ClubShell({
   canAccessApp,
   applicationStatus,
   showMatchesNav,
+  showFriendsNav = false,
   notifications,
   unreadNotificationCount,
 }: {
@@ -17,6 +18,7 @@ export default function ClubShell({
   canAccessApp: boolean
   applicationStatus: ApplicationStatus
   showMatchesNav: boolean
+  showFriendsNav?: boolean
   notifications: MemberNotificationItem[]
   unreadNotificationCount: number
 }) {
@@ -27,6 +29,7 @@ export default function ClubShell({
         canAccessApp={canAccessApp}
         applicationStatus={applicationStatus}
         showMatchesNav={showMatchesNav}
+        showFriendsNav={showFriendsNav}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
       />

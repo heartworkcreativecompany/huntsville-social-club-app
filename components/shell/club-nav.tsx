@@ -20,6 +20,7 @@ export default function ClubNav({
   canAccessApp,
   applicationStatus,
   showMatchesNav,
+  showFriendsNav = false,
   notifications,
   unreadNotificationCount,
 }: {
@@ -27,6 +28,7 @@ export default function ClubNav({
   canAccessApp: boolean
   applicationStatus: ApplicationStatus
   showMatchesNav: boolean
+  showFriendsNav?: boolean
   notifications: MemberNotificationItem[]
   unreadNotificationCount: number
 }) {
@@ -82,6 +84,16 @@ export default function ClubNav({
               href: '/matches',
               label: 'Matches',
               match: (p: string) => p === '/matches',
+            },
+          ]
+        : []),
+      ...(showFriendsNav
+        ? [
+            {
+              href: '/friendship/matches',
+              label: 'Friends',
+              match: (p: string) =>
+                p === '/friendship' || p.startsWith('/friendship/'),
             },
           ]
         : []),

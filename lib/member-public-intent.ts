@@ -186,6 +186,14 @@ export function includesDatingIntent(
   )
 }
 
+export function includesFriendsIntent(
+  connectionIntents: string[] | null | undefined
+): boolean {
+  return memberPublicIntentsFromConnectionIntents(connectionIntents).includes(
+    'friends'
+  )
+}
+
 /** @deprecated Use includesDatingIntent(connection_intents) */
 export function datingPresentInConnectionsOpenTo(
   connectionsOpenTo: string[] | null | undefined

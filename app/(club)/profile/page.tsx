@@ -9,6 +9,7 @@ import ProfileRevisionStatusCard from '@/components/profile/profile-revision-sta
 import ProfilePendingPhotosCard from '@/components/profile/profile-pending-photos-card'
 import ProfileRevisionHistoryModule from '@/components/profile/profile-revision-history-module'
 import CompatibilityStatusModule from '@/components/profile/compatibility-status-module'
+import FriendshipStatusModule from '@/components/profile/friendship-status-module'
 import VerificationStatusModule from '@/components/profile/verification-status-module'
 import { compatibilityContextForViewer } from '@/lib/compatibility/viewer-context'
 import { summarizeMemberMatchAvailability } from '@/lib/compatibility/member-match-availability'
@@ -28,6 +29,8 @@ import ProfileForm from '@/app/(club)/members/profile-form'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { createClient } from '@/lib/supabase/server'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
+import { loadOwnFriendshipQuestionnaire } from '@/lib/friendship/candidate-pool'
+import { friendshipContextForViewer } from '@/lib/friendship/viewer-context'
 import {
   buildProfileRevisionDiff,
   editorPhotosForRevision,
@@ -115,13 +118,22 @@ export default async function YourProfilePage() {
     viewer,
     entitlements
   )
+  const supabase = await createClient()
+  const friendshipQuestionnaire = await loadOwnFriendshipQuestionnaire(
+    supabase,
+    viewer.userId
+  )
+  const { access: friendshipAccess } = friendshipContextForViewer(
+    viewer,
+    entitlements,
+    friendshipQuestionnaire
+  )
 
   let matchAvailabilityHeadline = compatibilitySummary.headline
   let matchAvailabilityDetail = compatibilitySummary.detail
   let matchDeliveryLines: string[] | undefined
 
   if (compatibilitySummary.status === 'active') {
-    const supabase = await createClient()
     await syncRecommendationLifecycleForMember(supabase, viewer.userId)
     const deliverySnapshot = await loadMemberDeliverySnapshot(supabase, viewer.userId, {
       lastMatchGenerationAt: profile?.last_match_generation_at ?? null,
@@ -249,6 +261,16 @@ export default async function YourProfilePage() {
               ctaLabel={compatibilitySummary.ctaLabel}
               deliveryLines={matchDeliveryLines}
               messagingSuspended={messagingSuspendedForMatches}
+            />
+          ) : null}
+
+          {friendshipAccess.canViewSection ? (
+            <FriendshipStatusModule
+              headline={friendshipAccess.headline}
+              detail={friendshipAccess.detail}
+              status={friendshipAccess.status}
+              ctaHref={friendshipAccess.ctaHref}
+              ctaLabel={friendshipAccess.ctaLabel}
             />
           ) : null}
 

@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import ClubShell from '@/components/shell/club-shell'
 import MemberPerksHydrator from '@/components/membership/member-perks-hydrator'
 import { compatibilityContextForViewer } from '@/lib/compatibility/viewer-context'
+import { loadOwnFriendshipQuestionnaire } from '@/lib/friendship/candidate-pool'
+import { friendshipContextForViewer } from '@/lib/friendship/viewer-context'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { loadMemberNotifications } from '@/lib/load-member-notifications'
 import { createClient } from '@/lib/supabase/server'
@@ -19,16 +21,23 @@ export default async function ClubLayout({
   }
 
   const supabase = await createClient()
-  const [{ entitlements }, notificationResult] = await Promise.all([
-    loadMemberEntitlementsForViewer(),
-    loadMemberNotifications(supabase, viewer.userId).catch(() => ({
-      items: [],
-      unreadCount: 0,
-    })),
-  ])
+  const [{ entitlements }, notificationResult, friendshipQuestionnaire] =
+    await Promise.all([
+      loadMemberEntitlementsForViewer(),
+      loadMemberNotifications(supabase, viewer.userId).catch(() => ({
+        items: [],
+        unreadCount: 0,
+      })),
+      loadOwnFriendshipQuestionnaire(supabase, viewer.userId).catch(() => null),
+    ])
   const { canAccessMatchesInbox: showMatchesNav } = compatibilityContextForViewer(
     viewer,
     entitlements
+  )
+  const { canAccessFriendsNav: showFriendsNav } = friendshipContextForViewer(
+    viewer,
+    entitlements,
+    friendshipQuestionnaire
   )
 
   return (
@@ -37,6 +46,7 @@ export default async function ClubLayout({
       canAccessApp={viewer.canAccessApp}
       applicationStatus={viewer.applicationStatus}
       showMatchesNav={showMatchesNav}
+      showFriendsNav={showFriendsNav}
       notifications={notificationResult.items}
       unreadNotificationCount={notificationResult.unreadCount}
     >

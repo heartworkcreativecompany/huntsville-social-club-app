@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { isCompatibilityFeatureEnabled } from '@/lib/compatibility/eligibility'
 import { runScheduledCuratedMatchDelivery } from '@/lib/compatibility/run-scheduled-match-delivery'
+import { refreshFriendshipRecommendationsForAllEligible } from '@/lib/friendship/generate-recommendations'
+import { friendshipCronShouldRefresh } from '@/lib/friendship/matching-flag'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -15,17 +17,45 @@ function isAuthorized(request: Request): boolean {
   return authHeader === `Bearer ${cronSecret}`
 }
 
+async function runFriendshipRefresh(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>
+) {
+  const plan = friendshipCronShouldRefresh()
+  if (!plan.refresh) {
+    return {
+      processed: 0,
+      delivered: 0,
+      empty: 0,
+      skipped: 0,
+      skippedMatching: true,
+      reason: plan.reason,
+      error: null as string | null,
+    }
+  }
+
+  try {
+    return {
+      ...(await refreshFriendshipRecommendationsForAllEligible(admin)),
+      skippedMatching: false,
+      reason: null as string | null,
+      error: null as string | null,
+    }
+  } catch (error) {
+    return {
+      processed: 0,
+      delivered: 0,
+      empty: 0,
+      skipped: 0,
+      skippedMatching: false,
+      reason: null as string | null,
+      error: error instanceof Error ? error.message : 'Friendship refresh failed.',
+    }
+  }
+}
+
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  if (!isCompatibilityFeatureEnabled()) {
-    return NextResponse.json({
-      ok: true,
-      skipped: true,
-      reason: 'Compatibility matching is disabled.',
-    })
   }
 
   const admin = createAdminClient()
@@ -39,10 +69,21 @@ export async function GET(request: Request) {
     )
   }
 
+  const friendship = await runFriendshipRefresh(admin)
+
+  if (!isCompatibilityFeatureEnabled()) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: 'Compatibility matching is disabled.',
+      friendship,
+    })
+  }
+
   const summary = await runScheduledCuratedMatchDelivery(admin)
 
   if (summary.error) {
-    return NextResponse.json({ error: summary.error }, { status: 500 })
+    return NextResponse.json({ error: summary.error, friendship }, { status: 500 })
   }
 
   return NextResponse.json({
@@ -54,5 +95,6 @@ export async function GET(request: Request) {
     skipped: summary.skipped,
     recommendationsCreated: summary.recommendationsCreated,
     notificationsSent: summary.notificationsSent,
+    friendship,
   })
 }

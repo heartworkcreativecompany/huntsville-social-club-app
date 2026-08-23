@@ -298,6 +298,99 @@ export interface Database {
         }
         Relationships: []
       }
+      friendship_questionnaires: {
+        Row: {
+          user_id: string
+          version: number
+          answers: Json
+          status: string
+          completed_at: string | null
+          updated_at: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          version: number
+          answers?: Json
+          status?: string
+          completed_at?: string | null
+          updated_at?: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          version?: number
+          answers?: Json
+          status?: string
+          completed_at?: string | null
+          updated_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      friendship_match_batches: {
+        Row: {
+          id: string
+          user_id: string
+          status: string
+          match_count: number
+          created_at: string
+          delivered_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          status?: string
+          match_count?: number
+          created_at?: string
+          delivered_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          status?: string
+          match_count?: number
+          created_at?: string
+          delivered_at?: string | null
+        }
+        Relationships: []
+      }
+      friendship_match_recommendations: {
+        Row: {
+          id: string
+          batch_id: string
+          user_id: string
+          recommended_user_id: string
+          compatibility_score: number
+          score_breakdown: Json
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          batch_id: string
+          user_id: string
+          recommended_user_id: string
+          compatibility_score: number
+          score_breakdown?: Json
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          batch_id?: string
+          user_id?: string
+          recommended_user_id?: string
+          compatibility_score?: number
+          score_breakdown?: Json
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       member_vouches: {
         Row: {
           id: string

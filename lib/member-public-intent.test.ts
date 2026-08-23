@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  includesFriendsIntent,
   memberPublicIntentBadgeVariant,
   memberPublicIntentLabel,
   memberPublicIntentsFromConnectionsOpenTo,
@@ -64,5 +65,13 @@ describe('parseConnectionIntents', () => {
       'dating',
       'friends',
     ])
+  })
+})
+
+describe('includesFriendsIntent', () => {
+  it('detects the canonical friends intent value', () => {
+    expect(includesFriendsIntent(['friends'])).toBe(true)
+    expect(includesFriendsIntent(['dating'])).toBe(false)
+    expect(includesFriendsIntent(['dating', 'friends'])).toBe(true)
   })
 })
