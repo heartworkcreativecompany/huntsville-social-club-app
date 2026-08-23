@@ -162,6 +162,28 @@ export function canUseMessaging(entitlements: MemberEntitlements): boolean {
   return entitlements.canMessage
 }
 
+/**
+ * New message requests require both parties to have active paid messaging.
+ * Does not encode which party failed — callers must use a generic error/UI.
+ */
+export function canStartMessageRequest(input: {
+  senderEntitlements: Pick<MemberEntitlements, 'canMessage'>
+  recipientEntitlements: Pick<MemberEntitlements, 'canMessage'>
+  senderId: string
+  recipientId: string
+}): boolean {
+  if (!input.senderId || !input.recipientId) return false
+  if (input.senderId === input.recipientId) return false
+  return (
+    canUseMessaging(input.senderEntitlements as MemberEntitlements) &&
+    canUseMessaging(input.recipientEntitlements as MemberEntitlements)
+  )
+}
+
+/** Safe copy for UI + server when a new request is blocked by mutual eligibility. */
+export const MUTUAL_MESSAGING_REQUIRED_MESSAGE =
+  'Messaging is available when both members have an active paid membership.' as const
+
 function paidPerEventDecision(
   description: string,
   uiState: 'member_paid' | 'inner_premium_credit_exhausted' | 'elite_premium_credit_exhausted' = 'member_paid'

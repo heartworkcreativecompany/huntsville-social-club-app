@@ -13,6 +13,7 @@ import {
 } from '@/lib/member-message-limits'
 import {
   MEMBER_MESSAGING_LOCKED_COPY,
+  MEMBER_MESSAGING_MUTUAL_REQUIRED_COPY,
   MEMBER_MESSAGING_UPGRADE_CTA,
   MEMBER_MESSAGING_UPGRADE_PATH,
   profileMessagingUiMode,
@@ -28,12 +29,14 @@ export type ProfileMessageSendResult =
  */
 export default function MemberProfileMessageForm({
   firstName,
-  canMessage,
+  senderCanMessage,
+  recipientCanMessage,
   isSelf = false,
   onSend,
 }: {
   firstName: string
-  canMessage: boolean
+  senderCanMessage: boolean
+  recipientCanMessage: boolean
   isSelf?: boolean
   onSend: (body: string) => Promise<ProfileMessageSendResult>
 }) {
@@ -46,7 +49,11 @@ export default function MemberProfileMessageForm({
   )
   const [isPending, startTransition] = useTransition()
 
-  const mode = profileMessagingUiMode({ isSelf, canMessage })
+  const mode = profileMessagingUiMode({
+    isSelf,
+    senderCanMessage,
+    recipientCanMessage,
+  })
   if (mode === 'hidden') return null
 
   if (mode === 'upgrade') {
@@ -67,6 +74,20 @@ export default function MemberProfileMessageForm({
             {MEMBER_MESSAGING_UPGRADE_CTA}
           </Link>
         </div>
+      </Card>
+    )
+  }
+
+  if (mode === 'unavailable') {
+    return (
+      <Card className="w-full border-accent/25 bg-accent-soft/20">
+        <p className="eyebrow">Messaging</p>
+        <h2 className="text-display mt-1 text-xl font-semibold">
+          Message {firstName}
+        </h2>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          {MEMBER_MESSAGING_MUTUAL_REQUIRED_COPY}
+        </p>
       </Card>
     )
   }

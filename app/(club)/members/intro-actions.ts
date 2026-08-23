@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { sendMessageRequest } from '@/app/(club)/messages/actions'
-import { assertMessagingAllowed } from '@/lib/require-messaging'
+import { assertCanStartMessageRequest } from '@/lib/require-messaging'
 
 export async function requestCuratedIntro(note?: string) {
   return {
@@ -15,7 +15,7 @@ export async function requestMemberIntro(
   targetMemberId: string,
   body: string
 ) {
-  const gate = await assertMessagingAllowed()
+  const gate = await assertCanStartMessageRequest({ targetMemberId })
   if (!gate.ok) {
     return { error: gate.error }
   }

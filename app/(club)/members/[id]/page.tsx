@@ -9,6 +9,7 @@ import {
   loadViewerVouchesForMember,
   loadVouchSummaryForMember,
 } from '@/lib/load-member-vouches'
+import { loadMemberEntitlementsForUserId } from '@/lib/load-member-entitlements'
 import { buildMemberEntitlements } from '@/lib/membership-entitlements'
 import {
   memberFirstNameForMessaging,
@@ -89,16 +90,20 @@ export default async function MemberDetailPage({ params }: PageProps) {
     ? await loadViewerVouchesForMember(viewer.userId, member.id)
     : []
 
-  const canMessage = buildMemberEntitlements({
+  const senderEntitlements = buildMemberEntitlements({
     role: viewer.role,
     billing: viewer.profile?.membership_billing,
     applicationApproved: viewer.canAccessApp,
     activeCycle: null,
-  }).canMessage
+  })
+  const recipientEntitlements = await loadMemberEntitlementsForUserId(member.id)
+  const senderCanMessage = senderEntitlements.canMessage
+  const recipientCanMessage = recipientEntitlements?.canMessage ?? false
 
   const messageRecipientId = resolveProfileMessageRecipientId(member.id)
   const firstName = memberFirstNameForMessaging(member.full_name)
 
+    
   return (
     <>
       <MemberProfileViewTracker memberId={member.id} />
@@ -134,7 +139,8 @@ export default async function MemberDetailPage({ params }: PageProps) {
           <MemberProfileMessagePanel
             targetMemberId={messageRecipientId}
             firstName={firstName}
-            canMessage={canMessage}
+            senderCanMessage={senderCanMessage}
+            recipientCanMessage={recipientCanMessage}
             isSelf={false}
           />
         </div>

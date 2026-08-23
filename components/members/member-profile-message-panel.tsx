@@ -10,18 +10,21 @@ import MemberProfileMessageForm from '@/components/members/member-profile-messag
 export default function MemberProfileMessagePanel({
   targetMemberId,
   firstName,
-  canMessage,
+  senderCanMessage,
+  recipientCanMessage,
   isSelf = false,
 }: {
   targetMemberId: string
   firstName: string
-  canMessage: boolean
+  senderCanMessage: boolean
+  recipientCanMessage: boolean
   isSelf?: boolean
 }) {
   return (
     <MemberProfileMessageForm
       firstName={firstName}
-      canMessage={canMessage}
+      senderCanMessage={senderCanMessage}
+      recipientCanMessage={recipientCanMessage}
       isSelf={isSelf}
       onSend={(body) => requestMemberIntro(targetMemberId, body)}
     />

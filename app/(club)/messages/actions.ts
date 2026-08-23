@@ -30,7 +30,10 @@ import {
   retryMessageRequestAfterRecontact,
 } from '@/lib/message-recontact-flow'
 import { canSendMessageInConversation } from '@/lib/message-request-states'
-import { assertMessagingAllowed } from '@/lib/require-messaging'
+import {
+  assertCanStartMessageRequest,
+  assertMessagingAllowed,
+} from '@/lib/require-messaging'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
@@ -58,7 +61,7 @@ export async function sendMessageRequest(input: {
   body: string
   recommendationId?: string
 }) {
-  const gate = await assertMessagingAllowed()
+  const gate = await assertCanStartMessageRequest({ targetMemberId: input.targetMemberId })
   if (!gate.ok) {
     return { error: gate.error }
   }
