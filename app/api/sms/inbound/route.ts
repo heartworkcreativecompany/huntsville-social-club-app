@@ -11,7 +11,7 @@ import {
 
 /**
  * Inbound SMS webhook (Twilio form-urlencoded body).
- * STOP/unsubscribe keywords clear promotional SMS eligibility only.
+ * STOP/unsubscribe keywords clear account-notification SMS eligibility only.
  * Does not affect one-time verification OTP capability.
  *
  * Requires TWILIO_AUTH_TOKEN and a valid X-Twilio-Signature.

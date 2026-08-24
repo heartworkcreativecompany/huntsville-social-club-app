@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import twilio from 'twilio'
 import {
   applySmsMarketingStop,
-  isEligibleForPromotionalSms,
+  isEligibleForAccountNotificationSms,
   isSmsStopKeyword,
-  SMS_MARKETING_CONSENT_SOURCE,
-  SMS_MARKETING_CONSENT_VERSION,
+  SMS_ACCOUNT_NOTIFICATIONS_CONSENT_SOURCE,
+  SMS_ACCOUNT_NOTIFICATIONS_CONSENT_VERSION,
 } from '@/lib/sms-marketing-consent'
 import {
   isValidTwilioRequestSignature,
@@ -94,8 +94,8 @@ describe('Twilio webhook signature validation', () => {
       {
         sms_marketing_opt_in: true,
         sms_marketing_opt_in_at: '2026-08-01T12:00:00.000Z',
-        sms_marketing_consent_version: SMS_MARKETING_CONSENT_VERSION,
-        sms_marketing_consent_source: SMS_MARKETING_CONSENT_SOURCE,
+        sms_marketing_consent_version: SMS_ACCOUNT_NOTIFICATIONS_CONSENT_VERSION,
+        sms_marketing_consent_source: SMS_ACCOUNT_NOTIFICATIONS_CONSENT_SOURCE,
         sms_marketing_consent_phone_e164: EXAMPLE_E164,
         sms_marketing_opted_out_at: null,
       },
@@ -104,7 +104,7 @@ describe('Twilio webhook signature validation', () => {
 
     expect(optedOut?.sms_marketing_opt_in).toBe(false)
     expect(
-      isEligibleForPromotionalSms({
+      isEligibleForAccountNotificationSms({
         sms_marketing_opt_in: false,
         verified_phone_e164: EXAMPLE_E164,
       })
@@ -140,14 +140,14 @@ describe('Twilio webhook signature validation', () => {
     ).toBe(false)
   })
 
-  it('keeps marketing eligibility false after a duplicate valid STOP', () => {
+  it('keeps account-notification eligibility false after a duplicate valid STOP', () => {
     const firstOptOutAt = '2026-08-18T16:00:00.000Z'
     const afterFirst = applySmsMarketingStop(
       {
         sms_marketing_opt_in: true,
         sms_marketing_opt_in_at: '2026-08-01T12:00:00.000Z',
-        sms_marketing_consent_version: SMS_MARKETING_CONSENT_VERSION,
-        sms_marketing_consent_source: SMS_MARKETING_CONSENT_SOURCE,
+        sms_marketing_consent_version: SMS_ACCOUNT_NOTIFICATIONS_CONSENT_VERSION,
+        sms_marketing_consent_source: SMS_ACCOUNT_NOTIFICATIONS_CONSENT_SOURCE,
         sms_marketing_consent_phone_e164: EXAMPLE_E164,
         sms_marketing_opted_out_at: null,
       },
@@ -158,8 +158,8 @@ describe('Twilio webhook signature validation', () => {
       {
         sms_marketing_opt_in: false,
         sms_marketing_opt_in_at: '2026-08-01T12:00:00.000Z',
-        sms_marketing_consent_version: SMS_MARKETING_CONSENT_VERSION,
-        sms_marketing_consent_source: SMS_MARKETING_CONSENT_SOURCE,
+        sms_marketing_consent_version: SMS_ACCOUNT_NOTIFICATIONS_CONSENT_VERSION,
+        sms_marketing_consent_source: SMS_ACCOUNT_NOTIFICATIONS_CONSENT_SOURCE,
         sms_marketing_consent_phone_e164: EXAMPLE_E164,
         sms_marketing_opted_out_at: afterFirst?.sms_marketing_opted_out_at,
       },
@@ -169,7 +169,7 @@ describe('Twilio webhook signature validation', () => {
     expect(afterFirst?.sms_marketing_opted_out_at).toBe(firstOptOutAt)
     expect(afterDuplicate).toBeNull()
     expect(
-      isEligibleForPromotionalSms({
+      isEligibleForAccountNotificationSms({
         sms_marketing_opt_in: false,
         verified_phone_e164: EXAMPLE_E164,
       })

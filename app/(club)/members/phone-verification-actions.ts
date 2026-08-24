@@ -8,8 +8,8 @@ import {
 import { requireUsPhoneE164 } from '@/lib/member-phone'
 import {
   applySmsMarketingStop,
-  nextSmsMarketingConsentState,
-  type SmsMarketingConsentRecord,
+  nextSmsAccountNotificationsConsentState,
+  type SmsAccountNotificationsConsentRecord,
 } from '@/lib/sms-marketing-consent'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -20,8 +20,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * the SMS provider configured in the Supabase project (commonly Twilio).
  * All numbers are normalized to US E.164 before any Auth/gate updates.
  *
- * Optional SMS marketing consent is recorded separately and is never required
- * to send a verification code.
+ * Optional account-notification SMS consent is recorded separately and is
+ * never required to send a verification code.
  */
 
 function revalidatePhonePaths(userId: string) {
@@ -87,11 +87,11 @@ export async function syncPhoneVerificationAfterOtp(phoneInput: string) {
 }
 
 /**
- * Persist optional recurring SMS marketing consent when the member checks the
- * marketing checkbox. Does nothing when optedIn is false (verification may
- * proceed without marketing consent; prior opt-in evidence is preserved).
+ * Persist optional account-notification SMS consent when the member checks the
+ * consent checkbox. Does nothing when optedIn is false (verification may
+ * proceed without consent; prior opt-in evidence is preserved).
  */
-export async function recordSmsMarketingConsent(input: {
+export async function recordSmsAccountNotificationsConsent(input: {
   phoneInput: string
   optedIn: boolean
 }) {
@@ -121,8 +121,8 @@ export async function recordSmsMarketingConsent(input: {
     .eq('id', user.id)
     .maybeSingle()
 
-  const patch = nextSmsMarketingConsentState(
-    profile as SmsMarketingConsentRecord | null,
+  const patch = nextSmsAccountNotificationsConsentState(
+    profile as SmsAccountNotificationsConsentRecord | null,
     { optedIn: true, phoneE164: parsed.e164 }
   )
 
@@ -146,7 +146,7 @@ export async function recordSmsMarketingConsent(input: {
   return { success: true as const, updated: true, phoneE164: parsed.e164 }
 }
 
-/** Apply STOP / unsubscribe for recurring marketing texts by E.164 phone. */
+/** Apply STOP / unsubscribe for account-notification texts by E.164 phone. */
 export async function optOutSmsMarketingByPhone(phoneInput: string) {
   const parsed = requireUsPhoneE164(phoneInput)
   if (parsed.error || !parsed.e164) {
@@ -175,7 +175,7 @@ export async function optOutSmsMarketingByPhone(phoneInput: string) {
     .limit(10)
 
   if (verifiedError || consentError) {
-    return { error: 'Could not look up marketing consent.' }
+    return { error: 'Could not look up SMS consent.' }
   }
 
   const profilesById = new Map<
@@ -201,7 +201,9 @@ export async function optOutSmsMarketingByPhone(phoneInput: string) {
 
   let updated = 0
   for (const profile of profiles) {
-    const patch = applySmsMarketingStop(profile as SmsMarketingConsentRecord)
+    const patch = applySmsMarketingStop(
+      profile as SmsAccountNotificationsConsentRecord
+    )
     if (!patch) {
       // Already opted out — idempotent no-op.
       continue

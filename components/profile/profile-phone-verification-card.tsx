@@ -25,13 +25,13 @@ import { buttonPrimaryClassName, inputClassName } from '@/lib/event-labels'
 import {
   canSendPhoneVerificationCode,
   PHONE_VERIFICATION_REQUIRED_COPY,
-  SMS_MARKETING_CONSENT_LABEL,
-  SMS_MARKETING_CONSENT_LINKS,
-  SMS_MARKETING_OPT_IN_DEFAULT_CHECKED,
+  SMS_ACCOUNT_NOTIFICATIONS_CONSENT_DEFAULT_CHECKED,
+  SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LABEL,
+  SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LINKS,
 } from '@/lib/sms-marketing-consent'
 import {
   markPhonePendingReverification,
-  recordSmsMarketingConsent,
+  recordSmsAccountNotificationsConsent,
   syncPhoneVerificationAfterOtp,
 } from '@/app/(club)/members/phone-verification-actions'
 
@@ -69,7 +69,7 @@ export default function ProfilePhoneVerificationCard({
 }: ProfilePhoneVerificationCardProps) {
   const router = useRouter()
   const supabase = createClient()
-  const marketingConsentId = useId()
+  const accountSmsConsentId = useId()
   const initialDigits = nationalDigitsFromE164(
     verifiedPhoneE164 ?? authPhoneE164
   )
@@ -80,8 +80,8 @@ export default function ProfilePhoneVerificationCard({
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [cooldown, setCooldown] = useState(0)
-  const [marketingOptIn, setMarketingOptIn] = useState(
-    SMS_MARKETING_OPT_IN_DEFAULT_CHECKED
+  const [accountSmsConsent, setAccountSmsConsent] = useState(
+    SMS_ACCOUNT_NOTIFICATIONS_CONSENT_DEFAULT_CHECKED
   )
   const [isPending, startTransition] = useTransition()
   const lastResetPhone = useRef<string | null>(verifiedPhoneE164)
@@ -174,9 +174,9 @@ export default function ProfilePhoneVerificationCard({
           await markPhonePendingReverification(phoneE164)
         }
 
-        // Optional marketing consent — never required to send verification OTP.
-        if (marketingOptIn) {
-          const consentResult = await recordSmsMarketingConsent({
+        // Optional account-notification consent — never required to send OTP.
+        if (accountSmsConsent) {
+          const consentResult = await recordSmsAccountNotificationsConsent({
             phoneInput: phoneE164,
             optedIn: true,
           })
@@ -300,10 +300,6 @@ export default function ProfilePhoneVerificationCard({
     })
   }
 
-  const consentLabelParts = SMS_MARKETING_CONSENT_LABEL.split(
-    /(Terms of Service|Privacy Policy)/
-  )
-
   const body = (
     <>
       {!embedded ? (
@@ -344,45 +340,38 @@ export default function ProfilePhoneVerificationCard({
           </span>
         </label>
 
-        <div className="flex gap-3 text-sm">
-          <input
-            id={marketingConsentId}
-            type="checkbox"
-            className="mt-1 h-4 w-4 shrink-0 rounded border-border"
-            checked={marketingOptIn}
-            onChange={(event) => setMarketingOptIn(event.target.checked)}
-            disabled={isPending}
-          />
-          <label
-            htmlFor={marketingConsentId}
-            className="text-xs leading-relaxed text-muted-foreground"
-          >
-            {consentLabelParts.map((part, index) => {
-              if (part === 'Terms of Service') {
-                return (
-                  <Link
-                    key={`${part}-${index}`}
-                    href={SMS_MARKETING_CONSENT_LINKS.terms}
-                    className="text-accent underline"
-                  >
-                    Terms of Service
-                  </Link>
-                )
-              }
-              if (part === 'Privacy Policy') {
-                return (
-                  <Link
-                    key={`${part}-${index}`}
-                    href={SMS_MARKETING_CONSENT_LINKS.privacy}
-                    className="text-accent underline"
-                  >
-                    Privacy Policy
-                  </Link>
-                )
-              }
-              return <span key={`text-${index}`}>{part}</span>
-            })}
-          </label>
+        <div className="grid gap-2">
+          <div className="flex gap-3 text-sm">
+            <input
+              id={accountSmsConsentId}
+              type="checkbox"
+              className="mt-1 h-4 w-4 shrink-0 rounded border-border"
+              checked={accountSmsConsent}
+              onChange={(event) => setAccountSmsConsent(event.target.checked)}
+              disabled={isPending}
+            />
+            <label
+              htmlFor={accountSmsConsentId}
+              className="text-xs leading-relaxed text-muted-foreground"
+            >
+              {SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LABEL}
+            </label>
+          </div>
+          <p className="pl-7 text-xs text-muted-foreground">
+            <Link
+              href={SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LINKS.terms}
+              className="text-accent underline"
+            >
+              Terms of Service
+            </Link>
+            {' · '}
+            <Link
+              href={SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LINKS.privacy}
+              className="text-accent underline"
+            >
+              Privacy Policy
+            </Link>
+          </p>
         </div>
 
         {codeSent ? (
