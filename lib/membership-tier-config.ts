@@ -17,8 +17,11 @@ export const FREE_REGISTRATION_RETURN_CUTOFF_DAYS = 5
 /** When true, cancellations earlier than the cutoff return a consumed premium credit. */
 export const RETURN_FREE_REGISTRATION_BEFORE_CUTOFF = true
 
-/** Event sponsorship package price (cents). */
-export const EVENT_SPONSORSHIP_AMOUNT_CENTS = 19_900
+/** Event sponsorship package price (cents). One-time per event, not monthly. */
+export const EVENT_SPONSORSHIP_AMOUNT_CENTS = 49_900
+
+/** Short customer-facing sponsorship price, e.g. "$499". */
+export const EVENT_SPONSORSHIP_PRICE_LABEL = `$${EVENT_SPONSORSHIP_AMOUNT_CENTS / 100}`
 
 /** Tickets included with a sponsorship package. */
 export const EVENT_SPONSORSHIP_TICKET_COUNT = 4

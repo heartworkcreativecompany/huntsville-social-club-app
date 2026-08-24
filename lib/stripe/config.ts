@@ -13,7 +13,7 @@ export const STRIPE_LIVE_PRICE_IDS = {
   inner_circle: 'price_1TqimnBei7W40myBUKESC7wF',
   /** Elite Circle — $69.99/month (prod_UqPciS4ul6FhvF) */
   elite_circle: 'price_1TqimyBei7W40myBRnke6fQF',
-  /** Event Sponsorship — $199 one-time (prod_UvwN6jDxbT9O28) */
+  /** Event Sponsorship — $499 one-time (prod_UvwN6jDxbT9O28) */
   event_sponsorship: 'price_1Tw4UjBei7W40myBOG1mkxQ5',
 } as const
 
@@ -148,7 +148,7 @@ export function optionalCheckoutTrialDays(): number | undefined {
   return days
 }
 
-/** Stripe Price ID for $199 event sponsorship (one-time). Always resolvable. */
+/** Stripe Price ID for $499 event sponsorship (one-time). Always resolvable. */
 export function stripeSponsorshipPriceId(): string | null {
   if (isDeployedProduction()) {
     return STRIPE_LIVE_PRICE_IDS.event_sponsorship

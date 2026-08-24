@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { createEventSponsorshipCheckout } from '@/app/(club)/events/sponsorship-actions'
 import { buttonSecondaryClassName, inputClassName } from '@/lib/event-labels'
 import {
-  EVENT_SPONSORSHIP_AMOUNT_CENTS,
+  EVENT_SPONSORSHIP_PRICE_LABEL,
   EVENT_SPONSORSHIP_TICKET_COUNT,
 } from '@/lib/membership-tier-config'
 
@@ -27,8 +27,6 @@ export default function EventSponsorButton({
       </p>
     )
   }
-
-  const priceLabel = `$${(EVENT_SPONSORSHIP_AMOUNT_CENTS / 100).toFixed(0)}`
 
   const startCheckout = () => {
     setError('')
@@ -53,13 +51,14 @@ export default function EventSponsorButton({
           className={buttonSecondaryClassName}
           onClick={() => setOpen(true)}
         >
-          Sponsor ({priceLabel})
+          Sponsor ({EVENT_SPONSORSHIP_PRICE_LABEL})
         </button>
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            Sponsorship includes {EVENT_SPONSORSHIP_TICKET_COUNT} tickets, logo
-            placement, and a marketing table.
+            Event sponsorship: {EVENT_SPONSORSHIP_PRICE_LABEL} per event.
+            Includes {EVENT_SPONSORSHIP_TICKET_COUNT} tickets, logo placement,
+            and a marketing table.
           </p>
           <label className="grid gap-1 text-sm">
             <span className="text-muted-foreground">Business name</span>
@@ -79,7 +78,7 @@ export default function EventSponsorButton({
               disabled={isPending}
               onClick={startCheckout}
             >
-              {isPending ? 'Starting…' : `Pay ${priceLabel} & sponsor`}
+              {isPending ? 'Starting…' : `Pay ${EVENT_SPONSORSHIP_PRICE_LABEL} & sponsor`}
             </button>
             <button
               type="button"

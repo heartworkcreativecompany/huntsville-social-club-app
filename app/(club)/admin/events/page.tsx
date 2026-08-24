@@ -8,6 +8,7 @@ import { getViewer } from '@/lib/viewer'
 import AdminEventApprovalControls from '@/components/admin/admin-event-approval-controls'
 import AdminSponsorshipApproveButton from '@/components/admin/admin-sponsorship-approve-button'
 import EventTypeBadge from '@/components/events/event-type-badge'
+import { EVENT_SPONSORSHIP_AMOUNT_CENTS, EVENT_SPONSORSHIP_PRICE_LABEL } from '@/lib/membership-tier-config'
 
 export default async function AdminEventsPage() {
   const viewer = await getViewer()
@@ -87,7 +88,7 @@ export default async function AdminEventsPage() {
         {!sponsorships?.length ? (
           <EmptyState
             title="No sponsorships yet"
-            description="Paid $199 sponsorships for Circle Socials and Premium events appear here."
+            description={`Paid ${EVENT_SPONSORSHIP_PRICE_LABEL} sponsorships for Circle Socials and Premium events appear here.`}
           />
         ) : (
           <div className="grid gap-3">
@@ -100,7 +101,7 @@ export default async function AdminEventsPage() {
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Status: {row.status} · $
-                      {((row.amount_cents ?? 19900) / 100).toFixed(0)} ·{' '}
+                      {((row.amount_cents ?? EVENT_SPONSORSHIP_AMOUNT_CENTS) / 100).toFixed(0)} ·{' '}
                       {row.ticket_count ?? 4} tickets
                     </p>
                   </div>

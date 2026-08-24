@@ -9,7 +9,7 @@ Paid memberships use **Stripe Checkout** (subscription mode), **webhooks** for a
 | Member | _(none — free)_ | — | Free |
 | Inner Circle | `prod_UqPcL4boAOiMZT` | `price_1TqimnBei7W40myBUKESC7wF` | $29.99/mo |
 | Elite Circle | `prod_UqPciS4ul6FhvF` | `price_1TqimyBei7W40myBRnke6fQF` | $69.99/mo |
-| Event sponsorship | `prod_UvwN6jDxbT9O28` | `price_1Tw4UjBei7W40myBOG1mkxQ5` | $199 one-time |
+| Event sponsorship | `prod_UvwN6jDxbT9O28` | `price_1Tw4UjBei7W40myBOG1mkxQ5` | $499 one-time |
 
 Canonical live price IDs are defined in `lib/stripe/config.ts` as `STRIPE_LIVE_PRICE_IDS`.  
 **Checkout only requires `STRIPE_SECRET_KEY`.** Missing `STRIPE_PRICE_ID_*` env vars must not block billing — production uses the live IDs from `config.ts`.  
@@ -36,7 +36,7 @@ Copy `.env.example` to `.env.local` and set:
 
 1. In **live mode**, create products **Inner Circle** and **Elite Circle** with recurring **monthly** prices ($29.99 and $69.99).
 2. Confirm the live Price IDs match `STRIPE_LIVE_PRICE_IDS` in `lib/stripe/config.ts` (update that file if you recreate products).
-3. Optional: create a one-time **Event Sponsorship** price ($199).
+3. Optional: create a one-time **Event Sponsorship** price ($499). Confirm the live Price ID matches `STRIPE_LIVE_PRICE_IDS.event_sponsorship`.
 4. Enable the **Customer Portal** (Settings → Billing → Customer portal).
 5. Create **Coupons / Promotion codes** for beta testers as needed.
 6. Add a **live-mode** webhook endpoint: `https://<your-domain>/api/stripe/webhook`

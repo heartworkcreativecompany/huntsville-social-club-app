@@ -34,6 +34,7 @@ import { evaluateEventRegistration } from '@/lib/membership-entitlements'
 import type { EventAccessType } from '@/lib/membership-tier-config'
 import {
   ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+  EVENT_SPONSORSHIP_PRICE_LABEL,
   INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
   formatFeeCents,
 } from '@/lib/membership-tier-config'
@@ -436,7 +437,7 @@ export default async function EventDetailPage({ params }: PageProps) {
           {sponsorshipEligible ? (
             <div className="mb-6 rounded-2xl border border-border px-5 py-4">
               <p className="mb-2 text-sm font-medium text-foreground">
-                Sponsor this event
+                Event Sponsorship — {EVENT_SPONSORSHIP_PRICE_LABEL} per event
               </p>
               <EventSponsorButton
                 eventId={event.id}
@@ -501,7 +502,7 @@ export default async function EventDetailPage({ params }: PageProps) {
               {sponsorshipEligible && eventType !== 'standard_event' ? (
                 <div className="min-w-[200px] border-t border-border pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
                   <p className="mb-2 text-sm font-medium text-foreground">
-                    Sponsor this event
+                    Event Sponsorship — {EVENT_SPONSORSHIP_PRICE_LABEL} per event
                   </p>
                   <EventSponsorButton
                     eventId={event.id}
