@@ -11,6 +11,13 @@ import {
   type CompatibilityQuestionDefinition,
 } from '@/lib/compatibility/questionnaire-config'
 import type { CompatibilityQuestionnaireAnswers } from '@/lib/compatibility/questionnaire'
+import {
+  datingAgeFieldErrors,
+  hasBlockingDatingAgeFieldErrors,
+  parseIntegerAgeInput,
+  PREFERRED_MATCH_AGE_RANGE_LAYOUT_CLASS,
+  preferredMatchAgeRangeSummary,
+} from '@/lib/compatibility/age-preferences'
 
 type CompatibilityQuestionnaireFormProps = {
   initialAnswers: CompatibilityQuestionnaireAnswers
@@ -44,6 +51,9 @@ export default function CompatibilityQuestionnaireForm({
   useEffect(() => {
     setAnswers(initialAnswers)
   }, [initialAnswers])
+
+  const ageFieldErrors = datingAgeFieldErrors(answers)
+  const hasBlockingAgeErrors = hasBlockingDatingAgeFieldErrors(answers)
 
   const visibleQuestions = useMemo(
     () =>
@@ -173,6 +183,165 @@ export default function CompatibilityQuestionnaireForm({
       )
     }
 
+    if (question.type === 'number') {
+      const ageError = ageFieldErrors.age
+      const helpId = 'compatibility-age-help'
+      const errorId = 'compatibility-age-error'
+      return (
+        <div key={question.id} className="grid min-w-0 gap-1.5 text-sm">
+          <label htmlFor="compatibility-age" className="font-medium text-foreground">
+            {question.prompt}
+          </label>
+          {question.helperText ? (
+            <p id={helpId} className="text-muted-foreground">
+              {question.helperText}
+            </p>
+          ) : null}
+          <input
+            id="compatibility-age"
+            name="age"
+            type="number"
+            inputMode="numeric"
+            min={question.min ?? 18}
+            max={question.max ?? 99}
+            step={1}
+            value={answers.age ?? ''}
+            aria-invalid={ageError ? true : undefined}
+            aria-describedby={[question.helperText ? helpId : null, ageError ? errorId : null]
+              .filter(Boolean)
+              .join(' ') || undefined}
+            onChange={(event) =>
+              setAnswers((current) => ({
+                ...current,
+                age: parseIntegerAgeInput(event.target.value),
+              }))
+            }
+            className={`${inputClassName} max-w-full`}
+            disabled={isPending}
+          />
+          {ageError ? (
+            <p id={errorId} role="alert" className="text-danger">
+              {ageError}
+            </p>
+          ) : null}
+        </div>
+      )
+    }
+
+    if (question.type === 'age_range') {
+      const minError = ageFieldErrors.preferredMatchAgeMin
+      const maxError = ageFieldErrors.preferredMatchAgeMax
+      const rangeError = ageFieldErrors.preferredMatchAgeRange
+      const helpId = 'compatibility-preferred-match-age-help'
+      const minErrorId = 'compatibility-preferred-match-age-min-error'
+      const maxErrorId = 'compatibility-preferred-match-age-max-error'
+      const rangeErrorId = 'compatibility-preferred-match-age-range-error'
+      const summary = preferredMatchAgeRangeSummary(
+        answers.preferredMatchAgeMin,
+        answers.preferredMatchAgeMax
+      )
+      return (
+        <fieldset key={question.id} className="grid min-w-0 gap-2 text-sm">
+          <legend className="font-medium text-foreground">{question.prompt}</legend>
+          {question.helperText ? (
+            <p id={helpId} className="text-muted-foreground">
+              {question.helperText}
+            </p>
+          ) : null}
+          <div className={PREFERRED_MATCH_AGE_RANGE_LAYOUT_CLASS}>
+            <div className="grid min-w-0 gap-1.5">
+              <label
+                htmlFor="compatibility-preferred-match-age-min"
+                className="text-foreground"
+              >
+                Minimum age
+              </label>
+              <input
+                id="compatibility-preferred-match-age-min"
+                name="preferredMatchAgeMin"
+                type="number"
+                inputMode="numeric"
+                min={question.min ?? 18}
+                max={question.max ?? 99}
+                step={1}
+                value={answers.preferredMatchAgeMin ?? ''}
+                aria-invalid={minError || rangeError ? true : undefined}
+                aria-describedby={[
+                  helpId,
+                  minError ? minErrorId : null,
+                  rangeError ? rangeErrorId : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onChange={(event) =>
+                  setAnswers((current) => ({
+                    ...current,
+                    preferredMatchAgeMin: parseIntegerAgeInput(event.target.value),
+                  }))
+                }
+                className={`${inputClassName} w-full min-w-0`}
+                disabled={isPending}
+              />
+              {minError ? (
+                <p id={minErrorId} role="alert" className="text-danger">
+                  {minError}
+                </p>
+              ) : null}
+            </div>
+            <div className="grid min-w-0 gap-1.5">
+              <label
+                htmlFor="compatibility-preferred-match-age-max"
+                className="text-foreground"
+              >
+                Maximum age
+              </label>
+              <input
+                id="compatibility-preferred-match-age-max"
+                name="preferredMatchAgeMax"
+                type="number"
+                inputMode="numeric"
+                min={question.min ?? 18}
+                max={question.max ?? 99}
+                step={1}
+                value={answers.preferredMatchAgeMax ?? ''}
+                aria-invalid={maxError || rangeError ? true : undefined}
+                aria-describedby={[
+                  helpId,
+                  maxError ? maxErrorId : null,
+                  rangeError ? rangeErrorId : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onChange={(event) =>
+                  setAnswers((current) => ({
+                    ...current,
+                    preferredMatchAgeMax: parseIntegerAgeInput(event.target.value),
+                  }))
+                }
+                className={`${inputClassName} w-full min-w-0`}
+                disabled={isPending}
+              />
+              {maxError ? (
+                <p id={maxErrorId} role="alert" className="text-danger">
+                  {maxError}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          {rangeError ? (
+            <p id={rangeErrorId} role="alert" className="text-danger">
+              {rangeError}
+            </p>
+          ) : null}
+          {summary ? (
+            <p className="text-muted-foreground" aria-live="polite">
+              {summary}
+            </p>
+          ) : null}
+        </fieldset>
+      )
+    }
+
     if (question.type === 'scale' || question.type === 'single') {
       const value = answers[question.id as keyof CompatibilityQuestionnaireAnswers]
 
@@ -255,7 +424,7 @@ export default function CompatibilityQuestionnaireForm({
         <button
           type="button"
           className={buttonPrimaryClassName}
-          disabled={isPending}
+          disabled={isPending || hasBlockingAgeErrors}
           onClick={() => save(true)}
         >
           {isPending
@@ -268,7 +437,7 @@ export default function CompatibilityQuestionnaireForm({
           <button
             type="button"
             className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-            disabled={isPending}
+            disabled={isPending || hasBlockingAgeErrors}
             onClick={() => save(false)}
           >
             Save progress

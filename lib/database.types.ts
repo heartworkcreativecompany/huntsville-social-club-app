@@ -60,6 +60,9 @@ export interface Database {
           compatibility_questionnaire: Json | null
           compatibility_completed_at: string | null
           compatibility_updated_at: string | null
+          age: number | null
+          preferred_match_age_min: number | null
+          preferred_match_age_max: number | null
           wants_curated_matches: boolean
           curated_matches_paused_at: string | null
           curated_matches_pause_reason: string | null
@@ -125,6 +128,9 @@ export interface Database {
           compatibility_questionnaire?: Json | null
           compatibility_completed_at?: string | null
           compatibility_updated_at?: string | null
+          age?: number | null
+          preferred_match_age_min?: number | null
+          preferred_match_age_max?: number | null
           wants_curated_matches?: boolean
           curated_matches_paused_at?: string | null
           curated_matches_pause_reason?: string | null
@@ -190,6 +196,9 @@ export interface Database {
           compatibility_questionnaire?: Json | null
           compatibility_completed_at?: string | null
           compatibility_updated_at?: string | null
+          age?: number | null
+          preferred_match_age_min?: number | null
+          preferred_match_age_max?: number | null
           wants_curated_matches?: boolean
           curated_matches_paused_at?: string | null
           curated_matches_pause_reason?: string | null

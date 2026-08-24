@@ -131,12 +131,15 @@ describe('friendship privacy conventions', () => {
   })
 
   it('does not change Dating questionnaire prompts', () => {
-    expect(COMPATIBILITY_QUESTIONNAIRE_QUESTIONS).toHaveLength(32)
+    expect(COMPATIBILITY_QUESTIONNAIRE_QUESTIONS).toHaveLength(34)
     expect(
       COMPATIBILITY_QUESTIONNAIRE_QUESTIONS.some(
         (question) => question.id === 'friendshipGoals'
       )
     ).toBe(false)
+    expect(
+      COMPATIBILITY_QUESTIONNAIRE_QUESTIONS.map((question) => question.id)
+    ).toEqual(expect.arrayContaining(['age', 'preferredMatchAgeRange']))
   })
 
   it('keeps unpaid mutation denial copy from leaking other members’ data', () => {

@@ -22,7 +22,7 @@ export type MatchPoolProfile = CompatibilityProfileFields &
   }
 
 const MATCH_POOL_SELECT =
-  'id, application_status, connection_intents, compatibility_questionnaire, compatibility_completed_at, wants_curated_matches, curated_matches_paused_at, curated_matches_pause_reason, role, membership_billing, discovery_interests, location_area, birth_year, messaging_suspended_at, last_match_generation_at, last_match_review_at'
+  'id, application_status, connection_intents, compatibility_questionnaire, compatibility_completed_at, wants_curated_matches, curated_matches_paused_at, curated_matches_pause_reason, role, membership_billing, discovery_interests, location_area, birth_year, age, preferred_match_age_min, preferred_match_age_max, messaging_suspended_at, last_match_generation_at, last_match_review_at'
 
 export function isCandidateAvailable(
   profile: MatchPoolProfile,
@@ -68,6 +68,9 @@ export async function loadMatchPoolProfiles(
     .not('compatibility_completed_at', 'is', null)
     .eq('wants_curated_matches', true)
     .is('curated_matches_paused_at', null)
+    .not('age', 'is', null)
+    .not('preferred_match_age_min', 'is', null)
+    .not('preferred_match_age_max', 'is', null)
 
   if (error) {
     if (error.code === '42P01') {

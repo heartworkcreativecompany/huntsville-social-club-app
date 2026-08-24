@@ -14,10 +14,18 @@ import type {
   CompatibilityQuestionnaireV1,
   CompatibilityQuestionnaireV2,
 } from '@/lib/compatibility/types'
+import {
+  hasCompleteDatingAgePreferences,
+  parseAdultAge,
+  parseDatingAgePreferences,
+} from '@/lib/compatibility/age-preferences'
 
 export type CompatibilityQuestionnaireAnswers = {
   gender: string
   genderSelfDescribe: string
+  age: number | null
+  preferredMatchAgeMin: number | null
+  preferredMatchAgeMax: number | null
   matchInterests: string[]
   relationshipIntention: number | null
   faithValues: number | null
@@ -78,6 +86,9 @@ function emptyAnswers(): CompatibilityQuestionnaireAnswers {
   return {
     gender: '',
     genderSelfDescribe: '',
+    age: null,
+    preferredMatchAgeMin: null,
+    preferredMatchAgeMax: null,
     matchInterests: [],
     relationshipIntention: null,
     faithValues: null,
@@ -178,6 +189,17 @@ export function questionnaireAnswersFromStored(
       answers.gender = record.gender
     }
     answers.genderSelfDescribe = record.genderSelfDescribe ?? ''
+    answers.age = parseAdultAge(record.age) ?? (typeof record.age === 'number' && Number.isInteger(record.age) ? record.age : null)
+    answers.preferredMatchAgeMin =
+      parseAdultAge(record.preferredMatchAgeMin) ??
+      (typeof record.preferredMatchAgeMin === 'number' && Number.isInteger(record.preferredMatchAgeMin)
+        ? record.preferredMatchAgeMin
+        : null)
+    answers.preferredMatchAgeMax =
+      parseAdultAge(record.preferredMatchAgeMax) ??
+      (typeof record.preferredMatchAgeMax === 'number' && Number.isInteger(record.preferredMatchAgeMax)
+        ? record.preferredMatchAgeMax
+        : null)
     answers.matchInterests = [...(record.matchInterests ?? [])]
     answers.familySituation = [...(record.familySituation ?? [])]
     for (const key of COMPATIBILITY_ORDINAL_QUESTION_IDS) {
@@ -248,6 +270,10 @@ export function isQuestionnaireComplete(
     return false
   }
 
+  if (!hasCompleteDatingAgePreferences(record)) {
+    return false
+  }
+
   return true
 }
 
@@ -272,6 +298,9 @@ export function questionnaireHasAnyAnswers(value: unknown): boolean {
   const answers = questionnaireAnswersFromStored(value)
   return (
     Boolean(answers.gender) ||
+    answers.age != null ||
+    answers.preferredMatchAgeMin != null ||
+    answers.preferredMatchAgeMax != null ||
     answers.matchInterests.length > 0 ||
     answers.familySituation.length > 0 ||
     COMPATIBILITY_ORDINAL_QUESTION_IDS.some((key) => answers[key] != null)
@@ -324,6 +353,27 @@ export function buildCompatibilityQuestionnaire(
 
   stored.matchInterests = normalizeMatchInterests(input.matchInterests)
   stored.familySituation = normalizeFamilySituation(input.familySituation)
+
+  const age = parseAdultAge(input.age) ?? (typeof input.age === 'number' && Number.isInteger(input.age) ? input.age : null)
+  const preferredMatchAgeMin =
+    parseAdultAge(input.preferredMatchAgeMin) ??
+    (typeof input.preferredMatchAgeMin === 'number' && Number.isInteger(input.preferredMatchAgeMin)
+      ? input.preferredMatchAgeMin
+      : null)
+  const preferredMatchAgeMax =
+    parseAdultAge(input.preferredMatchAgeMax) ??
+    (typeof input.preferredMatchAgeMax === 'number' && Number.isInteger(input.preferredMatchAgeMax)
+      ? input.preferredMatchAgeMax
+      : null)
+  if (age != null) {
+    stored.age = age
+  }
+  if (preferredMatchAgeMin != null) {
+    stored.preferredMatchAgeMin = preferredMatchAgeMin
+  }
+  if (preferredMatchAgeMax != null) {
+    stored.preferredMatchAgeMax = preferredMatchAgeMax
+  }
 
   for (const key of COMPATIBILITY_ORDINAL_QUESTION_IDS) {
     const value = input[key]
@@ -423,6 +473,26 @@ export function missingRequiredQuestionPrompts(
       continue
     }
 
+    if (question.type === 'number') {
+      if (parseAdultAge(answers.age) == null) {
+        missing.push(question.prompt)
+      }
+      continue
+    }
+
+    if (question.type === 'age_range') {
+      const min = parseAdultAge(answers.preferredMatchAgeMin)
+      const max = parseAdultAge(answers.preferredMatchAgeMax)
+      if (min == null || max == null) {
+        missing.push(question.prompt)
+      } else if (min > max) {
+        missing.push(
+          `${question.prompt} (minimum age cannot be higher than maximum age)`
+        )
+      }
+      continue
+    }
+
     if (question.type === 'single' || question.type === 'scale') {
       const value = answers[question.id as keyof CompatibilityQuestionnaireAnswers]
       if (value == null || value === '') {
@@ -444,6 +514,15 @@ export function questionnaireValidationErrors(
   questionnaire: CompatibilityQuestionnaireStored
 ): string[] {
   const errors = missingRequiredQuestionPrompts(questionnaire)
+
+  const agePreferences = parseDatingAgePreferences(questionnaire)
+  if (
+    parseAdultAge(questionnaire.preferredMatchAgeMin) != null &&
+    parseAdultAge(questionnaire.preferredMatchAgeMax) != null &&
+    agePreferences == null
+  ) {
+    errors.push('Preferred match age range: minimum age cannot be higher than maximum age.')
+  }
 
   if (
     questionnaire.matchInterests?.includes('open_to_all') &&

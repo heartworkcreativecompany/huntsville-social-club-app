@@ -11,6 +11,8 @@ export type CompatibilityQuestionFieldType =
   | 'multi'
   | 'text'
   | 'scale'
+  | 'number'
+  | 'age_range'
 
 export type CompatibilityQuestionOption = {
   value: string | number
@@ -25,6 +27,8 @@ export type CompatibilityQuestionDefinition = {
   type: CompatibilityQuestionFieldType
   options?: CompatibilityQuestionOption[]
   required: boolean
+  min?: number
+  max?: number
   /** When set, this field is only shown when another field equals `value`. */
   visibleWhen?: { field: string; value: string }
   /** Multi-select option that cannot be combined with others. */
@@ -78,6 +82,26 @@ const AGREE_DISAGREE_5 = ORDINAL_5([
 
 export const COMPATIBILITY_QUESTIONNAIRE_QUESTIONS: CompatibilityQuestionDefinition[] =
   [
+    {
+      id: 'age',
+      section: 'eligibility',
+      prompt: 'How old are you?',
+      helperText: 'You must be at least 18 to participate in dating compatibility.',
+      type: 'number',
+      required: true,
+      min: 18,
+      max: 99,
+    },
+    {
+      id: 'preferredMatchAgeRange',
+      section: 'eligibility',
+      prompt: 'What age range are you open to dating?',
+      helperText: 'Choose a minimum and maximum between 18 and 99. I’m open to matches between these ages.',
+      type: 'age_range',
+      required: true,
+      min: 18,
+      max: 99,
+    },
     {
       id: 'gender',
       section: 'eligibility',

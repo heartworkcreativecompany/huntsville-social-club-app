@@ -51,6 +51,9 @@ export type CompatibilityQuestionnaireV2 = {
   version: typeof COMPATIBILITY_QUESTIONNAIRE_VERSION
   gender: CompatibilityGender
   genderSelfDescribe: string | null
+  age: number
+  preferredMatchAgeMin: number
+  preferredMatchAgeMax: number
   matchInterests: CompatibilityMatchInterest[]
   relationshipIntention: CompatibilityOrdinalAnswer
   faithValues: CompatibilityOrdinalAnswer
@@ -118,6 +121,9 @@ export type CompatibilityProfileFields = {
   messaging_entitlement_restored_at: string | null
   role?: string | null
   membership_billing?: unknown
+  age?: number | null
+  preferred_match_age_min?: number | null
+  preferred_match_age_max?: number | null
 }
 
 export type DatingConnectionChange =

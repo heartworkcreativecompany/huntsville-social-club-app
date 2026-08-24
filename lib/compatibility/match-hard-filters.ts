@@ -7,6 +7,7 @@ import {
   isQuestionnaireComplete,
   questionnaireV2,
 } from '@/lib/compatibility/questionnaire'
+import { isMutualDatingAgeMatch } from '@/lib/compatibility/age-preferences'
 
 type QuestionnaireProfile = {
   compatibility_questionnaire: unknown
@@ -76,6 +77,10 @@ export function passesCompatibilityHardFilters(
   viewer: CompatibilityQuestionnaireV2,
   candidate: CompatibilityQuestionnaireV2
 ): boolean {
+  if (!isMutualDatingAgeMatch(viewer, candidate)) {
+    return false
+  }
+
   if (!hasMutualGenderInterest(viewer, candidate)) {
     return false
   }

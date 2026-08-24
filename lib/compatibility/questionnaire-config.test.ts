@@ -9,12 +9,14 @@ import {
 describe('COMPATIBILITY_QUESTIONNAIRE_QUESTIONS', () => {
   it('defines the full planned questionnaire', () => {
     expect(COMPATIBILITY_QUESTIONNAIRE_VERSION).toBe(2)
-    expect(COMPATIBILITY_QUESTIONNAIRE_QUESTIONS).toHaveLength(32)
+    expect(COMPATIBILITY_QUESTIONNAIRE_QUESTIONS).toHaveLength(34)
 
     const prompts = COMPATIBILITY_QUESTIONNAIRE_QUESTIONS.map(
       (question) => question.prompt
     )
 
+    expect(prompts).toContain('How old are you?')
+    expect(prompts).toContain('What age range are you open to dating?')
     expect(prompts).toContain('What is your gender?')
     expect(prompts).toContain(
       'Who are you interested in being matched with?'

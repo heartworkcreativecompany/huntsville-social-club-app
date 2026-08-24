@@ -33,6 +33,9 @@ const innerCircleBilling = {
 const completeAnswers: CompatibilityQuestionnaireAnswers = {
   gender: 'woman',
   genderSelfDescribe: '',
+  age: 32,
+  preferredMatchAgeMin: 25,
+  preferredMatchAgeMax: 45,
   matchInterests: ['men'],
   relationshipIntention: 2,
   faithValues: 2,
@@ -159,6 +162,9 @@ describe('save progress vs complete', () => {
       ...completeAnswers,
       gender: 'self_describe',
       genderSelfDescribe: '',
+      age: 32,
+      preferredMatchAgeMin: 25,
+      preferredMatchAgeMax: 45,
     })
 
     const message = questionnaireValidationMessage(questionnaire)
@@ -201,6 +207,9 @@ describe('branching and field rules', () => {
       ...completeAnswers,
       gender: 'woman',
       genderSelfDescribe: '',
+      age: 32,
+      preferredMatchAgeMin: 25,
+      preferredMatchAgeMax: 45,
     })
 
     expect(isQuestionnaireComplete(questionnaire)).toBe(true)

@@ -10,6 +10,10 @@ import {
   type CompatibilityQuestionnaireAnswers,
 } from '@/lib/compatibility/questionnaire'
 import type { Json } from '@/lib/database.types'
+import {
+  datingAgePreferenceColumnPatch,
+  ownProfileCompatibilityWriteFilter,
+} from '@/lib/compatibility/age-preferences'
 
 export async function saveCompatibilityQuestionnaire(input: {
   answers: CompatibilityQuestionnaireAnswers
@@ -62,6 +66,9 @@ export async function saveCompatibilityQuestionnaire(input: {
     compatibilityCompletedAt = existing.compatibility_completed_at
   }
 
+  const ageColumns = datingAgePreferenceColumnPatch(questionnaire)
+  const writeFilter = ownProfileCompatibilityWriteFilter(user.id)
+
   const { error } = await supabase
     .from('profiles')
     .update({
@@ -69,8 +76,11 @@ export async function saveCompatibilityQuestionnaire(input: {
       compatibility_updated_at: now,
       updated_at: now,
       compatibility_completed_at: compatibilityCompletedAt,
+      age: ageColumns.age,
+      preferred_match_age_min: ageColumns.preferred_match_age_min,
+      preferred_match_age_max: ageColumns.preferred_match_age_max,
     })
-    .eq('id', user.id)
+    .eq(writeFilter.column, writeFilter.value)
 
   if (error) {
     return { error: error.message }

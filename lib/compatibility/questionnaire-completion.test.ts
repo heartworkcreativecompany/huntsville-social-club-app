@@ -11,6 +11,9 @@ import type { CompatibilityQuestionnaireAnswers } from '@/lib/compatibility/ques
 const completeAnswers: CompatibilityQuestionnaireAnswers = {
   gender: 'woman',
   genderSelfDescribe: '',
+  age: 32,
+  preferredMatchAgeMin: 25,
+  preferredMatchAgeMax: 45,
   matchInterests: ['men'],
   relationshipIntention: 2,
   faithValues: 2,
