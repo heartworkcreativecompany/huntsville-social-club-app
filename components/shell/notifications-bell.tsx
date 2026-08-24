@@ -33,9 +33,11 @@ function BellIcon({ className }: { className?: string }) {
 export default function NotificationsBell({
   items: initialItems,
   unreadCount: initialUnreadCount,
+  buttonClassName = `${navLinkClassName(false)} relative inline-flex items-center justify-center px-2.5`,
 }: {
   items: MemberNotificationItem[]
   unreadCount: number
+  buttonClassName?: string
 }) {
   const router = useRouter()
   const panelRef = useRef<HTMLDivElement>(null)
@@ -120,7 +122,7 @@ export default function NotificationsBell({
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className={`${navLinkClassName(false)} relative inline-flex items-center justify-center px-2.5`}
+        className={buttonClassName}
         aria-label={
           unreadCount > 0
             ? `Notifications, ${unreadCount} unread`
