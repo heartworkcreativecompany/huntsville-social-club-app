@@ -19,3 +19,15 @@ export function isOutsideMobileNav(
 
   return !container.contains(target as Node)
 }
+
+export type ClubHeaderOverlay = 'none' | 'mobileNav' | 'notifications'
+
+/** Only one header overlay is open at a time. */
+export function clubHeaderOverlayAfterOpen(
+  opened: Exclude<ClubHeaderOverlay, 'none'>
+): { mobileNavOpen: boolean; notificationsOpen: boolean } {
+  return {
+    mobileNavOpen: opened === 'mobileNav',
+    notificationsOpen: opened === 'notifications',
+  }
+}

@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { ClubNavMarkup } from '@/components/shell/club-nav'
 import {
   CLUB_MOBILE_NAV_ID,
+  clubHeaderOverlayAfterOpen,
   isMobileNavEscapeKey,
   isOutsideMobileNav,
   mobileNavToggleLabel,
@@ -247,5 +248,21 @@ describe('ClubNav interaction wiring', () => {
     expect(source).toContain('toggleRef.current?.focus()')
     expect(source).toContain('focus-visible:ring-2')
     expect(source).toContain('CLUB_MOBILE_NAV_MEDIA_QUERY')
+    expect(source).toContain('clubHeaderOverlayAfterOpen')
+    expect(source).toContain("clubHeaderOverlayAfterOpen('mobileNav')")
+    expect(source).toContain("clubHeaderOverlayAfterOpen('notifications')")
+  })
+})
+
+describe('header overlay exclusivity', () => {
+  it('closes notifications when the mobile nav opens, and vice versa', () => {
+    expect(clubHeaderOverlayAfterOpen('mobileNav')).toEqual({
+      mobileNavOpen: true,
+      notificationsOpen: false,
+    })
+    expect(clubHeaderOverlayAfterOpen('notifications')).toEqual({
+      mobileNavOpen: false,
+      notificationsOpen: true,
+    })
   })
 })

@@ -10,6 +10,7 @@ import { navLinkClassName } from '@/components/shell/nav-link-class'
 import {
   CLUB_MOBILE_NAV_ID,
   CLUB_MOBILE_NAV_MEDIA_QUERY,
+  clubHeaderOverlayAfterOpen,
   isMobileNavEscapeKey,
   isOutsideMobileNav,
   mobileNavToggleLabel,
@@ -62,6 +63,8 @@ export function ClubNavMarkup({
   unreadNotificationCount,
   onToggleMobileNav,
   onCloseMobileNav,
+  notificationsOpen = false,
+  onNotificationsOpenChange,
   headerRef,
   toggleRef,
 }: {
@@ -73,6 +76,8 @@ export function ClubNavMarkup({
   unreadNotificationCount: number
   onToggleMobileNav: () => void
   onCloseMobileNav: () => void
+  notificationsOpen?: boolean
+  onNotificationsOpenChange?: (open: boolean) => void
   headerRef?: Ref<HTMLElement>
   toggleRef?: Ref<HTMLButtonElement>
 }) {
@@ -90,6 +95,8 @@ export function ClubNavMarkup({
             items={notifications}
             unreadCount={unreadNotificationCount}
             buttonClassName="relative inline-flex h-11 w-11 min-h-11 min-w-11 items-center justify-center rounded-full text-accent transition hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            open={notificationsOpen}
+            onOpenChange={onNotificationsOpenChange}
           />
         </div>
         <div className="flex min-w-0 justify-center">
@@ -131,6 +138,8 @@ export function ClubNavMarkup({
           <NotificationsBell
             items={notifications}
             unreadCount={unreadNotificationCount}
+            open={notificationsOpen}
+            onOpenChange={onNotificationsOpenChange}
           />
           <form action={signOut}>
             <button type="submit" className={navLinkClassName(false)}>
@@ -142,7 +151,7 @@ export function ClubNavMarkup({
 
       <nav
         id={CLUB_MOBILE_NAV_ID}
-        className="absolute inset-x-0 top-full border-b border-border bg-surface shadow-md lg:hidden"
+        className="absolute inset-x-0 top-full z-40 border-b border-border bg-surface shadow-md lg:hidden"
         aria-label="Club"
         hidden={!mobileOpen}
       >
@@ -228,6 +237,7 @@ function ClubNavController({
   const headerRef = useRef<HTMLElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
 
   const items = buildClubNavItems({
     role,
@@ -290,8 +300,26 @@ function ClubNavController({
       mobileOpen={mobileOpen}
       notifications={notifications}
       unreadNotificationCount={unreadNotificationCount}
-      onToggleMobileNav={() => setMobileOpen((open) => !open)}
+      onToggleMobileNav={() => {
+        if (mobileOpen) {
+          setMobileOpen(false)
+          return
+        }
+        const next = clubHeaderOverlayAfterOpen('mobileNav')
+        setMobileOpen(next.mobileNavOpen)
+        setNotificationsOpen(next.notificationsOpen)
+      }}
       onCloseMobileNav={() => setMobileOpen(false)}
+      notificationsOpen={notificationsOpen}
+      onNotificationsOpenChange={(open) => {
+        if (!open) {
+          setNotificationsOpen(false)
+          return
+        }
+        const next = clubHeaderOverlayAfterOpen('notifications')
+        setMobileOpen(next.mobileNavOpen)
+        setNotificationsOpen(next.notificationsOpen)
+      }}
       headerRef={headerRef}
       toggleRef={toggleRef}
     />

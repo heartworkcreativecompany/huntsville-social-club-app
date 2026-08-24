@@ -8,7 +8,10 @@ import {
 } from '@/app/(club)/notifications/actions'
 import { formatNotificationRelativeTime } from '@/lib/format-notification-time'
 import type { MemberNotificationItem } from '@/lib/load-member-notifications'
-import { notificationUnreadBadgeLabel } from '@/lib/notification-ui'
+import {
+  NOTIFICATION_PANEL_CLASS_NAME,
+  notificationUnreadBadgeLabel,
+} from '@/lib/notification-ui'
 import { navLinkClassName } from '@/components/shell/nav-link-class'
 
 function BellIcon({ className }: { className?: string }) {
@@ -34,14 +37,28 @@ export default function NotificationsBell({
   items: initialItems,
   unreadCount: initialUnreadCount,
   buttonClassName = `${navLinkClassName(false)} relative inline-flex items-center justify-center px-2.5`,
+  open: openProp,
+  onOpenChange,
 }: {
   items: MemberNotificationItem[]
   unreadCount: number
   buttonClassName?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const router = useRouter()
   const panelRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const isControlled = openProp !== undefined
+  const open = isControlled ? openProp : uncontrolledOpen
+
+  const setOpen = (next: boolean | ((current: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(open) : next
+    if (!isControlled) {
+      setUncontrolledOpen(value)
+    }
+    onOpenChange?.(value)
+  }
   const [items, setItems] = useState(initialItems)
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
   const [isPending, startTransition] = useTransition()
@@ -56,15 +73,22 @@ export default function NotificationsBell({
       return
     }
 
+    function closePanel() {
+      if (!isControlled) {
+        setUncontrolledOpen(false)
+      }
+      onOpenChange?.(false)
+    }
+
     function handlePointerDown(event: MouseEvent) {
       if (!panelRef.current?.contains(event.target as Node)) {
-        setOpen(false)
+        closePanel()
       }
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setOpen(false)
+        closePanel()
       }
     }
 
@@ -74,7 +98,7 @@ export default function NotificationsBell({
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [open])
+  }, [open, isControlled, onOpenChange])
 
   const handleNotificationClick = (notification: MemberNotificationItem) => {
     setOpen(false)
@@ -140,7 +164,7 @@ export default function NotificationsBell({
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2.5rem,22rem)] overflow-hidden rounded-xl border border-border bg-surface shadow-md">
+        <div className={NOTIFICATION_PANEL_CLASS_NAME}>
           <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3">
             <p className="text-sm font-medium text-foreground">Notifications</p>
             {unreadCount > 0 ? (
