@@ -20,6 +20,7 @@ import { sendWelcomeEmail } from '@/lib/transactional-email'
 import {
   buttonPrimaryClassName,
   inputClassName,
+  mobileFullButtonClassName,
 } from '@/lib/event-labels'
 
 export default function SignUpPage() {
@@ -108,6 +109,7 @@ export default function SignUpPage() {
               type="email"
               name="email"
               autoComplete="email"
+              inputMode="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={inputClassName}
@@ -145,14 +147,14 @@ export default function SignUpPage() {
           </label>
 
           {error ? (
-            <p className="text-sm text-danger" role="alert">
+            <p className="text-sm break-words text-danger" role="alert">
               {error}
             </p>
           ) : null}
 
           <button
             type="submit"
-            className={buttonPrimaryClassName}
+            className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
             disabled={isPending}
           >
             {isPending ? 'Creating account…' : 'Create account'}

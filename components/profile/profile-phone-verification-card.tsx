@@ -21,7 +21,7 @@ import {
   requestPhoneChangeOtp,
   verifyPhoneChangeOtp,
 } from '@/lib/member-phone-auth'
-import { buttonPrimaryClassName, inputClassName } from '@/lib/event-labels'
+import { buttonPrimaryClassName, inputClassName, mobileFullButtonClassName } from '@/lib/event-labels'
 import {
   canSendPhoneVerificationCode,
   PHONE_VERIFICATION_REQUIRED_COPY,
@@ -328,7 +328,7 @@ export default function ProfilePhoneVerificationCard({
           <input
             type="tel"
             autoComplete="tel"
-            inputMode="numeric"
+            inputMode="tel"
             placeholder={US_PHONE_INPUT_PLACEHOLDER}
             value={formatUsPhoneShort(phoneDigits)}
             onChange={(event) => handlePhoneChange(event.target.value)}
@@ -341,18 +341,18 @@ export default function ProfilePhoneVerificationCard({
         </label>
 
         <div className="grid gap-2">
-          <div className="flex gap-3 text-sm">
+          <div className="flex min-h-11 gap-3 text-sm">
             <input
               id={accountSmsConsentId}
               type="checkbox"
-              className="mt-1 h-4 w-4 shrink-0 rounded border-border"
+              className="mt-1 h-5 w-5 shrink-0 rounded border-border"
               checked={accountSmsConsent}
               onChange={(event) => setAccountSmsConsent(event.target.checked)}
               disabled={isPending}
             />
             <label
               htmlFor={accountSmsConsentId}
-              className="text-xs leading-relaxed text-muted-foreground"
+              className="min-w-0 text-xs leading-relaxed break-words text-muted-foreground"
             >
               {SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LABEL}
             </label>
@@ -392,11 +392,11 @@ export default function ProfilePhoneVerificationCard({
           </label>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <button
             type="button"
             onClick={handleSendCode}
-            className={buttonPrimaryClassName}
+            className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
             disabled={isPending || cooldown > 0 || !canSend}
           >
             {isPending
@@ -412,7 +412,7 @@ export default function ProfilePhoneVerificationCard({
             <button
               type="button"
               onClick={handleVerifyCode}
-              className={buttonPrimaryClassName}
+              className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
               disabled={isPending}
             >
               {isPending ? 'Verifying…' : 'Verify code'}
@@ -421,7 +421,7 @@ export default function ProfilePhoneVerificationCard({
         </div>
 
         {error ? (
-          <p className="text-sm text-danger" role="alert">
+          <p className="min-w-0 text-sm break-words text-danger" role="alert">
             {error}
           </p>
         ) : null}

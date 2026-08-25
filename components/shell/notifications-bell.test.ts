@@ -32,7 +32,9 @@ describe('NotificationsBell panel', () => {
     expect(html).toContain(NOTIFICATION_PANEL_CLASS_NAME)
     expect(html).toContain('left-0')
     expect(html).toContain('lg:right-0')
-    expect(html).toContain('w-[min(22rem,calc(100vw-2rem))]')
+    expect(html).toContain(
+      'w-[min(22rem,calc(100vw-2rem-env(safe-area-inset-left,0px)-env(safe-area-inset-right,0px)))]'
+    )
     expect(html).not.toMatch(/class="absolute right-0/)
   })
 

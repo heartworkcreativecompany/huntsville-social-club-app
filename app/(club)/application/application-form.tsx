@@ -41,7 +41,14 @@ import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
   inputClassName,
+  textareaClassName,
 } from '@/lib/event-labels'
+import {
+  AGREEMENT_ROW_CLASS,
+  APPLICATION_ACTIONS_CLASS,
+  CHOICE_ROW_CLASS,
+  MOBILE_FULL_CONTROL_CLASS,
+} from '@/lib/application-mobile-ui'
 import { trackEvent } from '@/lib/analytics'
 import { saveApplicationDraft, submitApplication } from './actions'
 
@@ -115,6 +122,13 @@ export default function ApplicationForm({
       trackEvent('application_started')
     }
   }, [])
+
+  useEffect(() => {
+    if (!message) return
+    document
+      .getElementById('application-form-message')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [message])
 
   if (!editable) {
     return null
@@ -201,7 +215,7 @@ export default function ApplicationForm({
   const promptsDone = completedPromptCount(draft)
 
   return (
-    <div id="form" className="scroll-mt-8">
+    <div id="form" className="scroll-mt-8 min-w-0">
       <Card>
         <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
           {APPLICATION_FORM_INTRO}
@@ -230,7 +244,7 @@ export default function ApplicationForm({
                 of birth stay private and are used only for verification.
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2">
               <label className="grid gap-1.5 text-sm">
                 <FieldLabel required>First name</FieldLabel>
                 <input
@@ -350,7 +364,7 @@ export default function ApplicationForm({
                 after approval.
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-3">
               <label className="grid gap-1.5 text-sm sm:col-span-2">
                 <FieldLabel privateField>City</FieldLabel>
                 <input
@@ -400,11 +414,12 @@ export default function ApplicationForm({
             </label>
             <fieldset className="grid gap-2 text-sm">
               <FieldLabel>Do you live in the Huntsville metro area?</FieldLabel>
-              <div className="flex flex-wrap gap-4">
-                <label className="flex items-center gap-2">
+              <div className="flex flex-wrap gap-3">
+                <label className={CHOICE_ROW_CLASS}>
                   <input
                     type="radio"
                     name="livesInHuntsvilleArea"
+                    className="h-5 w-5 shrink-0"
                     checked={draft.location.livesInHuntsvilleArea === true}
                     onChange={() =>
                       updateLocation({
@@ -415,10 +430,11 @@ export default function ApplicationForm({
                   />
                   <span>Yes</span>
                 </label>
-                <label className="flex items-center gap-2">
+                <label className={CHOICE_ROW_CLASS}>
                   <input
                     type="radio"
                     name="livesInHuntsvilleArea"
+                    className="h-5 w-5 shrink-0"
                     checked={draft.location.livesInHuntsvilleArea === false}
                     onChange={() =>
                       updateLocation({ livesInHuntsvilleArea: false })
@@ -434,7 +450,7 @@ export default function ApplicationForm({
                   Your connection to the area
                 </FieldLabel>
                 <textarea
-                  className={`${inputClassName} resize-y`}
+                  className={textareaClassName}
                   rows={3}
                   value={draft.location.localConnection}
                   onChange={(e) =>
@@ -580,7 +596,7 @@ export default function ApplicationForm({
                 About Me
               </FieldLabel>
               <textarea
-                className={`${inputClassName} resize-y`}
+                className={textareaClassName}
                 rows={4}
                 maxLength={PROMPT_MAX_CHARS}
                 value={draft.profile.aboutMe}
@@ -610,7 +626,7 @@ export default function ApplicationForm({
                     {prompt.label}
                   </FieldLabel>
                   <textarea
-                    className={`${inputClassName} resize-y`}
+                    className={textareaClassName}
                     rows={3}
                     maxLength={PROMPT_MAX_CHARS}
                     value={value}
@@ -663,16 +679,16 @@ export default function ApplicationForm({
               applicationStatus={applicationStatus}
             />
 
-            <dl className="grid gap-3 rounded-lg border border-border bg-background/50 p-4 text-sm">
-              <div>
+            <dl className="grid min-w-0 gap-3 overflow-hidden rounded-lg border border-border bg-background/50 p-4 text-sm">
+              <div className="min-w-0">
                 <dt className="text-muted-foreground">Display name</dt>
-                <dd className="font-medium text-foreground">
+                <dd className="break-words font-medium text-foreground">
                   {draft.profile.displayName || '—'}
                 </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">About Me</dt>
-                <dd className="font-medium text-foreground">
+                <dd className="break-words font-medium text-foreground">
                   {draft.profile.aboutMe.trim()
                     ? `${draft.profile.aboutMe.trim().slice(0, 80)}${
                         draft.profile.aboutMe.trim().length > 80 ? '…' : ''
@@ -682,39 +698,39 @@ export default function ApplicationForm({
               </div>
               <div>
                 <dt className="text-muted-foreground">Public area</dt>
-                <dd className="font-medium text-foreground">
+                <dd className="break-words font-medium text-foreground">
                   {draft.location.neighborhoodOrArea || '—'}
                 </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Occupation</dt>
-                <dd className="font-medium text-foreground">
+                <dd className="break-words font-medium text-foreground">
                   {draft.workAndInterests.occupation || '—'}
                 </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Prompts completed</dt>
-                <dd className="font-medium text-foreground">{promptsDone}</dd>
+                <dd className="break-words font-medium text-foreground">{promptsDone}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Photos</dt>
-                <dd className="font-medium text-foreground">
+                <dd className="break-words font-medium text-foreground">
                   {draft.photos.length}
                 </dd>
               </div>
             </dl>
             <div className="grid gap-3">
               {AGREEMENT_ITEMS.map((item) => (
-                <label key={item.key} className="flex items-start gap-2">
+                <label key={item.key} className={AGREEMENT_ROW_CLASS}>
                   <input
                     type="checkbox"
                     checked={draft.agreements[item.key]}
                     onChange={(e) =>
                       updateAgreements({ [item.key]: e.target.checked })
                     }
-                    className="mt-1"
+                    className="mt-1 h-5 w-5 shrink-0"
                   />
-                  <span className="leading-relaxed text-muted-foreground">
+                  <span className="min-w-0 leading-relaxed break-words text-muted-foreground">
                     {item.key === 'codeOfConduct' ? (
                       <>
                         I agree to the{' '}
@@ -736,11 +752,11 @@ export default function ApplicationForm({
           </section>
         ) : null}
 
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className={APPLICATION_ACTIONS_CLASS}>
           {draft.step > 1 ? (
             <button
               type="button"
-              className={buttonSecondaryClassName}
+              className={`${buttonSecondaryClassName} ${MOBILE_FULL_CONTROL_CLASS}`}
               onClick={() => update({ step: draft.step - 1 })}
               disabled={isPending}
             >
@@ -750,7 +766,7 @@ export default function ApplicationForm({
           {draft.step < APPLICATION_TOTAL_STEPS ? (
             <button
               type="button"
-              className={buttonPrimaryClassName}
+              className={`${buttonPrimaryClassName} ${MOBILE_FULL_CONTROL_CLASS}`}
               onClick={() => update({ step: draft.step + 1 })}
               disabled={isPending}
             >
@@ -759,7 +775,7 @@ export default function ApplicationForm({
           ) : null}
           <button
             type="button"
-            className={buttonSecondaryClassName}
+            className={`${buttonSecondaryClassName} ${MOBILE_FULL_CONTROL_CLASS}`}
             onClick={handleSave}
             disabled={isPending}
           >
@@ -768,7 +784,7 @@ export default function ApplicationForm({
           {draft.step === APPLICATION_TOTAL_STEPS ? (
             <button
               type="button"
-              className={buttonPrimaryClassName}
+              className={`${buttonPrimaryClassName} ${MOBILE_FULL_CONTROL_CLASS}`}
               onClick={handleSubmit}
               disabled={isPending}
             >
@@ -778,7 +794,13 @@ export default function ApplicationForm({
         </div>
 
         {message ? (
-          <p className="mt-4 text-sm text-muted-foreground">{message}</p>
+          <p
+            id="application-form-message"
+            className="mt-4 min-w-0 text-sm break-words text-muted-foreground"
+            role="status"
+          >
+            {message}
+          </p>
         ) : null}
       </Card>
     </div>

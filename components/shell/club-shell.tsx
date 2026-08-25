@@ -33,7 +33,7 @@ export default function ClubShell({
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
       />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8 sm:px-8 sm:py-10">
+      <main className="mx-auto w-full min-w-0 max-w-6xl flex-1 px-5 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 sm:py-10">
         {children}
       </main>
       <SiteFooter />

@@ -50,24 +50,35 @@ export default async function PublicHomePage() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/85" />
         <div className="grain absolute inset-0" aria-hidden />
 
-        <header className="absolute top-0 right-0 left-0 z-20 flex items-center justify-between px-6 py-6 md:px-10">
-          <BrandLogo href="/" variant="wordmark" size="xl" priority />
-          <nav className="flex items-center gap-2 md:gap-3">
+        <header className="absolute top-0 right-0 left-0 z-20 flex min-w-0 items-center justify-between gap-3 px-4 py-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:px-10 md:py-6">
+          <div className="min-w-0">
+            <BrandLogo
+              href="/"
+              variant="wordmark"
+              size="xl"
+              className="max-w-[6.75rem] sm:max-w-none"
+              priority
+            />
+          </div>
+          <nav className="flex shrink-0 items-center gap-1 sm:gap-3">
             <Link href={loginHref} className={marketingNavLinkClassName}>
               Sign in
             </Link>
-            <Link href={signupHref} className={marketingButtonPrimaryClassName}>
+            <Link
+              href={signupHref}
+              className={`${marketingButtonPrimaryClassName} max-sm:hidden px-3 text-xs sm:px-6 sm:text-sm`}
+            >
               Join the club
             </Link>
           </nav>
         </header>
 
-        <div className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-20 text-white md:px-10 md:pb-28">
+        <div className="relative z-10 mx-auto w-full min-w-0 max-w-6xl px-5 pb-16 text-white sm:px-6 md:px-10 md:pb-28">
           <span className="hero-eyebrow">
             <span className="hero-eyebrow-line" aria-hidden />
             Huntsville · Rocket City
           </span>
-          <h1 className="font-brand mt-5 max-w-3xl text-5xl leading-[1.05] font-semibold md:text-7xl">
+          <h1 className="font-brand mt-5 max-w-3xl text-4xl leading-[1.08] font-semibold sm:text-5xl md:text-7xl">
             Where Huntsville Connects — Live
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/85 md:text-xl">
@@ -77,11 +88,17 @@ export default async function PublicHomePage() {
           <p className="mt-2 max-w-xl text-white/60">
             Bringing singles and social seekers together in Rocket City.
           </p>
-          <div className="mt-9 flex flex-wrap gap-3">
-            <Link href={signupHref} className={marketingButtonPrimaryClassName}>
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link
+              href={signupHref}
+              className={`${marketingButtonPrimaryClassName} w-full sm:w-auto`}
+            >
               Get started
             </Link>
-            <Link href={loginHref} className={marketingButtonSecondaryClassName}>
+            <Link
+              href={loginHref}
+              className={`${marketingButtonSecondaryClassName} w-full sm:w-auto`}
+            >
               Sign in
             </Link>
           </div>

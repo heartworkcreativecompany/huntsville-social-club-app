@@ -88,7 +88,7 @@ export function ClubNavMarkup({
     >
       <div
         data-club-header="mobile"
-        className="mx-auto grid max-w-6xl grid-cols-[44px_minmax(0,1fr)_44px] items-center px-5 py-4 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] lg:hidden"
+        className="mx-auto grid max-w-6xl grid-cols-[44px_minmax(0,1fr)_44px] items-center px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))] pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] lg:hidden"
       >
         <div className="flex h-11 w-11 items-center justify-center justify-self-start overflow-visible">
           <NotificationsBell
@@ -117,7 +117,7 @@ export function ClubNavMarkup({
 
       <div
         data-club-header="desktop"
-        className="mx-auto hidden max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-8 lg:flex"
+        className="mx-auto hidden max-w-6xl items-center justify-between gap-3 px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-8 lg:flex"
       >
         <div className="flex min-w-0 items-center gap-6">
           <BrandLogo href={logoHref} variant="wordmark" size="md" />

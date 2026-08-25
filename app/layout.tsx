@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Analytics } from '@vercel/analytics/react'
 import { Montserrat, Raleway } from 'next/font/google'
 import './globals.css'
@@ -15,6 +15,12 @@ const raleway = Raleway({
   weight: ['400', '500', '600'],
 })
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
+
 export const metadata: Metadata = {
   title: 'Huntsville Social Club',
   description:
@@ -29,9 +35,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${montserrat.variable} ${raleway.variable} h-full antialiased`}
+      className={`${montserrat.variable} ${raleway.variable} h-full overflow-x-clip antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="flex min-h-full min-w-0 flex-col overflow-x-clip">
         {children}
         <Analytics />
       </body>

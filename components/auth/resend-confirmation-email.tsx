@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { friendlyAuthError } from '@/lib/auth-errors'
 import { validateEmail } from '@/lib/auth-validation'
 import { authCallbackUrl } from '@/lib/site'
-import { buttonSecondaryClassName } from '@/lib/event-labels'
+import { buttonSecondaryClassName, mobileFullButtonClassName } from '@/lib/event-labels'
 
 const RESEND_SUCCESS =
   'If that email still needs confirmation, we sent a new link. Check inbox and spam.'
@@ -65,14 +65,14 @@ export default function ResendConfirmationEmail({
     <div className={className}>
       <button
         type="button"
-        className={buttonSecondaryClassName}
+        className={`${buttonSecondaryClassName} ${mobileFullButtonClassName}`}
         disabled={isPending}
         onClick={() => void handleResend()}
       >
         {isPending ? 'Sending…' : 'Resend confirmation email'}
       </button>
       {error ? (
-        <p className="mt-2 text-sm text-danger" role="alert">
+        <p className="mt-2 min-w-0 text-sm break-words text-danger" role="alert">
           {error}
         </p>
       ) : null}

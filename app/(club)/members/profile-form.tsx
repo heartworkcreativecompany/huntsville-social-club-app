@@ -30,6 +30,8 @@ import {
 import {
   buttonPrimaryClassName,
   inputClassName,
+  mobileFullButtonClassName,
+  textareaClassName,
 } from '@/lib/event-labels'
 import { updateMemberProfile } from './actions'
 
@@ -245,12 +247,12 @@ export default function ProfileForm({
             onChange={(e) => setAbout(e.target.value)}
             placeholder="e.g. Building thoughtful local connections outside of work..."
             rows={4}
-            className={`${inputClassName} resize-y`}
+            className={textareaClassName}
             disabled={isPending}
           />
         </label>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="grid gap-1.5 text-sm">
             <span className="font-medium text-foreground">Work</span>
             <input
@@ -333,7 +335,7 @@ export default function ProfileForm({
             }
             rows={3}
             maxLength={PROMPT_MAX_CHARS}
-            className={`${inputClassName} resize-y`}
+            className={textareaClassName}
             disabled={isPending}
           />
         </label>
@@ -349,7 +351,7 @@ export default function ProfileForm({
             }
             rows={3}
             maxLength={PROMPT_MAX_CHARS}
-            className={`${inputClassName} resize-y`}
+            className={textareaClassName}
             disabled={isPending}
           />
         </label>
@@ -365,7 +367,7 @@ export default function ProfileForm({
             }
             rows={3}
             maxLength={PROMPT_MAX_CHARS}
-            className={`${inputClassName} resize-y`}
+            className={textareaClassName}
             disabled={isPending}
           />
         </label>
@@ -373,14 +375,16 @@ export default function ProfileForm({
         <button
           type="button"
           onClick={handleSave}
-          className={buttonPrimaryClassName}
+          className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
           disabled={isPending}
         >
           {isPending ? 'Submitting…' : 'Submit for review'}
         </button>
 
         {message ? (
-          <p className="text-sm text-muted-foreground">{message}</p>
+          <p className="min-w-0 text-sm break-words text-muted-foreground">
+            {message}
+          </p>
         ) : null}
       </div>
     </Card>

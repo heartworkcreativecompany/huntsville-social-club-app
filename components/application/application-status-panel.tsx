@@ -119,21 +119,21 @@ export default function ApplicationStatusPanel({
             </p>
           ) : null}
           {status === 'needs_info' || status === 'rejected' ? (
-            <Link href={next.href} className={`${buttonPrimaryClassName} mt-4`}>
+            <Link href={next.href} className={`${buttonPrimaryClassName} mt-4 inline-flex w-full sm:w-auto`}>
               {next.cta}
             </Link>
           ) : null}
         </Card>
       ) : (
         <Card>
-          <ol className="grid gap-4 sm:grid-cols-4">
+          <ol className="grid min-w-0 gap-4 sm:grid-cols-4">
             {STATUS_STEPS.map((step, idx) => {
               const done = idx < currentIdx
               const active = idx === currentIdx
               return (
                 <li
                   key={step.status}
-                  className={`rounded-lg border px-3 py-3 text-sm ${
+                  className={`min-w-0 rounded-lg border px-3 py-3 text-sm ${
                     active
                       ? 'border-accent bg-accent-soft/50'
                       : done
@@ -202,21 +202,21 @@ export default function ApplicationStatusPanel({
             </dd>
           </div>
         </dl>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {(status === 'draft' ||
             status === 'needs_info' ||
             status === 'rejected') && (
-            <Link href={next.href} className={buttonPrimaryClassName}>
+            <Link href={next.href} className={`${buttonPrimaryClassName} w-full sm:w-auto`}>
               {next.cta}
             </Link>
           )}
           {status === 'approved' ? (
-            <Link href="/home" className={buttonPrimaryClassName}>
+            <Link href="/home" className={`${buttonPrimaryClassName} w-full sm:w-auto`}>
               Go to member home
             </Link>
           ) : null}
           {status === 'submitted' || status === 'in_review' ? (
-            <Link href="/application" className={buttonSecondaryClassName}>
+            <Link href="/application" className={`${buttonSecondaryClassName} w-full sm:w-auto`}>
               View application
             </Link>
           ) : null}

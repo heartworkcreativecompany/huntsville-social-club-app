@@ -18,14 +18,16 @@ export default function AuthPageShell({
   return (
     <div className="flex min-h-full flex-col bg-background">
       <header className="border-b border-border bg-surface shadow-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))] pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:px-8 sm:py-5">
           <BrandLogo href="/" variant="wordmark" size="lg" />
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-md flex-1 px-5 py-16 sm:px-8">
+      <main className="mx-auto w-full min-w-0 max-w-md flex-1 px-5 py-8 sm:px-8 sm:py-16">
         {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-        <h1 className="text-display mt-2 text-3xl font-semibold">{title}</h1>
+        <h1 className="text-display mt-2 text-2xl font-semibold break-words sm:text-3xl">
+          {title}
+        </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {description}
         </p>

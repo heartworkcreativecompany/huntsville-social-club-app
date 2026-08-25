@@ -50,7 +50,7 @@ export default async function ApplicationPage() {
         actions={
           <Link
             href="/application/status"
-            className="text-sm font-medium text-accent underline"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-accent underline"
           >
             Track status
           </Link>
@@ -69,7 +69,7 @@ export default async function ApplicationPage() {
             </p>
             <Link
               href="/application/status"
-              className={`${buttonSecondaryClassName} mt-4`}
+              className={`${buttonSecondaryClassName} mt-4 w-full sm:w-auto`}
             >
               View status & verification
             </Link>
@@ -108,7 +108,7 @@ export default async function ApplicationPage() {
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {status === 'draft' || status === 'needs_info' ? (
-                <a href={next.href} className={buttonSecondaryClassName}>
+                <a href={next.href} className={`${buttonSecondaryClassName} w-full sm:w-auto`}>
                   {next.cta}
                 </a>
               ) : null}

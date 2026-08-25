@@ -1,4 +1,10 @@
 import { APPLICATION_FORM_STEPS } from '@/lib/application-form-content'
+import {
+  APPLICATION_STEP_BUTTON_CLASS,
+  APPLICATION_STEP_CURRENT_LABEL_CLASS,
+  APPLICATION_STEP_LIST_CLASS,
+  applicationStepStatusLabel,
+} from '@/lib/application-mobile-ui'
 
 export default function ApplicationStepProgress({
   currentStep,
@@ -7,9 +13,12 @@ export default function ApplicationStepProgress({
   currentStep: number
   onStepSelect?: (step: number) => void
 }) {
+  const currentTitle =
+    APPLICATION_FORM_STEPS.find((step) => step.id === currentStep)?.title ?? ''
+
   return (
-    <div className="mb-6">
-      <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+    <div className="mb-6 min-w-0">
+      <div className="mb-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>
           Step {currentStep} of {APPLICATION_FORM_STEPS.length}
         </span>
@@ -23,6 +32,11 @@ export default function ApplicationStepProgress({
         aria-valuenow={currentStep}
         aria-valuemin={1}
         aria-valuemax={APPLICATION_FORM_STEPS.length}
+        aria-label={applicationStepStatusLabel(
+          currentStep,
+          APPLICATION_FORM_STEPS.length,
+          currentTitle
+        )}
       >
         <div
           className="h-full rounded-full bg-accent transition-all duration-300"
@@ -31,11 +45,12 @@ export default function ApplicationStepProgress({
           }}
         />
       </div>
-      <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <p className={APPLICATION_STEP_CURRENT_LABEL_CLASS}>{currentTitle}</p>
+      <ol className={APPLICATION_STEP_LIST_CLASS}>
         {APPLICATION_FORM_STEPS.map((step) => {
           const done = step.id < currentStep
           const active = step.id === currentStep
-          const className = `w-full rounded-full border px-3 py-2 text-left text-xs transition ${
+          const className = `${APPLICATION_STEP_BUTTON_CLASS} ${
             active
               ? 'border-accent/35 bg-accent-soft font-brand text-foreground'
               : done
@@ -44,7 +59,7 @@ export default function ApplicationStepProgress({
           }`
 
           return (
-            <li key={step.id}>
+            <li key={step.id} className="min-w-0">
               {onStepSelect ? (
                 <button
                   type="button"

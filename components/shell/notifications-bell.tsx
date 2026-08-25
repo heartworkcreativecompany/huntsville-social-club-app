@@ -203,7 +203,7 @@ export default function NotificationsBell({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <p
-                          className={`text-sm ${
+                          className={`min-w-0 break-words text-sm ${
                             unread
                               ? 'font-semibold text-foreground'
                               : 'font-medium text-foreground'
@@ -219,7 +219,7 @@ export default function NotificationsBell({
                         ) : null}
                       </div>
                       {item.body ? (
-                        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                        <p className="mt-1 min-w-0 text-sm leading-relaxed break-words text-muted-foreground">
                           {item.body}
                         </p>
                       ) : null}

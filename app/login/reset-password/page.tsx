@@ -17,6 +17,7 @@ import {
 import {
   buttonPrimaryClassName,
   inputClassName,
+  mobileFullButtonClassName,
 } from '@/lib/event-labels'
 
 export default function ResetPasswordPage() {
@@ -139,7 +140,7 @@ export default function ResetPasswordPage() {
         </AuthStatusBanner>
         <button
           type="button"
-          className={`${buttonPrimaryClassName} mt-6`}
+          className={`${buttonPrimaryClassName} ${mobileFullButtonClassName} mt-6`}
           onClick={() => router.push('/login?reset=success')}
         >
           Go to sign in
@@ -192,14 +193,14 @@ export default function ResetPasswordPage() {
         </label>
 
         {error ? (
-          <p className="text-sm text-danger" role="alert">
+          <p className="text-sm break-words text-danger" role="alert">
             {error}
           </p>
         ) : null}
 
         <button
           type="submit"
-          className={buttonPrimaryClassName}
+          className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
           disabled={isPending}
         >
           {isPending ? 'Updating…' : 'Update password'}

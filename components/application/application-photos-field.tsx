@@ -35,7 +35,7 @@ function PhotoPreview({
   removing: boolean
 }) {
   return (
-    <li className="rounded-xl border border-border bg-surface p-3">
+    <li className="min-w-0 rounded-xl border border-border bg-surface p-3">
       <MemberPhotoDisplay
         memberId={memberId}
         photo={photo}
@@ -43,7 +43,7 @@ function PhotoPreview({
         className="w-full"
         showPrimaryBadge={photo.isPrimary}
       />
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex min-w-0 flex-wrap gap-2">
         <button
           type="button"
           className={
@@ -56,7 +56,7 @@ function PhotoPreview({
         </button>
         <button
           type="button"
-          className="text-xs text-muted-foreground underline disabled:opacity-50"
+          className="inline-flex min-h-11 items-center px-2 text-sm text-muted-foreground underline disabled:opacity-50"
           onClick={onRemove}
           disabled={removing}
         >
@@ -64,12 +64,12 @@ function PhotoPreview({
         </button>
       </div>
       {photo.isPrimary ? (
-        <label className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+        <label className="mt-3 flex min-h-11 items-start gap-3 text-xs leading-relaxed text-muted-foreground">
           <input
             type="checkbox"
             checked={photo.facePhotoConfirmed}
             onChange={(e) => onConfirmFace(e.target.checked)}
-            className="mt-0.5"
+            className="mt-0.5 h-5 w-5 shrink-0"
             disabled={removing}
           />
           <span>
@@ -195,7 +195,7 @@ export default function ApplicationPhotosField({
         sunglasses-only images as primary.
       </p>
 
-      <ul className="grid gap-4 sm:grid-cols-2">
+      <ul className="grid min-w-0 gap-4 sm:grid-cols-2">
         {photos.map((photo) => (
           <PhotoPreview
             key={photo.id}
@@ -213,7 +213,7 @@ export default function ApplicationPhotosField({
 
       {photos.length < PHOTO_MAX_COUNT ? (
         <label
-          className={`${buttonSecondaryClassName} inline-flex cursor-pointer items-center justify-center ${
+          className={`${buttonSecondaryClassName} inline-flex w-full cursor-pointer items-center justify-center sm:w-auto ${
             busy ? 'pointer-events-none opacity-60' : ''
           }`}
         >
@@ -232,7 +232,7 @@ export default function ApplicationPhotosField({
       ) : null}
 
       {message ? (
-        <p className="text-sm text-danger" role="alert">
+        <p className="min-w-0 text-sm break-words text-danger" role="alert">
           {message}
         </p>
       ) : null}

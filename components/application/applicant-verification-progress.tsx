@@ -13,7 +13,7 @@ import {
   type ApprovalGates,
   type ApprovalGateKey,
 } from '@/lib/membership-systems'
-import { buttonPrimaryClassName, buttonSecondaryClassName } from '@/lib/event-labels'
+import { buttonPrimaryClassName, buttonSecondaryClassName, mobileFullButtonClassName } from '@/lib/event-labels'
 import { useRouter } from 'next/navigation'
 
 function identityCtaLabel(cta: 'start' | 'continue' | 'retry'): string {
@@ -162,10 +162,10 @@ export default function ApplicantVerificationProgress({
               {gate.key === 'phone_verified' && !approved ? (
                 <div className="mt-3 grid gap-3">
                   {!phoneOpen ? (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       <button
                         type="button"
-                        className={buttonPrimaryClassName}
+                        className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
                         onClick={() => setPhoneOpen(true)}
                       >
                         {status === 'pending_review'
@@ -188,17 +188,17 @@ export default function ApplicantVerificationProgress({
                 <div className="mt-3 grid gap-2">
                   {identityVerificationStatus === 'requires_input' &&
                   identityVerificationLastError ? (
-                    <p className="text-sm text-danger">
+                    <p className="min-w-0 text-sm break-words text-danger">
                       {identityVerificationLastError}
                     </p>
                   ) : null}
                   {identityError ? (
-                    <p className="text-sm text-danger">{identityError}</p>
+                    <p className="min-w-0 text-sm break-words text-danger">{identityError}</p>
                   ) : null}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                     <button
                       type="button"
-                      className={buttonPrimaryClassName}
+                      className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
                       disabled={isPending}
                       onClick={startIdentity}
                     >
@@ -208,7 +208,7 @@ export default function ApplicantVerificationProgress({
                     </button>
                     <button
                       type="button"
-                      className={buttonSecondaryClassName}
+                      className={`${buttonSecondaryClassName} ${mobileFullButtonClassName}`}
                       disabled={isPending}
                       onClick={() => router.refresh()}
                     >

@@ -67,7 +67,7 @@ export default function SiteFooter({
             <p className="mt-2">
               <a
                 href={`mailto:${SUPPORT_EMAIL}`}
-                className="link-brand hover:text-foreground"
+                className="link-brand break-all hover:text-foreground"
               >
                 {SUPPORT_EMAIL}
               </a>
@@ -85,7 +85,7 @@ export default function SiteFooter({
 
   return (
     <footer
-      className={`border-t border-border bg-surface px-5 py-8 text-sm text-muted-foreground sm:px-8 ${className}`}
+      className={`border-t border-border bg-surface px-5 py-8 pb-[max(2rem,env(safe-area-inset-bottom))] text-sm text-muted-foreground sm:px-8 ${className}`}
     >
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <BrandLogo variant="wordmark" size="sm" />
@@ -94,7 +94,7 @@ export default function SiteFooter({
             Questions?{' '}
             <a
               href={`mailto:${SUPPORT_EMAIL}`}
-              className="link-brand font-medium underline"
+              className="link-brand break-all font-medium underline"
             >
               {SUPPORT_EMAIL}
             </a>

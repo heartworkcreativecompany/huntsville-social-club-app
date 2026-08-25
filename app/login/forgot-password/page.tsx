@@ -14,6 +14,7 @@ import { authCallbackUrl } from '@/lib/site'
 import {
   buttonPrimaryClassName,
   inputClassName,
+  mobileFullButtonClassName,
 } from '@/lib/event-labels'
 
 export default function ForgotPasswordPage() {
@@ -77,6 +78,7 @@ export default function ForgotPasswordPage() {
               type="email"
               name="email"
               autoComplete="email"
+              inputMode="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={inputClassName}
@@ -85,14 +87,14 @@ export default function ForgotPasswordPage() {
           </label>
 
           {error ? (
-            <p className="text-sm text-danger" role="alert">
+            <p className="text-sm break-words text-danger" role="alert">
               {error}
             </p>
           ) : null}
 
           <button
             type="submit"
-            className={buttonPrimaryClassName}
+            className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
             disabled={isPending}
           >
             {isPending ? 'Sending…' : 'Send reset link'}

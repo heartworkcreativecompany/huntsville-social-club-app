@@ -26,8 +26,9 @@ describe('notification panel positioning', () => {
     expect(NOTIFICATION_PANEL_CLASS_NAME).toContain('left-0')
     expect(NOTIFICATION_PANEL_CLASS_NAME).toContain('right-auto')
     expect(NOTIFICATION_PANEL_CLASS_NAME).toContain(
-      'w-[min(22rem,calc(100vw-2rem))]'
+      'w-[min(22rem,calc(100vw-2rem-env(safe-area-inset-left,0px)-env(safe-area-inset-right,0px)))]'
     )
+    expect(NOTIFICATION_PANEL_CLASS_NAME).toContain('max-w-[calc(100vw-2rem)]')
     expect(NOTIFICATION_PANEL_CLASS_NAME).toContain('z-[60]')
     expect(NOTIFICATION_PANEL_CLASS_NAME).not.toMatch(
       /(?:^|\s)right-0(?:\s|$)/

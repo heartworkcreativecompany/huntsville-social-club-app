@@ -14,7 +14,7 @@ export default function AuthStatusBanner({
 
   return (
     <div
-      className={`rounded-lg border px-4 py-3 text-sm leading-relaxed ${styles}`}
+      className={`min-w-0 rounded-lg border px-4 py-3 text-sm leading-relaxed break-words ${styles}`}
       role="status"
     >
       {title ? <p className="font-medium">{title}</p> : null}
