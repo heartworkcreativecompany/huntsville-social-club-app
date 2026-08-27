@@ -55,8 +55,7 @@ export const PASSWORD_RESET_REQUEST_SUCCESS =
 export const ACCOUNT_CREATED_SUCCESS =
   'Account created. Check your email to confirm your address, then sign in to start your membership application.'
 
-export const EMAIL_CONFIRMED_SUCCESS =
-  'Email confirmed. Sign in to continue your membership application.'
+export const EMAIL_CONFIRMED_SUCCESS = 'Email confirmed. You can now sign in.'
 
 export const PASSWORD_UPDATED_SUCCESS =
   'Password updated. Sign in with your new password.'

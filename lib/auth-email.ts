@@ -22,15 +22,11 @@ export function localAuthEmailInboxUrl(): string | null {
   return process.env.NEXT_PUBLIC_SUPABASE_INBUCKET_URL ?? 'http://127.0.0.1:54324'
 }
 
+export const ACCOUNT_CREATED_CONFIRMATION_BODY =
+  'Check your email for the confirmation link, then sign in once it\'s verified. If the email does not arrive, first check your spam folder then click on \u201CDidn\'t get a confirmation email?\u201D on the Sign In page.'
+
 export function accountCreatedSuccessMessage(): string {
-  if (!isAuthEmailConfirmationRequired()) {
-    const inbox = localAuthEmailInboxUrl()
-    const inboxHint = inbox
-      ? ` If you are running Supabase locally, auth emails (if any) appear in Inbucket at ${inbox} — confirmation is not required to sign in during local development.`
-      : ' Email confirmation is not required to sign in in this environment.'
-    return `Account created.${inboxHint} Sign in to start your membership application. If your hosted Supabase project still requires confirmation, use Resend confirmation email on the sign-in page.`
-  }
-  return 'Account created. Check your email for the Supabase confirmation link, then sign in. If it does not arrive, use Resend confirmation email on the sign-in page (check spam).'
+  return ACCOUNT_CREATED_CONFIRMATION_BODY
 }
 
 export function welcomeEmailConfirmationParagraph(): string {

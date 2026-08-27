@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation'
 import AuthStatusBanner from '@/components/auth/auth-status-banner'
+import { loginStatusFromSearch } from '@/lib/auth-callback'
 import {
   EMAIL_CONFIRMED_SUCCESS,
   PASSWORD_UPDATED_SUCCESS,
@@ -9,11 +10,13 @@ import {
 
 export default function LoginStatusMessages() {
   const searchParams = useSearchParams()
-  const confirmed = searchParams.get('confirmed')
-  const reset = searchParams.get('reset')
-  const error = searchParams.get('error')
+  const status = loginStatusFromSearch({
+    confirmed: searchParams.get('confirmed'),
+    reset: searchParams.get('reset'),
+    error: searchParams.get('error'),
+  })
 
-  if (confirmed === '1') {
+  if (status === 'confirmed') {
     return (
       <AuthStatusBanner variant="success" title="Email confirmed">
         {EMAIL_CONFIRMED_SUCCESS}
@@ -21,7 +24,7 @@ export default function LoginStatusMessages() {
     )
   }
 
-  if (reset === 'success') {
+  if (status === 'reset') {
     return (
       <AuthStatusBanner variant="success" title="Password updated">
         {PASSWORD_UPDATED_SUCCESS}
@@ -29,7 +32,7 @@ export default function LoginStatusMessages() {
     )
   }
 
-  if (error === 'auth_callback_failed') {
+  if (status === 'callback_failed') {
     return (
       <AuthStatusBanner variant="info" title="Link could not be verified">
         This confirmation or sign-in link may have expired. Sign in again, or use

@@ -4,11 +4,26 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { friendlyAuthError } from '@/lib/auth-errors'
 import { validateEmail } from '@/lib/auth-validation'
-import { authCallbackUrl } from '@/lib/site'
+import { authCallbackUrl, SUPPORT_EMAIL } from '@/lib/site'
 import { buttonSecondaryClassName, mobileFullButtonClassName } from '@/lib/event-labels'
 
 const RESEND_SUCCESS =
   'If that email still needs confirmation, we sent a new link. Check inbox and spam.'
+
+export function ResendConfirmationHelp() {
+  return (
+    <p className="mt-2 min-w-0 text-xs leading-relaxed break-words text-muted-foreground">
+      Confirmation emails come from{' '}
+      <a
+        href={`mailto:${SUPPORT_EMAIL}`}
+        className="link-brand break-all underline decoration-accent/70 underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        {SUPPORT_EMAIL}
+      </a>
+      {'. If you still do not see the email, save this email address as a safe sender and then try again.'}
+    </p>
+  )
+}
 
 /**
  * Resends the Supabase Auth signup confirmation email (not Resend transactional mail).
@@ -81,10 +96,7 @@ export default function ResendConfirmationEmail({
           {message}
         </p>
       ) : null}
-      <p className="mt-2 text-xs text-muted-foreground">
-        Confirmation emails come from Supabase Auth. After you confirm, refresh
-        this page — Email verified should show Complete.
-      </p>
+      <ResendConfirmationHelp />
     </div>
   )
 }
