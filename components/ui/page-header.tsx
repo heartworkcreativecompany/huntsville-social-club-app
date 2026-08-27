@@ -17,7 +17,7 @@ export default function PageHeader({
           {title}
         </h1>
         {description ? (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-2 max-w-2xl min-w-0 text-sm leading-relaxed break-words text-muted-foreground">
             {description}
           </p>
         ) : null}

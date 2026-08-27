@@ -1,7 +1,13 @@
 /** Membership application intake copy and option lists. */
 
+export const APPLICATION_PAGE_INTRO =
+  'Tell us about yourself. Be sure to save your answers along the way if you need to come back to finish. Once submitted, we will manually review your answers to confirm you are ready to join the club.'
+
+export const APPLICATION_PAGE_SUBMITTED_INTRO =
+  'Review what you submitted. Track verification and review progress on your status page.'
+
 export const APPLICATION_FORM_INTRO =
-  'A selective, trust-gated intake for Huntsville Social Club. Fields marked required must be completed to submit. Optional sections help your profile stand out in discovery but never block approval.'
+  'We only accept real people that have been verified by our administrative staff. Provide only accurate information that can be verified or your application will be rejected or returned for changes. Fields marked as required must be complete before submission. Optional fields do not block approval if left empty, but they do help your profile stand out to future connections.'
 
 export const APPLICATION_FORM_STEPS = [
   { id: 1, title: 'Profile basics' },
@@ -27,8 +33,8 @@ export const INTEREST_MAX = 6
 
 export const GENDER_OPTIONS = [
   { value: '', label: 'Prefer not to say' },
-  { value: 'woman', label: 'Woman' },
-  { value: 'man', label: 'Man' },
+  { value: 'woman', label: 'Female' },
+  { value: 'man', label: 'Male' },
   { value: 'non_binary', label: 'Non-binary' },
   { value: 'other', label: 'Another identity' },
 ] as const

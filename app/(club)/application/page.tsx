@@ -5,7 +5,13 @@ import PageHeader from '@/components/ui/page-header'
 import {
   canEditApplication,
   nextActionForApplicant,
+  showApplicationReviewActionCard,
+  showApplicationStatusTracking,
 } from '@/lib/application'
+import {
+  APPLICATION_PAGE_INTRO,
+  APPLICATION_PAGE_SUBMITTED_INTRO,
+} from '@/lib/application-form-content'
 import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
 import { getViewer } from '@/lib/viewer'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
@@ -44,16 +50,18 @@ export default async function ApplicationPage() {
         title="Your application"
         description={
           showReadOnlyPreview
-            ? 'Review what you submitted. Track verification and review progress on your status page.'
-            : "Tell us about yourself, save anytime, and we'll review your application for the club."
+            ? APPLICATION_PAGE_SUBMITTED_INTRO
+            : APPLICATION_PAGE_INTRO
         }
         actions={
-          <Link
-            href="/application/status"
-            className="inline-flex min-h-11 items-center text-sm font-medium text-accent underline"
-          >
-            Track status
-          </Link>
+          showApplicationStatusTracking(status) ? (
+            <Link
+              href="/application/status"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-accent underline"
+            >
+              Track status
+            </Link>
+          ) : null
         }
       />
 
@@ -99,44 +107,31 @@ export default async function ApplicationPage() {
             />
           </section>
         </div>
-      ) : (
-        <div className="mb-8 grid gap-4 lg:grid-cols-2">
+      ) : showApplicationReviewActionCard(status) ? (
+        <div className="mb-8">
           <Card>
             <h2 className="text-display text-lg font-semibold">{next.title}</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-2 text-sm leading-relaxed break-words text-muted-foreground">
               {next.description}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              {status === 'draft' || status === 'needs_info' ? (
-                <a href={next.href} className={`${buttonSecondaryClassName} w-full sm:w-auto`}>
-                  {next.cta}
-                </a>
-              ) : null}
+              <a href={next.href} className={`${buttonSecondaryClassName} w-full sm:w-auto`}>
+                {next.cta}
+              </a>
               <Link
                 href="/application/status"
-                className="text-sm font-medium text-accent underline"
+                className="inline-flex min-h-11 items-center text-sm font-medium text-accent underline"
               >
                 View full status
               </Link>
             </div>
           </Card>
-
-          <Card>
-            <h2 className="text-display text-lg font-semibold">
-              Getting started
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              {status === 'draft'
-                ? 'No application on file yet — complete the form below. Your progress saves automatically when you click Save draft.'
-                : 'Update your application using the form below, then resubmit when ready.'}
-            </p>
-          </Card>
         </div>
-      )}
+      ) : null}
 
       {canEditApplication(status) ? (
         <section>
-          <h2 className="text-display mb-4 text-xl font-medium text-foreground">
+          <h2 className="text-display mb-4 text-xl font-medium break-words text-foreground">
             Application form
           </h2>
           <ApplicationForm

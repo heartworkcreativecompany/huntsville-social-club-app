@@ -169,6 +169,25 @@ export function canEditApplication(status: ApplicationStatus): boolean {
   )
 }
 
+/** Status tracking is useful after submit/review — not on a first unsubmitted draft. */
+export function showApplicationStatusTracking(
+  status: ApplicationStatus
+): boolean {
+  return (
+    status === 'submitted' ||
+    status === 'in_review' ||
+    status === 'needs_info' ||
+    status === 'rejected'
+  )
+}
+
+/** Reviewer-requested updates — not the first-draft “Complete your application” card. */
+export function showApplicationReviewActionCard(
+  status: ApplicationStatus
+): boolean {
+  return status === 'needs_info' || status === 'rejected'
+}
+
 export function canSubmitApplication(status: ApplicationStatus): boolean {
   return status === 'draft' || status === 'needs_info'
 }

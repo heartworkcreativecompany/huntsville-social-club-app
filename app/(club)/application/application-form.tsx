@@ -23,16 +23,12 @@ import {
   REQUIRED_PROMPT_KEYS,
   US_STATE_OPTIONS,
 } from '@/lib/application-form-content'
-import {
-  CONNECTION_OPEN_TO_OPTIONS,
-  SOCIAL_VIBE_OPTIONS,
-} from '@/lib/application-fields'
+import { SOCIAL_VIBE_OPTIONS } from '@/lib/application-fields'
 import type { ApplicationDraft, ApplicationStatus } from '@/lib/application'
 import { canEditApplication } from '@/lib/application'
 import { completedPromptCount } from '@/lib/application-validation'
 import {
   CONNECTION_LOOKING_FOR_FIELD,
-  CONNECTION_TYPES_OPEN_TO_FIELD,
   MEMBER_PUBLIC_INTENT_LABELS,
   memberPublicIntentLabelsFromValues,
   memberPublicIntentValuesFromLabels,
@@ -67,7 +63,7 @@ function FieldLabel({
 }) {
   return (
     <span className="grid gap-1">
-      <span className="font-medium text-foreground">
+      <span className="font-medium break-words text-foreground">
         {children}
         {required ? (
           <span className="ml-1.5 text-xs font-normal text-accent">
@@ -81,7 +77,7 @@ function FieldLabel({
         ) : null}
         {privateField ? (
           <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-            (private)
+            private
           </span>
         ) : null}
       </span>
@@ -217,7 +213,7 @@ export default function ApplicationForm({
   return (
     <div id="form" className="scroll-mt-8 min-w-0">
       <Card>
-        <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
+        <p className="mb-6 min-w-0 text-sm leading-relaxed break-words text-muted-foreground">
           {APPLICATION_FORM_INTRO}
         </p>
 
@@ -334,18 +330,6 @@ export default function ApplicationForm({
                   })
                 }
                 min={1}
-              />
-            </div>
-            <div className="text-sm">
-              <FieldLabel optional hint={CONNECTION_TYPES_OPEN_TO_FIELD.helper}>
-                {CONNECTION_TYPES_OPEN_TO_FIELD.label}
-              </FieldLabel>
-              <ChipMultiSelect
-                options={CONNECTION_OPEN_TO_OPTIONS}
-                selected={draft.profile.connectionsOpenTo}
-                onChange={(connectionsOpenTo) =>
-                  updateProfile({ connectionsOpenTo })
-                }
               />
             </div>
           </section>
