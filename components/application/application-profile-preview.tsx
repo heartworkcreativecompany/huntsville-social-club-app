@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo } from 'react'
 import type { ApplicationDraft, ApplicationStatus } from '@/lib/application'
+import { APPLICATION_REVIEW_PREVIEW_NOTICE } from '@/lib/application-form-content'
 import ApplicationProfilePhotoPreview from './application-profile-photo-preview'
 
 export default function ApplicationProfilePreview({
@@ -18,21 +18,6 @@ export default function ApplicationProfilePreview({
   variant?: 'inline' | 'submitted'
 }) {
   const isLive = applicationStatus === 'approved'
-  const showChrome = variant !== 'submitted'
-
-  const banner = useMemo(
-    () =>
-      isLive ? (
-        <span>This is how your profile appears to other members.</span>
-      ) : (
-        <span>
-          <strong className="font-medium text-foreground">Preview only.</strong>{' '}
-          Your profile stays private until membership is approved. This matches the
-          layout other members will see in the directory.
-        </span>
-      ),
-    [isLive]
-  )
 
   return (
     <div
@@ -42,27 +27,11 @@ export default function ApplicationProfilePreview({
           : 'rounded-lg border border-border bg-background/30 p-4'
       }
     >
-      {showChrome ? (
-        <>
-          <div className="mb-4">
-            <h3 className="text-display text-base font-medium text-foreground">
-              Profile preview
-            </h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Review your public name, About Me, details, and photos before you
-              submit.
-            </p>
-          </div>
-
-          <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 px-4 py-3 text-sm text-muted-foreground">
-            {banner}
-          </div>
-        </>
-      ) : (
-        <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft/40 px-4 py-3 text-sm text-muted-foreground">
-          {banner}
-        </div>
-      )}
+      <div className="mb-4 min-w-0 rounded-lg border border-accent/30 bg-accent-soft/40 px-4 py-3 text-sm leading-relaxed break-words text-muted-foreground">
+        {isLive
+          ? 'This is how your profile appears to other members.'
+          : APPLICATION_REVIEW_PREVIEW_NOTICE}
+      </div>
 
       <ApplicationProfilePhotoPreview
         draft={draft}

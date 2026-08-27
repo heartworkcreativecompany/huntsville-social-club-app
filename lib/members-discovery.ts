@@ -4,6 +4,7 @@ import {
   type ApplicationStatus,
 } from '@/lib/application'
 import { enrichProfileFromDraft } from '@/lib/enrich-profile-discovery'
+import { compareIndustries, memberIndustryMatchesFilter } from '@/lib/industries'
 import {
   membershipStatusLabel,
   resolveMembershipStatus,
@@ -305,7 +306,7 @@ export function filterDirectoryMembers(
   const normalizedQuery = filters.query.trim().toLowerCase()
   const normalizedLocation = filters.locationQuery.trim().toLowerCase()
   const normalizedInterest = filters.interestFilter.trim().toLowerCase()
-  const normalizedIndustry = filters.industryFilter.trim().toLowerCase()
+  const industryFilter = filters.industryFilter.trim()
 
   const ageOption = AGE_FILTER_OPTIONS.find((o) => o.value === filters.ageFilter)
 
@@ -368,9 +369,12 @@ export function filterDirectoryMembers(
       if (!interests.some((i) => i.includes(normalizedInterest))) return false
     }
 
-    if (normalizedIndustry) {
-      const industry = member.discovery_industry?.toLowerCase() ?? ''
-      if (!industry.includes(normalizedIndustry)) return false
+    if (industryFilter && industryFilter !== 'all') {
+      if (
+        !memberIndustryMatchesFilter(member.discovery_industry, industryFilter)
+      ) {
+        return false
+      }
     }
 
     if (!normalizedQuery) return true
@@ -399,4 +403,28 @@ export function collectInterestOptions(members: DirectoryMember[]): string[] {
     }
   }
   return [...set].sort((a, b) => a.localeCompare(b))
+}
+
+export type DirectorySort = 'name' | 'industry'
+
+/** Name A–Z is the directory default (matches server `.order('full_name')`). */
+export function sortDirectoryMembers(
+  members: DirectoryMember[],
+  sort: DirectorySort
+): DirectoryMember[] {
+  const next = [...members]
+  if (sort === 'industry') {
+    next.sort((a, b) => {
+      const industryCmp = compareIndustries(
+        a.discovery_industry,
+        b.discovery_industry
+      )
+      if (industryCmp !== 0) return industryCmp
+      return (a.full_name ?? '').localeCompare(b.full_name ?? '')
+    })
+    return next
+  }
+
+  next.sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
+  return next
 }

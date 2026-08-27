@@ -15,6 +15,7 @@ import {
   adminMemberApplicationDetailSections,
 } from '@/lib/admin-application-review'
 import { getViewer } from '@/lib/viewer'
+import { formatIndustryLabel } from '@/lib/industries'
 import AdminApplicationPhotoGallery from '@/components/admin/admin-application-photo-gallery'
 import AdminApprovalGates from '@/components/admin/admin-approval-gates'
 import AdminBillingStatus from '@/components/admin/admin-billing-status'
@@ -239,7 +240,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
               <div>
                 <dt className="text-muted-foreground">Industry</dt>
                 <dd className="font-medium text-foreground">
-                  {draft.workAndInterests.industry || '—'}
+                  {formatIndustryLabel(draft.workAndInterests.industry) || '—'}
                 </dd>
               </div>
               <div>

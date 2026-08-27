@@ -1,5 +1,6 @@
 import type { ApplicationDraft } from '@/lib/application'
 import { APPLICATION_PROMPTS } from '@/lib/application-form-content'
+import { formatIndustryLabel } from '@/lib/industries'
 import { memberPublicIntentLabelsFromValues } from '@/lib/member-public-intent'
 import { connectionIntentsFromDraft } from '@/lib/application-draft-sync'
 
@@ -114,7 +115,10 @@ export function publicProfileDetailsFromDraft(
     connectionIntents,
     locationArea: draft.location.neighborhoodOrArea.trim() || null,
     occupation: draft.workAndInterests.occupation.trim() || null,
-    industry: draft.workAndInterests.industry.trim() || null,
+    industry: (() => {
+      const raw = draft.workAndInterests.industry.trim()
+      return raw ? formatIndustryLabel(raw) || raw : null
+    })(),
     interests,
     lifestyleTags,
     eventInterests,

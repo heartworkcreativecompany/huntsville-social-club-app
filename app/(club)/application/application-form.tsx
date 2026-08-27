@@ -22,11 +22,23 @@ import {
   PROMPT_MAX_CHARS,
   REQUIRED_PROMPT_KEYS,
   US_STATE_OPTIONS,
+  applicationStepHeadingId,
 } from '@/lib/application-form-content'
 import { SOCIAL_VIBE_OPTIONS } from '@/lib/application-fields'
 import type { ApplicationDraft, ApplicationStatus } from '@/lib/application'
 import { canEditApplication } from '@/lib/application'
-import { completedPromptCount } from '@/lib/application-validation'
+import {
+  APPLICATION_FIELD_IDS,
+  collectApplicationValidationIssues,
+  completedPromptCount,
+  validateApplicationStep,
+  type ApplicationValidationIssue,
+} from '@/lib/application-validation'
+import {
+  INDUSTRY_OPTIONS,
+  formatIndustryLabel,
+  parseIndustryValue,
+} from '@/lib/industries'
 import {
   CONNECTION_LOOKING_FOR_FIELD,
   MEMBER_PUBLIC_INTENT_LABELS,
@@ -106,6 +118,7 @@ export default function ApplicationForm({
   const router = useRouter()
   const [draft, setDraft] = useState(initialDraft)
   const [message, setMessage] = useState('')
+  const [issues, setIssues] = useState<ApplicationValidationIssue[]>([])
   const [isPending, startTransition] = useTransition()
 
   const editable = canEditApplication(applicationStatus)
@@ -173,6 +186,37 @@ export default function ApplicationForm({
     }))
   }
 
+  const focusApplicationTarget = (focusId: string) => {
+    requestAnimationFrame(() => {
+      const node = document.getElementById(focusId)
+      if (node instanceof HTMLElement) {
+        node.focus()
+        node.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    })
+  }
+
+  const goToIssue = (item: ApplicationValidationIssue) => {
+    update({ step: item.stepId })
+    focusApplicationTarget(item.focusId)
+  }
+
+  const handleContinue = () => {
+    if (draft.step === 3) {
+      const industryIssues = validateApplicationStep(draft, 3).filter(
+        (item) => item.code === 'industry'
+      )
+      if (industryIssues.length > 0) {
+        setIssues(industryIssues)
+        setMessage('')
+        focusApplicationTarget(industryIssues[0].focusId)
+        return
+      }
+    }
+    setIssues([])
+    update({ step: draft.step + 1 })
+  }
+
   const handleSave = () => {
     setMessage('')
     startTransition(async () => {
@@ -189,6 +233,16 @@ export default function ApplicationForm({
 
   const handleSubmit = () => {
     setMessage('')
+    const nextIssues = collectApplicationValidationIssues(draft)
+    if (nextIssues.length > 0) {
+      setIssues(nextIssues)
+      startTransition(async () => {
+        await saveApplicationDraft(draft)
+      })
+      focusApplicationTarget('application-form-errors')
+      return
+    }
+    setIssues([])
     startTransition(async () => {
       const saveResult = await saveApplicationDraft(draft)
       if (saveResult.error) {
@@ -217,6 +271,34 @@ export default function ApplicationForm({
           {APPLICATION_FORM_INTRO}
         </p>
 
+        {issues.length > 0 ? (
+          <div
+            id="application-form-errors"
+            className="mb-6 min-w-0 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm"
+            role="alert"
+            tabIndex={-1}
+          >
+            <p className="font-medium text-foreground">
+              {issues.length === 1
+                ? 'Please fix this item before submitting:'
+                : `Please fix these ${issues.length} items before submitting:`}
+            </p>
+            <ul className="mt-2 grid gap-2">
+              {issues.map((item) => (
+                <li key={item.code} className="min-w-0">
+                  <button
+                    type="button"
+                    className="text-left font-medium break-words text-accent underline decoration-accent/70 underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    onClick={() => goToIssue(item)}
+                  >
+                    {item.message}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <ApplicationStepProgress
           currentStep={draft.step}
           onStepSelect={(step) => update({ step })}
@@ -232,7 +314,11 @@ export default function ApplicationForm({
         {draft.step === 1 ? (
           <section className="grid gap-5">
             <div>
-              <h3 className="text-display text-base font-medium text-foreground">
+              <h3
+                id={applicationStepHeadingId(1)}
+                tabIndex={-1}
+                className="text-display text-base font-medium text-foreground"
+              >
                 Profile basics
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -244,6 +330,7 @@ export default function ApplicationForm({
               <label className="grid gap-1.5 text-sm">
                 <FieldLabel required>First name</FieldLabel>
                 <input
+                  id={APPLICATION_FIELD_IDS.firstName}
                   className={inputClassName}
                   value={draft.profile.firstName}
                   onChange={(e) => updateProfile({ firstName: e.target.value })}
@@ -255,6 +342,7 @@ export default function ApplicationForm({
                   Last name
                 </FieldLabel>
                 <input
+                  id={APPLICATION_FIELD_IDS.lastName}
                   className={inputClassName}
                   value={draft.profile.lastName}
                   onChange={(e) => updateProfile({ lastName: e.target.value })}
@@ -270,6 +358,7 @@ export default function ApplicationForm({
                 Display name
               </FieldLabel>
               <input
+                id={APPLICATION_FIELD_IDS.displayName}
                 className={inputClassName}
                 value={draft.profile.displayName}
                 onChange={(e) => updateProfile({ displayName: e.target.value })}
@@ -283,6 +372,7 @@ export default function ApplicationForm({
               </FieldLabel>
               <input
                 type="date"
+                id={APPLICATION_FIELD_IDS.dateOfBirth}
                 className={inputClassName}
                 value={draft.profile.dateOfBirth}
                 onChange={(e) =>
@@ -315,7 +405,7 @@ export default function ApplicationForm({
                 placeholder="she/her, he/him, they/them…"
               />
             </label>
-            <div className="text-sm">
+            <div id={APPLICATION_FIELD_IDS.connectionIntents} className="text-sm" tabIndex={-1}>
               <FieldLabel required hint={CONNECTION_LOOKING_FOR_FIELD.helper}>
                 {CONNECTION_LOOKING_FOR_FIELD.label}
               </FieldLabel>
@@ -338,20 +428,82 @@ export default function ApplicationForm({
         {draft.step === 2 ? (
           <section className="grid gap-5">
             <div>
-              <h3 className="text-display text-base font-medium text-foreground">
+              <h3
+                id={applicationStepHeadingId(2)}
+                tabIndex={-1}
+                className="text-display text-base font-medium text-foreground"
+              >
                 Location
               </h3>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                City and ZIP help us confirm local membership — they stay private
-                and are reviewed by admins as a trust signal, not proof of
-                identity. Only your neighborhood or area label is shown publicly
-                after approval.
-              </p>
             </div>
+            <fieldset className="grid gap-2 text-sm">
+              <FieldLabel>
+                Do you live in the Huntsville metro area?
+              </FieldLabel>
+              <div
+                id={APPLICATION_FIELD_IDS.metro}
+                className="flex flex-wrap gap-3"
+                tabIndex={-1}
+              >
+                <label className={CHOICE_ROW_CLASS}>
+                  <input
+                    type="radio"
+                    name="livesInHuntsvilleArea"
+                    className="h-5 w-5 shrink-0"
+                    checked={draft.location.livesInHuntsvilleArea === true}
+                    onChange={() =>
+                      updateLocation({
+                        livesInHuntsvilleArea: true,
+                        localConnection: '',
+                      })
+                    }
+                  />
+                  <span>Yes</span>
+                </label>
+                <label className={CHOICE_ROW_CLASS}>
+                  <input
+                    type="radio"
+                    name="livesInHuntsvilleArea"
+                    className="h-5 w-5 shrink-0"
+                    checked={draft.location.livesInHuntsvilleArea === false}
+                    onChange={() =>
+                      updateLocation({ livesInHuntsvilleArea: false })
+                    }
+                  />
+                  <span>No</span>
+                </label>
+              </div>
+            </fieldset>
+            {draft.location.livesInHuntsvilleArea === false ? (
+              <label className="grid gap-1.5 text-sm">
+                <FieldLabel
+                  privateField
+                  hint="How you stay connected to Huntsville—work, family, frequent visits, etc."
+                >
+                  Your connection to the area
+                </FieldLabel>
+                <textarea
+                  id={APPLICATION_FIELD_IDS.localConnection}
+                  className={textareaClassName}
+                  rows={3}
+                  value={draft.location.localConnection}
+                  onChange={(e) =>
+                    updateLocation({ localConnection: e.target.value })
+                  }
+                />
+              </label>
+            ) : null}
+            <p className="text-xs leading-relaxed break-words text-muted-foreground">
+              City and ZIP help us confirm local membership — they stay private
+              and are reviewed by admins as a trust signal, not proof of
+              identity. Only your neighborhood or area label is shown publicly
+              after approval.
+            </p>
             <div className="grid min-w-0 gap-4 sm:grid-cols-3">
               <label className="grid gap-1.5 text-sm sm:col-span-2">
                 <FieldLabel privateField>City</FieldLabel>
                 <input
+                  id={APPLICATION_FIELD_IDS.city}
                   className={inputClassName}
                   value={draft.location.city}
                   onChange={(e) => updateLocation({ city: e.target.value })}
@@ -388,6 +540,7 @@ export default function ApplicationForm({
                 Neighborhood or area
               </FieldLabel>
               <input
+                id={APPLICATION_FIELD_IDS.neighborhood}
                 className={inputClassName}
                 value={draft.location.neighborhoodOrArea}
                 onChange={(e) =>
@@ -396,53 +549,6 @@ export default function ApplicationForm({
                 placeholder="Downtown Huntsville, Madison, Jones Valley…"
               />
             </label>
-            <fieldset className="grid gap-2 text-sm">
-              <FieldLabel>Do you live in the Huntsville metro area?</FieldLabel>
-              <div className="flex flex-wrap gap-3">
-                <label className={CHOICE_ROW_CLASS}>
-                  <input
-                    type="radio"
-                    name="livesInHuntsvilleArea"
-                    className="h-5 w-5 shrink-0"
-                    checked={draft.location.livesInHuntsvilleArea === true}
-                    onChange={() =>
-                      updateLocation({
-                        livesInHuntsvilleArea: true,
-                        localConnection: '',
-                      })
-                    }
-                  />
-                  <span>Yes</span>
-                </label>
-                <label className={CHOICE_ROW_CLASS}>
-                  <input
-                    type="radio"
-                    name="livesInHuntsvilleArea"
-                    className="h-5 w-5 shrink-0"
-                    checked={draft.location.livesInHuntsvilleArea === false}
-                    onChange={() =>
-                      updateLocation({ livesInHuntsvilleArea: false })
-                    }
-                  />
-                  <span>No</span>
-                </label>
-              </div>
-            </fieldset>
-            {draft.location.livesInHuntsvilleArea === false ? (
-              <label className="grid gap-1.5 text-sm">
-                <FieldLabel privateField hint="How you stay connected to Huntsville—work, family, frequent visits, etc.">
-                  Your connection to the area
-                </FieldLabel>
-                <textarea
-                  className={textareaClassName}
-                  rows={3}
-                  value={draft.location.localConnection}
-                  onChange={(e) =>
-                    updateLocation({ localConnection: e.target.value })
-                  }
-                />
-              </label>
-            ) : null}
             <label className="grid gap-1.5 text-sm">
               <FieldLabel
                 hint="Optional. LinkedIn, personal site, or community profile — reviewed privately."
@@ -464,12 +570,16 @@ export default function ApplicationForm({
         {draft.step === 3 ? (
           <section className="grid gap-5">
             <div>
-              <h3 className="text-display text-base font-medium text-foreground">
+              <h3
+                id={applicationStepHeadingId(3)}
+                tabIndex={-1}
+                className="text-display text-base font-medium text-foreground"
+              >
                 Work and interests
               </h3>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Helps reviewers understand how you&apos;ll contribute. Employer
-                details stay private unless you choose to share them later.
+              <p className="mt-1 text-xs leading-relaxed break-words text-muted-foreground">
+                Employer details stay private unless you choose to share them
+                later.
               </p>
             </div>
             <label className="grid gap-1.5 text-sm">
@@ -482,12 +592,42 @@ export default function ApplicationForm({
               />
             </label>
             <label className="grid gap-1.5 text-sm">
-              <FieldLabel hint="Recommended.">Industry</FieldLabel>
-              <input
+              <FieldLabel required>Industry</FieldLabel>
+              <select
+                id={APPLICATION_FIELD_IDS.industry}
                 className={inputClassName}
                 value={draft.workAndInterests.industry}
+                aria-invalid={issues.some((item) => item.code === 'industry')}
+                aria-describedby={
+                  issues.some((item) => item.code === 'industry')
+                    ? 'application-industry-error'
+                    : undefined
+                }
                 onChange={(e) => updateWork({ industry: e.target.value })}
-              />
+              >
+                <option value="">Select an industry</option>
+                {!parseIndustryValue(draft.workAndInterests.industry) &&
+                draft.workAndInterests.industry.trim() ? (
+                  <option value={draft.workAndInterests.industry}>
+                    {formatIndustryLabel(draft.workAndInterests.industry)} (update
+                    required)
+                  </option>
+                ) : null}
+                {INDUSTRY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {issues.some((item) => item.code === 'industry') ? (
+                <span
+                  id="application-industry-error"
+                  className="text-xs text-danger"
+                  role="alert"
+                >
+                  Select an industry to continue.
+                </span>
+              ) : null}
             </label>
             <label className="grid gap-1.5 text-sm">
               <FieldLabel privateField hint="Optional.">
@@ -527,7 +667,7 @@ export default function ApplicationForm({
                 ))}
               </select>
             </label>
-            <div className="text-sm">
+            <div id={APPLICATION_FIELD_IDS.interests} className="text-sm" tabIndex={-1}>
               <FieldLabel required>Interests</FieldLabel>
               <ChipMultiSelect
                 options={INTEREST_OPTIONS}
@@ -559,7 +699,11 @@ export default function ApplicationForm({
         {draft.step === 4 ? (
           <section className="grid gap-5">
             <div>
-              <h3 className="text-display text-base font-medium text-foreground">
+              <h3
+                id={applicationStepHeadingId(4)}
+                tabIndex={-1}
+                className="text-display text-base font-medium text-foreground"
+              >
                 About you
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -580,10 +724,8 @@ export default function ApplicationForm({
                 About Me
               </FieldLabel>
               <textarea
+                id={APPLICATION_FIELD_IDS.aboutMe}
                 className={textareaClassName}
-                rows={4}
-                maxLength={PROMPT_MAX_CHARS}
-                value={draft.profile.aboutMe}
                 onChange={(e) => updateProfile({ aboutMe: e.target.value })}
                 placeholder="A short introduction — what you’re like to hang out with, and what you’re hoping to find here."
               />
@@ -591,6 +733,7 @@ export default function ApplicationForm({
                 {draft.profile.aboutMe.length}/{PROMPT_MAX_CHARS}
               </span>
             </label>
+            <div id={APPLICATION_FIELD_IDS.prompts} className="grid gap-5" tabIndex={-1}>
             {APPLICATION_PROMPTS.map((prompt) => {
               const value = draft.prompts[prompt.key]
               const isRequired = REQUIRED_PROMPT_KEYS.includes(
@@ -625,29 +768,40 @@ export default function ApplicationForm({
                 </label>
               )
             })}
+            </div>
           </section>
         ) : null}
 
         {draft.step === 5 ? (
           <section className="grid gap-5">
             <div>
-              <h3 className="text-display text-base font-medium text-foreground">
+              <h3
+                id={applicationStepHeadingId(5)}
+                tabIndex={-1}
+                className="text-display text-base font-medium text-foreground"
+              >
                 Profile photos
               </h3>
             </div>
+            <div id={APPLICATION_FIELD_IDS.photos} tabIndex={-1}>
             <ApplicationPhotosField
               memberId={userId}
               photos={draft.photos}
               onChange={(photos) => update({ photos })}
               disabled={isPending}
             />
+            </div>
           </section>
         ) : null}
 
         {draft.step === 6 ? (
           <section className="grid gap-5 text-sm">
             <div>
-              <h3 className="text-display text-base font-medium text-foreground">
+              <h3
+                id={applicationStepHeadingId(6)}
+                tabIndex={-1}
+                className="text-display text-base font-medium text-foreground"
+              >
                 Review & agreements
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -703,7 +857,7 @@ export default function ApplicationForm({
                 </dd>
               </div>
             </dl>
-            <div className="grid gap-3">
+            <div id={APPLICATION_FIELD_IDS.agreements} className="grid gap-3" tabIndex={-1}>
               {AGREEMENT_ITEMS.map((item) => (
                 <label key={item.key} className={AGREEMENT_ROW_CLASS}>
                   <input
@@ -751,7 +905,7 @@ export default function ApplicationForm({
             <button
               type="button"
               className={`${buttonPrimaryClassName} ${MOBILE_FULL_CONTROL_CLASS}`}
-              onClick={() => update({ step: draft.step + 1 })}
+              onClick={handleContinue}
               disabled={isPending}
             >
               Continue

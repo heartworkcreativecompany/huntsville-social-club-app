@@ -1,6 +1,7 @@
 'use client'
 
 import { inputClassName } from '@/lib/event-labels'
+import { INDUSTRY_OPTIONS } from '@/lib/industries'
 import {
   AGE_FILTER_OPTIONS,
   DEFAULT_DISCOVERY_FILTERS,
@@ -111,13 +112,24 @@ export default function MemberDiscoveryFilters({
 
         <label className="grid gap-1.5 text-sm">
           <span className="font-medium text-foreground">Industry</span>
-          <input
-            type="search"
-            value={filters.industryFilter}
-            onChange={(e) => patch({ industryFilter: e.target.value })}
-            placeholder="e.g. Technology"
+          <select
+            value={filters.industryFilter || 'all'}
+            onChange={(e) =>
+              patch({
+                industryFilter:
+                  e.target.value === 'all' ? '' : e.target.value,
+              })
+            }
             className={inputClassName}
-          />
+            aria-label="Filter members by industry"
+          >
+            <option value="all">All industries</option>
+            {INDUSTRY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="grid gap-1.5 text-sm">

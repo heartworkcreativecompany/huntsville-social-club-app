@@ -6,6 +6,9 @@ export const APPLICATION_PAGE_INTRO =
 export const APPLICATION_PAGE_SUBMITTED_INTRO =
   'Review what you submitted. Track verification and review progress on your status page.'
 
+export const APPLICATION_REVIEW_PREVIEW_NOTICE =
+  'Your profile will stay private until your identity has been verified and membership is approved. Review your public facing profile preview below. This is how other members will see you in the directory.'
+
 export const APPLICATION_FORM_INTRO =
   'We only accept real people that have been verified by our administrative staff. Provide only accurate information that can be verified or your application will be rejected or returned for changes. Fields marked as required must be complete before submission. Optional fields do not block approval if left empty, but they do help your profile stand out to future connections.'
 
@@ -18,7 +21,25 @@ export const APPLICATION_FORM_STEPS = [
   { id: 6, title: 'Review' },
 ] as const
 
+export type ApplicationFormStepId = (typeof APPLICATION_FORM_STEPS)[number]['id']
+
 export const APPLICATION_TOTAL_STEPS = APPLICATION_FORM_STEPS.length
+
+export function applicationStepTitle(stepId: number): string {
+  return (
+    APPLICATION_FORM_STEPS.find((step) => step.id === stepId)?.title ??
+    'Application'
+  )
+}
+
+export function applicationStepHeadingId(stepId: number): string {
+  return `application-step-${stepId}`
+}
+
+/** Prefix for final-step errors that originated on an earlier step. */
+export function applicationGoBackToStepPrefix(stepId: number): string {
+  return `Go back to Step ${stepId}: ${applicationStepTitle(stepId)}`
+}
 
 export const PROMPT_MAX_CHARS = 250
 
