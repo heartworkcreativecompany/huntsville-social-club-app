@@ -4,7 +4,11 @@ import {
   type ApplicationStatus,
 } from '@/lib/application'
 import { enrichProfileFromDraft } from '@/lib/enrich-profile-discovery'
-import { compareIndustries, memberIndustryMatchesFilter } from '@/lib/industries'
+import {
+  compareIndustries,
+  isIndustryValue,
+  memberIndustryMatchesFilter,
+} from '@/lib/industries'
 import {
   membershipStatusLabel,
   resolveMembershipStatus,
@@ -427,4 +431,162 @@ export function sortDirectoryMembers(
 
   next.sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
   return next
+}
+
+export const DIRECTORY_BROWSE_MODE_OPTIONS = [
+  { value: 'intentions', label: 'Intentions' },
+  { value: 'industry', label: 'Industry' },
+] as const
+
+export type DirectoryBrowseMode =
+  (typeof DIRECTORY_BROWSE_MODE_OPTIONS)[number]['value']
+
+export const DEFAULT_DIRECTORY_BROWSE_MODE: DirectoryBrowseMode = 'intentions'
+
+/** Member Directory intention chips — labels match the live directory UI. */
+export const DIRECTORY_INTENT_FILTER_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'networking', label: 'Networking' },
+  { value: 'dating', label: 'Dating' },
+  { value: 'friends', label: 'Friends' },
+] as const
+
+export type DirectoryIntentFilterValue =
+  (typeof DIRECTORY_INTENT_FILTER_OPTIONS)[number]['value']
+
+export const DIRECTORY_INDUSTRY_SORT_HINT =
+  'Members are grouped alphabetically by industry.'
+
+export const DIRECTORY_INTENTIONS_EMPTY_DESCRIPTION =
+  'No members found with this intention yet.'
+
+export const DIRECTORY_INDUSTRY_EMPTY_DESCRIPTION =
+  'No members found in this industry yet.'
+
+export type DirectoryBrowseState = {
+  browseMode: DirectoryBrowseMode
+  intentFilter: DirectoryIntentFilterValue
+  industryFilter: string
+}
+
+export const DEFAULT_DIRECTORY_BROWSE_STATE: DirectoryBrowseState = {
+  browseMode: DEFAULT_DIRECTORY_BROWSE_MODE,
+  intentFilter: 'all',
+  industryFilter: 'all',
+}
+
+const DIRECTORY_INTENT_VALUES = new Set<string>(
+  DIRECTORY_INTENT_FILTER_OPTIONS.map((option) => option.value)
+)
+
+export function parseDirectoryBrowseMode(
+  value: unknown
+): DirectoryBrowseMode {
+  if (value === 'intentions' || value === 'industry') return value
+  return DEFAULT_DIRECTORY_BROWSE_MODE
+}
+
+export function parseDirectoryIntentFilter(
+  value: unknown
+): DirectoryIntentFilterValue {
+  if (typeof value === 'string' && DIRECTORY_INTENT_VALUES.has(value)) {
+    return value as DirectoryIntentFilterValue
+  }
+  return 'all'
+}
+
+/** Canonical slugs only; invalid or legacy free-text selections fall back to All. */
+export function parseDirectoryIndustryFilter(value: unknown): string {
+  if (typeof value !== 'string') return 'all'
+  const trimmed = value.trim()
+  if (!trimmed || trimmed === 'all') return 'all'
+  if (isIndustryValue(trimmed)) return trimmed
+  return 'all'
+}
+
+/**
+ * Mutually exclusive browse state. Invalid values fall back to Intentions + All.
+ * Industry mode always clears the intent chip; Intentions mode always clears industry.
+ */
+export function parseDirectoryBrowseState(input: {
+  browseMode?: unknown
+  intentFilter?: unknown
+  industryFilter?: unknown
+} = {}): DirectoryBrowseState {
+  const browseMode = parseDirectoryBrowseMode(input.browseMode)
+  if (browseMode === 'industry') {
+    return {
+      browseMode,
+      intentFilter: 'all',
+      industryFilter: parseDirectoryIndustryFilter(input.industryFilter),
+    }
+  }
+  return {
+    browseMode,
+    intentFilter: parseDirectoryIntentFilter(input.intentFilter),
+    industryFilter: 'all',
+  }
+}
+
+export function applyDirectoryBrowseModeChange(
+  current: DirectoryBrowseState,
+  nextMode: unknown
+): DirectoryBrowseState {
+  const browseMode = parseDirectoryBrowseMode(nextMode)
+  if (browseMode === 'intentions') {
+    return parseDirectoryBrowseState({
+      browseMode,
+      intentFilter: current.intentFilter,
+      industryFilter: 'all',
+    })
+  }
+  return parseDirectoryBrowseState({
+    browseMode,
+    intentFilter: 'all',
+    industryFilter: current.industryFilter,
+  })
+}
+
+export function directoryFiltersForBrowse(
+  state: DirectoryBrowseState
+): DiscoveryFilters {
+  const parsed = parseDirectoryBrowseState(state)
+  if (parsed.browseMode === 'industry') {
+    return {
+      ...DEFAULT_DISCOVERY_FILTERS,
+      intentFilter: 'all',
+      industryFilter:
+        parsed.industryFilter === 'all' ? '' : parsed.industryFilter,
+    }
+  }
+  return {
+    ...DEFAULT_DISCOVERY_FILTERS,
+    intentFilter: parsed.intentFilter,
+    industryFilter: '',
+  }
+}
+
+export function directorySortForBrowse(
+  mode: DirectoryBrowseMode
+): DirectorySort {
+  return parseDirectoryBrowseMode(mode) === 'industry' ? 'industry' : 'name'
+}
+
+export function directoryEmptyStateDescription(
+  mode: DirectoryBrowseMode
+): string {
+  return parseDirectoryBrowseMode(mode) === 'industry'
+    ? DIRECTORY_INDUSTRY_EMPTY_DESCRIPTION
+    : DIRECTORY_INTENTIONS_EMPTY_DESCRIPTION
+}
+
+export function browseDirectoryMembers(
+  members: DirectoryMember[],
+  state: DirectoryBrowseState
+): DirectoryMember[] {
+  const parsed = parseDirectoryBrowseState(state)
+  return sortDirectoryMembers(
+    filterDirectoryMembers(members, directoryFiltersForBrowse(parsed)),
+    directorySortForBrowse(parsed.browseMode)
+  )
 }

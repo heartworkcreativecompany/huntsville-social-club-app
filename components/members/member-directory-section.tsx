@@ -2,41 +2,33 @@
 
 import { useMemo, useState } from 'react'
 import EmptyState from '@/components/ui/empty-state'
-import { inputClassName } from '@/lib/event-labels'
-import { INDUSTRY_OPTIONS } from '@/lib/industries'
 import {
-  DEFAULT_DISCOVERY_FILTERS,
-  filterDirectoryMembers,
-  sortDirectoryMembers,
+  DEFAULT_DIRECTORY_BROWSE_STATE,
+  applyDirectoryBrowseModeChange,
+  browseDirectoryMembers,
+  directoryEmptyStateDescription,
+  parseDirectoryBrowseState,
+  parseDirectoryIndustryFilter,
+  parseDirectoryIntentFilter,
+  type DirectoryBrowseMode,
+  type DirectoryIntentFilterValue,
   type DirectoryMember,
-  type DirectorySort,
-  type DiscoveryFilters,
-  type IntentFilterValue,
 } from '@/lib/members-discovery'
+import MemberDirectoryBrowseControls from './member-directory-browse-controls'
 import MemberDiscoveryCard from './member-discovery-card'
-import MemberIntentFilterPills from './member-intent-filter-pills'
 
 export default function MemberDirectorySection({
   members,
 }: {
   members: DirectoryMember[]
 }) {
-  const [intentFilter, setIntentFilter] = useState<IntentFilterValue>('all')
-  const [industryFilter, setIndustryFilter] = useState('all')
-  const [sort, setSort] = useState<DirectorySort>('name')
-
-  const filters: DiscoveryFilters = useMemo(
-    () => ({
-      ...DEFAULT_DISCOVERY_FILTERS,
-      intentFilter,
-      industryFilter: industryFilter === 'all' ? '' : industryFilter,
-    }),
-    [intentFilter, industryFilter]
+  const [browseState, setBrowseState] = useState(
+    DEFAULT_DIRECTORY_BROWSE_STATE
   )
 
   const visible = useMemo(
-    () => sortDirectoryMembers(filterDirectoryMembers(members, filters), sort),
-    [members, filters, sort]
+    () => browseDirectoryMembers(members, browseState),
+    [members, browseState]
   )
 
   if (members.length === 0) {
@@ -50,47 +42,39 @@ export default function MemberDirectorySection({
 
   return (
     <>
-      <MemberIntentFilterPills value={intentFilter} onChange={setIntentFilter} />
+      <MemberDirectoryBrowseControls
+        state={browseState}
+        onBrowseModeChange={(mode: DirectoryBrowseMode) =>
+          setBrowseState((current) =>
+            applyDirectoryBrowseModeChange(current, mode)
+          )
+        }
+        onIntentFilterChange={(value: DirectoryIntentFilterValue) =>
+          setBrowseState((current) =>
+            parseDirectoryBrowseState({
+              ...current,
+              intentFilter: parseDirectoryIntentFilter(value),
+            })
+          )
+        }
+        onIndustryFilterChange={(value: string) =>
+          setBrowseState((current) =>
+            parseDirectoryBrowseState({
+              ...current,
+              industryFilter: parseDirectoryIndustryFilter(value),
+            })
+          )
+        }
+      />
 
-      <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
-        <label className="grid min-w-0 gap-1.5 text-sm">
-          <span className="font-medium text-foreground">Industry</span>
-          <select
-            className={inputClassName}
-            value={industryFilter}
-            aria-label="Filter members by industry"
-            onChange={(e) => setIndustryFilter(e.target.value)}
-          >
-            <option value="all">All industries</option>
-            {INDUSTRY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid min-w-0 gap-1.5 text-sm">
-          <span className="font-medium text-foreground">Sort</span>
-          <select
-            className={inputClassName}
-            value={sort}
-            aria-label="Sort members"
-            onChange={(e) => setSort(e.target.value as DirectorySort)}
-          >
-            <option value="name">Name: A–Z</option>
-            <option value="industry">Industry: A–Z</option>
-          </select>
-        </label>
-      </div>
-
-      <p className="mt-4 text-xs text-muted-foreground">
+      <p className="mt-4 text-xs text-muted-foreground" aria-live="polite">
         Showing {visible.length} of {members.length} members
       </p>
 
       {visible.length === 0 ? (
         <EmptyState
           title="No matches"
-          description="Try another connection or industry filter."
+          description={directoryEmptyStateDescription(browseState.browseMode)}
         />
       ) : (
         <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

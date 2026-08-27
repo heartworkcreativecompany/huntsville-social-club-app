@@ -4,32 +4,38 @@ import {
   chipActiveClassName,
   chipInactiveClassName,
 } from '@/lib/event-labels'
-import type { IntentFilterValue } from '@/lib/members-discovery'
+import {
+  DIRECTORY_INTENT_FILTER_OPTIONS,
+  type DirectoryIntentFilterValue,
+} from '@/lib/members-discovery'
 
-const PILLS: { value: IntentFilterValue; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'networking', label: 'Networking' },
-  { value: 'dating', label: 'Dating' },
-  { value: 'friends', label: 'Friends' },
-]
+export const DIRECTORY_INTENT_PILLS_CLASS = 'flex min-w-0 flex-wrap gap-2'
+
+const PILL_FOCUS_CLASS =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background'
 
 export default function MemberIntentFilterPills({
   value,
   onChange,
 }: {
-  value: IntentFilterValue
-  onChange: (value: IntentFilterValue) => void
+  value: DirectoryIntentFilterValue
+  onChange: (value: DirectoryIntentFilterValue) => void
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {PILLS.map((pill) => {
+    <div
+      className={DIRECTORY_INTENT_PILLS_CLASS}
+      role="group"
+      aria-label="Filter by intention"
+    >
+      {DIRECTORY_INTENT_FILTER_OPTIONS.map((pill) => {
         const active = value === pill.value
         return (
           <button
             key={pill.value}
             type="button"
+            aria-pressed={active}
             onClick={() => onChange(pill.value)}
-            className={active ? chipActiveClassName : chipInactiveClassName}
+            className={`${active ? chipActiveClassName : chipInactiveClassName} ${PILL_FOCUS_CLASS}`}
           >
             {pill.label}
           </button>
