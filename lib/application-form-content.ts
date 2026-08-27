@@ -99,6 +99,13 @@ export const EVENT_INTEREST_OPTIONS = [
   'Members-only gatherings',
 ] as const
 
+/** Shared helper for the two required About you prompts that stay off the public profile. */
+export const APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE =
+  'These answers are for internal review only and are not shown on your public profile.'
+
+export const APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE_ID =
+  'application-internal-review-prompts-notice'
+
 export const APPLICATION_PROMPTS = [
   {
     key: 'bringsYouHere' as const,
@@ -106,7 +113,7 @@ export const APPLICATION_PROMPTS = [
     placeholder:
       'A fresh social circle, thoughtful events, professional peers outside work…',
     required: true,
-    profileVisible: true,
+    profileVisible: false,
   },
   {
     key: 'hopingToMeet' as const,
@@ -114,7 +121,7 @@ export const APPLICATION_PROMPTS = [
     placeholder:
       'Curious people who show up, low-pressure hangs, activity partners…',
     required: true,
-    profileVisible: true,
+    profileVisible: false,
   },
   {
     key: 'perfectWeekend' as const,

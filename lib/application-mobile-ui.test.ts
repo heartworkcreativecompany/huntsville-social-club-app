@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import ApplicationStepProgress from '@/components/application/application-step-progress'
 import {
   APPLICATION_ACTIONS_CLASS,
+  APPLICATION_HELPER_TEXT_CLASS,
   APPLICATION_STEP_CURRENT_LABEL_CLASS,
   APPLICATION_STEP_LIST_CLASS,
   CHOICE_ROW_CLASS,
@@ -56,6 +57,14 @@ describe('application mobile layout classes', () => {
     expect(textareaClassName).toContain('min-h-[7.5rem]')
     expect(CHOICE_ROW_CLASS).toContain('min-h-11')
     expect(buttonPrimaryClassName).not.toContain('min-w-[')
+  })
+
+  it('wraps About you internal-review helper copy without horizontal overflow', () => {
+    expect(APPLICATION_HELPER_TEXT_CLASS).toContain('min-w-0')
+    expect(APPLICATION_HELPER_TEXT_CLASS).toContain('break-words')
+    expect(APPLICATION_HELPER_TEXT_CLASS).toContain('leading-relaxed')
+    expect(APPLICATION_HELPER_TEXT_CLASS).not.toContain('overflow-x-auto')
+    expect(APPLICATION_HELPER_TEXT_CLASS).not.toContain('whitespace-nowrap')
   })
 
   it('keeps the public Sign in control visible on small screens', () => {

@@ -33,6 +33,17 @@ describe('admin application field mapping', () => {
       'Friendly local looking for community.'
     )
     expect(adminApplicationLookingForLabel(draft)).toBe('Networking')
+    expect(
+      about.some(
+        (row) =>
+          row.key === 'bringsYouHere' &&
+          row.label === 'What brings you to the club most right now?' &&
+          row.value === 'New friends'
+      )
+    ).toBe(true)
+    expect(
+      about.some((row) => row.key === 'hopingToMeet' && row.value === '—')
+    ).toBe(true)
   })
 
   it('does not surface vendor-verification on standard member applications', () => {

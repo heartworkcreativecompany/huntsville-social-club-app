@@ -23,6 +23,10 @@ export const CHOICE_ROW_CLASS =
 export const AGREEMENT_ROW_CLASS =
   'flex min-h-11 min-w-0 items-start gap-3 py-1 text-sm'
 
+/** Helper copy under application field labels — wraps on 320px–390px. */
+export const APPLICATION_HELPER_TEXT_CLASS =
+  'min-w-0 text-xs leading-relaxed break-words text-muted-foreground'
+
 export function applicationStepStatusLabel(
   currentStep: number,
   totalSteps: number,

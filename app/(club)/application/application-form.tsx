@@ -11,6 +11,8 @@ import Card from '@/components/ui/card'
 import {
   AGREEMENT_ITEMS,
   APPLICATION_FORM_INTRO,
+  APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE,
+  APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE_ID,
   APPLICATION_PROMPTS,
   APPLICATION_TOTAL_STEPS,
   EVENT_INTEREST_OPTIONS,
@@ -54,6 +56,7 @@ import {
 import {
   AGREEMENT_ROW_CLASS,
   APPLICATION_ACTIONS_CLASS,
+  APPLICATION_HELPER_TEXT_CLASS,
   CHOICE_ROW_CLASS,
   MOBILE_FULL_CONTROL_CLASS,
 } from '@/lib/application-mobile-ui'
@@ -99,6 +102,54 @@ function FieldLabel({
         </span>
       ) : null}
     </span>
+  )
+}
+
+function ApplicationPromptField({
+  prompt,
+  value,
+  onChange,
+}: {
+  prompt: (typeof APPLICATION_PROMPTS)[number]
+  value: string
+  onChange: (value: string) => void
+}) {
+  const isRequired = REQUIRED_PROMPT_KEYS.includes(
+    prompt.key as (typeof REQUIRED_PROMPT_KEYS)[number]
+  )
+  const isInternalReview = !prompt.profileVisible
+
+  return (
+    <label className="grid min-w-0 gap-1.5 text-sm">
+      <FieldLabel
+        required={isRequired}
+        optional={!isRequired}
+        privateField={isInternalReview}
+        hint={
+          prompt.profileVisible
+            ? 'Visible to other members after approval.'
+            : undefined
+        }
+      >
+        {prompt.label}
+      </FieldLabel>
+      <textarea
+        className={textareaClassName}
+        rows={3}
+        maxLength={PROMPT_MAX_CHARS}
+        value={value}
+        aria-describedby={
+          isInternalReview
+            ? APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE_ID
+            : undefined
+        }
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={prompt.placeholder}
+      />
+      <span className="text-xs text-muted-foreground">
+        {value.length}/{PROMPT_MAX_CHARS}
+      </span>
+    </label>
   )
 }
 
@@ -733,41 +784,33 @@ export default function ApplicationForm({
                 {draft.profile.aboutMe.length}/{PROMPT_MAX_CHARS}
               </span>
             </label>
-            <div id={APPLICATION_FIELD_IDS.prompts} className="grid gap-5" tabIndex={-1}>
-            {APPLICATION_PROMPTS.map((prompt) => {
-              const value = draft.prompts[prompt.key]
-              const isRequired = REQUIRED_PROMPT_KEYS.includes(
-                prompt.key as (typeof REQUIRED_PROMPT_KEYS)[number]
+            <div id={APPLICATION_FIELD_IDS.prompts} className="grid min-w-0 gap-5" tabIndex={-1}>
+            <p
+              id={APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE_ID}
+              className={APPLICATION_HELPER_TEXT_CLASS}
+            >
+              {APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE}
+            </p>
+            {APPLICATION_PROMPTS.filter((prompt) => !prompt.profileVisible).map(
+              (prompt) => (
+                <ApplicationPromptField
+                  key={prompt.key}
+                  prompt={prompt}
+                  value={draft.prompts[prompt.key]}
+                  onChange={(next) => updatePrompts({ [prompt.key]: next })}
+                />
               )
-              return (
-                <label key={prompt.key} className="grid gap-1.5 text-sm">
-                  <FieldLabel
-                    required={isRequired}
-                    optional={!isRequired}
-                    hint={
-                      prompt.profileVisible
-                        ? 'Visible to other members after approval.'
-                        : undefined
-                    }
-                  >
-                    {prompt.label}
-                  </FieldLabel>
-                  <textarea
-                    className={textareaClassName}
-                    rows={3}
-                    maxLength={PROMPT_MAX_CHARS}
-                    value={value}
-                    onChange={(e) =>
-                      updatePrompts({ [prompt.key]: e.target.value })
-                    }
-                    placeholder={prompt.placeholder}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    {value.length}/{PROMPT_MAX_CHARS}
-                  </span>
-                </label>
+            )}
+            {APPLICATION_PROMPTS.filter((prompt) => prompt.profileVisible).map(
+              (prompt) => (
+                <ApplicationPromptField
+                  key={prompt.key}
+                  prompt={prompt}
+                  value={draft.prompts[prompt.key]}
+                  onChange={(next) => updatePrompts({ [prompt.key]: next })}
+                />
               )
-            })}
+            )}
             </div>
           </section>
         ) : null}

@@ -453,8 +453,7 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
       : migrateConnectionIntentsFromLegacy(lookingFor, connectionsOpenTo)
 
   const hopingToMeet = parseString(prompts.hopingToMeet)
-  // Prefer dedicated aboutMe; fall back once from hopingToMeet for older drafts.
-  const aboutMe = parseString(profile.aboutMe) || hopingToMeet
+  const aboutMe = parseString(profile.aboutMe)
 
   return {
     version: 2,

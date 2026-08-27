@@ -26,6 +26,19 @@ export function membershipIntentFromDraft(draft: ApplicationDraft): string {
   return draft.profile.aboutMe.trim()
 }
 
+/** True when a candidate public-bio string is only a private review prompt. */
+export function isInternalReviewPromptEcho(
+  draft: ApplicationDraft,
+  value: string | null | undefined
+): boolean {
+  const trimmed = value?.trim() ?? ''
+  if (!trimmed) return false
+  return (
+    trimmed === draft.prompts.hopingToMeet.trim() ||
+    trimmed === draft.prompts.bringsYouHere.trim()
+  )
+}
+
 export function connectionIntentsFromDraft(
   draft: ApplicationDraft
 ): MemberPublicIntentValue[] {
@@ -144,7 +157,10 @@ export function mergeProfileIntoDraft(
   }
 
   if (!parsed.profile.aboutMe.trim() && profile.membership_intent?.trim()) {
-    parsed.profile.aboutMe = profile.membership_intent.trim()
+    const candidate = profile.membership_intent.trim()
+    if (!isInternalReviewPromptEcho(parsed, candidate)) {
+      parsed.profile.aboutMe = candidate
+    }
   }
 
   const resolvedIntents = profile

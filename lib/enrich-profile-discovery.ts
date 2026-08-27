@@ -1,8 +1,10 @@
 import { parseApplicationDraft } from '@/lib/application'
+import { isInternalReviewPromptEcho } from '@/lib/application-draft-sync'
 import { discoveryColumnsFromDraft } from '@/lib/membership-systems'
 
 type ProfileWithDraft = {
   application_draft?: unknown
+  membership_intent?: string | null
   location_area?: string | null
   discovery_intent?: string | null
   location_city?: string | null
@@ -35,9 +37,16 @@ export function enrichProfileFromDraft<T extends ProfileWithDraft>(
 
   const draft = parseApplicationDraft(profile.application_draft)
   const discovery = discoveryColumnsFromDraft(draft)
+  const membershipIntent = profile.membership_intent?.trim() || null
+  const sanitizedMembershipIntent =
+    !draft.profile.aboutMe.trim() &&
+    isInternalReviewPromptEcho(draft, membershipIntent)
+      ? null
+      : profile.membership_intent
 
   return {
     ...profile,
+    membership_intent: sanitizedMembershipIntent,
     location_area:
       profile.location_area?.trim() ||
       draft.location.neighborhoodOrArea.trim() ||
