@@ -4,5 +4,12 @@
       "path": "/api/cron/curated-matches",
       "schedule": "0 14 * * 1"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/connect",
+      "destination": "/",
+      "permanent": true
+    }
   ]
 }
