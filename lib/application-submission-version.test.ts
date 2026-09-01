@@ -111,11 +111,11 @@ describe('application submission version migration', () => {
 })
 
 describe('application status email send paths', () => {
-  it('identifies existing Next.js Resend email senders rather than removing them', () => {
-    expect(submitAction).toContain('sendApplicationSubmittedEmail')
-    expect(adminAction).toContain('sendApplicationApprovedEmail')
-    expect(adminAction).toContain('sendApplicationRejectedEmail')
-    expect(adminAction).toContain('sendApplicationNeedsInfoEmail')
+  it('keeps Next.js applicant-status helpers unused by submit and admin status updates', () => {
+    expect(submitAction).not.toContain('sendApplicationSubmittedEmail')
+    expect(adminAction).not.toContain('sendApplicationApprovedEmail')
+    expect(adminAction).not.toContain('sendApplicationRejectedEmail')
+    expect(adminAction).not.toContain('sendApplicationNeedsInfoEmail')
     expect(handler).toContain('RESEND_EVENTS_URL')
     expect(handler).toContain('https://api.resend.com/events/send')
   })
