@@ -5,6 +5,9 @@
 /** Inner Circle included premium event credits per billing period. */
 export const INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD = 1
 
+/** Inner Circle included Circle Social credits per billing period. */
+export const INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD = 2
+
 /** Elite Circle included premium event credits per billing period. */
 export const ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD = 2
 
@@ -49,10 +52,14 @@ export type RegistrationMethod =
   | 'credit'
   | 'included_unlimited'
 
+export type CreditKind = 'premium_event' | 'circle_social'
+
 export type RegistrationUiState =
   | 'member_standard_free'
   | 'member_paid'
   | 'inner_circle_social_included'
+  | 'inner_circle_social_credit_remaining'
+  | 'inner_circle_social_credit_exhausted'
   | 'inner_premium_credit_remaining'
   | 'inner_premium_credit_exhausted'
   | 'elite_circle_social_included'
@@ -71,6 +78,7 @@ export type EventRegistrationDecision =
         | 'event_closed'
         | 'pending_approval'
         | 'priority_window'
+        | 'included_credits_exhausted'
       message: string
       upgradeTier?: 'inner_circle' | 'elite_circle'
       generalRsvpOpensAt?: string | null
@@ -78,6 +86,7 @@ export type EventRegistrationDecision =
   | {
       allowed: true
       method: RegistrationMethod
+      creditKind?: CreditKind
       freeRegistrationsRemaining?: number
       freeRegistrationsGranted?: number
       paymentRequired?: boolean
@@ -101,6 +110,15 @@ export function premiumCreditsForTier(
 export function guestInvitesForTier(tier: ProductTier): number {
   if (tier === 'elite_circle') return ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD
   return 0
+}
+
+/**
+ * Circle Social credits granted per Inner Circle billing period.
+ * Elite is unlimited (null). Other tiers have no included allotment.
+ */
+export function circleSocialCreditsForTier(tier: ProductTier): number | null {
+  if (tier === 'inner_circle') return INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD
+  return null
 }
 
 /** Parse dollars like "25" or "25.00" into cents; empty → null. */

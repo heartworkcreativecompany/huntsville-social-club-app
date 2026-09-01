@@ -12,12 +12,13 @@ import {
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
 import {
   FREE_MEMBER_PREMIUM_CREDITS_COPY,
-  dashboardCreditsSummaryFromSnapshot,
+  dashboardPerkLinesFromSnapshot,
   hydrateMemberPerksFromServer,
   isPaidPerksTier,
   membershipPerksSnapshotFromEntitlements,
   useMemberPerksWithFallback,
 } from '@/lib/member-perks-store'
+import MembershipPerkLines from '@/components/membership/membership-perk-lines'
 import type { SubscriptionStatus } from '@/lib/membership-systems'
 
 function subscriptionStatusLabel(status: SubscriptionStatus): string {
@@ -51,8 +52,10 @@ export default function MembershipUsageCard({
   }, [
     entitlements.productTier,
     entitlements.premiumCreditsRemaining,
+    entitlements.circleSocialCreditsRemaining,
     entitlements.guestInvitesRemaining,
     entitlements.activeCycle?.credits_granted,
+    entitlements.activeCycle?.circle_social_credits_granted,
     entitlements.activeCycle?.period_start,
     entitlements.activeCycle?.period_end,
   ])
@@ -72,9 +75,9 @@ export default function MembershipUsageCard({
       billing.billing_period_end)
     : null
 
-  const usageLine = showPaidUsage
-    ? dashboardCreditsSummaryFromSnapshot(livePerks!)
-    : FREE_MEMBER_PREMIUM_CREDITS_COPY
+  const usageLines = showPaidUsage
+    ? dashboardPerkLinesFromSnapshot(livePerks!)
+    : [FREE_MEMBER_PREMIUM_CREDITS_COPY]
 
   const hasPaidSubscription =
     Boolean(billing.stripe_subscription_id) &&
@@ -112,7 +115,9 @@ export default function MembershipUsageCard({
           to keep membership access.
         </p>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">{usageLine}</p>
+        <div className="mt-3 min-w-0 max-w-full">
+          <MembershipPerkLines lines={usageLines} />
+        </div>
       )}
 
       {showPaidUsage && entitlements.productTier === 'elite_circle' ? (

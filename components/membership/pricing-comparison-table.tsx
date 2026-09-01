@@ -35,9 +35,9 @@ export default function PricingComparisonTable() {
                   >
                     {row[0]}
                   </th>
-                  <td className="px-4 py-3 text-muted-foreground">{row[1]}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{row[2]}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{row[3]}</td>
+                  <td className="px-4 py-3 break-words text-muted-foreground">{row[1]}</td>
+                  <td className="px-4 py-3 break-words text-muted-foreground">{row[2]}</td>
+                  <td className="px-4 py-3 break-words text-muted-foreground">{row[3]}</td>
                 </tr>
               ))}
             </tbody>

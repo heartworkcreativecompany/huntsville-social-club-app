@@ -85,6 +85,9 @@ export function eventCardAccessHint(input: {
     if (preview.code === 'priority_window') {
       return 'Elite priority RSVP window'
     }
+    if (preview.code === 'included_credits_exhausted') {
+      return 'No remaining Circle Social credits'
+    }
     return null
   }
 
@@ -99,6 +102,10 @@ export function eventCardAccessHint(input: {
 
   if (preview.uiState === 'inner_circle_social_included') {
     return 'Included with Inner Circle'
+  }
+
+  if (preview.uiState === 'inner_circle_social_credit_remaining') {
+    return 'Use Circle Social credit'
   }
 
   if (
@@ -139,6 +146,9 @@ export function eventRsvpActionLabel(input: {
     if (preview.code === 'priority_window') {
       return 'Elite priority window'
     }
+    if (preview.code === 'included_credits_exhausted') {
+      return 'No remaining Circle Social credits'
+    }
     return null
   }
 
@@ -159,6 +169,7 @@ export function eventRsvpActionLabel(input: {
   if (
     preview.uiState === 'elite_circle_social_included' ||
     preview.uiState === 'inner_circle_social_included' ||
+    preview.uiState === 'inner_circle_social_credit_remaining' ||
     preview.uiState === 'member_standard_free'
   ) {
     return 'Included with membership'

@@ -1,6 +1,7 @@
 import {
   ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD,
   ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+  INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD,
   INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
 } from '@/lib/membership-tier-config'
 
@@ -38,8 +39,8 @@ export const PRICING_PLANS = {
     bullets: [
       'Everything in Member',
       'Messaging access',
-      'Free Circle Socials',
       `${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credit per billing period`,
+      `${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social credits per billing period`,
       'Pay for additional premium events anytime',
       'Create standard events (admin approval required)',
       'Inner Circle badge',
@@ -53,6 +54,7 @@ export const PRICING_PLANS = {
     bullets: [
       'Everything in Inner Circle',
       `${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credits per billing period`,
+      'All Circle Socials are included in your membership.',
       `${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite per billing period`,
       'Priority RSVP for premium events and Circle Socials',
       'Eligible to apply for a Business Directory listing',
@@ -71,7 +73,12 @@ export const COMPARISON_TABLE = {
     ['Apply for Business Directory listing', 'No', 'No', 'Yes'],
     ['Messaging', 'No', 'Yes', 'Yes'],
     ['Standard events', 'Free', 'Free + can create (admin approval)', 'Free + can create (admin approval)'],
-    ['Circle Socials', 'Paid', 'Included', 'Included + priority RSVP'],
+    [
+      'Circle Socials',
+      'Paid',
+      `${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included credits per billing period`,
+      'All Circle Socials are included in your membership.',
+    ],
     [
       'Premium event credits',
       '0 (pay per event)',
@@ -81,7 +88,7 @@ export const COMPARISON_TABLE = {
     ['Guest invites', 'No', 'No', `${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} per billing period`],
     ['Badge', 'No', 'Inner Circle badge', 'Elite Circle badge'],
   ] as const,
-  footnote: `Inner Circle includes ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credit per billing period. Elite includes ${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium credits, ${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite, and priority RSVP. Circle Socials are free for paid members.`,
+  footnote: `Inner Circle includes ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credit and ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} Circle Social credits per billing period. Elite includes ${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium credits, ${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite, priority RSVP, and all Circle Socials in your membership.`,
 }
 
 export const PRICING_FAQ = [
@@ -97,16 +104,15 @@ export const PRICING_FAQ = [
   },
   {
     question: 'What is included with Inner Circle?',
-    answer: `Inner Circle (${INNER_CIRCLE_MONTHLY_PRICE}) includes messaging, free Circle Socials, ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credit per billing period, and the ability to create standard events subject to admin approval.`,
+    answer: `Inner Circle (${INNER_CIRCLE_MONTHLY_PRICE}) includes messaging, ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credit per billing period, ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social credits per billing period, and the ability to create standard events subject to admin approval.`,
   },
   {
     question: 'Are Circle Socials counted toward premium credits?',
-    answer:
-      'No. Circle Socials are included at no additional cost for Inner Circle and Elite Circle. Premium credits apply only to premium events.',
+    answer: `No. Premium credits apply only to premium events. Inner Circle receives ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social credits per billing period. Elite Circle includes all Circle Socials in the membership.`,
   },
   {
     question: 'What does Elite Circle include?',
-    answer: `Elite Circle includes everything in Inner Circle, plus ${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credits per billing period, ${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite, priority RSVP for premium events and Circle Socials, and eligibility to apply for a Business Directory listing.`,
+    answer: `Elite Circle includes everything in Inner Circle, plus ${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credits per billing period, ${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite, priority RSVP for premium events and Circle Socials, eligibility to apply for a Business Directory listing, and all Circle Socials included in your membership.`,
   },
   {
     question: 'Can I change my membership later?',
@@ -133,11 +139,11 @@ export const BOTTOM_CTA = {
 export const UPGRADE_MODALS = {
   free_to_inner: {
     title: 'Unlock more with Inner Circle',
-    body: `Get messaging, free Circle Socials, and ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credit every billing period.`,
+    body: `Get messaging, ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credit per billing period, and ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social credits per billing period.`,
     bullets: [
       'Message other approved members',
-      'Attend Circle Socials at no additional cost',
-      `Use ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credit each billing period`,
+      `${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credit per billing period`,
+      `${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social credits per billing period`,
       'Create standard events with admin approval',
     ],
     primaryCta: 'Join Inner Circle',
@@ -148,6 +154,7 @@ export const UPGRADE_MODALS = {
     body: 'Get the highest level of access with premium credits, guest invites, priority RSVP, and Business Directory eligibility.',
     bullets: [
       `${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credits per billing period`,
+      'All Circle Socials are included in your membership.',
       `${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite per billing period`,
       'Priority RSVP for premium events and Circle Socials',
       'Apply for a Business Directory listing',
@@ -160,6 +167,7 @@ export const UPGRADE_MODALS = {
     body: 'Move up to more premium credits, a guest invite, priority RSVP, and Business Directory eligibility.',
     bullets: [
       `${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credits per billing period`,
+      'All Circle Socials are included in your membership.',
       `${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite per billing period`,
       'Priority RSVP',
       'Business Directory listing eligibility',
@@ -201,8 +209,18 @@ export const FEATURE_GATE_COPY = {
   },
 } as const
 
+export const ELITE_CIRCLE_SOCIALS_INCLUDED_COPY =
+  'All Circle Socials are included in your membership.'
+
+export const INNER_CIRCLE_SOCIAL_CREDITS_EXHAUSTED_MESSAGE = `You have used your ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social credits for this billing period.`
+
+/** Singular when remaining is 1; plural for 0 or any other count. */
+export function includedCreditNoun(remaining: number): string {
+  return remaining === 1 ? 'credit' : 'credits'
+}
+
 export function innerIncludedRemainingHeadline(remaining: number): string {
-  return `You have ${remaining} of ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credit${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD === 1 ? '' : 's'} remaining this billing period`
+  return `You have ${remaining} of ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event ${includedCreditNoun(remaining)} remaining this billing period.`
 }
 
 export function elitePremiumRemainingHeadline(
@@ -210,6 +228,10 @@ export function elitePremiumRemainingHeadline(
   granted: number = ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
 ): string {
   return `You have ${remaining} of ${granted} included premium event credits remaining this billing period`
+}
+
+export function innerCircleSocialRemainingHeadline(remaining: number): string {
+  return `You have ${remaining} of ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social ${includedCreditNoun(remaining)} remaining this billing period.`
 }
 
 export function innerIncludedSummary(remaining: number): string {
@@ -224,7 +246,7 @@ export function eliteUnlimitedSummary(): string {
 }
 
 export function memberFreeSummary(): string {
-  return 'Standard events are free. Circle Socials and premium events require payment. Upgrade for messaging, free Circle Socials, and premium credits.'
+  return 'Standard events are free. Circle Socials and premium events require payment. Upgrade for messaging, Circle Social credits, and premium event credits.'
 }
 
 /** MembershipUsageCard copy for free / no-subscription members (no credit counts). */

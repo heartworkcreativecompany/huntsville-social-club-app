@@ -121,6 +121,11 @@ export default function EventRsvp({
         typeof result === 'object' &&
         'usedCredit' in result &&
         Boolean(result.usedCredit)
+      const usedCircleSocialCredit =
+        result &&
+        typeof result === 'object' &&
+        'usedCircleSocialCredit' in result &&
+        Boolean(result.usedCircleSocialCredit)
       const perks =
         result && typeof result === 'object' && 'perks' in result
           ? (result.perks as MembershipPerksSnapshot | null | undefined)
@@ -131,6 +136,7 @@ export default function EventRsvp({
       const before = getMemberPerksSnapshot()
       const after = applyRsvpResultToMemberPerksStore({
         usedCredit,
+        usedCircleSocialCredit,
         perks: perks ?? null,
       })
 
@@ -158,6 +164,8 @@ export default function EventRsvp({
         setMessage('RSVP updated.')
       } else if (usedCredit) {
         setMessage('RSVP saved. One premium credit was used.')
+      } else if (usedCircleSocialCredit) {
+        setMessage('RSVP saved. One Circle Social credit was used.')
       } else {
         setMessage('RSVP saved.')
       }
@@ -172,7 +180,8 @@ export default function EventRsvp({
     preview?.allowed &&
     (preview.uiState === 'inner_premium_credit_remaining' ||
       preview.uiState === 'elite_premium_credit_remaining') &&
-    preview.method === 'credit'
+    preview.method === 'credit' &&
+    preview.creditKind !== 'circle_social'
 
   const showInnerIncludedExhausted =
     preview?.allowed &&
@@ -188,6 +197,7 @@ export default function EventRsvp({
     preview?.allowed &&
     (preview.uiState === 'elite_circle_social_included' ||
       preview.uiState === 'inner_circle_social_included' ||
+      preview.uiState === 'inner_circle_social_credit_remaining' ||
       preview.uiState === 'member_standard_free')
 
   const willChargeEventFee =

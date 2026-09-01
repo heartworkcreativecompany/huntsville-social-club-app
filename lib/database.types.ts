@@ -1134,6 +1134,8 @@ export interface Database {
           credits_used: number
           guest_invites_granted: number
           guest_invites_used: number
+          circle_social_credits_granted: number | null
+          circle_social_credits_used: number
           is_active: boolean
           created_at: string
         }
@@ -1147,6 +1149,8 @@ export interface Database {
           credits_used?: number
           guest_invites_granted?: number
           guest_invites_used?: number
+          circle_social_credits_granted?: number | null
+          circle_social_credits_used?: number
           is_active?: boolean
           created_at?: string
         }
@@ -1160,6 +1164,8 @@ export interface Database {
           credits_used?: number
           guest_invites_granted?: number
           guest_invites_used?: number
+          circle_social_credits_granted?: number | null
+          circle_social_credits_used?: number
           is_active?: boolean
           created_at?: string
         }

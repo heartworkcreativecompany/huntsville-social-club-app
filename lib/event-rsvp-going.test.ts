@@ -108,6 +108,20 @@ describe('isGoingRegistrationEligible', () => {
     expect(isGoingRegistrationEligible(null, false)).toBe(true)
   })
 
+  it('marks Inner Circle Circle Social credit exhaustion as ineligible', () => {
+    expect(
+      isGoingRegistrationEligible(
+        {
+          allowed: false,
+          code: 'included_credits_exhausted',
+          message:
+            'You have used your 2 included Circle Social credits for this billing period.',
+        },
+        false
+      )
+    ).toBe(false)
+  })
+
   it('marks priority-window blocks as ineligible', () => {
     expect(
       isGoingRegistrationEligible(

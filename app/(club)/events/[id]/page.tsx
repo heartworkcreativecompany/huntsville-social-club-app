@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
+import EventLivePerksBubble from '@/components/events/event-live-perks-bubble'
 import EventGuestInviteControls from '@/components/events/event-guest-invite-controls'
 import EventMetaBadges from '@/components/events/event-meta-badges'
 import EventPremiumRegistrationSection from '@/components/events/event-premium-registration-section'
@@ -43,6 +44,7 @@ import {
   isConfirmedGoingAttendee,
   isGoingRegistrationEligible,
 } from '@/lib/event-rsvp-going'
+import { membershipPerksSnapshotFromEntitlements } from '@/lib/member-perks-snapshot'
 import {
   premiumCreditsSummary,
   resolveEventRsvpWindow,
@@ -182,7 +184,8 @@ export default async function EventDetailPage({ params }: PageProps) {
     : null
 
   const creditSummary =
-    entitlements && eventType === 'premium_event'
+    entitlements &&
+    (eventType === 'premium_event' || eventType === 'circle_social')
       ? premiumCreditsSummary({
           productTier: entitlements.productTier,
           premiumCreditsRemaining: entitlements.premiumCreditsRemaining,
@@ -194,6 +197,7 @@ export default async function EventDetailPage({ params }: PageProps) {
               : entitlements.productTier === 'inner_circle'
                 ? INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
                 : null),
+          circleSocialCreditsRemaining: entitlements.circleSocialCreditsRemaining,
         })
       : null
 
@@ -201,19 +205,7 @@ export default async function EventDetailPage({ params }: PageProps) {
     entitlements &&
     (entitlements.productTier === 'inner_circle' ||
       entitlements.productTier === 'elite_circle')
-      ? {
-          productTier: entitlements.productTier,
-          hasPaidMembership: true,
-          premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
-          creditsGranted:
-            entitlements.activeCycle?.credits_granted ??
-            (entitlements.productTier === 'elite_circle'
-              ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-              : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD),
-          guestInvitesRemaining: entitlements.guestInvitesRemaining,
-          periodStart: entitlements.activeCycle?.period_start ?? null,
-          periodEnd: entitlements.activeCycle?.period_end ?? null,
-        }
+      ? membershipPerksSnapshotFromEntitlements(entitlements)
       : null
 
   const sponsorshipEligible =
@@ -254,13 +246,14 @@ export default async function EventDetailPage({ params }: PageProps) {
       ? `$${formatFeeCents(event.fee_cents)}`
       : null
   const isPremiumEvent = eventType === 'premium_event'
+  const isCircleSocial = eventType === 'circle_social'
   const rsvpWindow = resolveEventRsvpWindow({
     eventType,
     priorityRsvpOpensAt: event.priority_rsvp_opens_at,
     generalRsvpOpensAt: event.general_rsvp_opens_at,
   })
   const showMembershipPerks =
-    isPremiumEvent &&
+    (isPremiumEvent || isCircleSocial) &&
     Boolean(creditSummary) &&
     Boolean(membershipPerksSnapshot) &&
     (entitlements?.productTier === 'inner_circle' ||
@@ -498,6 +491,19 @@ export default async function EventDetailPage({ params }: PageProps) {
                   }
                   isElite={entitlements?.productTier === 'elite_circle'}
                 />
+                {isCircleSocial && membershipPerksSnapshot ? (
+                  <div className="mt-6">
+                    <EventLivePerksBubble
+                      eventId={event.id}
+                      eventType={eventType}
+                      isGoing={currentUserStatus === 'going'}
+                      guestName={currentGuestName}
+                      guestInviteConsumed={currentGuestInviteConsumed}
+                      isElite={entitlements?.productTier === 'elite_circle'}
+                      initialPerks={membershipPerksSnapshot}
+                    />
+                  </div>
+                ) : null}
               </div>
               {sponsorshipEligible && eventType !== 'standard_event' ? (
                 <div className="min-w-[200px] border-t border-border pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">

@@ -1,19 +1,29 @@
 import { useSyncExternalStore } from 'react'
 import {
   applyRsvpPerksSnapshot,
+  membershipPerkLinesFromSnapshot,
   type MembershipPerksSnapshot,
 } from '@/lib/event-rsvp-window'
-import type { MemberEntitlements } from '@/lib/membership-entitlements'
 import {
   elitePremiumRemainingHeadline,
   FREE_MEMBER_PREMIUM_CREDITS_COPY,
+  innerCircleSocialRemainingHeadline,
   innerIncludedSummary,
 } from '@/lib/membership-pricing-copy'
-import type { ProductTier } from '@/lib/membership-tier-config'
 import {
   ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
-  INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
 } from '@/lib/membership-tier-config'
+import {
+  freeMemberPerksSnapshot,
+  normalizeMemberPerksSnapshot,
+} from '@/lib/member-perks-snapshot'
+
+export {
+  freeMemberPerksSnapshot,
+  isPaidPerksTier,
+  membershipPerksSnapshotFromEntitlements,
+  normalizeMemberPerksSnapshot,
+} from '@/lib/member-perks-snapshot'
 
 type Listener = () => void
 
@@ -43,87 +53,6 @@ export function resetMemberPerksStoreForTests() {
   emit()
 }
 
-export function isPaidPerksTier(
-  tier: ProductTier
-): tier is 'inner_circle' | 'elite_circle' {
-  return tier === 'inner_circle' || tier === 'elite_circle'
-}
-
-/** Explicit zeroed snapshot for free / cancelled / no-subscription members. */
-export function freeMemberPerksSnapshot(
-  _productTier: ProductTier = 'member'
-): MembershipPerksSnapshot {
-  return {
-    productTier: 'member',
-    hasPaidMembership: false,
-    premiumCreditsRemaining: 0,
-    creditsGranted: 0,
-    guestInvitesRemaining: 0,
-    periodStart: null,
-    periodEnd: null,
-  }
-}
-
-/**
- * Normalize any snapshot: free members never carry paid credit defaults
- * (e.g. Elite's 2-credit fallback).
- */
-export function normalizeMemberPerksSnapshot(
-  snapshot: MembershipPerksSnapshot
-): MembershipPerksSnapshot {
-  const hasPaidMembership =
-    snapshot.hasPaidMembership === true &&
-    isPaidPerksTier(snapshot.productTier)
-
-  if (!hasPaidMembership) {
-    return freeMemberPerksSnapshot(
-      snapshot.productTier === 'member' ? 'member' : 'member'
-    )
-  }
-
-  return {
-    ...snapshot,
-    hasPaidMembership: true,
-    premiumCreditsRemaining: Math.max(0, snapshot.premiumCreditsRemaining),
-    creditsGranted:
-      snapshot.creditsGranted ??
-      (snapshot.productTier === 'elite_circle'
-        ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-        : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD),
-    guestInvitesRemaining: Math.max(0, snapshot.guestInvitesRemaining),
-  }
-}
-
-export function membershipPerksSnapshotFromEntitlements(
-  entitlements: Pick<
-    MemberEntitlements,
-    | 'productTier'
-    | 'premiumCreditsRemaining'
-    | 'guestInvitesRemaining'
-    | 'activeCycle'
-    | 'subscriptionActive'
-  >
-): MembershipPerksSnapshot {
-  if (!isPaidPerksTier(entitlements.productTier)) {
-    return freeMemberPerksSnapshot('member')
-  }
-
-  const grantedDefault =
-    entitlements.productTier === 'elite_circle'
-      ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-      : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-
-  return normalizeMemberPerksSnapshot({
-    productTier: entitlements.productTier,
-    hasPaidMembership: true,
-    premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
-    creditsGranted: entitlements.activeCycle?.credits_granted ?? grantedDefault,
-    guestInvitesRemaining: entitlements.guestInvitesRemaining,
-    periodStart: entitlements.activeCycle?.period_start ?? null,
-    periodEnd: entitlements.activeCycle?.period_end ?? null,
-  })
-}
-
 /**
  * Authoritative update after RSVP / guest-invite mutations.
  * Always applies the server snapshot (with no-credit-refund guard for paid).
@@ -150,6 +79,11 @@ export function updateMemberPerksFromSnapshot(
     currentSnapshot = {
       ...normalized,
       premiumCreditsRemaining: currentSnapshot.premiumCreditsRemaining,
+      circleSocialCreditsRemaining:
+        typeof normalized.circleSocialCreditsRemaining === 'number' &&
+        typeof currentSnapshot.circleSocialCreditsRemaining === 'number'
+          ? currentSnapshot.circleSocialCreditsRemaining
+          : normalized.circleSocialCreditsRemaining,
     }
   } else {
     currentSnapshot = normalized
@@ -163,6 +97,7 @@ export function updateMemberPerksFromSnapshot(
  */
 export function applyRsvpResultToMemberPerksStore(input: {
   usedCredit?: boolean
+  usedCircleSocialCredit?: boolean
   perks?: MembershipPerksSnapshot | null
 }): MembershipPerksSnapshot | null {
   if (!input.perks && !currentSnapshot) {
@@ -180,6 +115,7 @@ export function applyRsvpResultToMemberPerksStore(input: {
   const next = applyRsvpPerksSnapshot({
     previous,
     usedCredit: input.usedCredit,
+    usedCircleSocialCredit: input.usedCircleSocialCredit,
     perks: input.perks,
   })
 
@@ -225,30 +161,62 @@ export function hydrateMemberPerksFromServer(
       normalized.premiumCreditsRemaining,
       currentSnapshot.premiumCreditsRemaining
     ),
+    circleSocialCreditsRemaining: clampCircleSocialRemaining(
+      currentSnapshot.circleSocialCreditsRemaining,
+      normalized.circleSocialCreditsRemaining
+    ),
     guestInvitesRemaining: currentSnapshot.guestInvitesRemaining,
   }
   emit()
   return currentSnapshot
 }
 
+function clampCircleSocialRemaining(
+  previous: number | null | undefined,
+  next: number | null | undefined
+): number | null {
+  if (typeof previous === 'number' && typeof next === 'number') {
+    return Math.min(previous, next)
+  }
+  return next ?? null
+}
+
 /** Dashboard / Members card copy for included premium credits. */
 export function dashboardCreditsSummaryFromSnapshot(
   snapshot: MembershipPerksSnapshot
 ): string | null {
+  const lines = dashboardPerkLinesFromSnapshot(snapshot)
+  return lines[0] ?? null
+}
+
+export function dashboardPerkLinesFromSnapshot(
+  snapshot: MembershipPerksSnapshot
+): string[] {
   const normalized = normalizeMemberPerksSnapshot(snapshot)
   if (!normalized.hasPaidMembership) {
-    return FREE_MEMBER_PREMIUM_CREDITS_COPY
+    return [FREE_MEMBER_PREMIUM_CREDITS_COPY]
   }
   if (normalized.productTier === 'elite_circle') {
-    return elitePremiumRemainingHeadline(
-      normalized.premiumCreditsRemaining,
-      normalized.creditsGranted ?? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-    )
+    return [
+      elitePremiumRemainingHeadline(
+        normalized.premiumCreditsRemaining,
+        normalized.creditsGranted ?? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+      ),
+      ...membershipPerkLinesFromSnapshot(normalized).slice(1),
+    ]
   }
   if (normalized.productTier === 'inner_circle') {
-    return innerIncludedSummary(normalized.premiumCreditsRemaining)
+    const lines = [innerIncludedSummary(normalized.premiumCreditsRemaining)]
+    if (normalized.circleSocialCreditsRemaining != null) {
+      lines.push(
+        innerCircleSocialRemainingHeadline(
+          normalized.circleSocialCreditsRemaining
+        )
+      )
+    }
+    return lines
   }
-  return FREE_MEMBER_PREMIUM_CREDITS_COPY
+  return [FREE_MEMBER_PREMIUM_CREDITS_COPY]
 }
 
 export function useMemberPerks(): MembershipPerksSnapshot | null {

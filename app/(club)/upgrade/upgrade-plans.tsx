@@ -7,6 +7,7 @@ import { buttonPrimaryClassName } from '@/lib/event-labels'
 import {
   ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD,
   ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+  INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD,
   INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
 } from '@/lib/membership-tier-config'
 import {
@@ -33,7 +34,7 @@ export default function UpgradePlans() {
 
       setMessage(
         tier === 'inner'
-          ? `Welcome to Inner Circle — your billing period includes ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credit.`
+          ? `Welcome to Inner Circle — your billing period includes ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credit and ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} Circle Social credits.`
           : `Welcome to Elite Circle — ${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium credits and ${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite are now active.`
       )
     })
@@ -44,7 +45,7 @@ export default function UpgradePlans() {
       <PageHeader
         eyebrow="Membership"
         title="Upgrade your membership"
-        description="Unlock messaging, free Circle Socials, premium event credits, and more."
+        description="Unlock messaging, Circle Social credits, premium event credits, and more."
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -54,10 +55,13 @@ export default function UpgradePlans() {
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             <li>Inner Circle badge</li>
             <li>Messaging enabled</li>
-            <li>Free Circle Socials</li>
             <li>
               {INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event
               credit per billing period
+            </li>
+            <li>
+              {INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle
+              Social credits per billing period
             </li>
             <li>Create standard events (admin approval required)</li>
             <li>Unused credits expire each cycle — no rollover</li>
@@ -81,6 +85,7 @@ export default function UpgradePlans() {
               {ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credits per
               billing period
             </li>
+            <li>All Circle Socials are included in your membership.</li>
             <li>
               {ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite per billing
               period

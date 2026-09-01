@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { consumeEventCredit } from '@/lib/membership-billing-cycles'
+import {
+  consumeCircleSocialCredit,
+  consumeEventCredit,
+} from '@/lib/membership-billing-cycles'
+import { INNER_CIRCLE_SOCIAL_CREDITS_EXHAUSTED_MESSAGE } from '@/lib/membership-pricing-copy'
 
 const { createAdminClientMock } = vi.hoisted(() => ({
   createAdminClientMock: vi.fn(() => null),
@@ -13,6 +17,8 @@ type CycleState = {
   id: string
   credits_granted: number
   credits_used: number
+  circle_social_credits_granted?: number | null
+  circle_social_credits_used?: number
   is_active: boolean
 }
 
@@ -21,7 +27,49 @@ function createCycleClient(options: {
   /** Simulate RLS: update returns no row */
   blockUpdates?: boolean
 }) {
-  const state = { ...options.cycle }
+  const state = {
+    circle_social_credits_granted: null as number | null,
+    circle_social_credits_used: 0,
+    ...options.cycle,
+  }
+
+  function updateChain(values: Record<string, number>) {
+    const filters: Record<string, unknown> = {}
+    const chain = {
+      eq(column: string, value: unknown) {
+        filters[column] = value
+        return chain
+      },
+      select() {
+        return {
+          maybeSingle: async () => {
+            if (options.blockUpdates) {
+              return { data: null, error: null }
+            }
+            if (
+              filters.credits_used != null &&
+              state.credits_used !== filters.credits_used
+            ) {
+              return { data: null, error: null }
+            }
+            if (
+              filters.circle_social_credits_used != null &&
+              state.circle_social_credits_used !==
+                filters.circle_social_credits_used
+            ) {
+              return { data: null, error: null }
+            }
+            Object.assign(state, values)
+            return {
+              data: { ...state },
+              error: null,
+            }
+          },
+        }
+      },
+    }
+    return chain
+  }
 
   const client = {
     from(table: string) {
@@ -31,46 +79,19 @@ function createCycleClient(options: {
 
       return {
         select() {
-          return {
+          const chain = {
             eq() {
-              return {
-                single: async () => ({
-                  data: { ...state },
-                  error: null,
-                }),
-              }
+              return chain
             },
+            single: async () => ({
+              data: { ...state },
+              error: null,
+            }),
           }
+          return chain
         },
-        update(values: { credits_used: number }) {
-          return {
-            eq() {
-              return {
-                eq() {
-                  return {
-                    select() {
-                      return {
-                        maybeSingle: async () => {
-                          if (options.blockUpdates) {
-                            return { data: null, error: null }
-                          }
-                          state.credits_used = values.credits_used
-                          return {
-                            data: {
-                              id: state.id,
-                              credits_granted: state.credits_granted,
-                              credits_used: state.credits_used,
-                            },
-                            error: null,
-                          }
-                        },
-                      }
-                    },
-                  }
-                },
-              }
-            },
-          }
+        update(values: Record<string, number>) {
+          return updateChain(values)
         },
       }
     },
@@ -153,11 +174,76 @@ describe('Elite credit RSVP result snapshot contract', () => {
     expect(perks.premiumCreditsRemaining).toBe(1)
     expect(perks.creditsGranted).toBe(2)
 
-    // Fresh read of the same authoritative row still shows 1 remaining.
     const freshRemaining = Math.max(
       0,
       getState().credits_granted - getState().credits_used
     )
     expect(freshRemaining).toBe(1)
+  })
+})
+
+describe('consumeCircleSocialCredit', () => {
+  beforeEach(() => {
+    createAdminClientMock.mockReturnValue(null)
+  })
+
+  it('consumes exactly one Inner Circle Circle Social credit', async () => {
+    const { client, getState } = createCycleClient({
+      cycle: {
+        id: 'cycle-inner',
+        credits_granted: 1,
+        credits_used: 0,
+        circle_social_credits_granted: 2,
+        circle_social_credits_used: 0,
+        is_active: true,
+      },
+    })
+
+    const result = await consumeCircleSocialCredit(client, 'cycle-inner')
+    expect(result).toEqual({
+      creditsRemaining: 1,
+      creditsGranted: 2,
+      creditsUsed: 1,
+    })
+    expect(getState().circle_social_credits_used).toBe(1)
+    expect(getState().credits_used).toBe(0)
+  })
+
+  it('denies a third included Circle Social credit without consuming another', async () => {
+    const { client, getState } = createCycleClient({
+      cycle: {
+        id: 'cycle-inner',
+        credits_granted: 1,
+        credits_used: 0,
+        circle_social_credits_granted: 2,
+        circle_social_credits_used: 2,
+        is_active: true,
+      },
+    })
+
+    await expect(consumeCircleSocialCredit(client, 'cycle-inner')).rejects.toThrow(
+      INNER_CIRCLE_SOCIAL_CREDITS_EXHAUSTED_MESSAGE
+    )
+    expect(getState().circle_social_credits_used).toBe(2)
+  })
+
+  it('does not let a stale CAS retry consume two credits for one remaining slot', async () => {
+    const { client, getState } = createCycleClient({
+      cycle: {
+        id: 'cycle-inner',
+        credits_granted: 1,
+        credits_used: 0,
+        circle_social_credits_granted: 2,
+        circle_social_credits_used: 1,
+        is_active: true,
+      },
+    })
+
+    const first = await consumeCircleSocialCredit(client, 'cycle-inner')
+    expect(first.creditsRemaining).toBe(0)
+    await expect(consumeCircleSocialCredit(client, 'cycle-inner')).rejects.toThrow(
+      INNER_CIRCLE_SOCIAL_CREDITS_EXHAUSTED_MESSAGE
+    )
+    expect(getState().circle_social_credits_used).toBe(2)
   })
 })

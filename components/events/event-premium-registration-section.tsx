@@ -5,7 +5,7 @@ import EventMembershipPerksBubble from '@/components/events/event-membership-per
 import EventRsvp from '@/app/(club)/events/event-rsvp'
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import {
-  membershipPerksSummaryFromSnapshot,
+  membershipPerkLinesFromSnapshot,
   type MembershipPerksSnapshot,
 } from '@/lib/event-rsvp-window'
 import {
@@ -57,7 +57,9 @@ export default function EventPremiumRegistrationSection({
     initialPerks.productTier,
     initialPerks.hasPaidMembership,
     initialPerks.premiumCreditsRemaining,
+    initialPerks.circleSocialCreditsRemaining,
     initialPerks.creditsGranted,
+    initialPerks.circleSocialCreditsGranted,
     initialPerks.guestInvitesRemaining,
     initialPerks.periodStart,
     initialPerks.periodEnd,
@@ -74,7 +76,7 @@ export default function EventPremiumRegistrationSection({
 
   const livePerks = useMemberPerks()
   const perks = livePerks ?? initialPerks
-  const creditSummary = membershipPerksSummaryFromSnapshot(perks)
+  const perkLines = membershipPerkLinesFromSnapshot(perks)
 
   return (
     <>
@@ -95,9 +97,9 @@ export default function EventPremiumRegistrationSection({
           // (a second apply with usedCredit + remaining 1 was force-decrementing to 0).
         }}
       />
-      {creditSummary ? (
+      {perkLines.length > 0 ? (
         <EventMembershipPerksBubble
-          creditSummary={creditSummary}
+          perkLines={perkLines}
           eventId={eventId}
           eventType={eventType}
           isGoing={isGoing}

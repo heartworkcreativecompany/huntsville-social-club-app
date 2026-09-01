@@ -1,10 +1,12 @@
 import {
   EVENT_ACCESS_LABELS,
   FREE_REGISTRATION_RETURN_CUTOFF_DAYS,
+  INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD,
   INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
   ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
   PRODUCT_TIER_LABELS,
   RETURN_FREE_REGISTRATION_BEFORE_CUTOFF,
+  circleSocialCreditsForTier,
   guestInvitesForTier,
   premiumCreditsForTier,
   type EventAccessType,
@@ -13,8 +15,11 @@ import {
   type RegistrationMethod,
 } from '@/lib/membership-tier-config'
 import {
+  ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
   FEATURE_GATE_COPY,
+  INNER_CIRCLE_SOCIAL_CREDITS_EXHAUSTED_MESSAGE,
   elitePremiumRemainingHeadline,
+  innerCircleSocialRemainingHeadline,
   innerIncludedRemainingHeadline,
   innerIncludedSummary,
   memberFreeSummary,
@@ -37,6 +42,12 @@ export type EntitlementCycle = {
   credits_used: number
   guest_invites_granted?: number
   guest_invites_used?: number
+  /**
+   * Inner Circle Circle Social allotment for this cycle.
+   * Null = unlimited (Elite, or Inner Circle current period at rollout).
+   */
+  circle_social_credits_granted?: number | null
+  circle_social_credits_used?: number
   is_active: boolean
 }
 
@@ -48,6 +59,11 @@ export type MemberEntitlements = {
   /** Premium event credits remaining this period (null = none / not applicable). */
   freeRegistrationsRemaining: number | null
   premiumCreditsRemaining: number | null
+  /**
+   * Inner Circle Circle Social credits remaining this period.
+   * Null = unlimited / not metered (Elite, grandfathered Inner Circle cycle, or no cycle).
+   */
+  circleSocialCreditsRemaining: number | null
   guestInvitesRemaining: number
   canMessage: boolean
   canAccessCircleSocial: boolean
@@ -126,6 +142,20 @@ function remainingPremiumCredits(
   return Math.max(0, cycleGranted - activeCycle.credits_used)
 }
 
+function remainingCircleSocialCredits(
+  productTier: ProductTier,
+  activeCycle: EntitlementCycle | null
+): number | null {
+  if (productTier !== 'inner_circle') return null
+  const configured = circleSocialCreditsForTier(productTier)
+  if (configured == null) return null
+  if (!activeCycle) return null
+  const granted = activeCycle.circle_social_credits_granted
+  if (granted == null) return null
+  const used = activeCycle.circle_social_credits_used ?? 0
+  return Math.max(0, granted - used)
+}
+
 export function buildMemberEntitlements(input: {
   role?: string | null
   billing?: MembershipBilling | unknown
@@ -159,6 +189,9 @@ export function buildMemberEntitlements(input: {
   const premiumCreditsRemaining = isPaid
     ? remainingPremiumCredits(productTier, activeCycle)
     : null
+  const circleSocialCreditsRemaining = isPaid
+    ? remainingCircleSocialCredits(productTier, activeCycle)
+    : null
   const guestGranted = isPaid
     ? (activeCycle?.guest_invites_granted ?? guestInvitesForTier(productTier))
     : 0
@@ -171,6 +204,7 @@ export function buildMemberEntitlements(input: {
     activeCycle,
     freeRegistrationsRemaining: premiumCreditsRemaining,
     premiumCreditsRemaining,
+    circleSocialCreditsRemaining,
     guestInvitesRemaining: Math.max(0, guestGranted - guestUsed),
     canMessage: isPaid,
     canAccessCircleSocial: isPaid,
@@ -350,28 +384,64 @@ export function evaluateEventRegistration(input: {
     }
   }
 
-  // Circle Socials: free for paid; paid_per_event for free members.
+  // Circle Socials: Inner Circle uses period credits; Elite is included/unlimited.
   if (eventType === 'circle_social') {
-    if (entitlements.canAccessCircleSocial) {
+    if (!entitlements.canAccessCircleSocial) {
+      return paidPerEventDecision(
+        'Free members can attend Circle Socials by paying the event fee, or upgrade for included access.',
+        'member_paid'
+      )
+    }
+
+    if (entitlements.productTier === 'elite_circle') {
       return {
         allowed: true,
         method: 'included_unlimited',
         circleSocialIncluded: true,
         priorityAccess: entitlements.hasPriorityRsvp,
-        uiState:
-          entitlements.productTier === 'elite_circle'
-            ? 'elite_circle_social_included'
-            : 'inner_circle_social_included',
+        uiState: 'elite_circle_social_included',
         label: 'Included',
-        description:
-          'Circle Socials are included with Inner Circle and Elite Circle at no additional cost.',
+        description: ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
       }
     }
 
-    return paidPerEventDecision(
-      'Free members can attend Circle Socials by paying the event fee, or upgrade for included access.',
-      'member_paid'
-    )
+    const remaining = entitlements.circleSocialCreditsRemaining
+    const granted = INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD
+
+    // Null remaining = not metered this cycle (rollout grandfather / no cycle).
+    if (remaining == null) {
+      return {
+        allowed: true,
+        method: 'included_unlimited',
+        circleSocialIncluded: true,
+        priorityAccess: entitlements.hasPriorityRsvp,
+        uiState: 'inner_circle_social_included',
+        label: 'Included',
+        description: 'Included with Inner Circle this billing period.',
+      }
+    }
+
+    if (remaining > 0) {
+      return {
+        allowed: true,
+        method: 'credit',
+        creditKind: 'circle_social',
+        freeRegistrationsRemaining: remaining,
+        freeRegistrationsGranted: granted,
+        circleSocialIncluded: true,
+        priorityAccess: entitlements.hasPriorityRsvp,
+        uiState: 'inner_circle_social_credit_remaining',
+        label: 'Included',
+        description: innerCircleSocialRemainingHeadline(remaining),
+      }
+    }
+
+    return {
+      allowed: false,
+      code: 'included_credits_exhausted',
+      message: INNER_CIRCLE_SOCIAL_CREDITS_EXHAUSTED_MESSAGE,
+      upgradeTier: 'elite_circle',
+    }
   }
 
   // Premium events: credits or pay.
@@ -394,6 +464,7 @@ export function evaluateEventRegistration(input: {
         freeRegistrationsRemaining: remaining,
         freeRegistrationsGranted: granted,
         canPayInsteadOfIncluded: true,
+        creditKind: 'premium_event',
         priorityAccess: entitlements.hasPriorityRsvp,
         uiState:
           entitlements.productTier === 'elite_circle'
@@ -468,22 +539,43 @@ export function eventTypeLabel(eventType: EventAccessType | string | null): stri
   return EVENT_ACCESS_LABELS.standard_event
 }
 
+export function membershipPerkCopyLines(
+  entitlements: MemberEntitlements
+): string[] {
+  if (entitlements.productTier === 'elite_circle') {
+    return [
+      elitePremiumRemainingHeadline(
+        entitlements.premiumCreditsRemaining ?? 0,
+        entitlements.activeCycle?.credits_granted ??
+          ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+      ),
+      ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
+    ]
+  }
+  if (entitlements.productTier === 'inner_circle') {
+    const lines = [
+      innerIncludedSummary(entitlements.premiumCreditsRemaining ?? 0),
+    ]
+    if (entitlements.circleSocialCreditsRemaining != null) {
+      lines.push(
+        innerCircleSocialRemainingHeadline(
+          entitlements.circleSocialCreditsRemaining
+        )
+      )
+    }
+    return lines
+  }
+  if (entitlements.productTier === 'member') {
+    return [memberFreeSummary()]
+  }
+  return []
+}
+
 export function freeRegistrationsSummary(
   entitlements: MemberEntitlements
 ): string | null {
-  if (entitlements.productTier === 'elite_circle') {
-    return elitePremiumRemainingHeadline(
-      entitlements.premiumCreditsRemaining ?? 0,
-      ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-    )
-  }
-  if (entitlements.productTier === 'inner_circle') {
-    return innerIncludedSummary(entitlements.premiumCreditsRemaining ?? 0)
-  }
-  if (entitlements.productTier === 'member') {
-    return memberFreeSummary()
-  }
-  return null
+  const lines = membershipPerkCopyLines(entitlements)
+  return lines.length > 0 ? lines.join(' ') : null
 }
 
 /** @deprecated Use freeRegistrationsSummary */

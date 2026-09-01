@@ -5,13 +5,16 @@ import { createClient } from '@/lib/supabase/server'
 import { isApprovedMember } from '@/lib/application'
 import {
   appendRegistrationLedger,
+  consumeCircleSocialCredit,
   consumeEventCredit,
   loadActiveEntitlementCycle,
+  returnCircleSocialCredit,
   returnEventCredit,
   returnGuestInvite,
 } from '@/lib/membership-billing-cycles'
 import { buildMemberEntitlementsWithOverride } from '@/lib/load-member-entitlements'
 import { evaluateEventRegistration } from '@/lib/membership-entitlements'
+import { membershipPerksSnapshotFromEntitlements } from '@/lib/member-perks-snapshot'
 import {
   EVENT_AT_CAPACITY_MESSAGE,
   isEventAtCapacity,
@@ -86,41 +89,13 @@ async function loadMembershipPerksSnapshot(
     activeCycle,
   })
 
-  return perksFromEntitlements(entitlements)
+  return membershipPerksSnapshotFromEntitlements(entitlements)
 }
 
-function perksFromEntitlements(entitlements: {
-  productTier: MembershipPerksSnapshot['productTier']
-  premiumCreditsRemaining: number | null
-  guestInvitesRemaining: number
-  activeCycle: {
-    credits_granted: number | null
-    period_start?: string | null
-    period_end?: string | null
-  } | null
-}): MembershipPerksSnapshot {
-  const hasPaidMembership =
-    entitlements.productTier === 'inner_circle' ||
-    entitlements.productTier === 'elite_circle'
-  return {
-    productTier: entitlements.productTier,
-    hasPaidMembership,
-    premiumCreditsRemaining: hasPaidMembership
-      ? (entitlements.premiumCreditsRemaining ?? 0)
-      : 0,
-    creditsGranted: hasPaidMembership
-      ? (entitlements.activeCycle?.credits_granted ?? null)
-      : 0,
-    guestInvitesRemaining: hasPaidMembership
-      ? entitlements.guestInvitesRemaining
-      : 0,
-    periodStart: hasPaidMembership
-      ? (entitlements.activeCycle?.period_start ?? null)
-      : null,
-    periodEnd: hasPaidMembership
-      ? (entitlements.activeCycle?.period_end ?? null)
-      : null,
-  }
+function perksFromEntitlements(
+  entitlements: Parameters<typeof membershipPerksSnapshotFromEntitlements>[0]
+): MembershipPerksSnapshot {
+  return membershipPerksSnapshotFromEntitlements(entitlements)
 }
 
 export async function updateEventRsvp(input: {
@@ -318,12 +293,15 @@ export async function updateEventRsvp(input: {
       }
     }
 
-    let registrationMethod = decision.method
+    const registrationMethod = decision.method
     let paymentStatus: string | null = null
     let entitlementCycleId: string | null = null
     let creditConsumed = false
+    let circleSocialCreditConsumed = false
     let consumedCreditsRemaining: number | null = null
     let consumedCreditsGranted: number | null = null
+    let consumedCircleSocialRemaining: number | null = null
+    let consumedCircleSocialGranted: number | null = null
 
     if (decision.method === 'paid_per_event') {
       // Fee missing/zero — never grant free Going on a paid decision.
@@ -332,7 +310,59 @@ export async function updateEventRsvp(input: {
       }
     }
 
-    if (decision.method === 'credit') {
+    const consumeCircleSocial =
+      decision.method === 'credit' &&
+      eventType === 'circle_social' &&
+      decision.creditKind === 'circle_social'
+    const consumePremium =
+      decision.method === 'credit' &&
+      eventType === 'premium_event' &&
+      decision.creditKind !== 'circle_social'
+
+    if (decision.method === 'credit' && !consumeCircleSocial && !consumePremium) {
+      return { error: 'This event cannot use a membership credit.' }
+    }
+
+    if (consumeCircleSocial) {
+      if (!entitlements.activeCycle?.id) {
+        return { error: 'No active billing cycle found for Circle Social credits.' }
+      }
+      try {
+        const consumed = await consumeCircleSocialCredit(
+          supabase,
+          entitlements.activeCycle.id
+        )
+        entitlementCycleId = entitlements.activeCycle.id
+        circleSocialCreditConsumed = true
+        consumedCircleSocialRemaining = consumed.creditsRemaining
+        consumedCircleSocialGranted = consumed.creditsGranted
+      } catch (error) {
+        return {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not consume a Circle Social credit.',
+        }
+      }
+      try {
+        await appendRegistrationLedger(supabase, {
+          userId,
+          eventId: input.eventId,
+          action: 'credit_consume',
+          registrationMethod: 'credit',
+          entitlementCycleId,
+          creditDelta: -1,
+          metadata: { credit_kind: 'circle_social' },
+        })
+      } catch (error) {
+        return {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Credit was used but registration ledger failed.',
+        }
+      }
+    } else if (consumePremium) {
       if (!entitlements.activeCycle?.id) {
         return { error: 'No active billing cycle found for free registrations.' }
       }
@@ -390,7 +420,7 @@ export async function updateEventRsvp(input: {
       registration_method: registrationMethod,
       payment_status: paymentStatus,
       entitlement_cycle_id: entitlementCycleId,
-      credit_consumed: creditConsumed,
+      credit_consumed: creditConsumed || circleSocialCreditConsumed,
       credit_returned: false,
       registered_at: new Date().toISOString(),
       cancelled_at: null,
@@ -412,6 +442,13 @@ export async function updateEventRsvp(input: {
           // best-effort rollback of a failed Going write
         }
       }
+      if (circleSocialCreditConsumed && entitlementCycleId) {
+        try {
+          await returnCircleSocialCredit(supabase, entitlementCycleId)
+        } catch {
+          // best-effort rollback of a failed Going write
+        }
+      }
       return { error: error.message }
     }
 
@@ -422,6 +459,26 @@ export async function updateEventRsvp(input: {
 
     // Fresh post-write entitlements (same source of truth as consumeEventCredit).
     const perks = await loadMembershipPerksSnapshot(supabase, viewer)
+
+    if (circleSocialCreditConsumed) {
+      const expectedRemaining =
+        consumedCircleSocialRemaining ?? perks.circleSocialCreditsRemaining
+      const durablePerks = {
+        ...perks,
+        hasPaidMembership: true as const,
+        circleSocialCreditsRemaining: expectedRemaining,
+        circleSocialCreditsGranted:
+          consumedCircleSocialGranted ?? perks.circleSocialCreditsGranted,
+      }
+
+      return {
+        success: true as const,
+        decision,
+        usedCredit: false as const,
+        usedCircleSocialCredit: true as const,
+        perks: durablePerks,
+      }
+    }
 
     if (creditConsumed) {
       const expectedRemaining = consumedCreditsRemaining ?? perks.premiumCreditsRemaining
@@ -455,6 +512,7 @@ export async function updateEventRsvp(input: {
       success: true as const,
       decision,
       usedCredit: false as const,
+      usedCircleSocialCredit: false as const,
       perks,
     }
   }
