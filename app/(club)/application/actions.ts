@@ -17,7 +17,6 @@ import { validateApplicationForSubmit } from '@/lib/application-validation'
 import { APPLICATION_TOTAL_STEPS } from '@/lib/application-form-content'
 import { trackServerEvent } from '@/lib/analytics'
 import { captureOperationalError } from '@/lib/capture-error'
-import { sendApplicationSubmittedEmail } from '@/lib/transactional-email'
 import {
   initializeApprovalGatesForSubmit,
   localityFromDraft,
@@ -170,9 +169,7 @@ export async function submitApplication() {
 
   trackServerEvent('application_submitted')
 
-  if (user.email) {
-    void sendApplicationSubmittedEmail(user.email)
-  }
+  // Applicant status email delivery is handled by the Supabase application-status-email webhook pipeline after production activation.
 
   return { success: true as const }
 }

@@ -14,11 +14,6 @@ import {
   parseMembershipBilling,
 } from '@/lib/membership-systems'
 import { trackServerEvent } from '@/lib/analytics'
-import {
-  sendApplicationApprovedEmail,
-  sendApplicationNeedsInfoEmail,
-  sendApplicationRejectedEmail,
-} from '@/lib/transactional-email'
 import { queueAutoGenerateCuratedMatches } from '@/lib/compatibility/auto-generate-matches'
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import { syncAuthDisplayNameBestEffort } from '@/lib/sync-auth-display-name'
@@ -132,16 +127,7 @@ export async function updateApplicationStatus(
     revalidateCuratedMatchMemberRoutes()
   }
 
-  const email = applicant?.email
-  if (email) {
-    if (status === 'approved') {
-      void sendApplicationApprovedEmail(email)
-    } else if (status === 'rejected') {
-      void sendApplicationRejectedEmail(email, adminNotes)
-    } else if (status === 'needs_info') {
-      void sendApplicationNeedsInfoEmail(email, adminNotes)
-    }
-  }
+  // Applicant status email delivery is handled by the Supabase application-status-email webhook pipeline after production activation.
 
   return { success: true as const }
 }
