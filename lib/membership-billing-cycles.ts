@@ -3,7 +3,9 @@ import type { Database, Json } from '@/lib/database.types'
 import {
   ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD,
   ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+  INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD,
   INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+  type CreditKind,
   type ProductTier,
 } from '@/lib/membership-tier-config'
 import type { EntitlementCycle } from '@/lib/membership-entitlements'
@@ -12,6 +14,7 @@ import {
   type MembershipBilling,
   type MembershipPlan,
 } from '@/lib/membership-systems'
+import { INNER_CIRCLE_SOCIAL_CREDITS_EXHAUSTED_MESSAGE } from '@/lib/membership-pricing-copy'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type CycleRow = {
@@ -24,7 +27,30 @@ type CycleRow = {
   credits_used: number
   guest_invites_granted?: number
   guest_invites_used?: number
+  circle_social_credits_granted?: number | null
+  circle_social_credits_used?: number
   is_active: boolean
+}
+
+const CYCLE_SELECT_FULL =
+  'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, guest_invites_granted, guest_invites_used, circle_social_credits_granted, circle_social_credits_used, is_active'
+
+const CYCLE_SELECT_WITH_GUESTS =
+  'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, guest_invites_granted, guest_invites_used, is_active'
+
+const CYCLE_SELECT_LEGACY =
+  'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, is_active'
+
+function isMissingColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false
+  if (error.code === '42P01' || error.code === '42703') return true
+  const message = error.message?.toLowerCase() ?? ''
+  return (
+    message.includes('circle_social_credits') ||
+    message.includes('guest_invites') ||
+    message.includes('does not exist') ||
+    message.includes('schema cache')
+  )
 }
 
 /**
@@ -60,6 +86,8 @@ function toCycle(row: CycleRow): EntitlementCycle {
     credits_used: row.credits_used,
     guest_invites_granted: row.guest_invites_granted ?? 0,
     guest_invites_used: row.guest_invites_used ?? 0,
+    circle_social_credits_granted: row.circle_social_credits_granted ?? null,
+    circle_social_credits_used: row.circle_social_credits_used ?? 0,
     is_active: row.is_active,
   }
 }
@@ -70,9 +98,7 @@ export async function loadActiveEntitlementCycle(
 ): Promise<EntitlementCycle | null> {
   const { data, error } = await supabase
     .from('membership_entitlement_cycles')
-    .select(
-      'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, guest_invites_granted, guest_invites_used, is_active'
-    )
+    .select(CYCLE_SELECT_FULL)
     .eq('user_id', userId)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
@@ -80,22 +106,34 @@ export async function loadActiveEntitlementCycle(
     .maybeSingle()
 
   if (error) {
-    if (error.code === '42P01' || error.message?.includes('guest_invites')) {
-      const fallback = await supabase
+    if (isMissingColumnError(error)) {
+      const withGuests = await supabase
         .from('membership_entitlement_cycles')
-        .select(
-          'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, is_active'
-        )
+        .select(CYCLE_SELECT_WITH_GUESTS)
         .eq('user_id', userId)
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
-      if (fallback.error) {
-        if (fallback.error.code === '42P01') return null
-        throw new Error(fallback.error.message)
+      if (withGuests.error) {
+        if (isMissingColumnError(withGuests.error)) {
+          const fallback = await supabase
+            .from('membership_entitlement_cycles')
+            .select(CYCLE_SELECT_LEGACY)
+            .eq('user_id', userId)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (fallback.error) {
+            if (fallback.error.code === '42P01') return null
+            throw new Error(fallback.error.message)
+          }
+          return fallback.data ? toCycle(fallback.data as CycleRow) : null
+        }
+        throw new Error(withGuests.error.message)
       }
-      return fallback.data ? toCycle(fallback.data as CycleRow) : null
+      return withGuests.data ? toCycle(withGuests.data as CycleRow) : null
     }
     throw new Error(error.message)
   }
@@ -117,16 +155,19 @@ export async function deactivateActiveCycles(
 function creditsAndGuestsForTier(productTier: 'inner_circle' | 'elite_circle'): {
   creditsGranted: number
   guestInvitesGranted: number
+  circleSocialCreditsGranted: number | null
 } {
   if (productTier === 'inner_circle') {
     return {
       creditsGranted: INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
       guestInvitesGranted: 0,
+      circleSocialCreditsGranted: INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD,
     }
   }
   return {
     creditsGranted: ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
     guestInvitesGranted: ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD,
+    circleSocialCreditsGranted: null,
   }
 }
 
@@ -143,9 +184,8 @@ export async function startEntitlementCycle(
   const periodStart = input.periodStart ?? new Date()
   const plan = input.plan ?? 'monthly'
   const periodEnd = input.periodEnd ?? defaultPeriodEnd(plan, periodStart)
-  const { creditsGranted, guestInvitesGranted } = creditsAndGuestsForTier(
-    input.productTier
-  )
+  const { creditsGranted, guestInvitesGranted, circleSocialCreditsGranted } =
+    creditsAndGuestsForTier(input.productTier)
 
   await deactivateActiveCycles(supabase, input.userId)
 
@@ -160,17 +200,16 @@ export async function startEntitlementCycle(
       credits_used: 0,
       guest_invites_granted: guestInvitesGranted,
       guest_invites_used: 0,
+      circle_social_credits_granted: circleSocialCreditsGranted,
+      circle_social_credits_used: 0,
       is_active: true,
     })
-    .select(
-      'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, guest_invites_granted, guest_invites_used, is_active'
-    )
+    .select(CYCLE_SELECT_FULL)
     .single()
 
   if (error) {
-    // Fallback if guest invite columns are not migrated yet.
-    if (error.message?.includes('guest_invites')) {
-      const legacy = await supabase
+    if (isMissingColumnError(error)) {
+      const withGuests = await supabase
         .from('membership_entitlement_cycles')
         .insert({
           user_id: input.userId,
@@ -179,14 +218,33 @@ export async function startEntitlementCycle(
           period_end: periodEnd.toISOString(),
           credits_granted: creditsGranted,
           credits_used: 0,
+          guest_invites_granted: guestInvitesGranted,
+          guest_invites_used: 0,
           is_active: true,
         })
-        .select(
-          'id, user_id, product_tier, period_start, period_end, credits_granted, credits_used, is_active'
-        )
+        .select(CYCLE_SELECT_WITH_GUESTS)
         .single()
-      if (legacy.error) throw new Error(legacy.error.message)
-      return toCycle(legacy.data as CycleRow)
+      if (withGuests.error) {
+        if (withGuests.error.message?.includes('guest_invites')) {
+          const legacy = await supabase
+            .from('membership_entitlement_cycles')
+            .insert({
+              user_id: input.userId,
+              product_tier: input.productTier,
+              period_start: periodStart.toISOString(),
+              period_end: periodEnd.toISOString(),
+              credits_granted: creditsGranted,
+              credits_used: 0,
+              is_active: true,
+            })
+            .select(CYCLE_SELECT_LEGACY)
+            .single()
+          if (legacy.error) throw new Error(legacy.error.message)
+          return toCycle(legacy.data as CycleRow)
+        }
+        throw new Error(withGuests.error.message)
+      }
+      return toCycle(withGuests.data as CycleRow)
     }
     throw new Error(error.message)
   }
@@ -284,60 +342,160 @@ export async function renewEntitlementCycle(
   })
 }
 
+const MAX_CREDIT_CONSUME_ATTEMPTS = 3
+
+type CreditConsumeResult = {
+  creditsRemaining: number
+  creditsGranted: number
+  creditsUsed: number
+}
+
+function creditColumns(kind: CreditKind): {
+  granted: 'credits_granted' | 'circle_social_credits_granted'
+  used: 'credits_used' | 'circle_social_credits_used'
+  exhausted: string
+} {
+  if (kind === 'circle_social') {
+    return {
+      granted: 'circle_social_credits_granted',
+      used: 'circle_social_credits_used',
+      exhausted: INNER_CIRCLE_SOCIAL_CREDITS_EXHAUSTED_MESSAGE,
+    }
+  }
+  return {
+    granted: 'credits_granted',
+    used: 'credits_used',
+    exhausted: 'No included premium event credits remaining this billing period.',
+  }
+}
+
+type CycleCreditRead = {
+  id: string
+  is_active: boolean
+  credits_granted?: number | null
+  credits_used?: number
+  circle_social_credits_granted?: number | null
+  circle_social_credits_used?: number
+}
+
+function readCreditBalance(row: CycleCreditRead, kind: CreditKind): {
+  granted: number | null
+  used: number
+} {
+  if (kind === 'circle_social') {
+    return {
+      granted: row.circle_social_credits_granted ?? null,
+      used: row.circle_social_credits_used ?? 0,
+    }
+  }
+  return {
+    granted: row.credits_granted ?? null,
+    used: row.credits_used ?? 0,
+  }
+}
+
+export async function consumeEntitlementCredit(
+  supabase: SupabaseClient<Database>,
+  cycleId: string,
+  kind: CreditKind
+): Promise<CreditConsumeResult> {
+  const db = entitlementWriteClient(supabase)
+  const cols = creditColumns(kind)
+
+  for (let attempt = 0; attempt < MAX_CREDIT_CONSUME_ATTEMPTS; attempt++) {
+    const selectColumns =
+      kind === 'circle_social'
+        ? 'id, circle_social_credits_granted, circle_social_credits_used, is_active'
+        : 'id, credits_granted, credits_used, is_active'
+
+    const { data: cycle, error: readError } = await db
+      .from('membership_entitlement_cycles')
+      .select(selectColumns)
+      .eq('id', cycleId)
+      .single()
+
+    if (readError || !cycle) {
+      throw new Error(readError?.message ?? 'Entitlement cycle not found.')
+    }
+
+    const row = cycle as CycleCreditRead
+    if (!row.is_active) {
+      throw new Error('Billing period has ended. Credits cannot be used.')
+    }
+
+    const { granted: grantedRaw, used } = readCreditBalance(row, kind)
+    if (kind === 'circle_social' && grantedRaw == null) {
+      throw new Error(
+        'Circle Social credits are not metered for this billing period.'
+      )
+    }
+
+    const granted = grantedRaw ?? 0
+    if (used >= granted) {
+      throw new Error(cols.exhausted)
+    }
+
+    const nextUsed = used + 1
+    const updateQuery =
+      kind === 'circle_social'
+        ? db
+            .from('membership_entitlement_cycles')
+            .update({ circle_social_credits_used: nextUsed })
+            .eq('id', cycleId)
+            .eq('is_active', true)
+            .eq('circle_social_credits_used', used)
+            .select('id, circle_social_credits_granted, circle_social_credits_used')
+            .maybeSingle()
+        : db
+            .from('membership_entitlement_cycles')
+            .update({ credits_used: nextUsed })
+            .eq('id', cycleId)
+            .eq('is_active', true)
+            .eq('credits_used', used)
+            .select('id, credits_granted, credits_used')
+            .maybeSingle()
+
+    const { data: updated, error: updateError } = await updateQuery
+
+    if (updateError) {
+      throw new Error(updateError.message)
+    }
+
+    if (!updated) {
+      continue
+    }
+
+    const updatedRow = updated as CycleCreditRead
+    const persisted = readCreditBalance(updatedRow, kind)
+    if (persisted.used !== nextUsed) {
+      continue
+    }
+
+    const creditsGranted = persisted.granted ?? granted
+    return {
+      creditsRemaining: Math.max(0, creditsGranted - persisted.used),
+      creditsGranted,
+      creditsUsed: persisted.used,
+    }
+  }
+
+  throw new Error(
+    'Credit consumption did not persist. Check entitlement-cycle update permissions (service role / RLS).'
+  )
+}
+
 export async function consumeEventCredit(
   supabase: SupabaseClient<Database>,
   cycleId: string
-): Promise<{ creditsRemaining: number; creditsGranted: number; creditsUsed: number }> {
-  const db = entitlementWriteClient(supabase)
+): Promise<CreditConsumeResult> {
+  return consumeEntitlementCredit(supabase, cycleId, 'premium_event')
+}
 
-  const { data: cycle, error: readError } = await db
-    .from('membership_entitlement_cycles')
-    .select('id, credits_granted, credits_used, is_active')
-    .eq('id', cycleId)
-    .single()
-
-  if (readError || !cycle) {
-    throw new Error(readError?.message ?? 'Entitlement cycle not found.')
-  }
-
-  if (!cycle.is_active) {
-    throw new Error('Billing period has ended. Credits cannot be used.')
-  }
-
-  const granted = cycle.credits_granted ?? 0
-  const used = cycle.credits_used ?? 0
-  if (used >= granted) {
-    throw new Error(
-      'No included premium event credits remaining this billing period.'
-    )
-  }
-
-  const nextUsed = used + 1
-  const { data: updated, error: updateError } = await db
-    .from('membership_entitlement_cycles')
-    .update({ credits_used: nextUsed })
-    .eq('id', cycleId)
-    .eq('is_active', true)
-    .select('id, credits_granted, credits_used')
-    .maybeSingle()
-
-  if (updateError) {
-    throw new Error(updateError.message)
-  }
-
-  // RLS can silently no-op updates (0 rows). Never report success without a row.
-  if (!updated || updated.credits_used !== nextUsed) {
-    throw new Error(
-      'Credit consumption did not persist. Check entitlement-cycle update permissions (service role / RLS).'
-    )
-  }
-
-  const creditsGranted = updated.credits_granted ?? granted
-  return {
-    creditsRemaining: Math.max(0, creditsGranted - updated.credits_used),
-    creditsGranted,
-    creditsUsed: updated.credits_used,
-  }
+export async function consumeCircleSocialCredit(
+  supabase: SupabaseClient<Database>,
+  cycleId: string
+): Promise<CreditConsumeResult> {
+  return consumeEntitlementCredit(supabase, cycleId, 'circle_social')
 }
 
 export async function returnGuestInvite(
@@ -424,27 +582,64 @@ export async function returnEventCredit(
   supabase: SupabaseClient<Database>,
   cycleId: string
 ): Promise<void> {
+  return returnEntitlementCredit(supabase, cycleId, 'premium_event')
+}
+
+export async function returnCircleSocialCredit(
+  supabase: SupabaseClient<Database>,
+  cycleId: string
+): Promise<void> {
+  return returnEntitlementCredit(supabase, cycleId, 'circle_social')
+}
+
+async function returnEntitlementCredit(
+  supabase: SupabaseClient<Database>,
+  cycleId: string,
+  kind: CreditKind
+): Promise<void> {
   const db = entitlementWriteClient(supabase)
+  const selectColumn =
+    kind === 'circle_social' ? 'circle_social_credits_used' : 'credits_used'
   const { data: cycle } = await db
     .from('membership_entitlement_cycles')
-    .select('credits_used')
+    .select(selectColumn)
     .eq('id', cycleId)
     .single()
 
-  if (!cycle || (cycle.credits_used ?? 0) <= 0) return
+  const row = cycle as CycleCreditRead | null
+  const used =
+    kind === 'circle_social'
+      ? (row?.circle_social_credits_used ?? 0)
+      : (row?.credits_used ?? 0)
+  if (!row || used <= 0) return
 
-  const nextUsed = Math.max(0, (cycle.credits_used ?? 0) - 1)
-  const { data: updated, error } = await db
-    .from('membership_entitlement_cycles')
-    .update({ credits_used: nextUsed })
-    .eq('id', cycleId)
-    .select('credits_used')
-    .maybeSingle()
+  const nextUsed = Math.max(0, used - 1)
+  const updateQuery =
+    kind === 'circle_social'
+      ? db
+          .from('membership_entitlement_cycles')
+          .update({ circle_social_credits_used: nextUsed })
+          .eq('id', cycleId)
+          .select('circle_social_credits_used')
+          .maybeSingle()
+      : db
+          .from('membership_entitlement_cycles')
+          .update({ credits_used: nextUsed })
+          .eq('id', cycleId)
+          .select('credits_used')
+          .maybeSingle()
+
+  const { data: updated, error } = await updateQuery
 
   if (error) {
     throw new Error(error.message)
   }
-  if (!updated || updated.credits_used !== nextUsed) {
+  const persisted = updated as CycleCreditRead | null
+  const persistedUsed =
+    kind === 'circle_social'
+      ? persisted?.circle_social_credits_used
+      : persisted?.credits_used
+  if (!persisted || persistedUsed !== nextUsed) {
     throw new Error(
       'Credit return did not persist. Check entitlement-cycle update permissions.'
     )

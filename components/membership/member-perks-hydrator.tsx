@@ -24,8 +24,10 @@ export default function MemberPerksHydrator({
   }, [
     entitlements?.productTier,
     entitlements?.premiumCreditsRemaining,
+    entitlements?.circleSocialCreditsRemaining,
     entitlements?.guestInvitesRemaining,
     entitlements?.activeCycle?.credits_granted,
+    entitlements?.activeCycle?.circle_social_credits_granted,
     entitlements?.activeCycle?.period_start,
     entitlements?.activeCycle?.period_end,
     entitlements?.subscriptionActive,

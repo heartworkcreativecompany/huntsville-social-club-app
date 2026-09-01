@@ -2,14 +2,15 @@ import Link from 'next/link'
 import Card from '@/components/ui/card'
 import { buttonPrimaryClassName, buttonSecondaryClassName } from '@/lib/event-labels'
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
-import { freeRegistrationsSummary } from '@/lib/membership-entitlements'
+import { membershipPerkCopyLines } from '@/lib/membership-entitlements'
+import MembershipPerkLines from '@/components/membership/membership-perk-lines'
 
 export default function MembershipEntitlementBanner({
   entitlements,
 }: {
   entitlements: MemberEntitlements
 }) {
-  const summary = freeRegistrationsSummary(entitlements)
+  const lines = membershipPerkCopyLines(entitlements)
 
   return (
     <Card padding="sm" className="mb-8 border-accent/20 bg-accent-soft/30">
@@ -19,8 +20,10 @@ export default function MembershipEntitlementBanner({
           <p className="text-display mt-1 text-lg font-semibold">
             {entitlements.productTierLabel}
           </p>
-          {summary ? (
-            <p className="mt-2 text-sm text-muted-foreground">{summary}</p>
+          {lines.length > 0 ? (
+            <div className="mt-2 min-w-0 max-w-full">
+              <MembershipPerkLines lines={lines} />
+            </div>
           ) : null}
         </div>
         {entitlements.productTier === 'member' ? (

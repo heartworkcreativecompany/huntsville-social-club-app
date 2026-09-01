@@ -153,7 +153,7 @@ describe('premiumCreditsSummary and countdown', () => {
         creditsGranted: 2,
       })
     ).toBe(
-      'You have 2 of 2 premium credits and 1 guest invite(s) remaining this billing period.'
+      'You have 2 of 2 premium credits and 1 guest invite(s) remaining this billing period. All Circle Socials are included in your membership.'
     )
   })
 
@@ -190,7 +190,7 @@ describe('Membership Perks after RSVP credit changes', () => {
 
     expect(afterGoing.premiumCreditsRemaining).toBe(1)
     expect(membershipPerksSummaryFromSnapshot(afterGoing)).toBe(
-      'You have 1 of 2 premium credits and 1 guest invite(s) remaining this billing period.'
+      'You have 1 of 2 premium credits and 1 guest invite(s) remaining this billing period. All Circle Socials are included in your membership.'
     )
   })
 
@@ -218,7 +218,7 @@ describe('Membership Perks after RSVP credit changes', () => {
 
     expect(afterNotGoing.premiumCreditsRemaining).toBe(1)
     expect(membershipPerksSummaryFromSnapshot(afterNotGoing)).toBe(
-      'You have 1 of 2 premium credits and 1 guest invite(s) remaining this billing period.'
+      'You have 1 of 2 premium credits and 1 guest invite(s) remaining this billing period. All Circle Socials are included in your membership.'
     )
   })
 
@@ -312,5 +312,27 @@ describe('Membership Perks after RSVP credit changes', () => {
         guestInvitesRemaining: 0,
       })
     ).toBeNull()
+  })
+
+  it('applies Circle Social remaining from the server snapshot without touching premium credits', () => {
+    const inner: MembershipPerksSnapshot = {
+      productTier: 'inner_circle',
+      hasPaidMembership: true,
+      premiumCreditsRemaining: 1,
+      creditsGranted: 1,
+      circleSocialCreditsRemaining: 2,
+      circleSocialCreditsGranted: 2,
+      guestInvitesRemaining: 0,
+    }
+    const after = applyRsvpPerksSnapshot({
+      previous: inner,
+      usedCircleSocialCredit: true,
+      perks: { ...inner, circleSocialCreditsRemaining: 1 },
+    })
+    expect(after.circleSocialCreditsRemaining).toBe(1)
+    expect(after.premiumCreditsRemaining).toBe(1)
+    expect(membershipPerksSummaryFromSnapshot(after)).toContain(
+      '1 of 2 included Circle Social credit'
+    )
   })
 })

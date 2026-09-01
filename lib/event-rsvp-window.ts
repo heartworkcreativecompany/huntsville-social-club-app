@@ -1,4 +1,12 @@
 import type { EventAccessType, ProductTier } from '@/lib/membership-tier-config'
+import {
+  ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
+  innerCircleSocialRemainingHeadline,
+  innerIncludedRemainingHeadline,
+} from '@/lib/membership-pricing-copy'
+import {
+  ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
+} from '@/lib/membership-tier-config'
 
 export type EventRsvpWindowPhase =
   | 'before_priority'
@@ -229,11 +237,43 @@ export type MembershipPerksSnapshot = {
   hasPaidMembership: boolean
   premiumCreditsRemaining: number
   creditsGranted: number | null
+  /** Null = unlimited / not metered (Elite, or Inner Circle grandfathered cycle). */
+  circleSocialCreditsRemaining?: number | null
+  circleSocialCreditsGranted?: number | null
   guestInvitesRemaining: number
   /** Active entitlement cycle start (ISO), when known. */
   periodStart?: string | null
   /** Active entitlement cycle end (ISO), when known. */
   periodEnd?: string | null
+}
+
+export function membershipPerkLinesFromSnapshot(
+  snapshot: MembershipPerksSnapshot
+): string[] {
+  if (!snapshot.hasPaidMembership) return []
+
+  if (snapshot.productTier === 'elite_circle') {
+    const granted =
+      snapshot.creditsGranted ?? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+    return [
+      `You have ${snapshot.premiumCreditsRemaining} of ${granted} premium credits and ${snapshot.guestInvitesRemaining} guest invite(s) remaining this billing period.`,
+      ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
+    ]
+  }
+
+  if (snapshot.productTier === 'inner_circle') {
+    const lines = [
+      innerIncludedRemainingHeadline(snapshot.premiumCreditsRemaining),
+    ]
+    if (snapshot.circleSocialCreditsRemaining != null) {
+      lines.push(
+        innerCircleSocialRemainingHeadline(snapshot.circleSocialCreditsRemaining)
+      )
+    }
+    return lines
+  }
+
+  return []
 }
 
 export function premiumCreditsSummary(input: {
@@ -242,6 +282,7 @@ export function premiumCreditsSummary(input: {
   guestInvitesRemaining: number
   creditsGranted: number | null
   hasPaidMembership?: boolean
+  circleSocialCreditsRemaining?: number | null
 }): string | null {
   const hasPaid =
     input.hasPaidMembership ??
@@ -259,16 +300,28 @@ export function premiumCreditsSummary(input: {
     (productTier === 'elite_circle' ? 2 : 1)
 
   if (productTier === 'elite_circle') {
-    return `You have ${remaining} of ${granted} premium credits and ${guestInvitesRemaining} guest invite(s) remaining this billing period.`
+    return [
+      `You have ${remaining} of ${granted} premium credits and ${guestInvitesRemaining} guest invite(s) remaining this billing period.`,
+      ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
+    ].join(' ')
   }
 
-  return `You have ${remaining} of ${granted} premium credit(s) remaining this billing period.`
+  const premiumLine = `You have ${remaining} of ${granted} premium credit(s) remaining this billing period.`
+  if (input.circleSocialCreditsRemaining == null) {
+    return premiumLine
+  }
+  return [
+    premiumLine,
+    innerCircleSocialRemainingHeadline(input.circleSocialCreditsRemaining),
+  ].join(' ')
 }
 
 export function membershipPerksSummaryFromSnapshot(
   snapshot: MembershipPerksSnapshot
 ): string | null {
   if (!snapshot.hasPaidMembership) return null
+  const lines = membershipPerkLinesFromSnapshot(snapshot)
+  if (lines.length > 0) return lines.join(' ')
   return premiumCreditsSummary(snapshot)
 }
 
@@ -283,6 +336,7 @@ export function membershipPerksSummaryFromSnapshot(
 export function applyRsvpPerksSnapshot(input: {
   previous: MembershipPerksSnapshot
   usedCredit?: boolean
+  usedCircleSocialCredit?: boolean
   perks?: MembershipPerksSnapshot | null
 }): MembershipPerksSnapshot {
   const perks = input.perks
@@ -304,6 +358,17 @@ export function applyRsvpPerksSnapshot(input: {
         premiumCreditsRemaining: input.previous.premiumCreditsRemaining,
       }
     }
+    if (
+      typeof next.circleSocialCreditsRemaining === 'number' &&
+      typeof input.previous.circleSocialCreditsRemaining === 'number' &&
+      next.circleSocialCreditsRemaining >
+        input.previous.circleSocialCreditsRemaining
+    ) {
+      next = {
+        ...next,
+        circleSocialCreditsRemaining: input.previous.circleSocialCreditsRemaining,
+      }
+    }
     return next
   }
 
@@ -314,6 +379,19 @@ export function applyRsvpPerksSnapshot(input: {
       premiumCreditsRemaining: Math.max(
         0,
         input.previous.premiumCreditsRemaining - 1
+      ),
+    }
+  }
+
+  if (
+    input.usedCircleSocialCredit &&
+    typeof input.previous.circleSocialCreditsRemaining === 'number'
+  ) {
+    return {
+      ...input.previous,
+      circleSocialCreditsRemaining: Math.max(
+        0,
+        input.previous.circleSocialCreditsRemaining - 1
       ),
     }
   }

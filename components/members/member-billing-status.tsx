@@ -4,7 +4,8 @@ import Badge from '@/components/ui/badge'
 import { BillingPortalButton } from '@/components/membership/membership-billing-buttons'
 import { billingStatusLabel } from '@/lib/membership-systems'
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
-import { freeRegistrationsSummary } from '@/lib/membership-entitlements'
+import { membershipPerkCopyLines } from '@/lib/membership-entitlements'
+import MembershipPerkLines from '@/components/membership/membership-perk-lines'
 import { buttonPrimaryClassName } from '@/lib/event-labels'
 
 export default function MemberBillingStatus({
@@ -14,7 +15,7 @@ export default function MemberBillingStatus({
 }) {
   const billing = entitlements.billing
   const label = billingStatusLabel(billing)
-  const summary = freeRegistrationsSummary(entitlements)
+  const perkLines = membershipPerkCopyLines(entitlements)
   const hasPaidSubscription =
     Boolean(billing.stripe_subscription_id) &&
     (billing.subscription_status === 'active' ||
@@ -48,8 +49,10 @@ export default function MemberBillingStatus({
           There is a payment issue on your account. Update your billing details
           to keep membership access.
         </p>
-      ) : summary ? (
-        <p className="mt-3 text-sm text-muted-foreground">{summary}</p>
+      ) : perkLines.length > 0 ? (
+        <div className="mt-3 min-w-0 max-w-full">
+          <MembershipPerkLines lines={perkLines} />
+        </div>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">
           Upgrade to Inner Circle or Elite Circle for messaging, included standard

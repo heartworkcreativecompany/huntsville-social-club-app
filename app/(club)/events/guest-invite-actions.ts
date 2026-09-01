@@ -10,42 +10,9 @@ import {
   returnGuestInvite,
 } from '@/lib/membership-billing-cycles'
 import { buildMemberEntitlementsWithOverride } from '@/lib/load-member-entitlements'
+import { membershipPerksSnapshotFromEntitlements } from '@/lib/member-perks-snapshot'
 import type { MembershipPerksSnapshot } from '@/lib/event-rsvp-window'
 import { getViewer } from '@/lib/viewer'
-
-function perksSnapshotFromEntitlements(entitlements: {
-  productTier: MembershipPerksSnapshot['productTier']
-  premiumCreditsRemaining: number | null
-  guestInvitesRemaining: number
-  activeCycle: {
-    credits_granted: number | null
-    period_start?: string | null
-    period_end?: string | null
-  } | null
-}): MembershipPerksSnapshot {
-  const hasPaidMembership =
-    entitlements.productTier === 'inner_circle' ||
-    entitlements.productTier === 'elite_circle'
-  return {
-    productTier: entitlements.productTier,
-    hasPaidMembership,
-    premiumCreditsRemaining: hasPaidMembership
-      ? (entitlements.premiumCreditsRemaining ?? 0)
-      : 0,
-    creditsGranted: hasPaidMembership
-      ? (entitlements.activeCycle?.credits_granted ?? null)
-      : 0,
-    guestInvitesRemaining: hasPaidMembership
-      ? entitlements.guestInvitesRemaining
-      : 0,
-    periodStart: hasPaidMembership
-      ? (entitlements.activeCycle?.period_start ?? null)
-      : null,
-    periodEnd: hasPaidMembership
-      ? (entitlements.activeCycle?.period_end ?? null)
-      : null,
-  }
-}
 
 async function loadGuestInvitePerksSnapshot(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -59,7 +26,7 @@ async function loadGuestInvitePerksSnapshot(
     applicationApproved: true,
     activeCycle,
   })
-  return perksSnapshotFromEntitlements(entitlements)
+  return membershipPerksSnapshotFromEntitlements(entitlements)
 }
 
 /**

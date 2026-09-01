@@ -8,6 +8,7 @@ import { FREE_MEMBER_PREMIUM_CREDITS_COPY } from '@/lib/membership-pricing-copy'
 import {
   applyRsvpResultToMemberPerksStore,
   dashboardCreditsSummaryFromSnapshot,
+  dashboardPerkLinesFromSnapshot,
   freeMemberPerksSnapshot,
   getMemberPerksSnapshot,
   hydrateMemberPerksFromServer,
@@ -51,7 +52,7 @@ describe('shared member perks store', () => {
     expect(live?.premiumCreditsRemaining).toBe(1)
 
     expect(membershipPerksSummaryFromSnapshot(live!)).toBe(
-      'You have 1 of 2 premium credits and 1 guest invite(s) remaining this billing period.'
+      'You have 1 of 2 premium credits and 1 guest invite(s) remaining this billing period. All Circle Socials are included in your membership.'
     )
     expect(dashboardCreditsSummaryFromSnapshot(live!)).toBe(
       'You have 1 of 2 included premium event credits remaining this billing period'
@@ -229,5 +230,52 @@ describe('shared member perks store', () => {
     expect(snapshot.hasPaidMembership).toBe(false)
     expect(snapshot.premiumCreditsRemaining).toBe(0)
     expect(snapshot.creditsGranted).toBe(0)
+  })
+})
+
+describe('Inner Circle Circle Social perks store', () => {
+  const innerFull: MembershipPerksSnapshot = {
+    productTier: 'inner_circle',
+    hasPaidMembership: true,
+    premiumCreditsRemaining: 1,
+    creditsGranted: 1,
+    circleSocialCreditsRemaining: 2,
+    circleSocialCreditsGranted: 2,
+    guestInvitesRemaining: 0,
+    ...period,
+  }
+
+  it('shows both Inner Circle counters and refreshes after a Circle Social RSVP', () => {
+    hydrateMemberPerksFromServer(innerFull)
+    expect(dashboardPerkLinesFromSnapshot(getMemberPerksSnapshot()!)).toEqual([
+      'You have 1 of 1 included premium event credit remaining this billing period.',
+      'You have 2 of 2 included Circle Social credits remaining this billing period.',
+    ])
+
+    applyRsvpResultToMemberPerksStore({
+      usedCircleSocialCredit: true,
+      perks: { ...innerFull, circleSocialCreditsRemaining: 1 },
+    })
+
+    const live = getMemberPerksSnapshot()
+    expect(live?.circleSocialCreditsRemaining).toBe(1)
+    expect(live?.premiumCreditsRemaining).toBe(1)
+    expect(dashboardPerkLinesFromSnapshot(live!)).toEqual([
+      'You have 1 of 1 included premium event credit remaining this billing period.',
+      'You have 1 of 2 included Circle Social credit remaining this billing period.',
+    ])
+  })
+
+  it('does not refund Circle Social credits on Going → Not going', () => {
+    hydrateMemberPerksFromServer(innerFull)
+    applyRsvpResultToMemberPerksStore({
+      usedCircleSocialCredit: true,
+      perks: { ...innerFull, circleSocialCreditsRemaining: 1 },
+    })
+    applyRsvpResultToMemberPerksStore({
+      usedCircleSocialCredit: false,
+      perks: { ...innerFull, circleSocialCreditsRemaining: 2 },
+    })
+    expect(getMemberPerksSnapshot()?.circleSocialCreditsRemaining).toBe(1)
   })
 })
