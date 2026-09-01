@@ -29,7 +29,7 @@ export default function PricingBottomCta({
       </p>
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         <Link
-          href={variant === 'marketing' ? '/signup' : '/members'}
+          href={variant === 'marketing' ? '/signup' : '/dashboard'}
           className={secondary}
         >
           {PRICING_PLANS.member.cta}

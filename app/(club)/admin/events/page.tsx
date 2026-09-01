@@ -13,7 +13,7 @@ import { EVENT_SPONSORSHIP_AMOUNT_CENTS, EVENT_SPONSORSHIP_PRICE_LABEL } from '@
 export default async function AdminEventsPage() {
   const viewer = await getViewer()
   if (!viewer) redirect('/login')
-  if (viewer.role !== 'admin') redirect('/members')
+  if (viewer.role !== 'admin') redirect('/dashboard')
 
   const supabase = await createClient()
 

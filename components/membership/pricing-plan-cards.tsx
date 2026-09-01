@@ -34,7 +34,7 @@ export default function PricingPlanCards({
     if (key === 'member') {
       return (
         <Link
-          href={mode === 'public' ? '/signup' : '/members'}
+          href={mode === 'public' ? '/signup' : '/dashboard'}
           className={buttonSecondaryClassName}
         >
           {plan.cta}

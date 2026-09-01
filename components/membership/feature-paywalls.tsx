@@ -84,7 +84,7 @@ export function UpgradePrompt({
             {copy.secondaryCta}
           </Link>
         ) : (
-          <Link href="/members" className={buttonSecondaryClassName}>
+          <Link href="/dashboard" className={buttonSecondaryClassName}>
             {copy.secondaryCta}
           </Link>
         )}

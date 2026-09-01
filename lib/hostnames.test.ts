@@ -58,10 +58,10 @@ describe('rootRouteAction — members host `/`', () => {
     })
   })
 
-  it('redirects authenticated visitors to /members', () => {
+  it('redirects authenticated visitors to /dashboard', () => {
     expect(rootRouteAction('members', true)).toEqual({
       type: 'redirect',
-      location: '/members',
+      location: '/dashboard',
     })
   })
 })
@@ -76,7 +76,7 @@ describe('rootRouteAction — marketing apex `/`', () => {
       'https://members.huntsvillesocialclub.com'
     expect(rootRouteAction('marketing', true)).toEqual({
       type: 'redirect',
-      location: 'https://members.huntsvillesocialclub.com/members',
+      location: 'https://members.huntsvillesocialclub.com/dashboard',
     })
   })
 })
@@ -89,7 +89,7 @@ describe('rootRouteAction — preview hosts', () => {
   it('keeps existing vercel.app behavior (members when signed in)', () => {
     expect(rootRouteAction('preview', true)).toEqual({
       type: 'redirect',
-      location: '/members',
+      location: '/dashboard',
     })
   })
 })
@@ -118,6 +118,7 @@ describe('marketing apex route gate', () => {
     const cases = [
       ['/login', '?next=%2Fmembers'],
       ['/signup', '?ref=cta'],
+      ['/dashboard', '?from=login'],
       ['/members', '?tab=directory'],
       ['/events', '?when=upcoming'],
       ['/messages', '?box=inbox'],
@@ -167,6 +168,7 @@ describe('members host keeps full application behavior', () => {
       '/',
       '/login',
       '/signup',
+      '/dashboard',
       '/members',
       '/events',
       '/messages',
@@ -188,6 +190,7 @@ describe('vercel.app preview keeps full member app behavior', () => {
       '/',
       '/login',
       '/signup',
+      '/dashboard',
       '/members',
       '/events',
       '/messages',

@@ -12,16 +12,18 @@ import {
 
 const repoRoot = join(__dirname, '../..')
 
-describe('Members dashboard layout', () => {
-  it('does not show Your membership on the Members dashboard', () => {
+function membersPageSource() {
+  return readFileSync(join(repoRoot, 'app/(club)/members/page.tsx'), 'utf8')
+}
+
+describe('Members directory layout', () => {
+  it('does not show Your membership on the Members directory', () => {
     expect(membersDashboardShowsMembershipUsage()).toBe(false)
 
     const html = renderToStaticMarkup(
       createElement(MembersDashboardLayout, {
-        heading: createElement('h1', null, 'Members'),
+        heading: createElement('h1', null, 'Member directory'),
         directory: createElement('div', null, 'Member directory'),
-        recentMessages: createElement('div', null, 'Recent messages'),
-        curatedIntro: createElement('div', null, 'Curated Intro'),
       })
     )
 
@@ -30,61 +32,43 @@ describe('Members dashboard layout', () => {
     expect(html).not.toContain('event credit')
     expect(html).not.toContain('guest invite')
 
-    const membersPage = readFileSync(
-      join(repoRoot, 'app/(club)/members/page.tsx'),
-      'utf8'
-    )
+    const membersPage = membersPageSource()
     expect(membersPage).not.toContain('MembershipUsageCard')
     expect(membersPage).not.toContain('loadMemberEntitlementsForViewer')
     expect(membersPage).not.toContain('Your membership')
   })
 
-  it('renders Curated Intro after Recent Messages in reading order', () => {
+  it('keeps a directory-only section order', () => {
     const order = membersDashboardSectionOrder({
       showApprovalNotice: false,
       showAdmin: false,
-      showRecentMessages: true,
-      showCuratedIntro: true,
     })
 
-    expect(order).toEqual([
-      'heading',
-      'directory',
-      'recent_messages',
-      'curated_intro',
-    ])
-    expect(order.indexOf('recent_messages')).toBeLessThan(
-      order.indexOf('curated_intro')
-    )
+    expect(order).toEqual(['heading', 'directory'])
 
-    const html = renderToStaticMarkup(
-      createElement(MembersDashboardLayout, {
-        heading: createElement('header', null, 'Page heading'),
-        directory: createElement('section', null, 'Member directory'),
-        recentMessages: createElement('section', null, 'Recent messages'),
-        curatedIntro: createElement('section', null, 'Curated Intro'),
-      })
-    )
-
-    const messagesAt = html.indexOf('Recent messages')
-    const introAt = html.indexOf('Curated Intro')
-    expect(messagesAt).toBeGreaterThan(-1)
-    expect(introAt).toBeGreaterThan(-1)
-    expect(messagesAt).toBeLessThan(introAt)
-  })
-
-  it('keeps Curated Intro after Recent Messages when admin block is present', () => {
-    const order = membersDashboardSectionOrder({
+    const withAdmin = membersDashboardSectionOrder({
       showApprovalNotice: false,
       showAdmin: true,
-      showRecentMessages: true,
-      showCuratedIntro: true,
     })
+    expect(withAdmin).toEqual(['heading', 'directory', 'admin'])
+    expect(withAdmin).not.toContain('recent_messages')
+    expect(withAdmin).not.toContain('curated_intro')
+  })
 
-    expect(order.indexOf('admin')).toBeLessThan(order.indexOf('recent_messages'))
-    expect(order.indexOf('recent_messages')).toBeLessThan(
-      order.indexOf('curated_intro')
+  it('no longer renders moved Dashboard modules on the Members page', () => {
+    const membersPage = membersPageSource()
+
+    expect(membersPage).toContain('MemberDirectorySection')
+    expect(membersPage).toContain('loadDirectoryProfiles')
+    expect(membersPage).toContain('title="Member directory"')
+    expect(membersPage).not.toContain('RecentMessagesPreview')
+    expect(membersPage).not.toContain('CuratedIntroCard')
+    expect(membersPage).not.toContain('loadRecentMessagePreviews')
+    expect(membersPage).not.toContain('title="Dashboard"')
+    expect(membersPage).not.toContain(
+      'Your dashboard for curated intros, member discovery, and recent conversations.'
     )
+    expect(membersPage).not.toContain('eyebrow="Discovery"')
   })
 })
 

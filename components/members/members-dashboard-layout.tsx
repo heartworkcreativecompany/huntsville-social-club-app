@@ -1,29 +1,25 @@
 import type { ReactNode } from 'react'
 
 /**
- * Members dashboard section order (single-column / mobile reading order):
+ * Members directory section order (single-column / mobile reading order):
  * 1. Page heading / approved status
- * 2. Member discovery (directory) + optional approval notice / admin
- * 3. Recent Messages
- * 4. Curated Intro
+ * 2. Optional approval notice
+ * 3. Member directory
+ * 4. Optional admin member management
  *
- * Membership usage (“Your membership”) is intentionally not a dashboard section —
- * it lives on Your Profile.
+ * Dashboard modules (recent messages, curated intro) live on /dashboard.
+ * Membership usage (“Your membership”) lives on Your Profile.
  */
 export function MembersDashboardLayout({
   heading,
   approvalNotice,
   directory,
   admin,
-  recentMessages,
-  curatedIntro,
 }: {
   heading: ReactNode
   approvalNotice?: ReactNode
   directory: ReactNode
   admin?: ReactNode
-  recentMessages?: ReactNode
-  curatedIntro?: ReactNode
 }) {
   return (
     <>
@@ -31,8 +27,6 @@ export function MembersDashboardLayout({
       {approvalNotice ?? null}
       {directory}
       {admin ?? null}
-      {recentMessages ?? null}
-      {curatedIntro ?? null}
     </>
   )
 }
@@ -41,15 +35,11 @@ export function MembersDashboardLayout({
 export function membersDashboardSectionOrder(input: {
   showApprovalNotice: boolean
   showAdmin: boolean
-  showRecentMessages: boolean
-  showCuratedIntro: boolean
 }): string[] {
   const sections: string[] = ['heading']
   if (input.showApprovalNotice) sections.push('approval_notice')
   sections.push('directory')
   if (input.showAdmin) sections.push('admin')
-  if (input.showRecentMessages) sections.push('recent_messages')
-  if (input.showCuratedIntro) sections.push('curated_intro')
   return sections
 }
 

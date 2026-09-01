@@ -41,6 +41,12 @@ export function buildClubNavItems({
   if (canAccessApp) {
     items.push(
       {
+        href: '/dashboard',
+        label: 'Dashboard',
+        isActive: (pathname) =>
+          pathname === '/dashboard' || pathname.startsWith('/dashboard/'),
+      },
+      {
         href: '/members',
         label: 'Members',
         isActive: (pathname) =>
@@ -103,5 +109,5 @@ export function buildClubNavItems({
 }
 
 export function clubLogoHref(canAccessApp: boolean): string {
-  return canAccessApp ? '/members' : '/application'
+  return canAccessApp ? '/dashboard' : '/application'
 }

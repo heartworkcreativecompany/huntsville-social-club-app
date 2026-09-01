@@ -183,7 +183,7 @@ export function rootRouteAction(
   if (kind === 'members') {
     return {
       type: 'redirect',
-      location: authenticated ? '/members' : '/login',
+      location: authenticated ? '/dashboard' : '/login',
     }
   }
 
@@ -198,10 +198,10 @@ export function rootRouteAction(
     if (kind === 'marketing') {
       return {
         type: 'redirect',
-        location: `${membersOrigin()}/members`,
+        location: `${membersOrigin()}/dashboard`,
       }
     }
-    return { type: 'redirect', location: '/members' }
+    return { type: 'redirect', location: '/dashboard' }
   }
 
   return { type: 'landing' }

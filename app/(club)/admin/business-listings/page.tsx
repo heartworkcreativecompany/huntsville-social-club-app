@@ -11,7 +11,7 @@ import { formatBusinessListingIndustryLabel } from '@/lib/business-listing-indus
 export default async function AdminBusinessListingsPage() {
   const viewer = await getViewer()
   if (!viewer) redirect('/login')
-  if (viewer.role !== 'admin') redirect('/members')
+  if (viewer.role !== 'admin') redirect('/dashboard')
 
   const supabase = await createClient()
   const { data: listings } = await supabase

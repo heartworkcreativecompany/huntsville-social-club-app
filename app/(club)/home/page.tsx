@@ -16,7 +16,7 @@ export default async function HomePage() {
   }
 
   if (viewer.canAccessApp) {
-    redirect('/members')
+    redirect('/dashboard')
   }
 
   const { role, applicationStatus, profile } = viewer

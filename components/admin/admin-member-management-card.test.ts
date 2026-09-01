@@ -52,7 +52,7 @@ describe('Admin dashboard member management card', () => {
 
   it('leaves existing admin routes and sidebar destinations unchanged', () => {
     const clubNav = readFileSync(
-      join(repoRoot, 'components/shell/club-nav.tsx'),
+      join(repoRoot, 'lib/club-nav-items.ts'),
       'utf8'
     )
     expect(clubNav).toContain("href: '/admin/applications'")

@@ -35,7 +35,7 @@ const adminItems = buildClubNavItems({
 
 function renderNav({
   items = memberItems,
-  pathname = '/members',
+  pathname = '/dashboard',
   mobileOpen = false,
 }: {
   items?: ReturnType<typeof buildClubNavItems>
@@ -59,6 +59,7 @@ function renderNav({
 describe('buildClubNavItems', () => {
   it('includes club destinations and omits Admin for members', () => {
     expect(memberItems.map((item) => item.label)).toEqual([
+      'Dashboard',
       'Members',
       'Events',
       'Business Directory',
@@ -66,6 +67,7 @@ describe('buildClubNavItems', () => {
       'Your Profile',
     ])
     expect(memberItems.map((item) => item.href)).toEqual([
+      '/dashboard',
       '/members',
       '/events',
       '/business',
@@ -82,10 +84,14 @@ describe('buildClubNavItems', () => {
     expect(memberItems.some((item) => item.label === 'Admin')).toBe(false)
   })
 
-  it('marks the active route for Members and nested member profiles', () => {
+  it('marks the active route for Dashboard, Members, and nested member profiles', () => {
+    const dashboard = memberItems.find((item) => item.href === '/dashboard')
     const members = memberItems.find((item) => item.href === '/members')
+    expect(dashboard?.isActive('/dashboard')).toBe(true)
+    expect(dashboard?.isActive('/members')).toBe(false)
     expect(members?.isActive('/members')).toBe(true)
     expect(members?.isActive('/members/abc')).toBe(true)
+    expect(members?.isActive('/dashboard')).toBe(false)
     expect(members?.isActive('/events')).toBe(false)
   })
 
@@ -98,6 +104,7 @@ describe('buildClubNavItems', () => {
       showFriendsNav: true,
     })
     expect(items.map((item) => item.label)).toEqual([
+      'Dashboard',
       'Members',
       'Events',
       'Business Directory',
@@ -106,6 +113,10 @@ describe('buildClubNavItems', () => {
       'Friends',
       'Your Profile',
     ])
+    expect(items.find((item) => item.label === 'Matches')?.href).toBe('/matches')
+    expect(items.find((item) => item.label === 'Friends')?.href).toBe(
+      '/friendship/matches'
+    )
   })
 
   it('keeps applicant destinations when the club app is locked', () => {
@@ -120,7 +131,7 @@ describe('buildClubNavItems', () => {
       ['Status', '/application/status'],
     ])
     expect(clubLogoHref(false)).toBe('/application')
-    expect(clubLogoHref(true)).toBe('/members')
+    expect(clubLogoHref(true)).toBe('/dashboard')
   })
 })
 
@@ -131,6 +142,8 @@ describe('ClubNavMarkup', () => {
     expect(html).toContain('hidden max-w-6xl')
     expect(html).toContain('lg:flex')
     expect(html).toContain('flex flex-wrap gap-1')
+    expect(html).toContain('Dashboard')
+    expect(html).toContain('href="/dashboard"')
     expect(html).toContain('Members')
     expect(html).toContain('href="/members"')
     expect(html).toContain('href="/events"')
@@ -192,7 +205,7 @@ describe('ClubNavMarkup', () => {
   })
 
   it('opens into an X, updates the label, and reveals the same destinations', () => {
-    const html = renderNav({ mobileOpen: true, pathname: '/members' })
+    const html = renderNav({ mobileOpen: true, pathname: '/dashboard' })
     expect(html).toContain('aria-label="Close navigation menu"')
     expect(html).toContain('aria-expanded="true"')
     expect(html).toContain('d="M6 6l12 12"')

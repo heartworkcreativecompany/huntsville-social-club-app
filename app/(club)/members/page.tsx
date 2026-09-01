@@ -4,14 +4,9 @@ import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
 import AdminMemberManagementCard from '@/components/admin/admin-member-management-card'
-import CuratedIntroCard from '@/components/members/curated-intro-card'
 import MemberDirectorySection from '@/components/members/member-directory-section'
 import { MembersDashboardLayout } from '@/components/members/members-dashboard-layout'
-import RecentMessagesPreview from '@/components/messages/recent-messages-preview'
 import { loadDirectoryProfiles } from '@/lib/load-directory-profiles'
-import { loadRecentMessagePreviews } from '@/lib/member-messages'
-import { buildMemberEntitlementsWithOverride } from '@/lib/load-member-entitlements'
-import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
 export default async function MembersPage() {
@@ -26,32 +21,13 @@ export default async function MembersPage() {
   const { members: directoryMembers, error: directoryError } =
     await loadDirectoryProfiles(viewer.userId, canBrowseDiscovery, isAdmin)
 
-  // Messaging gate only — membership usage (credits/tier) lives on Your Profile.
-  const canMessage = (
-    await buildMemberEntitlementsWithOverride({
-      userId: viewer.userId,
-      role: viewer.role,
-      billing: viewer.profile?.membership_billing,
-      applicationApproved: viewer.canAccessApp,
-      activeCycle: null,
-    })
-  ).canMessage
-
-  const supabase = await createClient()
-  const { previews: messagePreviews, error: messagesError } =
-    canBrowseDiscovery && canMessage
-      ? await loadRecentMessagePreviews(supabase, viewer.userId, 3)
-      : { previews: [], error: null }
-
-  const showRecentMessages = canBrowseDiscovery && canMessage
-
   return (
     <MembersDashboardLayout
       heading={
         <PageHeader
-          eyebrow="Discovery"
-          title="Members"
-          description="Your dashboard for curated intros, member discovery, and recent conversations."
+          eyebrow="Directory"
+          title="Member directory"
+          description="Browse verified members by how you want to connect — networking, dating, friends, or everyone."
           actions={<ApplicationStatusBadge status={viewer.applicationStatus} />}
         />
       }
@@ -70,17 +46,6 @@ export default async function MembersPage() {
       }
       directory={
         <section className="mb-12">
-          <div className="mb-6">
-            <p className="eyebrow">Directory</p>
-            <h2 className="text-display mt-1 text-xl font-semibold">
-              Member directory
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Browse verified members by how you want to connect — networking,
-              dating, friends, or everyone.
-            </p>
-          </div>
-
           {directoryError ? (
             <p className="text-sm text-danger">
               Could not load directory: {directoryError}
@@ -105,23 +70,6 @@ export default async function MembersPage() {
       }
       admin={
         viewer.role === 'admin' ? <AdminMemberManagementCard /> : undefined
-      }
-      recentMessages={
-        showRecentMessages ? (
-          <div className="mb-10">
-            <RecentMessagesPreview
-              previews={messagePreviews}
-              error={messagesError}
-            />
-          </div>
-        ) : undefined
-      }
-      curatedIntro={
-        viewer.canAccessApp ? (
-          <section className="mb-10">
-            <CuratedIntroCard />
-          </section>
-        ) : undefined
       }
     />
   )

@@ -9,12 +9,12 @@ import {
 /** Where to send the member after a successful password sign-in. */
 export async function postLoginPath(
   supabase: SupabaseClient<Database>
-): Promise<'/members' | '/application'> {
+): Promise<'/dashboard' | '/application'> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) return '/members'
+  if (!user) return '/dashboard'
 
   let profile: {
     application_status?: string | null
@@ -42,5 +42,5 @@ export async function postLoginPath(
   const status = resolveApplicationStatus(profile)
   const role = profile?.role ?? 'member'
 
-  return isApprovedMember(status, role) ? '/members' : '/application'
+  return isApprovedMember(status, role) ? '/dashboard' : '/application'
 }

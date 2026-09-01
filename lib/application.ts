@@ -245,7 +245,7 @@ export function nextActionForApplicant(status: ApplicationStatus): {
         description:
           'You have full access to events, discovery, and member experiences.',
         cta: 'Go to home',
-        href: '/home',
+        href: '/dashboard',
       }
   }
 }
