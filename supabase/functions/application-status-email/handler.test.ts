@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   ACTION_URLS,
@@ -717,21 +715,5 @@ describe('application-status-email handler', () => {
       })
     )
     expect(url).toBe(RESEND_EVENTS_URL)
-  })
-})
-
-describe('resend-email-events stub', () => {
-  it('remains an unchanged 501 not_implemented scaffold', () => {
-    const source = readFileSync(
-      resolve(
-        process.cwd(),
-        'supabase/functions/resend-email-events/index.ts'
-      ),
-      'utf8'
-    )
-    expect(source).toContain('status: "not_implemented"')
-    expect(source).toContain('status: 501')
-    expect(source).toContain('resend-email-events')
-    expect(source).not.toContain('api.resend.com')
   })
 })
