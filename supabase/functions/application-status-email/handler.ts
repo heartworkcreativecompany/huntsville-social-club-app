@@ -469,8 +469,8 @@ export function createProductionDeps(
           event_key: row.eventKey,
           application_status: row.applicationStatus,
           delivery_status: row.deliveryStatus,
-          error_text: null,
-          provider_metadata: {
+          error_message: null,
+          provider_event: {
             event: row.eventName,
             stage: 'claimed',
           },
@@ -511,9 +511,9 @@ export function createProductionDeps(
           },
           body: JSON.stringify({
             delivery_status: patch.deliveryStatus,
-            error_text: patch.errorText,
-            provider_email_id: patch.providerEmailId,
-            provider_metadata: patch.metadata,
+            error_message: patch.errorText,
+            resend_email_id: patch.providerEmailId,
+            provider_event: patch.metadata,
           }),
         }
       )

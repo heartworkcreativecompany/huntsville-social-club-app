@@ -3,6 +3,7 @@ import {
   ACTION_URLS,
   RESEND_EVENTS_URL,
   WEBHOOK_SECRET_HEADER,
+  createProductionDeps,
   eventKeyFor,
   handleApplicationStatusEmailRequest,
   mapStatusTransition,
@@ -715,5 +716,141 @@ describe('application-status-email handler', () => {
       })
     )
     expect(url).toBe(RESEND_EVENTS_URL)
+  })
+})
+
+const FORBIDDEN_AUDIT_COLUMNS = [
+  'provider_email_id',
+  'error_text',
+  'provider_metadata',
+] as const
+
+describe('production application_email_log REST payloads', () => {
+  const supabaseUrl = 'https://example.supabase.co'
+  const serviceKey = 'test-service-role-key'
+
+  function productionDeps(options?: {
+    resendStatus?: number
+    resendThrow?: boolean
+    restBodies?: Record<string, unknown>[]
+  }) {
+    const restBodies = options?.restBodies ?? []
+    return createProductionDeps(
+      (name) =>
+        ({
+          APPLICATION_STATUS_WEBHOOK_SECRET: WEBHOOK_SECRET,
+          RESEND_API_KEY: RESEND_KEY,
+          SUPABASE_URL: supabaseUrl,
+          SUPABASE_SERVICE_ROLE_KEY: serviceKey,
+        })[name],
+      async (input, init) => {
+        const url = String(input)
+        const method = init?.method ?? 'GET'
+        if (url.includes('/rest/v1/profiles')) {
+          return new Response(
+            JSON.stringify([
+              {
+                email: FETCHED_EMAIL,
+                full_name: FETCHED_NAME,
+                application_status: 'submitted',
+                application_submission_version: 1,
+              },
+            ]),
+            { status: 200 }
+          )
+        }
+        if (url.includes('/rest/v1/application_email_log')) {
+          restBodies.push({
+            method,
+            url,
+            body: JSON.parse(String(init?.body ?? '{}')),
+          })
+          if (method === 'POST') {
+            return new Response(JSON.stringify([{ id: AUDIT_ID }]), {
+              status: 201,
+            })
+          }
+          return new Response(null, { status: 200 })
+        }
+        if (options?.resendThrow) {
+          throw new Error('connect ECONNREFUSED')
+        }
+        return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
+          status: options?.resendStatus ?? 200,
+        })
+      }
+    )
+  }
+
+  it('claims with production column names and never sends retired audit fields', async () => {
+    const restBodies: Record<string, unknown>[] = []
+    await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      productionDeps({ restBodies })
+    )
+    const insert = restBodies.find((row) => row.method === 'POST')
+      ?.body as Record<string, unknown>
+    expect(insert).toEqual({
+      application_id: PROFILE_ID,
+      recipient_user_id: PROFILE_ID,
+      recipient_email: FETCHED_EMAIL,
+      event_key: 'application_submitted:1',
+      application_status: 'submitted',
+      delivery_status: 'queued',
+      error_message: null,
+      provider_event: {
+        event: 'application_submitted',
+        stage: 'claimed',
+      },
+    })
+    const serialized = JSON.stringify(restBodies)
+    for (const column of FORBIDDEN_AUDIT_COLUMNS) {
+      expect(serialized).not.toContain(column)
+    }
+  })
+
+  it('patches sent using resend_email_id, error_message, and provider_event', async () => {
+    const restBodies: Record<string, unknown>[] = []
+    await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      productionDeps({ restBodies })
+    )
+    const patch = restBodies.find((row) => row.method === 'PATCH')
+      ?.body as Record<string, unknown>
+    expect(patch).toEqual({
+      delivery_status: 'sent',
+      error_message: null,
+      resend_email_id: 'evt_opaque_1',
+      provider_event: {
+        event: 'application_submitted',
+        http_status_category: '2xx',
+      },
+    })
+    for (const column of FORBIDDEN_AUDIT_COLUMNS) {
+      expect(JSON.stringify(patch)).not.toContain(column)
+    }
+  })
+
+  it('patches failed using sanitized error_message and production columns only', async () => {
+    const restBodies: Record<string, unknown>[] = []
+    await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      productionDeps({ restBodies, resendStatus: 500 })
+    )
+    const patch = restBodies.find((row) => row.method === 'PATCH')
+      ?.body as Record<string, unknown>
+    expect(patch).toEqual({
+      delivery_status: 'failed',
+      error_message: 'resend_5xx',
+      resend_email_id: null,
+      provider_event: {
+        event: 'application_submitted',
+        http_status_category: '5xx',
+        category: 'resend_5xx',
+      },
+    })
+    for (const column of FORBIDDEN_AUDIT_COLUMNS) {
+      expect(JSON.stringify(patch)).not.toContain(column)
+    }
   })
 })
