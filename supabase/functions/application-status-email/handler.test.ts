@@ -499,8 +499,9 @@ describe('application-status-email handler', () => {
     expect(claimCalls[0]?.deliveryStatus).toBe('queued')
   })
 
-  it('sends application_submitted:2 for needs_info → submitted at version 2', async () => {
+  it('sends application_resubmitted:2 for needs_info → submitted at version 2', async () => {
     const claimCalls: AuditClaim[] = []
+    let sent: Record<string, unknown> | undefined
     const response = await handleApplicationStatusEmailRequest(
       jsonRequest(
         webhookPayload({
@@ -517,10 +518,23 @@ describe('application-status-email handler', () => {
           application_status: 'submitted',
           application_submission_version: 2,
         },
+        fetchImpl: async (_input, init) => {
+          sent = JSON.parse(String(init?.body))
+          return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
+            status: 200,
+          })
+        },
       })
     )
     expect(await response.json()).toEqual({ ok: true, result: 'sent' })
-    expect(claimCalls[0]?.eventKey).toBe('application_submitted:2')
+    expect(claimCalls[0]?.eventKey).toBe('application_resubmitted:2')
+    expect(claimCalls[0]?.eventName).toBe('application_resubmitted')
+    expect(sent).toEqual({
+      event: 'application_resubmitted',
+      email: FETCHED_EMAIL,
+      first_name: 'Ada',
+      action_url: ACTION_URLS.application_submitted,
+    })
   })
 
   it('retries of the same transition/version are duplicate and do not call Resend', async () => {

@@ -49,7 +49,7 @@ export type AuditClaim = {
   recipientEmail: string
   eventKey: string
   applicationStatus: ApplicationStatus
-  eventName: ResendEventName
+  eventName: ResendEventName | 'application_resubmitted'
   deliveryStatus: 'queued'
 }
 
@@ -133,7 +133,7 @@ export async function secretsMatch(
  * Version is server-produced on draft|needs_info → submitted only.
  */
 export function eventKeyFor(
-  eventName: ResendEventName,
+  eventName: ResendEventName | 'application_resubmitted',
   version: number
 ): string {
   return `${eventName}:${version}`
@@ -306,6 +306,11 @@ export async function handleApplicationStatusEmailRequest(
     return json(200, { ok: true, result: 'skipped' })
   }
 
+  const resendEventName =
+    mapped.eventName === 'application_submitted' && authoritativeVersion > 1
+      ? 'application_resubmitted'
+      : mapped.eventName
+
   const recipientEmail = profile.email?.trim() ?? ''
   if (!recipientEmail || !recipientEmail.includes('@')) {
     deps.log('invalid_recipient')
@@ -318,7 +323,7 @@ export async function handleApplicationStatusEmailRequest(
     return json(200, { ok: false, error: 'failed' })
   }
 
-  const eventKey = eventKeyFor(mapped.eventName, authoritativeVersion)
+  const eventKey = eventKeyFor(resendEventName, authoritativeVersion)
   const claim = await deps.claimAudit({
     applicationId: profileId,
     recipientEmail,
@@ -330,7 +335,7 @@ export async function handleApplicationStatusEmailRequest(
         : mapped.eventName === 'application_approved'
           ? 'approved'
           : 'rejected',
-    eventName: mapped.eventName,
+    eventName: resendEventName,
     deliveryStatus: 'queued',
   })
 
@@ -345,7 +350,7 @@ export async function handleApplicationStatusEmailRequest(
   }
 
   const resendBody = {
-    event: mapped.eventName,
+    event: resendEventName,
     email: recipientEmail,
     first_name: firstNameFromFullName(profile.full_name),
     action_url: mapped.actionUrl,
