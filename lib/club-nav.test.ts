@@ -283,6 +283,24 @@ describe('ClubNav interaction wiring', () => {
   })
 })
 
+describe('club layout match-tab flags', () => {
+  it('computes Dating Matches and Matched Friends visibility from intent and flags only', () => {
+    const source = readFileSync(
+      join(__dirname, '../app/(club)/layout.tsx'),
+      'utf8'
+    )
+    expect(source).toContain('canShowDatingMatchesNav(viewer)')
+    expect(source).toContain('canShowFriendsMatchesNav(viewer)')
+    expect(source).toContain('showMatchesNav={canShowDatingMatchesNav(viewer)}')
+    expect(source).toContain('showFriendsNav={canShowFriendsMatchesNav(viewer)}')
+    expect(source).not.toContain('canAccessMatchesInbox: showMatchesNav')
+    expect(source).not.toContain('canAccessFriendsNav: showFriendsNav')
+    expect(source).not.toContain('loadOwnFriendshipQuestionnaire')
+    expect(source).not.toContain('compatibilityContextForViewer')
+    expect(source).not.toContain('friendshipContextForViewer')
+  })
+})
+
 describe('header overlay exclusivity', () => {
   it('closes notifications when the mobile nav opens, and vice versa', () => {
     expect(clubHeaderOverlayAfterOpen('mobileNav')).toEqual({

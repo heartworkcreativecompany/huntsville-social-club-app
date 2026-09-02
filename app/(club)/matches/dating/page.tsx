@@ -111,9 +111,6 @@ export default async function DatingMatchesPage() {
           ctaHref={context.summary.ctaHref}
           ctaLabel={context.summary.ctaLabel}
         />
-        <Card padding="sm">
-          <HowCompatibilityWorksInlineSummary />
-        </Card>
       </>
     )
   }

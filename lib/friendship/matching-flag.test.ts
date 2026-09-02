@@ -160,8 +160,9 @@ describe('FRIENDSHIP_MATCHING_ENABLED', () => {
 
   it('does not expose match results on the matches page when disabled', () => {
     expect(resolveFriendshipMatchesView({ canViewMatches: false })).toEqual({
-      kind: 'redirect',
-      href: '/friendship',
+      kind: 'unavailable',
+      title: FRIENDSHIP_MATCHING_UNAVAILABLE_HEADING,
+      description: FRIENDSHIP_MATCHING_UNAVAILABLE_BODY,
       loadRecommendations: false,
     })
     const view = resolveFriendshipMatchesView({ canViewMatches: true })
@@ -173,6 +174,10 @@ describe('FRIENDSHIP_MATCHING_ENABLED', () => {
     })
     expect(JSON.stringify(view)).not.toMatch(/score|alcohol|priority|billing|%/)
     process.env.FRIENDSHIP_MATCHING_ENABLED = 'true'
+    expect(resolveFriendshipMatchesView({ canViewMatches: false })).toEqual({
+      kind: 'gated',
+      loadRecommendations: false,
+    })
     expect(
       resolveFriendshipMatchesView({ canViewMatches: true }).loadRecommendations
     ).toBe(true)

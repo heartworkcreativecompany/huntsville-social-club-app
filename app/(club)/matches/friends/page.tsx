@@ -32,10 +32,6 @@ export default async function MatchedFriendsPage() {
     canViewMatches: access.canViewMatches,
   })
 
-  if (view.kind === 'redirect') {
-    redirect(view.href)
-  }
-
   const shouldLoad = view.loadRecommendations
   const loaded = shouldLoad
     ? await loadFriendshipMatchRecommendations(supabase, viewer.userId)
@@ -56,6 +52,21 @@ export default async function MatchedFriendsPage() {
           </Link>
         }
       />
+
+      {view.kind === 'gated' ? (
+        <Card>
+          <h2 className="text-display text-lg font-semibold">{access.headline}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{access.detail}</p>
+          {access.ctaHref && access.ctaLabel ? (
+            <Link
+              href={access.ctaHref}
+              className="mt-4 inline-flex text-sm font-medium text-accent underline"
+            >
+              {access.ctaLabel}
+            </Link>
+          ) : null}
+        </Card>
+      ) : null}
 
       {view.kind === 'unavailable' ? (
         <Card>

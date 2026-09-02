@@ -121,7 +121,15 @@ describe('canonical inbox titles and loaders', () => {
     expect(page).toContain('syncRecommendationLifecycleForMember')
     expect(page).toContain('loadCuratedMatchRecommendations')
     expect(page).toContain('sortCuratedMatchItems')
+    expect(page).toContain('HowCompatibilityWorksInlineSummary')
     expect(page).not.toContain('@/app/(club)/matches/actions')
+    const howItWorksBlocks = page.split('<HowCompatibilityWorksInlineSummary')
+    expect(howItWorksBlocks.length).toBe(2)
+    const blockedBranch = page.slice(
+      page.indexOf('if (!context.canAccessMatchesInbox)'),
+      page.indexOf('syncRecommendationLifecycleForMember')
+    )
+    expect(blockedBranch).not.toContain('HowCompatibilityWorksInlineSummary')
   })
 
   it('keeps friendship inbox behavior and titles the page Matched Friends', () => {
@@ -133,7 +141,9 @@ describe('canonical inbox titles and loaders', () => {
     expect(page).toContain('resolveFriendshipMatchesView')
     expect(page).toContain('view.loadRecommendations')
     expect(page).toContain('loadFriendshipMatchRecommendations')
-    expect(page).toContain('redirect(view.href)')
+    expect(page).toContain("view.kind === 'gated'")
+    expect(page).not.toContain('redirect(view.href)')
+    expect(page).not.toContain("redirect('/friendship')")
   })
 })
 

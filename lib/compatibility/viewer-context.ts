@@ -1,5 +1,6 @@
 import {
   isCompatibilityFeatureEnabled,
+  isDatingConnectionSelected,
   type MessagingEntitlementInput,
 } from '@/lib/compatibility/eligibility'
 import { canAccessMatchesInbox } from '@/lib/compatibility/matches-access'
@@ -44,6 +45,19 @@ export function compatibilityEntitlementInputFromViewer(
     activeCycle: entitlements?.activeCycle ?? null,
     accessOverride: entitlements?.accessOverride ?? null,
   }
+}
+
+/** Intent + feature-flag nav only. Does not consider paid access or questionnaire state. */
+export function canShowDatingMatchesNav(viewer: Viewer): boolean {
+  const profile = viewer.profile
+  if (!profile || profile.application_status !== 'approved') {
+    return false
+  }
+
+  return (
+    isCompatibilityFeatureEnabled() &&
+    isDatingConnectionSelected(profile.connection_intents)
+  )
 }
 
 export function compatibilityContextForViewer(

@@ -6,8 +6,7 @@ import {
 
 export type FriendshipMatchesView =
   | {
-      kind: 'redirect'
-      href: '/friendship'
+      kind: 'gated'
       loadRecommendations: false
     }
   | {
@@ -25,20 +24,19 @@ export function resolveFriendshipMatchesView(input: {
   canViewMatches: boolean
   matchingEnabled?: boolean
 }): FriendshipMatchesView {
-  if (!input.canViewMatches) {
-    return {
-      kind: 'redirect',
-      href: '/friendship',
-      loadRecommendations: false,
-    }
-  }
-
   const matchingEnabled = input.matchingEnabled ?? isFriendshipMatchingEnabled()
   if (!matchingEnabled) {
     return {
       kind: 'unavailable',
       title: FRIENDSHIP_MATCHING_UNAVAILABLE_HEADING,
       description: FRIENDSHIP_MATCHING_UNAVAILABLE_BODY,
+      loadRecommendations: false,
+    }
+  }
+
+  if (!input.canViewMatches) {
+    return {
+      kind: 'gated',
       loadRecommendations: false,
     }
   }
