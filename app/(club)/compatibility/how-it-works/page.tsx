@@ -27,10 +27,10 @@ export default async function HowCompatibilityWorksPage() {
 
       <div className="mb-6 flex flex-wrap gap-4 text-sm">
         <Link
-          href="/matches"
+          href="/matches/dating"
           className="text-muted-foreground hover:text-foreground"
         >
-          ← Curated matches
+          ← Dating Matches
         </Link>
         <Link
           href="/compatibility"

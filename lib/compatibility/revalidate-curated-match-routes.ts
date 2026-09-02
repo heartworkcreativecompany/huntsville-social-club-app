@@ -37,6 +37,7 @@ export function revalidateCuratedMatchMemberRoutes(
   }
   if (opts.matches) {
     revalidatePath('/matches')
+    revalidatePath('/matches/dating')
   }
   if (opts.compatibility) {
     revalidatePath('/compatibility')

@@ -75,18 +75,19 @@ export function buildClubNavItems({
 
     if (showMatchesNav) {
       items.push({
-        href: '/matches',
-        label: 'Matches',
-        isActive: (pathname) => pathname === '/matches',
+        href: '/matches/dating',
+        label: 'Dating Matches',
+        isActive: (pathname) =>
+          pathname === '/matches/dating' || pathname === '/matches',
       })
     }
 
     if (showFriendsNav) {
       items.push({
-        href: '/friendship/matches',
-        label: 'Friends',
+        href: '/matches/friends',
+        label: 'Matched Friends',
         isActive: (pathname) =>
-          pathname === '/friendship' || pathname.startsWith('/friendship/'),
+          pathname === '/matches/friends' || pathname === '/friendship/matches',
       })
     }
 

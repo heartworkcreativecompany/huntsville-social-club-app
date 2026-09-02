@@ -278,7 +278,7 @@ export async function sendCuratedIntroDeclinedEmail(input: {
     'Curated intro update',
     `<p>We reviewed your intro request for <strong>${input.otherMemberName}</strong> and are not moving forward with that connection at this time.</p>
      <p>Your matches inbox has been updated with this recommendation in your archive. New curated recommendations may still arrive in future batches.</p>`,
-    { label: 'View matches', href: `${origin}/matches` }
+    { label: 'View matches', href: `${origin}/matches/dating` }
   )
 
   return sendEmail({
@@ -305,7 +305,7 @@ export async function sendCuratedMatchesDeliveredEmail(input: {
     `<p>Hi ${input.memberName},</p>
      <p>You have <strong>${matchLabel}</strong> waiting in your matches inbox.</p>
      <p>Review the profiles, request an intro when someone feels right, or pass if it is not a fit.</p>`,
-    { label: 'View matches', href: `${origin}/matches` }
+    { label: 'View matches', href: `${origin}/matches/dating` }
   )
 
   return sendEmail({

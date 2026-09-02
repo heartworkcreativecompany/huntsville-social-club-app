@@ -186,7 +186,7 @@ export function summarizeCompatibilityProfileStatus(input: {
       detail:
         'Your questionnaire is complete. View your curated recommendations and connect when you are ready.',
       showCard: true,
-      ctaHref: '/matches',
+      ctaHref: '/matches/dating',
       ctaLabel: 'View matches',
     }
   }

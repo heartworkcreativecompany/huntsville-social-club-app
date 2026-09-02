@@ -190,6 +190,7 @@ export async function refreshFriendshipRecommendationsAction() {
   revalidateFriendshipRoutes()
   revalidatePath('/admin/curated-matches')
   revalidatePath('/friendship/matches')
+  revalidatePath('/matches/friends')
 
   return { success: true as const, result: outcome.result }
 }

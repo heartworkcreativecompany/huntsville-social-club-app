@@ -42,6 +42,7 @@ function revalidateConversation(conversationId: string) {
   revalidatePath(`/messages/${conversationId}`)
   revalidatePath('/members')
   revalidatePath('/matches')
+  revalidatePath('/matches/dating')
   revalidatePath('/admin/recontact-requests')
 }
 

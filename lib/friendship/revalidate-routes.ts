@@ -6,4 +6,5 @@ export function revalidateFriendshipRoutes(): void {
   revalidatePath('/profile')
   revalidatePath('/friendship')
   revalidatePath('/friendship/matches')
+  revalidatePath('/matches/friends')
 }

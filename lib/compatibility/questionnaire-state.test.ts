@@ -71,6 +71,7 @@ const completeAnswers: CompatibilityQuestionnaireAnswers = {
 const baseProfile = {
   application_status: 'approved' as const,
   connection_intents: ['dating'],
+  connections_open_to: ['New friends'],
   wants_curated_matches: true,
   curated_matches_paused_at: null,
   curated_matches_pause_reason: null,
@@ -238,8 +239,11 @@ describe('status and eligibility synchronization', () => {
       summarizeCompatibilityProfileStatus({
         profile,
         entitlementInput: { billing: innerCircleBilling },
-      }).status
-    ).toBe('active')
+      })
+    ).toMatchObject({
+      status: 'active',
+      ctaHref: '/matches/dating',
+    })
   })
 
   it('treats legacy v1 completion timestamps as in progress across status surfaces', () => {

@@ -38,7 +38,7 @@ export default function MessagesInbox({
           sent or accepted.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
-          <Link href="/matches" className={buttonSecondaryClassName}>
+          <Link href="/matches/dating" className={buttonSecondaryClassName}>
             Curated matches
           </Link>
           <Link href="/members" className={buttonSecondaryClassName}>

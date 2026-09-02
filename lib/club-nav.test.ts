@@ -109,14 +109,27 @@ describe('buildClubNavItems', () => {
       'Events',
       'Business Directory',
       'Messages',
-      'Matches',
-      'Friends',
+      'Dating Matches',
+      'Matched Friends',
       'Your Profile',
     ])
-    expect(items.find((item) => item.label === 'Matches')?.href).toBe('/matches')
-    expect(items.find((item) => item.label === 'Friends')?.href).toBe(
-      '/friendship/matches'
+    expect(items.find((item) => item.label === 'Dating Matches')?.href).toBe(
+      '/matches/dating'
     )
+    expect(items.find((item) => item.label === 'Matched Friends')?.href).toBe(
+      '/matches/friends'
+    )
+
+    const dating = items.find((item) => item.label === 'Dating Matches')
+    const friends = items.find((item) => item.label === 'Matched Friends')
+    expect(dating?.isActive('/matches/dating')).toBe(true)
+    expect(dating?.isActive('/matches')).toBe(true)
+    expect(dating?.isActive('/matches/friends')).toBe(false)
+    expect(dating?.isActive('/matches/other')).toBe(false)
+    expect(friends?.isActive('/matches/friends')).toBe(true)
+    expect(friends?.isActive('/friendship/matches')).toBe(true)
+    expect(friends?.isActive('/friendship')).toBe(false)
+    expect(friends?.isActive('/matches/dating')).toBe(false)
   })
 
   it('keeps applicant destinations when the club app is locked', () => {

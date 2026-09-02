@@ -170,7 +170,7 @@ export function evaluateFriendshipAccess(
         canScore: false,
         headline: FRIENDSHIP_MATCHING_UNAVAILABLE_HEADING,
         detail: FRIENDSHIP_MATCHING_UNAVAILABLE_BODY,
-        ctaHref: '/friendship/matches',
+        ctaHref: '/matches/friends',
         ctaLabel: 'See status',
         mutationError: null,
       }
@@ -186,7 +186,7 @@ export function evaluateFriendshipAccess(
       headline: 'Friendship compatibility active',
       detail:
         'Your Friendship Questionnaire is complete. View friend recommendations and update answers anytime.',
-      ctaHref: '/friendship/matches',
+      ctaHref: '/matches/friends',
       ctaLabel: 'View friend recommendations',
       mutationError: null,
     }

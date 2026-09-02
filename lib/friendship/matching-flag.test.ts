@@ -93,6 +93,7 @@ describe('FRIENDSHIP_MATCHING_ENABLED', () => {
     expect(access.canMutate).toBe(true)
     expect(access.canViewForm).toBe(true)
     expect(access.status).toBe('matching_unavailable')
+    expect(access.ctaHref).toBe('/matches/friends')
     expect(
       assertCanMutateFriendshipQuestionnaire({
         signedIn: true,
@@ -158,6 +159,11 @@ describe('FRIENDSHIP_MATCHING_ENABLED', () => {
   })
 
   it('does not expose match results on the matches page when disabled', () => {
+    expect(resolveFriendshipMatchesView({ canViewMatches: false })).toEqual({
+      kind: 'redirect',
+      href: '/friendship',
+      loadRecommendations: false,
+    })
     const view = resolveFriendshipMatchesView({ canViewMatches: true })
     expect(view).toEqual({
       kind: 'unavailable',

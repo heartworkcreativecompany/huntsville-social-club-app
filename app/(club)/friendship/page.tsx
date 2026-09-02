@@ -70,7 +70,7 @@ export default async function FriendshipQuestionnairePage() {
         ) : null}
         {access.canViewMatches ? (
           <Link
-            href="/friendship/matches"
+            href="/matches/friends"
             className="mt-4 inline-flex text-sm font-medium text-accent underline"
           >
             {access.ctaLabel ?? 'See status'}
