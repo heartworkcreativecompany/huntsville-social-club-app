@@ -23,6 +23,7 @@ const TRIGGER_FILES: Record<MemberNotificationType, string> = {
   messaging_suspended: 'lib/message-report-moderation.ts',
   messaging_restored: 'lib/message-report-moderation.ts',
   dating_intent_approved: 'lib/compatibility/dating-lifecycle.ts',
+  friendship_intent_approved: 'lib/friendship/friendship-lifecycle.ts',
   compatibility_questionnaire_ready: 'lib/compatibility/subscription-lifecycle.ts',
   membership_upgraded: 'lib/compatibility/subscription-sync-hook.ts',
   profile_revision_approved: 'app/(club)/admin/profile-revisions/actions.ts',

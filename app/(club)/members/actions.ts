@@ -119,6 +119,7 @@ export async function updateMemberProfile(input: {
     locationArea: input.locationArea.trim(),
     memberPublicIntents: input.memberPublicIntents,
     submittedAt: new Date().toISOString(),
+    intentEventId: crypto.randomUUID(),
     ...(photosChanged ? { photos: input.photos } : {}),
     ...(interestsChanged ? { interests: input.interests } : {}),
     ...(occupation !== live.occupation ? { occupation } : {}),

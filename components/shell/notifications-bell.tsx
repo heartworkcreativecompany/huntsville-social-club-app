@@ -9,6 +9,7 @@ import {
 import { formatNotificationRelativeTime } from '@/lib/format-notification-time'
 import type { MemberNotificationItem } from '@/lib/load-member-notifications'
 import {
+  isSafeInAppHref,
   NOTIFICATION_PANEL_CLASS_NAME,
   notificationUnreadBadgeLabel,
 } from '@/lib/notification-ui'
@@ -61,6 +62,7 @@ export default function NotificationsBell({
   }
   const [items, setItems] = useState(initialItems)
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
+  const [markAllError, setMarkAllError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -114,16 +116,21 @@ export default function NotificationsBell({
       setUnreadCount((count) => Math.max(0, count - 1))
     }
 
+    const safeHref = isSafeInAppHref(notification.href) ? notification.href : null
+
     startTransition(async () => {
       if (!notification.readAt) {
         await markNotificationRead(notification.id)
       }
-      router.push(notification.href)
-      router.refresh()
+      if (safeHref) {
+        router.push(safeHref)
+        router.refresh()
+      }
     })
   }
 
   const handleMarkAllRead = () => {
+    setMarkAllError(null)
     startTransition(async () => {
       const result = await markAllNotificationsRead()
       if ('success' in result) {
@@ -134,7 +141,10 @@ export default function NotificationsBell({
           }))
         )
         setUnreadCount(0)
-        router.refresh()
+        // Do not call router.refresh() here — optimistic update is sufficient
+        // and refresh would remount the component, closing the popover.
+      } else {
+        setMarkAllError('Could not mark notifications as read. Please try again.')
       }
     })
   }
@@ -165,17 +175,22 @@ export default function NotificationsBell({
 
       {open ? (
         <div className={NOTIFICATION_PANEL_CLASS_NAME}>
-          <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3">
-            <p className="text-sm font-medium text-foreground">Notifications</p>
-            {unreadCount > 0 ? (
-              <button
-                type="button"
-                onClick={handleMarkAllRead}
-                disabled={isPending}
-                className="text-xs font-medium text-accent underline disabled:opacity-60"
-              >
-                Mark all read
-              </button>
+          <div className="border-b border-border bg-surface px-4 py-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">Notifications</p>
+              {unreadCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleMarkAllRead}
+                  disabled={isPending}
+                  className="text-xs font-medium text-accent underline disabled:opacity-60"
+                >
+                  Mark all read
+                </button>
+              ) : null}
+            </div>
+            {markAllError ? (
+              <p className="mt-1 text-xs text-danger">{markAllError}</p>
             ) : null}
           </div>
 

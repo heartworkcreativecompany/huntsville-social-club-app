@@ -31,6 +31,11 @@ export type ProfilePendingRevision = {
   /** Proposed photo set — omitted when unchanged from live. */
   photos?: ApplicationPhoto[]
   submittedAt: string
+  /**
+   * Stable UUID minted once when this pending revision is submitted.
+   * Omitted on legacy pending revisions created before this field existed.
+   */
+  intentEventId?: string
 }
 
 export type ProfileRevisionSnapshot = {
@@ -108,6 +113,11 @@ export function emptyProfilePendingRevision(): ProfilePendingRevision {
   }
 }
 
+/** True when a pending revision carries a non-empty stable submit-time event id. */
+export function isUsableIntentEventId(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
 function parseStringList(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined
   return value.filter((item): item is string => typeof item === 'string')
@@ -149,6 +159,9 @@ export function parseProfilePendingRevision(
       ? raw.submittedAt
       : new Date().toISOString()
   const photos = parseRevisionPhotos(raw.photos)
+  const intentEventId = isUsableIntentEventId(raw.intentEventId)
+    ? raw.intentEventId.trim()
+    : undefined
 
   const hasTextOrIntent =
     Boolean(displayName) ||
@@ -187,6 +200,7 @@ export function parseProfilePendingRevision(
     icebreaker: parseOptionalString(raw.icebreaker),
     photos,
     submittedAt,
+    ...(intentEventId ? { intentEventId } : {}),
   }
 }
 

@@ -2,7 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { queueAutoGenerateCuratedMatches } from '@/lib/compatibility/auto-generate-matches'
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
-import { isCompatibilityFeatureEnabled } from '@/lib/compatibility/eligibility'
+import {
+  hasMessagingEntitlement,
+  isApprovedMember,
+  isCompatibilityFeatureEnabled,
+} from '@/lib/compatibility/eligibility'
 import { createMemberNotification } from '@/lib/member-notifications'
 import {
   cancelScheduledBatches,
@@ -11,13 +15,17 @@ import {
   loadCompatibilityProfileRow,
   pauseCompatibilityMatching,
 } from '@/lib/compatibility/lifecycle-db'
+import { loadActiveMembershipAccessOverride } from '@/lib/membership-access-override/admin'
+import { loadActiveEntitlementCycle } from '@/lib/membership-billing-cycles'
+import { isUsableIntentEventId } from '@/lib/profile-revision'
 
 type AdminClient = SupabaseClient<Database>
 
 /** Server-only: member added Dating to connection options. */
 export async function onDatingConnectionAdded(
   supabase: AdminClient,
-  userId: string
+  userId: string,
+  intentEventId?: string | null
 ): Promise<void> {
   if (!isCompatibilityFeatureEnabled()) return
 
@@ -44,10 +52,31 @@ export async function onDatingConnectionAdded(
   })
 
   queueAutoGenerateCuratedMatches(userId, 'dating_added')
-  void createMemberNotification(supabase, {
-    userId,
-    type: 'dating_intent_approved',
-  })
+
+  if (
+    isApprovedMember(profile.application_status) &&
+    isUsableIntentEventId(intentEventId)
+  ) {
+    const [activeCycle, accessOverride] = await Promise.all([
+      loadActiveEntitlementCycle(supabase, userId),
+      loadActiveMembershipAccessOverride(supabase, userId),
+    ])
+    if (
+      hasMessagingEntitlement({
+        role: profile.role,
+        billing: profile.membership_billing,
+        applicationApproved: true,
+        activeCycle,
+        accessOverride,
+      })
+    ) {
+      await createMemberNotification(supabase, {
+        userId,
+        type: 'dating_intent_approved',
+        metadata: { intent_event_id: intentEventId.trim() },
+      })
+    }
+  }
   revalidateCuratedMatchMemberRoutes()
 }
 

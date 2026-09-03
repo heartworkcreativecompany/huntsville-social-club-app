@@ -1,3 +1,14 @@
+/**
+ * Returns true for safe in-app hrefs: must begin with exactly one `/`.
+ * Rejects missing, `//`-prefixed, external URLs, protocol URLs, and other non-internal values.
+ */
+export function isSafeInAppHref(href: string | null | undefined): href is string {
+  if (typeof href !== 'string' || href.length === 0) {
+    return false
+  }
+  return href.startsWith('/') && !href.startsWith('//')
+}
+
 export function notificationUnreadBadgeLabel(
   unreadCount: number
 ): string | null {

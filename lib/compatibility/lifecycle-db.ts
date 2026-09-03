@@ -93,6 +93,7 @@ export type CompatibilityProfileRow = {
   compatibility_completed_at: string | null
   membership_billing: unknown
   role: string | null
+  application_status: string | null
 }
 
 export async function loadCompatibilityProfileRow(
@@ -102,7 +103,7 @@ export async function loadCompatibilityProfileRow(
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'connection_intents, wants_curated_matches, curated_matches_pause_reason, compatibility_completed_at, membership_billing, role'
+      'connection_intents, wants_curated_matches, curated_matches_pause_reason, compatibility_completed_at, membership_billing, role, application_status'
     )
     .eq('id', userId)
     .maybeSingle()

@@ -165,7 +165,8 @@ export async function approveProfileRevision(
   await runCompatibilityConnectionsLifecycle(
     memberId,
     previousIntents,
-    liveColumns.connection_intents
+    liveColumns.connection_intents,
+    pending.intentEventId
   )
 
   void createMemberNotification(serviceAdmin, {

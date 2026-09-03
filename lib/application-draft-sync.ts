@@ -70,6 +70,22 @@ export function connectionsOpenToFromDraft(draft: ApplicationDraft): string[] {
   )
 }
 
+export function detectFriendshipConnectionChange(
+  previous: string[] | null | undefined,
+  next: string[] | null | undefined
+): import('@/lib/compatibility/types').DatingConnectionChange {
+  const hadFriends = memberPublicIntentsFromConnectionIntents(previous).includes(
+    'friends'
+  )
+  const hasFriends = memberPublicIntentsFromConnectionIntents(next).includes(
+    'friends'
+  )
+
+  if (!hadFriends && hasFriends) return { type: 'added' }
+  if (hadFriends && !hasFriends) return { type: 'removed' }
+  return { type: 'none' }
+}
+
 export function detectDatingConnectionChange(
   previous: string[] | null | undefined,
   next: string[] | null | undefined

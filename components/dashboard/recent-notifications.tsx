@@ -3,6 +3,7 @@ import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import { formatNotificationRelativeTime } from '@/lib/format-notification-time'
 import type { MemberNotificationItem } from '@/lib/load-member-notifications'
+import { isSafeInAppHref } from '@/lib/notification-ui'
 
 export const DASHBOARD_NOTIFICATION_PREVIEW_LIMIT = 5
 
@@ -11,12 +12,7 @@ export const DASHBOARD_NOTIFICATIONS_EMPTY = {
   description: 'New updates will appear here as your club activity grows.',
 } as const
 
-export function isSafeInAppHref(href: string | null | undefined): href is string {
-  if (typeof href !== 'string' || href.length === 0) {
-    return false
-  }
-  return href.startsWith('/') && !href.startsWith('//')
-}
+export { isSafeInAppHref }
 
 export default function RecentNotifications({
   items,

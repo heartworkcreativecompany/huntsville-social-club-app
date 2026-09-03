@@ -17,6 +17,7 @@ export const MEMBER_NOTIFICATION_TYPES = [
   'messaging_suspended',
   'messaging_restored',
   'dating_intent_approved',
+  'friendship_intent_approved',
   'compatibility_questionnaire_ready',
   'membership_upgraded',
   'profile_revision_approved',
@@ -106,8 +107,13 @@ export const MEMBER_NOTIFICATION_TEMPLATES: Record<
   },
   dating_intent_approved: {
     title: 'Dating added to profile',
-    body: 'Your profile update was approved. You can continue with curated matches.',
-    href: '/profile',
+    body: 'Your profile update was approved. You can continue with Dating Matches.',
+    href: '/matches/dating',
+  },
+  friendship_intent_approved: {
+    title: 'Friendship added to profile',
+    body: 'Your profile update was approved. You can continue with Matched Friends.',
+    href: '/matches/friends',
   },
   compatibility_questionnaire_ready: {
     title: 'Complete compatibility questionnaire',
@@ -135,6 +141,12 @@ export type CreateMemberNotificationInput = {
   metadata?: Record<string, unknown>
 }
 
+/** Notification types whose insert is idempotent per intent_event_id. */
+const IDEMPOTENT_NOTIFICATION_TYPES = new Set<MemberNotificationType>([
+  'dating_intent_approved',
+  'friendship_intent_approved',
+])
+
 export async function createMemberNotification(
   supabase: SupabaseClient<Database>,
   input: CreateMemberNotificationInput
@@ -151,7 +163,12 @@ export async function createMemberNotification(
   })
 
   if (error) {
+    // Missing table — safe to ignore during local dev / migration not yet run.
     if (error.code === '42P01') {
+      return
+    }
+    // Unique constraint violation on idempotent types — duplicate is a no-op.
+    if (error.code === '23505' && IDEMPOTENT_NOTIFICATION_TYPES.has(input.type)) {
       return
     }
     console.error('[notifications] Failed to create notification:', error.message)
