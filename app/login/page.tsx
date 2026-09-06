@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { Suspense, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AuthPageShell from '@/components/auth/auth-page-shell'
 import LoginStatusMessages from '@/components/auth/login-status-messages'
 import ResendConfirmationEmail from '@/components/auth/resend-confirmation-email'
 import { createClient } from '@/lib/supabase/client'
 import { postLoginPath } from '@/lib/auth-post-login'
+import { safeUpgradeReturnPath } from '@/lib/membership-plan-links'
 import { friendlyAuthError } from '@/lib/auth-errors'
 import { validateEmail, validatePassword } from '@/lib/auth-validation'
 import { trackEvent } from '@/lib/analytics'
@@ -26,16 +27,18 @@ export default function SignInPage() {
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Need an account?{' '}
-          <Link href="/signup" className="link-brand font-medium underline">
-            Sign up
-          </Link>
+          <Suspense fallback={<Link href="/signup" className="link-brand font-medium underline">Sign up</Link>}>
+            <LoginSignupLink />
+          </Suspense>
         </p>
       }
     >
       <Suspense fallback={null}>
         <LoginStatusMessages />
       </Suspense>
-      <SignInForm />
+      <Suspense fallback={null}>
+        <SignInForm />
+      </Suspense>
     </AuthPageShell>
   )
 }
@@ -44,8 +47,22 @@ function isEmailNotConfirmedError(message: string): boolean {
   return message.toLowerCase().includes('email not confirmed')
 }
 
+function LoginSignupLink() {
+  const searchParams = useSearchParams()
+  const returnPath = safeUpgradeReturnPath(searchParams.get('next'))
+  const href = returnPath
+    ? `/signup?next=${encodeURIComponent(returnPath)}`
+    : '/signup'
+  return (
+    <Link href={href} className="link-brand font-medium underline">
+      Sign up
+    </Link>
+  )
+}
+
 function SignInForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -86,7 +103,10 @@ function SignInForm() {
     }
 
     trackEvent('auth_sign_in')
-    const path = await postLoginPath(supabase)
+    const fallback = await postLoginPath(supabase)
+    const requested = safeUpgradeReturnPath(searchParams.get('next'))
+    const path =
+      fallback === '/application' ? fallback : (requested ?? fallback)
     router.push(path)
     router.refresh()
   }

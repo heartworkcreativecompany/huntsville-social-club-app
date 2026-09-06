@@ -46,8 +46,10 @@ export function MembershipCheckoutButton({
 
 export function BillingPortalButton({
   className = buttonSecondaryClassName,
+  children = 'Manage billing',
 }: {
   className?: string
+  children?: React.ReactNode
 }) {
   const [isPending, startTransition] = useTransition()
 
@@ -69,7 +71,7 @@ export function BillingPortalButton({
         })
       }}
     >
-      {isPending ? 'Opening…' : 'Manage billing'}
+      {isPending ? 'Opening…' : children}
     </button>
   )
 }

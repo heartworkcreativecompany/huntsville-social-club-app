@@ -4,6 +4,8 @@ import {
   resolveAuthCallbackRedirect,
   toEmailOtpCallbackType,
 } from '@/lib/auth-callback'
+import { paidPlanFromSafeNext } from '@/lib/membership-plan-links'
+import { setPendingMembershipPlanOnResponse } from '@/lib/pending-membership-plan'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -85,5 +87,10 @@ export async function GET(request: Request) {
     await syncEmailApprovalGateForUser(supabase, sessionUser.id, true)
   }
 
-  return NextResponse.redirect(`${origin}${destination}`)
+  const redirectResponse = NextResponse.redirect(`${origin}${destination}`)
+  const pendingPlan = paidPlanFromSafeNext(next)
+  if (pendingPlan) {
+    setPendingMembershipPlanOnResponse(redirectResponse, pendingPlan)
+  }
+  return redirectResponse
 }

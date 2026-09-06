@@ -1,21 +1,34 @@
-import Link from 'next/link'
 import {
   BOTTOM_CTA,
-  PRICING_PLANS,
 } from '@/lib/membership-pricing-copy'
+import MembershipPlanCta from '@/components/membership/membership-plan-cta'
 import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
   marketingButtonPrimaryClassName,
   marketingButtonSecondaryClassName,
 } from '@/lib/event-labels'
+import type { PricingPlanKey, PricingSurfaceMode } from '@/lib/membership-plan-links'
+
+const PLAN_KEYS = [
+  'member',
+  'connect',
+  'inner_circle',
+  'elite_circle',
+] as const satisfies readonly PricingPlanKey[]
 
 export default function PricingBottomCta({
   variant = 'club',
+  currentTier = 'member',
+  selectedPlan = null,
 }: {
   variant?: 'club' | 'marketing'
+  currentTier?: PricingPlanKey
+  selectedPlan?: Exclude<PricingPlanKey, 'member'> | null
 }) {
-  const primary = variant === 'marketing' ? marketingButtonPrimaryClassName : buttonPrimaryClassName
+  const mode: PricingSurfaceMode = variant === 'marketing' ? 'public' : 'member'
+  const primary =
+    variant === 'marketing' ? marketingButtonPrimaryClassName : buttonPrimaryClassName
   const secondary =
     variant === 'marketing' ? marketingButtonSecondaryClassName : buttonSecondaryClassName
 
@@ -28,30 +41,16 @@ export default function PricingBottomCta({
         {BOTTOM_CTA.subtext}
       </p>
       <div className="mt-8 flex flex-wrap justify-center gap-3">
-        <Link
-          href={variant === 'marketing' ? '/signup' : '/dashboard'}
-          className={secondary}
-        >
-          {PRICING_PLANS.member.cta}
-        </Link>
-        <Link
-          href={variant === 'marketing' ? '/signup' : '/upgrade'}
-          className={primary}
-        >
-          {PRICING_PLANS.connect.cta}
-        </Link>
-        <Link
-          href={variant === 'marketing' ? '/signup' : '/upgrade'}
-          className={primary}
-        >
-          {PRICING_PLANS.inner_circle.cta}
-        </Link>
-        <Link
-          href={variant === 'marketing' ? '/signup' : '/upgrade'}
-          className={primary}
-        >
-          {PRICING_PLANS.elite_circle.cta}
-        </Link>
+        {PLAN_KEYS.map((key) => (
+          <MembershipPlanCta
+            key={key}
+            planKey={key}
+            mode={mode}
+            currentTier={currentTier}
+            className={key === 'member' ? secondary : primary}
+            selected={selectedPlan === key}
+          />
+        ))}
       </div>
     </section>
   )

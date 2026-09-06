@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import AuthPageShell from '@/components/auth/auth-page-shell'
 import AuthStatusBanner from '@/components/auth/auth-status-banner'
 import { createClient } from '@/lib/supabase/client'
@@ -15,6 +16,7 @@ import {
   validatePasswordConfirmation,
 } from '@/lib/auth-validation'
 import { authCallbackUrl } from '@/lib/site'
+import { safeUpgradeReturnPath, loginHrefForReturnPath } from '@/lib/membership-plan-links'
 import { trackEvent } from '@/lib/analytics'
 import { sendWelcomeEmail } from '@/lib/transactional-email'
 import {
@@ -24,7 +26,17 @@ import {
 } from '@/lib/event-labels'
 
 export default function SignUpPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignUpForm />
+    </Suspense>
+  )
+}
+
+function SignUpForm() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const returnPath = safeUpgradeReturnPath(searchParams.get('next'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -63,7 +75,7 @@ export default function SignUpPage() {
       email: trimmedEmail,
       password,
       options: {
-        emailRedirectTo: authCallbackUrl('/login?confirmed=1'),
+        emailRedirectTo: authCallbackUrl(returnPath ?? '/login?confirmed=1'),
       },
     })
 
@@ -91,7 +103,10 @@ export default function SignUpPage() {
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{' '}
-          <Link href="/login" className="font-medium text-accent underline">
+          <Link
+            href={returnPath ? loginHrefForReturnPath(returnPath) : '/login'}
+            className="font-medium text-accent underline"
+          >
             Sign in
           </Link>
         </p>
