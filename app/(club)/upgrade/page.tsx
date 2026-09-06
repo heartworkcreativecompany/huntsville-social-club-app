@@ -5,9 +5,14 @@ import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import {
   loginHrefForReturnPath,
   paidMembershipPlanFromQuery,
+  upgradeCtaCurrentPlanKey,
   upgradePathForPlan,
 } from '@/lib/membership-plan-links'
 import { readPendingMembershipPlanFromCookies } from '@/lib/pending-membership-plan-server'
+import {
+  billedPaidMembershipTier,
+  stripeSubscriptionBlocksNewCheckout,
+} from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
 
 type UpgradePageProps = {
@@ -40,22 +45,23 @@ export default async function UpgradePage({ searchParams }: UpgradePageProps) {
         : null
 
   const { entitlements } = await loadMemberEntitlementsForViewer()
-  const currentTier = entitlements?.productTier ?? 'member'
+  const billing = entitlements?.billing
+  const hasPaidStripeSubscription = billing
+    ? stripeSubscriptionBlocksNewCheckout(billing)
+    : false
+  const currentTier = upgradeCtaCurrentPlanKey({
+    productTier: entitlements?.productTier,
+    billedPaidTier: billing ? billedPaidMembershipTier(billing) : null,
+  })
 
   return (
     <>
       <CheckoutStatusBanner status={checkoutStatus} />
       <PricingPageContent
         mode="member"
-        currentTier={
-          currentTier === 'inner_circle' ||
-          currentTier === 'elite_circle' ||
-          currentTier === 'connect' ||
-          currentTier === 'member'
-            ? currentTier
-            : 'member'
-        }
+        currentTier={currentTier}
         selectedPlan={selectedPlan}
+        hasPaidStripeSubscription={hasPaidStripeSubscription}
       />
     </>
   )

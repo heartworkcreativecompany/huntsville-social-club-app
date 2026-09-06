@@ -12,12 +12,14 @@ type PricingPageContentProps = {
   mode: 'public' | 'member'
   currentTier?: 'member' | 'connect' | 'inner_circle' | 'elite_circle'
   selectedPlan?: 'connect' | 'inner_circle' | 'elite_circle' | null
+  hasPaidStripeSubscription?: boolean
 }
 
 export default function PricingPageContent({
   mode,
   currentTier = 'member',
   selectedPlan = null,
+  hasPaidStripeSubscription = false,
 }: PricingPageContentProps) {
   return (
     <div className="mx-auto max-w-6xl">
@@ -37,6 +39,7 @@ export default function PricingPageContent({
           mode={mode}
           currentTier={currentTier}
           selectedPlan={selectedPlan}
+          hasPaidStripeSubscription={hasPaidStripeSubscription}
         />
       </div>
 
@@ -46,6 +49,7 @@ export default function PricingPageContent({
         variant={mode === 'public' ? 'marketing' : 'club'}
         currentTier={currentTier}
         selectedPlan={selectedPlan}
+        hasPaidStripeSubscription={hasPaidStripeSubscription}
       />
     </div>
   )

@@ -6,8 +6,14 @@ import {
   paidPlanFromSafeNext,
   safeUpgradeReturnPath,
   signupHrefForPaidPlan,
+  upgradeCtaCurrentPlanKey,
   upgradePathForPlan,
 } from '@/lib/membership-plan-links'
+import {
+  billedPaidMembershipTier,
+  emptyMembershipBilling,
+  stripeSubscriptionBlocksNewCheckout,
+} from '@/lib/membership-systems'
 
 describe('paidMembershipPlanFromQuery', () => {
   it('accepts only canonical paid tiers', () => {
@@ -136,34 +142,141 @@ describe('membershipPlanCtaKind', () => {
     ).toBe('checkout')
   })
 
-  it('uses the billing portal for paid members instead of a second checkout', () => {
-    expect(
-      membershipPlanCtaKind({
-        planKey: 'connect',
-        mode: 'member',
-        currentTier: 'connect',
-      })
-    ).toBe('current_plan')
+  it('sends paid Stripe subscribers to the Portal for a different paid tier', () => {
+    const paidPairs = [
+      ['connect', 'inner_circle'],
+      ['connect', 'elite_circle'],
+      ['inner_circle', 'connect'],
+      ['inner_circle', 'elite_circle'],
+      ['elite_circle', 'connect'],
+      ['elite_circle', 'inner_circle'],
+    ] as const
+
+    for (const [currentTier, planKey] of paidPairs) {
+      expect(
+        membershipPlanCtaKind({
+          planKey,
+          mode: 'member',
+          currentTier,
+          hasPaidStripeSubscription: true,
+        })
+      ).toBe('portal')
+    }
+
     expect(
       membershipPlanCtaKind({
         planKey: 'inner_circle',
         mode: 'member',
-        currentTier: 'connect',
+        currentTier: 'member',
+        hasPaidStripeSubscription: true,
       })
     ).toBe('portal')
+  })
+
+  it('treats the current paid tier as current plan and does not send Join Free to checkout', () => {
+    for (const currentTier of ['connect', 'inner_circle', 'elite_circle'] as const) {
+      expect(
+        membershipPlanCtaKind({
+          planKey: currentTier,
+          mode: 'member',
+          currentTier,
+          hasPaidStripeSubscription: true,
+        })
+      ).toBe('current_plan')
+      expect(
+        membershipPlanCtaKind({
+          planKey: 'member',
+          mode: 'member',
+          currentTier,
+          hasPaidStripeSubscription: true,
+        })
+      ).toBe('dashboard')
+    }
+  })
+
+  it('does not open Portal or Checkout for staff/complimentary paid entitlements without Stripe', () => {
     expect(
       membershipPlanCtaKind({
         planKey: 'connect',
         mode: 'member',
         currentTier: 'elite_circle',
+        hasPaidStripeSubscription: false,
       })
-    ).toBe('portal')
+    ).toBe('billing_unavailable')
     expect(
       membershipPlanCtaKind({
-        planKey: 'member',
+        planKey: 'elite_circle',
         mode: 'member',
         currentTier: 'inner_circle',
+        hasPaidStripeSubscription: false,
       })
-    ).toBe('dashboard')
+    ).toBe('billing_unavailable')
+    expect(
+      membershipPlanCtaKind({
+        planKey: 'elite_circle',
+        mode: 'member',
+        currentTier: 'elite_circle',
+        hasPaidStripeSubscription: false,
+      })
+    ).toBe('current_plan')
+  })
+})
+
+describe('billed paid-subscription CTA inputs', () => {
+  it('treats active, grace, and past_due Stripe subscriptions as blocking Checkout', () => {
+    const base = emptyMembershipBilling()
+    expect(stripeSubscriptionBlocksNewCheckout(base)).toBe(false)
+    expect(
+      stripeSubscriptionBlocksNewCheckout({
+        ...base,
+        stripe_subscription_id: 'sub_test',
+        subscription_status: 'active',
+        tier: 'connect',
+      })
+    ).toBe(true)
+    expect(
+      stripeSubscriptionBlocksNewCheckout({
+        ...base,
+        stripe_subscription_id: 'sub_test',
+        subscription_status: 'grace',
+        tier: 'inner_circle',
+      })
+    ).toBe(true)
+    expect(
+      stripeSubscriptionBlocksNewCheckout({
+        ...base,
+        stripe_subscription_id: 'sub_test',
+        subscription_status: 'past_due',
+        tier: 'elite_circle',
+      })
+    ).toBe(true)
+    expect(
+      billedPaidMembershipTier({
+        ...base,
+        stripe_subscription_id: 'sub_test',
+        subscription_status: 'active',
+        tier: 'connect',
+      })
+    ).toBe('connect')
+    expect(
+      billedPaidMembershipTier({
+        ...base,
+        stripe_subscription_id: 'sub_test',
+        subscription_status: 'active',
+        tier: 'member',
+      })
+    ).toBeNull()
+    expect(
+      upgradeCtaCurrentPlanKey({
+        productTier: 'member',
+        billedPaidTier: 'connect',
+      })
+    ).toBe('connect')
+    expect(
+      upgradeCtaCurrentPlanKey({
+        productTier: 'elite_circle',
+        billedPaidTier: null,
+      })
+    ).toBe('elite_circle')
   })
 })
