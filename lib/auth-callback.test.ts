@@ -26,6 +26,9 @@ describe('safeAuthCallbackNext', () => {
     expect(safeAuthCallbackNext('https://evil.example')).toBe('/home')
     expect(safeAuthCallbackNext('//evil.example')).toBe('/home')
     expect(safeAuthCallbackNext('/login?confirmed=1')).toBe('/login?confirmed=1')
+    expect(safeAuthCallbackNext('/upgrade?plan=connect')).toBe(
+      '/upgrade?plan=connect'
+    )
   })
 })
 

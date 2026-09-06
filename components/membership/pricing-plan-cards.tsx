@@ -1,10 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import Badge from '@/components/ui/badge'
 import Card from '@/components/ui/card'
+import MembershipPlanCta from '@/components/membership/membership-plan-cta'
 import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
@@ -13,68 +11,30 @@ import {
   PRICING_PLANS,
   type UpgradeModalVariant,
 } from '@/lib/membership-pricing-copy'
-import { MembershipCheckoutButton } from '@/components/membership/membership-billing-buttons'
+import type { PricingPlanKey } from '@/lib/membership-plan-links'
 
-type PlanKey = keyof typeof PRICING_PLANS
+type PlanKey = PricingPlanKey
 
 type PricingPlanCardsProps = {
   mode: 'public' | 'member'
-  currentTier?: 'member' | 'connect' | 'inner_circle' | 'elite_circle'
+  currentTier?: PlanKey
+  selectedPlan?: Exclude<PlanKey, 'member'> | null
 }
 
 export default function PricingPlanCards({
   mode,
   currentTier = 'member',
+  selectedPlan = null,
 }: PricingPlanCardsProps) {
-  const [message, setMessage] = useState('')
-
-  const renderCta = (key: PlanKey) => {
-    const plan = PRICING_PLANS[key]
-
-    if (key === 'member') {
-      return (
-        <Link
-          href={mode === 'public' ? '/signup' : '/dashboard'}
-          className={buttonSecondaryClassName}
-        >
-          {plan.cta}
-        </Link>
-      )
-    }
-
-    if (mode === 'public') {
-      return (
-        <Link href="/signup" className={buttonPrimaryClassName}>
-          {plan.cta}
-        </Link>
-      )
-    }
-
-    const isCurrent = key === currentTier
-
-    if (isCurrent) {
-      return (
-        <span className="text-sm font-medium text-muted-foreground">
-          Current plan
-        </span>
-      )
-    }
-
-    const disabled =
-      (key === 'connect' &&
-        (currentTier === 'inner_circle' || currentTier === 'elite_circle')) ||
-      (key === 'inner_circle' && currentTier === 'elite_circle')
-
-    return (
-      <MembershipCheckoutButton
-        tier={key}
-        disabled={disabled}
-        className={buttonPrimaryClassName}
-      >
-        {plan.cta}
-      </MembershipCheckoutButton>
-    )
-  }
+  const renderCta = (key: PlanKey) => (
+    <MembershipPlanCta
+      planKey={key}
+      mode={mode}
+      currentTier={currentTier}
+      className={key === 'member' ? buttonSecondaryClassName : buttonPrimaryClassName}
+      selected={selectedPlan === key}
+    />
+  )
 
   const plans: PlanKey[] = ['member', 'connect', 'inner_circle', 'elite_circle']
 
@@ -124,11 +84,6 @@ export default function PricingPlanCards({
           )
         })}
       </div>
-      {message ? (
-        <p className="mt-6 text-sm text-muted-foreground" role="status">
-          {message}
-        </p>
-      ) : null}
     </>
   )
 }

@@ -11,11 +11,13 @@ import {
 type PricingPageContentProps = {
   mode: 'public' | 'member'
   currentTier?: 'member' | 'connect' | 'inner_circle' | 'elite_circle'
+  selectedPlan?: 'connect' | 'inner_circle' | 'elite_circle' | null
 }
 
 export default function PricingPageContent({
   mode,
   currentTier = 'member',
+  selectedPlan = null,
 }: PricingPageContentProps) {
   return (
     <div className="mx-auto max-w-6xl">
@@ -31,12 +33,20 @@ export default function PricingPageContent({
       </header>
 
       <div className="mt-12">
-        <PricingPlanCards mode={mode} currentTier={currentTier} />
+        <PricingPlanCards
+          mode={mode}
+          currentTier={currentTier}
+          selectedPlan={selectedPlan}
+        />
       </div>
 
       <PricingComparisonTable />
       <PricingFaq />
-      <PricingBottomCta variant={mode === 'public' ? 'marketing' : 'club'} />
+      <PricingBottomCta
+        variant={mode === 'public' ? 'marketing' : 'club'}
+        currentTier={currentTier}
+        selectedPlan={selectedPlan}
+      />
     </div>
   )
 }

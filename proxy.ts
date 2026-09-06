@@ -4,6 +4,7 @@ import {
   proxyHostAction,
   resolveRequestHost,
 } from '@/lib/hostnames'
+import { applyPendingMembershipPlanCookie } from '@/lib/pending-membership-plan'
 import { updateSession } from '@/lib/supabase/middleware'
 
 export async function proxy(request: NextRequest) {
@@ -18,7 +19,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(action.location, action.status)
   }
 
-  return await updateSession(request)
+  const response = await updateSession(request)
+  return applyPendingMembershipPlanCookie(request, response)
 }
 
 export const config = {
