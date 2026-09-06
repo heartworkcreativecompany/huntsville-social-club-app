@@ -7,6 +7,15 @@ import {
   hasMessagingEntitlement,
   isCompatibilityEligible,
 } from '@/lib/compatibility/eligibility'
+import { datingGenerationSkipReason } from '@/lib/compatibility/generate-recommendations'
+import {
+  isEligibleRecipient,
+  type MatchPoolProfile,
+} from '@/lib/compatibility/match-candidate-pool'
+import {
+  CONNECT_HOLDOVER_EXPIRY_CANCELLATION_REASON,
+  connectHoldoverExpiryCandidates,
+} from '@/lib/compatibility/expire-connect-holdover-matching'
 import { summarizeCompatibilityProfileStatus } from '@/lib/compatibility/profile-status'
 import { canAccessMatchesInbox } from '@/lib/compatibility/matches-access'
 import { canShowDatingMatchesNav } from '@/lib/compatibility/viewer-context'
@@ -27,6 +36,7 @@ import {
   canStartMessageRequest,
   evaluateEventRegistration,
   isUnexpiredCircleEntitlementCycle,
+  shouldExpireConnectHoldoverMatching,
   type EntitlementCycle,
 } from '@/lib/membership-entitlements'
 import { parseMembershipBilling } from '@/lib/membership-systems'
@@ -123,6 +133,38 @@ function entitlementsFor(
           },
     activeCycle: cycle === undefined ? (tier === 'member' || tier === 'connect' ? null : circleCycle(tier === 'elite_circle' ? 'elite_circle' : 'inner_circle')) : cycle,
   })
+}
+
+function datingPoolProfile(
+  overrides: Partial<MatchPoolProfile> = {}
+): MatchPoolProfile {
+  return {
+    id: 'member-1',
+    application_status: 'approved',
+    connection_intents: ['dating'],
+    compatibility_questionnaire: completeQuestionnaire,
+    compatibility_completed_at: '2026-01-01T00:00:00.000Z',
+    wants_curated_matches: true,
+    curated_matches_paused_at: null,
+    curated_matches_pause_reason: null,
+    dating_connection_enabled_at: null,
+    dating_connection_removed_at: null,
+    messaging_entitlement_lost_at: null,
+    messaging_entitlement_restored_at: null,
+    role: 'member',
+    membership_billing: innerCircleBilling,
+    discovery_interests: ['hiking'],
+    location_area: 'Huntsville',
+    birth_year: 1990,
+    age: 36,
+    preferred_match_age_min: 25,
+    preferred_match_age_max: 45,
+    messaging_suspended_at: null,
+    last_match_generation_at: null,
+    last_match_review_at: null,
+    connections_open_to: ['Dating'],
+    ...overrides,
+  }
 }
 
 describe('Connect membership tier', () => {
@@ -409,6 +451,181 @@ describe('Connect membership tier', () => {
     expect(hook).toContain('userHadCuratedMatchingBeforeBillingChange')
     expect(hook).toContain('expirePendingFriendshipRecommendations')
     expect(hook).toContain('onMessagingEntitlementLost')
+  })
+
+  it('Inner/Elite → Connect holdover stays in Dating generation and Friendship matching', () => {
+    process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
+    process.env.FRIENDSHIP_MATCHING_ENABLED = 'true'
+    const futureCycle = circleCycle('inner_circle')
+    const entitlements = entitlementsFor('connect', futureCycle)
+    expect(entitlements.canMessage).toBe(true)
+    expect(entitlements.canUseCuratedMatching).toBe(true)
+    expect(
+      shouldExpireConnectHoldoverMatching({
+        productTier: entitlements.productTier,
+        cycle: futureCycle,
+      })
+    ).toBe(false)
+
+    const datingProfile = datingPoolProfile({
+      membership_billing: connectBilling,
+      activeCycle: futureCycle,
+    })
+    expect(
+      isCompatibilityEligible(datingProfile, {
+        billing: connectBilling,
+        applicationApproved: true,
+        activeCycle: futureCycle,
+      })
+    ).toBe(true)
+    expect(isEligibleRecipient(datingProfile)).toBe(true)
+    expect(datingGenerationSkipReason(datingProfile)).toBeNull()
+    expect(
+      canGenerateMatches(datingProfile, {
+        billing: connectBilling,
+        applicationApproved: true,
+        activeCycle: futureCycle,
+      })
+    ).toBe(true)
+    expect(
+      canGenerateFriendshipMatches(
+        { application_status: 'approved', connection_intents: ['friends'] },
+        {
+          billing: connectBilling,
+          applicationApproved: true,
+          activeCycle: futureCycle,
+        },
+        submittedFriendshipRow()
+      )
+    ).toBe(true)
+    expect(
+      isFriendshipMatchPoolCandidate({
+        application_status: 'approved',
+        connection_intents: ['friends'],
+        role: 'member',
+        membership_billing: connectBilling,
+        questionnaire: submittedFriendshipRow(),
+        activeCycle: futureCycle,
+      })
+    ).toBe(true)
+
+    const generateSource = readFileSync(
+      join(repoRoot, 'lib/compatibility/generate-recommendations.ts'),
+      'utf8'
+    )
+    expect(generateSource).toContain('matchPoolEntitlementInput(profile)')
+    expect(generateSource).toContain('datingGenerationSkipReason')
+    expect(generateSource).not.toMatch(/canGenerateMatches\([\s\S]{0,200}canMessage/)
+  })
+
+  it('expired Circle holdover excludes Connect from both pools and schedules pending-match cleanup', () => {
+    process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
+    process.env.FRIENDSHIP_MATCHING_ENABLED = 'true'
+    const expiredCycle = circleCycle(
+      'elite_circle',
+      new Date(Date.now() - 60_000).toISOString()
+    )
+    const entitlements = entitlementsFor('connect', expiredCycle)
+    expect(entitlements.canMessage).toBe(true)
+    expect(entitlements.canUseCuratedMatching).toBe(false)
+    expect(
+      shouldExpireConnectHoldoverMatching({
+        productTier: entitlements.productTier,
+        cycle: expiredCycle,
+      })
+    ).toBe(true)
+
+    const datingProfile = datingPoolProfile({
+      membership_billing: connectBilling,
+      activeCycle: expiredCycle,
+    })
+    expect(isEligibleRecipient(datingProfile)).toBe(false)
+    expect(datingGenerationSkipReason(datingProfile)).toBe(
+      'Member is not eligible for new recommendations.'
+    )
+    expect(
+      isFriendshipMatchPoolCandidate({
+        application_status: 'approved',
+        connection_intents: ['friends'],
+        role: 'member',
+        membership_billing: connectBilling,
+        questionnaire: submittedFriendshipRow(),
+        activeCycle: expiredCycle,
+      })
+    ).toBe(false)
+
+    expect(
+      connectHoldoverExpiryCandidates(
+        [{ userId: 'user-1', cycle: expiredCycle }],
+        [
+          {
+            id: 'user-1',
+            role: 'member',
+            membership_billing: connectBilling,
+            application_status: 'approved',
+          },
+        ]
+      )
+    ).toEqual([
+      {
+        userId: 'user-1',
+        cycle: expiredCycle,
+        productTier: 'connect',
+      },
+    ])
+
+    const lifecycleDb = readFileSync(
+      join(repoRoot, 'lib/compatibility/lifecycle-db.ts'),
+      'utf8'
+    )
+    expect(lifecycleDb).toContain(".in('status', ['pending', 'viewed'])")
+    const friendshipLifecycle = readFileSync(
+      join(repoRoot, 'lib/friendship/friendship-lifecycle.ts'),
+      'utf8'
+    )
+    expect(friendshipLifecycle).toContain(".in('status', ['pending', 'viewed'])")
+    const cron = readFileSync(
+      join(repoRoot, 'app/api/cron/curated-matches/route.ts'),
+      'utf8'
+    )
+    expect(cron).toContain('expireDueConnectHoldoverMatching')
+    const viewerLoad = readFileSync(
+      join(repoRoot, 'lib/load-member-entitlements.ts'),
+      'utf8'
+    )
+    expect(viewerLoad).toContain('expireConnectHoldoverMatchingForUser')
+    expect(CONNECT_HOLDOVER_EXPIRY_CANCELLATION_REASON).toBe(
+      'connect_holdover_expired'
+    )
+  })
+
+  it('does not treat canMessage as the curated-matching authorization gate', () => {
+    expect(
+      hasCuratedMatchingEntitlement({
+        billing: connectBilling,
+        applicationApproved: true,
+      })
+    ).toBe(false)
+    expect(
+      hasMessagingEntitlement({
+        billing: connectBilling,
+        applicationApproved: true,
+      })
+    ).toBe(true)
+    expect(
+      hasCuratedMatchingEntitlement({
+        billing: innerCircleBilling,
+        applicationApproved: true,
+      })
+    ).toBe(true)
+    const generateSource = readFileSync(
+      join(repoRoot, 'lib/compatibility/generate-recommendations.ts'),
+      'utf8'
+    )
+    expect(generateSource).toContain('canGenerateMatches')
+    expect(generateSource).toContain('matchPoolEntitlementInput')
+    expect(generateSource).not.toContain('canUseMessaging')
+    expect(generateSource).not.toContain('entitlements.canMessage')
   })
 
   it('9. Connect dashboard teaser uses the approved copy and hides locked match experiences', () => {

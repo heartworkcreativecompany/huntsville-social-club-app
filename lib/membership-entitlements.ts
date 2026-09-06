@@ -114,6 +114,23 @@ export function isUnexpiredCircleEntitlementCycle(
   return periodEnd > now.getTime()
 }
 
+/**
+ * Connect keep leftover Inner/Elite matching only while that cycle is unexpired.
+ * When the leftover cycle is still marked active but `period_end` has passed,
+ * pending curated recommendations must be expired.
+ */
+export function shouldExpireConnectHoldoverMatching(input: {
+  productTier: ProductTier
+  cycle?: EntitlementCycle | null
+  now?: Date
+}): boolean {
+  if (input.productTier !== 'connect') return false
+  const cycle = input.cycle
+  if (!cycle || cycle.is_active === false) return false
+  if (!isCircleProductTier(cycle.product_tier)) return false
+  return !isUnexpiredCircleEntitlementCycle(cycle, input.now ?? new Date())
+}
+
 export function resolveProductTier(input: {
   role?: string | null
   billing?: MembershipBilling | unknown

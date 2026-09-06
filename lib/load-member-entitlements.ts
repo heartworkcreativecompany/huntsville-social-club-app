@@ -4,8 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadActiveMembershipAccessOverride } from '@/lib/membership-access-override/admin'
 import { loadActiveEntitlementCycle } from '@/lib/membership-billing-cycles'
+import { expireConnectHoldoverMatchingForUser } from '@/lib/compatibility/expire-connect-holdover-matching'
 import {
   buildMemberEntitlements,
+  shouldExpireConnectHoldoverMatching,
   type EntitlementCycle,
   type MemberEntitlements,
 } from '@/lib/membership-entitlements'
@@ -52,6 +54,31 @@ export async function loadMemberEntitlementsForViewer(): Promise<{
     applicationApproved: viewer.canAccessApp,
     activeCycle,
   })
+
+  if (
+    activeCycle &&
+    shouldExpireConnectHoldoverMatching({
+      productTier: entitlements.productTier,
+      cycle: activeCycle,
+    })
+  ) {
+    const admin = createAdminClient()
+    if (admin) {
+      try {
+        await expireConnectHoldoverMatchingForUser(admin, {
+          userId: viewer.userId,
+          cycle: activeCycle,
+          productTier: entitlements.productTier,
+        })
+      } catch (error) {
+        console.error(
+          '[membership] failed to expire Connect holdover matching for',
+          viewer.userId,
+          error
+        )
+      }
+    }
+  }
 
   return { entitlements, userId: viewer.userId }
 }

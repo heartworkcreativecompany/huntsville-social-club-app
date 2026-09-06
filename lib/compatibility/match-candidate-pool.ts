@@ -8,6 +8,7 @@ import { loadActiveEntitlementCyclesByUserIds } from '@/lib/membership-billing-c
 import {
   canGenerateMatches,
   isCompatibilityFeatureEnabled,
+  type MessagingEntitlementInput,
 } from '@/lib/compatibility/eligibility'
 import type { CompatibilityProfileFields } from '@/lib/compatibility/types'
 import type { ScorableMemberProfile } from '@/lib/compatibility/scoring'
@@ -26,6 +27,26 @@ export type MatchPoolProfile = CompatibilityProfileFields &
 
 const MATCH_POOL_SELECT =
   'id, application_status, connection_intents, compatibility_questionnaire, compatibility_completed_at, wants_curated_matches, curated_matches_paused_at, curated_matches_pause_reason, role, membership_billing, discovery_interests, location_area, birth_year, age, preferred_match_age_min, preferred_match_age_max, messaging_suspended_at, last_match_generation_at, last_match_review_at'
+
+export function matchPoolEntitlementInput(
+  profile: Pick<
+    MatchPoolProfile,
+    | 'role'
+    | 'membership_billing'
+    | 'application_status'
+    | 'accessOverride'
+    | 'activeCycle'
+  >,
+  accessOverride?: SlimMembershipAccessOverride | null
+): MessagingEntitlementInput {
+  return {
+    role: profile.role,
+    billing: profile.membership_billing,
+    applicationApproved: profile.application_status === 'approved',
+    accessOverride: accessOverride ?? profile.accessOverride ?? null,
+    activeCycle: profile.activeCycle ?? null,
+  }
+}
 
 export function isCandidateAvailable(
   profile: MatchPoolProfile,
@@ -49,11 +70,7 @@ export function isCandidateAvailable(
   }
 
   return canGenerateMatches(profile, {
-    role: profile.role,
-    billing: profile.membership_billing,
-    applicationApproved: profile.application_status === 'approved',
-    accessOverride:
-      options?.accessOverride ?? profile.accessOverride ?? null,
+    ...matchPoolEntitlementInput(profile, options?.accessOverride ?? null),
     activeCycle: options?.activeCycle ?? profile.activeCycle ?? null,
   })
 }
@@ -174,13 +191,10 @@ export function isEligibleRecipient(
     return false
   }
 
-  return canGenerateMatches(profile, {
-    role: profile.role,
-    billing: profile.membership_billing,
-    applicationApproved: profile.application_status === 'approved',
-    accessOverride: accessOverride ?? profile.accessOverride ?? null,
-    activeCycle: profile.activeCycle ?? null,
-  })
+  return canGenerateMatches(
+    profile,
+    matchPoolEntitlementInput(profile, accessOverride)
+  )
 }
 
 export function listEligibleRecipients(
