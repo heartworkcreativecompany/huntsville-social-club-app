@@ -107,6 +107,7 @@ export type FriendshipAccessStatus =
   | 'not_approved'
   | 'no_friends'
   | 'no_messaging'
+  | 'no_curated_matching'
   | 'questionnaire_needed'
   | 'questionnaire_in_progress'
   | 'matching_unavailable'

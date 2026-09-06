@@ -1,4 +1,4 @@
-import { hasMessagingEntitlement } from '@/lib/compatibility/eligibility'
+import { hasCuratedMatchingEntitlement, hasMessagingEntitlement } from '@/lib/compatibility/eligibility'
 import { includesFriendsIntent } from '@/lib/member-public-intent'
 import {
   isFriendshipQuestionnaireSubmitted,
@@ -50,7 +50,7 @@ export function isFriendshipEligible(
   if (!isFriendsConnectionSelected(profile.connection_intents)) {
     return false
   }
-  return hasMessagingEntitlement(entitlementInput)
+  return hasCuratedMatchingEntitlement(entitlementInput)
 }
 
 export function canGenerateFriendshipMatches(
@@ -141,7 +141,24 @@ export function evaluateFriendshipAccess(
     }
   }
 
-  if (!hasMessagingEntitlement(input.entitlementInput)) {
+  if (!hasCuratedMatchingEntitlement(input.entitlementInput)) {
+    if (hasMessagingEntitlement(input.entitlementInput)) {
+      return {
+        status: 'no_curated_matching',
+        canViewSection: false,
+        canViewForm: false,
+        canMutate: false,
+        canViewMatches: false,
+        canScore: false,
+        headline: 'Friendship compatibility is available with Inner Circle.',
+        detail:
+          'Inner Circle members can complete the Friendship Compatibility Questionnaire and receive curated friend recommendations.',
+        ctaHref: FRIENDSHIP_UPGRADE_HREF,
+        ctaLabel: 'Upgrade to Inner Circle',
+        mutationError: FRIENDSHIP_MUTATION_DENIED_UNPAID,
+      }
+    }
+
     return {
       status: 'no_messaging',
       canViewSection: true,

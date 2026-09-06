@@ -1,6 +1,7 @@
 import { loadActiveEntitlementCycle } from '@/lib/membership-billing-cycles'
 import { buildMemberEntitlementsWithOverride } from '@/lib/load-member-entitlements'
 import {
+  canUseCuratedMatching,
   canUseMessaging,
   type MemberEntitlements,
 } from '@/lib/membership-entitlements'
@@ -54,4 +55,34 @@ export async function userHasMessagingAfterBillingChange(
     applicationApproved: true,
   })
   return canUseMessaging(entitlements)
+}
+
+export async function userHadCuratedMatchingBeforeBillingChange(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  previousBilling: unknown,
+  role?: string | null
+): Promise<boolean> {
+  const entitlements = await loadMemberEntitlementsForUser(supabase, {
+    userId,
+    role,
+    billing: previousBilling,
+    applicationApproved: true,
+  })
+  return canUseCuratedMatching(entitlements)
+}
+
+export async function userHasCuratedMatchingAfterBillingChange(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  nextBilling: unknown,
+  role?: string | null
+): Promise<boolean> {
+  const entitlements = await loadMemberEntitlementsForUser(supabase, {
+    userId,
+    role,
+    billing: nextBilling,
+    applicationApproved: true,
+  })
+  return canUseCuratedMatching(entitlements)
 }

@@ -8,6 +8,8 @@ import {
   RETURN_FREE_REGISTRATION_BEFORE_CUTOFF,
   circleSocialCreditsForTier,
   guestInvitesForTier,
+  isCircleProductTier,
+  isMessagingProductTier,
   premiumCreditsForTier,
   type EventAccessType,
   type EventRegistrationDecision,
@@ -56,6 +58,11 @@ export type MemberEntitlements = {
   productTierLabel: string
   billing: MembershipBilling
   activeCycle: EntitlementCycle | null
+  /**
+   * Inner/Elite cycle used for curated-matching holdover after a downgrade to Connect.
+   * Distinct from activeCycle so Connect cannot consume leftover credits.
+   */
+  matchingCycle: EntitlementCycle | null
   /** Premium event credits remaining this period (null = none / not applicable). */
   freeRegistrationsRemaining: number | null
   premiumCreditsRemaining: number | null
@@ -66,6 +73,11 @@ export type MemberEntitlements = {
   circleSocialCreditsRemaining: number | null
   guestInvitesRemaining: number
   canMessage: boolean
+  /**
+   * Inner Circle / Elite Circle curated matching (questionnaires, pools, inboxes).
+   * Distinct from canMessage so Connect can DM without entering match pools.
+   */
+  canUseCuratedMatching: boolean
   canAccessCircleSocial: boolean
   /** @deprecated Elite no longer has unlimited registrations; use premium credits. */
   hasUnlimitedRegistrations: boolean
@@ -83,10 +95,40 @@ export function normalizeBillingTier(
 ): ProductTier | 'applicant' | 'vendor_reviewed' | 'community_partner' {
   if (tier === 'inner_circle') return 'inner_circle'
   if (tier === 'elite_circle' || tier === 'premium_member') return 'elite_circle'
+  if (tier === 'connect') return 'connect'
   if (tier === 'member') return 'member'
   if (tier === 'vendor_reviewed') return 'vendor_reviewed'
   if (tier === 'community_partner') return 'community_partner'
   return 'applicant'
+}
+
+/** Active Inner/Elite cycle whose period has not ended. */
+export function isUnexpiredCircleEntitlementCycle(
+  cycle: EntitlementCycle | null | undefined,
+  now: Date = new Date()
+): cycle is EntitlementCycle {
+  if (!cycle || cycle.is_active === false) return false
+  if (!isCircleProductTier(cycle.product_tier)) return false
+  const periodEnd = Date.parse(cycle.period_end)
+  if (Number.isNaN(periodEnd)) return false
+  return periodEnd > now.getTime()
+}
+
+/**
+ * Connect keep leftover Inner/Elite matching only while that cycle is unexpired.
+ * When the leftover cycle is still marked active but `period_end` has passed,
+ * pending curated recommendations must be expired.
+ */
+export function shouldExpireConnectHoldoverMatching(input: {
+  productTier: ProductTier
+  cycle?: EntitlementCycle | null
+  now?: Date
+}): boolean {
+  if (input.productTier !== 'connect') return false
+  const cycle = input.cycle
+  if (!cycle || cycle.is_active === false) return false
+  if (!isCircleProductTier(cycle.product_tier)) return false
+  return !isUnexpiredCircleEntitlementCycle(cycle, input.now ?? new Date())
 }
 
 export function resolveProductTier(input: {
@@ -115,6 +157,10 @@ export function resolveProductTier(input: {
 
   if (normalized === 'inner_circle') {
     return subscriptionIsActive(billing) ? 'inner_circle' : 'member'
+  }
+
+  if (normalized === 'connect') {
+    return subscriptionIsActive(billing) ? 'connect' : 'member'
   }
 
   if (input.applicationApproved) {
@@ -177,39 +223,50 @@ export function buildMemberEntitlements(input: {
       }
     : null
   const productTier = resolveProductTier({ ...input, accessOverride })
-  const isPaid =
-    productTier === 'inner_circle' || productTier === 'elite_circle'
+  const now = input.now ?? new Date()
+  const isCircle = isCircleProductTier(productTier)
+  const canMessage = isMessagingProductTier(productTier)
+  const holdoverMatching =
+    productTier === 'connect' &&
+    isUnexpiredCircleEntitlementCycle(input.activeCycle, now)
+  const matchingCycle = isUnexpiredCircleEntitlementCycle(input.activeCycle, now)
+    ? input.activeCycle
+    : null
+  const canUseCuratedMatching = isCircle || holdoverMatching
 
-  // Free / expired members must not inherit leftover paid cycle credit rows.
+  // Credits only follow the current Circle product. Connect keep leftover
+  // Inner/Elite cycles for matching holdover, but must not consume credits.
   const activeCycle =
-    isPaid && input.activeCycle?.is_active !== false
+    isCircle && input.activeCycle?.is_active !== false
       ? (input.activeCycle ?? null)
       : null
 
-  const premiumCreditsRemaining = isPaid
+  const premiumCreditsRemaining = isCircle
     ? remainingPremiumCredits(productTier, activeCycle)
     : null
-  const circleSocialCreditsRemaining = isPaid
+  const circleSocialCreditsRemaining = isCircle
     ? remainingCircleSocialCredits(productTier, activeCycle)
     : null
-  const guestGranted = isPaid
+  const guestGranted = isCircle
     ? (activeCycle?.guest_invites_granted ?? guestInvitesForTier(productTier))
     : 0
-  const guestUsed = isPaid ? (activeCycle?.guest_invites_used ?? 0) : 0
+  const guestUsed = isCircle ? (activeCycle?.guest_invites_used ?? 0) : 0
 
   return {
     productTier,
     productTierLabel: PRODUCT_TIER_LABELS[productTier],
     billing,
     activeCycle,
+    matchingCycle,
     freeRegistrationsRemaining: premiumCreditsRemaining,
     premiumCreditsRemaining,
     circleSocialCreditsRemaining,
     guestInvitesRemaining: Math.max(0, guestGranted - guestUsed),
-    canMessage: isPaid,
-    canAccessCircleSocial: isPaid,
+    canMessage,
+    canUseCuratedMatching,
+    canAccessCircleSocial: isCircle,
     hasUnlimitedRegistrations: false,
-    canCreateStandardEvents: isPaid,
+    canCreateStandardEvents: isCircle,
     canApplyBusinessListing: productTier === 'elite_circle',
     canBrowseBusinessDirectory: true,
     hasPriorityRsvp: productTier === 'elite_circle',
@@ -220,6 +277,17 @@ export function buildMemberEntitlements(input: {
 
 export function canUseMessaging(entitlements: MemberEntitlements): boolean {
   return entitlements.canMessage
+}
+
+export function canUseCuratedMatching(entitlements: MemberEntitlements): boolean {
+  return entitlements.canUseCuratedMatching
+}
+
+/** Connect (messaging without Circle matching) should not see match/questionnaire UI. */
+export function shouldHideCuratedMatchingSurfaces(
+  entitlements: MemberEntitlements | null | undefined
+): boolean {
+  return Boolean(entitlements?.canMessage && !entitlements.canUseCuratedMatching)
 }
 
 /**
@@ -567,6 +635,11 @@ export function membershipPerkCopyLines(
   }
   if (entitlements.productTier === 'member') {
     return [memberFreeSummary()]
+  }
+  if (entitlements.productTier === 'connect') {
+    return [
+      'Standard events are free. Circle Socials and premium events require payment. Upgrade to Inner Circle for curated matches, event credits, and event creation.',
+    ]
   }
   return []
 }

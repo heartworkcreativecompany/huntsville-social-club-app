@@ -9,6 +9,7 @@ describe('canAccessMatchesInbox', () => {
       'not_approved',
       'no_dating',
       'no_messaging',
+      'no_curated_matching',
       'paused',
       'paused_system',
       'questionnaire_needed',

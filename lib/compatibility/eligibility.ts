@@ -1,6 +1,7 @@
 import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
 import {
   buildMemberEntitlements,
+  canUseCuratedMatching,
   canUseMessaging,
   type EntitlementCycle,
 } from '@/lib/membership-entitlements'
@@ -44,6 +45,20 @@ export function hasMessagingEntitlement(input: MessagingEntitlementInput): boole
   return canUseMessaging(entitlements)
 }
 
+export function hasCuratedMatchingEntitlement(
+  input: MessagingEntitlementInput
+): boolean {
+  const entitlements = buildMemberEntitlements({
+    role: input.role,
+    billing: input.billing,
+    applicationApproved: input.applicationApproved ?? true,
+    activeCycle: input.activeCycle ?? null,
+    accessOverride: input.accessOverride ?? null,
+    now: input.now,
+  })
+  return canUseCuratedMatching(entitlements)
+}
+
 export function isUserPaused(profile: CompatibilityProfileFields): boolean {
   if (profile.wants_curated_matches === false) {
     return true
@@ -67,7 +82,7 @@ export function isCompatibilityEligible(
     return false
   }
 
-  if (!hasMessagingEntitlement(entitlementInput)) {
+  if (!hasCuratedMatchingEntitlement(entitlementInput)) {
     return false
   }
 

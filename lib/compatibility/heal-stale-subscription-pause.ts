@@ -14,7 +14,7 @@ export async function healStaleSubscriptionInactivePause(
   viewer: Viewer,
   entitlements: MemberEntitlements | null
 ): Promise<boolean> {
-  if (!entitlements?.canMessage) return false
+  if (!entitlements?.canUseCuratedMatching) return false
   if (viewer.profile?.curated_matches_pause_reason !== 'subscription_inactive') {
     return false
   }

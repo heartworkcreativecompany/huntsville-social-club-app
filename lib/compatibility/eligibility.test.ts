@@ -140,6 +140,15 @@ describe('isCompatibilityEligible', () => {
     ).toBe(false)
   })
 
+  it('returns false for Connect members', () => {
+    process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
+    expect(
+      isCompatibilityEligible(baseProfile(), {
+        billing: { ...innerCircleBilling, tier: 'connect', subscription_status: 'active' },
+      })
+    ).toBe(false)
+  })
+
   it('returns true for approved Dating Inner Circle members', () => {
     process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
     expect(

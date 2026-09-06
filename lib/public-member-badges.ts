@@ -15,7 +15,7 @@ import {
   type PublicRecognitionBadge,
 } from '@/lib/recognition-badges/catalog'
 
-export type PublicPaidTier = 'inner_circle' | 'elite_circle'
+export type PublicPaidTier = 'connect' | 'inner_circle' | 'elite_circle'
 
 export type PublicVisibleBadge = {
   key: string
@@ -57,6 +57,9 @@ export function effectivePublicTier(input: {
   if (billing.tier === 'inner_circle') {
     return 'inner_circle'
   }
+  if (billing.tier === 'connect') {
+    return 'connect'
+  }
   return null
 }
 
@@ -84,6 +87,7 @@ export function paidPublicTierFromMembershipTier(
 ): PublicPaidTier | null {
   if (tier === 'elite_circle' || tier === 'premium_member') return 'elite_circle'
   if (tier === 'inner_circle') return 'inner_circle'
+  if (tier === 'connect') return 'connect'
   return null
 }
 

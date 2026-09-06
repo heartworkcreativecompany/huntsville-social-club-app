@@ -1,6 +1,7 @@
 import {
   isCompatibilityFeatureEnabled,
   isDatingConnectionSelected,
+  hasCuratedMatchingEntitlement,
   type MessagingEntitlementInput,
 } from '@/lib/compatibility/eligibility'
 import { canAccessMatchesInbox } from '@/lib/compatibility/matches-access'
@@ -42,22 +43,37 @@ export function compatibilityEntitlementInputFromViewer(
     role: viewer.role,
     billing: viewer.profile?.membership_billing,
     applicationApproved: viewer.canAccessApp,
-    activeCycle: entitlements?.activeCycle ?? null,
+    activeCycle: entitlements?.matchingCycle ?? entitlements?.activeCycle ?? null,
     accessOverride: entitlements?.accessOverride ?? null,
   }
 }
 
-/** Intent + feature-flag nav only. Does not consider paid access or questionnaire state. */
-export function canShowDatingMatchesNav(viewer: Viewer): boolean {
+/** Approved + intent + feature flag + curated matching entitlement. */
+export function canShowDatingMatchesNav(
+  viewer: Viewer,
+  entitlements?: MemberEntitlements | null
+): boolean {
   const profile = viewer.profile
   if (!profile || profile.application_status !== 'approved') {
     return false
   }
 
-  return (
-    isCompatibilityFeatureEnabled() &&
-    isDatingConnectionSelected(profile.connection_intents)
-  )
+  if (
+    !isCompatibilityFeatureEnabled() ||
+    !isDatingConnectionSelected(profile.connection_intents)
+  ) {
+    return false
+  }
+
+  if (entitlements) {
+    return entitlements.canUseCuratedMatching
+  }
+
+  return hasCuratedMatchingEntitlement({
+    role: viewer.role,
+    billing: profile.membership_billing,
+    applicationApproved: true,
+  })
 }
 
 export function compatibilityContextForViewer(
@@ -80,5 +96,6 @@ export function compatibilityContextForViewer(
     canAccessMatchesInbox: canAccessMatchesInbox(summary),
     summary,
     canMessage: entitlements?.canMessage ?? false,
+    canUseCuratedMatching: entitlements?.canUseCuratedMatching ?? false,
   }
 }

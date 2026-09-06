@@ -31,13 +31,37 @@ export const EVENT_SPONSORSHIP_TICKET_COUNT = 4
 
 export const PRODUCT_TIER_LABELS = {
   member: 'Member',
+  connect: 'Connect',
   inner_circle: 'Inner Circle',
   elite_circle: 'Elite Circle',
 } as const
 
 export type ProductTier = keyof typeof PRODUCT_TIER_LABELS
 
-export const PAID_PRODUCT_TIERS: ProductTier[] = ['inner_circle', 'elite_circle']
+/** Stripe-billed memberships. Member is free. */
+export const PAID_PRODUCT_TIERS: ProductTier[] = [
+  'connect',
+  'inner_circle',
+  'elite_circle',
+]
+
+/** Connect, Inner Circle, and Elite Circle may send and receive DMs. */
+export const MESSAGING_PRODUCT_TIERS: ProductTier[] = PAID_PRODUCT_TIERS
+
+/** Inner Circle and Elite Circle exclusively receive curated matching and credits. */
+export const CIRCLE_PRODUCT_TIERS: ProductTier[] = ['inner_circle', 'elite_circle']
+
+export function isMessagingProductTier(tier: ProductTier): boolean {
+  return (
+    tier === 'connect' || tier === 'inner_circle' || tier === 'elite_circle'
+  )
+}
+
+export function isCircleProductTier(
+  tier: ProductTier
+): tier is 'inner_circle' | 'elite_circle' {
+  return tier === 'inner_circle' || tier === 'elite_circle'
+}
 
 export type EventAccessType = 'standard_event' | 'circle_social' | 'premium_event'
 

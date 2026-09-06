@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { expireDueConnectHoldoverMatching } from '@/lib/compatibility/expire-connect-holdover-matching'
 import { isCompatibilityFeatureEnabled } from '@/lib/compatibility/eligibility'
 import { runScheduledCuratedMatchDelivery } from '@/lib/compatibility/run-scheduled-match-delivery'
 import { refreshFriendshipRecommendationsForAllEligible } from '@/lib/friendship/generate-recommendations'
@@ -69,6 +70,7 @@ export async function GET(request: Request) {
     )
   }
 
+  const holdoverExpiry = await expireDueConnectHoldoverMatching(admin)
   const friendship = await runFriendshipRefresh(admin)
 
   if (!isCompatibilityFeatureEnabled()) {
@@ -76,6 +78,7 @@ export async function GET(request: Request) {
       ok: true,
       skipped: true,
       reason: 'Compatibility matching is disabled.',
+      holdoverExpiry,
       friendship,
     })
   }
@@ -83,11 +86,15 @@ export async function GET(request: Request) {
   const summary = await runScheduledCuratedMatchDelivery(admin)
 
   if (summary.error) {
-    return NextResponse.json({ error: summary.error, friendship }, { status: 500 })
+    return NextResponse.json(
+      { error: summary.error, holdoverExpiry, friendship },
+      { status: 500 }
+    )
   }
 
   return NextResponse.json({
     ok: true,
+    holdoverExpiry,
     dueCount: summary.dueCount,
     processed: summary.processed,
     delivered: summary.delivered,

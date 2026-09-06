@@ -30,7 +30,12 @@ function stubSubscription(input: {
 }
 
 describe('resolvePaidTierForSubscription', () => {
-  it('maps live Inner Circle price IDs', () => {
+  it('maps live Connect and Inner Circle price IDs', () => {
+    expect(
+      resolvePaidTierForSubscription(
+        stubSubscription({ priceId: STRIPE_LIVE_PRICE_IDS.connect })
+      )
+    ).toBe('connect')
     expect(
       resolvePaidTierForSubscription(
         stubSubscription({ priceId: STRIPE_LIVE_PRICE_IDS.inner_circle })

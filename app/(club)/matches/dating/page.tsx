@@ -17,6 +17,7 @@ import {
   sortCuratedMatchItems,
 } from '@/lib/load-curated-matches'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
@@ -63,6 +64,10 @@ export default async function DatingMatchesPage() {
   const healed = await healStaleSubscriptionInactivePause(viewer, entitlements)
   const gatedViewer = healed ? (await getViewer()) ?? viewer : viewer
   const context = compatibilityContextForViewer(gatedViewer, entitlements)
+
+  if (shouldHideCuratedMatchingSurfaces(entitlements)) {
+    redirect('/dashboard')
+  }
 
   if (!isCompatibilityFeatureEnabled()) {
     return (

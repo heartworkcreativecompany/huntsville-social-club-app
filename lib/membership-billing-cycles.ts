@@ -141,6 +141,97 @@ export async function loadActiveEntitlementCycle(
   return data ? toCycle(data as CycleRow) : null
 }
 
+export async function loadActiveEntitlementCyclesByUserIds(
+  supabase: SupabaseClient<Database>,
+  userIds: string[]
+): Promise<Map<string, EntitlementCycle>> {
+  const map = new Map<string, EntitlementCycle>()
+  if (userIds.length === 0) return map
+
+  const { data, error } = await supabase
+    .from('membership_entitlement_cycles')
+    .select(CYCLE_SELECT_FULL)
+    .in('user_id', userIds)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    if (error.code === '42P01') return map
+    throw new Error(error.message)
+  }
+
+  for (const row of data ?? []) {
+    const typed = row as CycleRow
+    if (!map.has(typed.user_id)) {
+      map.set(typed.user_id, toCycle(typed))
+    }
+  }
+
+  return map
+}
+
+export async function loadExpiredActiveCircleCycles(
+  supabase: SupabaseClient<Database>,
+  now: Date = new Date()
+): Promise<Array<{ userId: string; cycle: EntitlementCycle }>> {
+  const periodEnd = now.toISOString()
+  const { data, error } = await supabase
+    .from('membership_entitlement_cycles')
+    .select(CYCLE_SELECT_FULL)
+    .eq('is_active', true)
+    .in('product_tier', ['inner_circle', 'elite_circle'])
+    .lte('period_end', periodEnd)
+
+  if (error) {
+    if (error.code === '42P01') return []
+    if (isMissingColumnError(error)) {
+      const fallback = await supabase
+        .from('membership_entitlement_cycles')
+        .select(CYCLE_SELECT_LEGACY)
+        .eq('is_active', true)
+        .in('product_tier', ['inner_circle', 'elite_circle'])
+        .lte('period_end', periodEnd)
+      if (fallback.error) {
+        if (fallback.error.code === '42P01') return []
+        throw new Error(fallback.error.message)
+      }
+      return (fallback.data ?? []).map((row) => {
+        const typed = row as CycleRow & { user_id: string }
+        return { userId: typed.user_id, cycle: toCycle(typed) }
+      })
+    }
+    throw new Error(error.message)
+  }
+
+  return (data ?? []).map((row) => {
+    const typed = row as CycleRow & { user_id: string }
+    return { userId: typed.user_id, cycle: toCycle(typed) }
+  })
+}
+
+export async function deactivateExpiredEntitlementCycle(
+  supabase: SupabaseClient<Database>,
+  cycleId: string,
+  now: Date = new Date()
+): Promise<boolean> {
+  const db = entitlementWriteClient(supabase)
+  const { data, error } = await db
+    .from('membership_entitlement_cycles')
+    .update({ is_active: false })
+    .eq('id', cycleId)
+    .eq('is_active', true)
+    .lte('period_end', now.toISOString())
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    if (error.code === '42P01') return false
+    throw new Error(error.message)
+  }
+
+  return Boolean(data)
+}
+
 export async function deactivateActiveCycles(
   supabase: SupabaseClient<Database>,
   userId: string

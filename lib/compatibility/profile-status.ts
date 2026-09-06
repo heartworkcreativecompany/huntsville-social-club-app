@@ -1,5 +1,6 @@
 import {
   canGenerateMatches,
+  hasCuratedMatchingEntitlement,
   hasMessagingEntitlement,
   isApprovedMember,
   isCompatibilityFeatureEnabled,
@@ -18,6 +19,7 @@ export type CompatibilityProfileStatus =
   | 'not_approved'
   | 'no_dating'
   | 'no_messaging'
+  | 'no_curated_matching'
   | 'paused'
   | 'questionnaire_needed'
   | 'questionnaire_in_progress'
@@ -98,7 +100,19 @@ export function summarizeCompatibilityProfileStatus(input: {
     }
   }
 
-  if (!hasMessagingEntitlement(entitlementInput)) {
+  if (!hasCuratedMatchingEntitlement(entitlementInput)) {
+    if (hasMessagingEntitlement(entitlementInput)) {
+      return {
+        status: 'no_curated_matching',
+        headline: 'Curated matches',
+        detail:
+          'Curated matching is included with Inner Circle and Elite Circle.',
+        showCard: false,
+        ctaHref: '/upgrade',
+        ctaLabel: 'Upgrade to Inner Circle',
+      }
+    }
+
     return {
       status: 'no_messaging',
       headline: 'Curated matches',

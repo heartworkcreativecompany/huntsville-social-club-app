@@ -14,6 +14,7 @@ import {
   loadBlockedUserIdsForMember,
   loadMatchPoolProfiles,
   listEligibleRecipients,
+  matchPoolEntitlementInput,
   type MatchPoolProfile,
 } from '@/lib/compatibility/match-candidate-pool'
 import type { CuratedBatchGenerationSource } from '@/lib/compatibility/batch-generation-source'
@@ -61,7 +62,9 @@ export type GenerateRecommendationsOptions = {
   notificationStatus?: CuratedBatchNotificationStatus | null
 }
 
-function recipientEligibilityReason(profile: MatchPoolProfile | null): string | null {
+export function datingGenerationSkipReason(
+  profile: MatchPoolProfile | null
+): string | null {
   if (!profile) {
     return 'Member not found.'
   }
@@ -70,14 +73,7 @@ function recipientEligibilityReason(profile: MatchPoolProfile | null): string | 
     return 'Compatibility matching is disabled.'
   }
 
-  if (
-    !canGenerateMatches(profile, {
-      role: profile.role,
-      billing: profile.membership_billing,
-      applicationApproved: profile.application_status === 'approved',
-      accessOverride: profile.accessOverride ?? null,
-    })
-  ) {
+  if (!canGenerateMatches(profile, matchPoolEntitlementInput(profile))) {
     return 'Member is not eligible for new recommendations.'
   }
 
@@ -249,7 +245,7 @@ export async function generateCuratedRecommendationsForUser(
     (await loadMatchPoolProfiles(supabase)).profiles
 
   const recipient = profiles.find((profile) => profile.id === userId) ?? null
-  const skipReason = recipientEligibilityReason(recipient)
+  const skipReason = datingGenerationSkipReason(recipient)
   if (skipReason) {
     return {
       userId,

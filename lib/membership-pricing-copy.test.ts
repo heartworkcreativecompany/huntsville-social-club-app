@@ -40,7 +40,7 @@ describe('membership pricing copy — Circle Social entitlements', () => {
     const innerCopy = [
       ...PRICING_PLANS.inner_circle.bullets,
       PRICING_PLANS.inner_circle.description,
-      COMPARISON_TABLE.rows.map((row) => row[2]).join('\n'),
+      COMPARISON_TABLE.rows.map((row) => row[3]).join('\n'),
       UPGRADE_MODALS.free_to_inner.body,
       ...UPGRADE_MODALS.free_to_inner.bullets,
     ].join('\n')
@@ -58,7 +58,7 @@ describe('membership pricing copy — Circle Social entitlements', () => {
     expect(PRICING_PLANS.elite_circle.bullets).toContain(
       '2 included premium event credits per billing period'
     )
-    expect(COMPARISON_TABLE.rows.find((row) => row[0] === 'Circle Socials')?.[3]).toBe(
+    expect(COMPARISON_TABLE.rows.find((row) => row[0] === 'Circle Socials')?.[4]).toBe(
       ELITE_CIRCLE_SOCIALS_INCLUDED_COPY
     )
     expect(allCustomerFacingCopy()).toContain(ELITE_CIRCLE_SOCIALS_INCLUDED_COPY)

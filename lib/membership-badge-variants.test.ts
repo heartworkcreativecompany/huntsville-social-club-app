@@ -13,8 +13,12 @@ describe('membership tier badge variants', () => {
     expect(membershipTierBadge('elite_circle').variant).toBe('elite')
   })
 
-  it('uses muted category styling for the base member tier', () => {
-    expect(membershipTierBadge('member').variant).toBe('category')
+  it('uses accent styling for the Connect badge', () => {
+    expect(membershipTierBadge('connect')).toEqual({
+      key: 'connect',
+      label: 'Connect',
+      variant: 'accent',
+    })
   })
 
   it('maps Community partner to the Member badge for display', () => {

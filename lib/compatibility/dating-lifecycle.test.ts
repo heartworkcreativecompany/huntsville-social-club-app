@@ -138,10 +138,10 @@ describe('onDatingConnectionAdded — paid entitlement gate', () => {
     vi.stubEnv('COMPATIBILITY_MATCHING_ENABLED', 'true')
   })
 
-  it('does not create a notification for an approved but unpaid member', async () => {
+  it('does not create a notification for an approved Connect member', async () => {
     const supabase = makeSupabase({
       application_status: 'approved',
-      membership_billing: null,
+      membership_billing: { subscription_status: 'active', tier: 'connect' },
     })
     await onDatingConnectionAdded(supabase, 'user-1', EVENT_ID)
     expect(supabase._inserts).toHaveLength(0)

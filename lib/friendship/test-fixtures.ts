@@ -22,6 +22,11 @@ export const innerCircleBilling = {
   application_fee: { status: 'paid' as const, paid_at: null },
 }
 
+export const connectBilling = {
+  ...innerCircleBilling,
+  tier: 'connect' as const,
+}
+
 export const freeMemberBilling = {
   ...innerCircleBilling,
   tier: 'member' as const,

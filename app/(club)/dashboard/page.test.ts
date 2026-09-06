@@ -141,6 +141,13 @@ describe('approved member dashboard page', () => {
     expect(source).not.toContain('buildMemberEntitlementsWithOverride')
   })
 
+  it('shows the Connect curated-match teaser instead of locked match modules', () => {
+    const source = dashboardPageSource()
+    expect(source).toContain('ConnectMatchesTeaser')
+    expect(source).toContain('shouldHideCuratedMatchingSurfaces')
+    expect(source).toContain('showConnectMatchesTeaser')
+  })
+
   it('loads dating recommendations only behind canAccessMatchesInbox', () => {
     const source = dashboardPageSource()
     expect(source).toContain('compatibilityContextForViewer')

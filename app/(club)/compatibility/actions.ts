@@ -1,6 +1,9 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getViewer } from '@/lib/viewer'
+import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { canUseCuratedMatching } from '@/lib/membership-entitlements'
 import { queueAutoGenerateCuratedMatches } from '@/lib/compatibility/auto-generate-matches'
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import {
@@ -26,6 +29,18 @@ export async function saveCompatibilityQuestionnaire(input: {
 
   if (!user) {
     return { error: 'You must be signed in.' }
+  }
+
+  const viewer = await getViewer()
+  if (!viewer?.canAccessApp) {
+    return { error: 'Membership approval is required.' }
+  }
+  const { entitlements } = await loadMemberEntitlementsForViewer()
+  if (!entitlements || !canUseCuratedMatching(entitlements)) {
+    return {
+      error:
+        'Inner Circle or Elite Circle membership is required to save the Dating Compatibility Questionnaire.',
+    }
   }
 
   const { data: existing } = await supabase

@@ -7,6 +7,7 @@ import FriendshipMatchesList from '@/components/friendship/friendship-matches-li
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements'
 import { loadOwnFriendshipQuestionnaire } from '@/lib/friendship/candidate-pool'
 import { friendshipContextForViewer } from '@/lib/friendship/viewer-context'
 import { loadFriendshipMatchRecommendations } from '@/lib/friendship/load-matches'
@@ -25,6 +26,9 @@ export default async function MatchedFriendsPage() {
   }
 
   const { entitlements } = await loadMemberEntitlementsForViewer()
+  if (shouldHideCuratedMatchingSurfaces(entitlements)) {
+    redirect('/dashboard')
+  }
   const supabase = await createClient()
   const questionnaire = await loadOwnFriendshipQuestionnaire(supabase, viewer.userId)
   const { access } = friendshipContextForViewer(viewer, entitlements, questionnaire)
