@@ -13,6 +13,7 @@ import {
   loginStatusFromSearch,
   resolveAuthCallbackRedirect,
   safeAuthCallbackNext,
+  signupConfirmationReplayPath,
 } from '@/lib/auth-callback'
 import { EMAIL_CONFIRMED_SUCCESS } from '@/lib/auth-errors'
 import { ACCOUNT_CREATED_CONFIRMATION_BODY } from '@/lib/auth-email'
@@ -37,6 +38,33 @@ describe('isConfirmationCallbackNext', () => {
     expect(isConfirmationCallbackNext(confirmationNext)).toBe(true)
     expect(isConfirmationCallbackNext('/home')).toBe(false)
     expect(isConfirmationCallbackNext('/login/reset-password')).toBe(false)
+    expect(isConfirmationCallbackNext('/upgrade?plan=connect')).toBe(false)
+  })
+})
+
+describe('signupConfirmationReplayPath', () => {
+  it('accepts the login confirmation destination and canonical paid Upgrade paths', () => {
+    expect(signupConfirmationReplayPath(confirmationNext)).toBe(
+      EMAIL_CONFIRMED_LOGIN_PATH
+    )
+    expect(signupConfirmationReplayPath('/upgrade?plan=connect')).toBe(
+      '/upgrade?plan=connect'
+    )
+    expect(signupConfirmationReplayPath('/upgrade?plan=inner_circle')).toBe(
+      '/upgrade?plan=inner_circle'
+    )
+    expect(signupConfirmationReplayPath('/upgrade?plan=elite_circle')).toBe(
+      '/upgrade?plan=elite_circle'
+    )
+  })
+
+  it('rejects invalid, external, and non-confirmation destinations', () => {
+    expect(signupConfirmationReplayPath('/upgrade')).toBeNull()
+    expect(signupConfirmationReplayPath('/upgrade?plan=not_a_tier')).toBeNull()
+    expect(signupConfirmationReplayPath('/home')).toBeNull()
+    expect(signupConfirmationReplayPath('https://evil.example')).toBeNull()
+    expect(signupConfirmationReplayPath('//evil.example')).toBeNull()
+    expect(signupConfirmationReplayPath('/login/reset-password')).toBeNull()
   })
 })
 
@@ -76,6 +104,32 @@ describe('resolveAuthCallbackRedirect', () => {
     expect(authCallbackRedirectExposesSecrets(path)).toBe(false)
   })
 
+  it('sends first-time paid-plan confirmations to the validated Upgrade destination', () => {
+    for (const tier of ['connect', 'inner_circle', 'elite_circle'] as const) {
+      const next = `/upgrade?plan=${tier}`
+      expect(
+        resolveAuthCallbackRedirect({
+          next,
+          type: 'signup',
+          hasCode: true,
+          hasTokenHash: false,
+          exchangeError: null,
+          existingEmailConfirmed: true,
+        })
+      ).toBe(next)
+      expect(
+        resolveAuthCallbackRedirect({
+          next,
+          type: 'signup',
+          hasCode: true,
+          hasTokenHash: false,
+          exchangeError: null,
+          existingEmailConfirmed: false,
+        })
+      ).toBe(next)
+    }
+  })
+
   it('does not fail a consumed confirmation when the account is already confirmed', () => {
     const path = resolveAuthCallbackRedirect({
       next: confirmationNext,
@@ -101,6 +155,44 @@ describe('resolveAuthCallbackRedirect', () => {
     })
     expect(path).toBe(EMAIL_CONFIRMED_LOGIN_PATH)
     expect(path).not.toContain('Link could not be verified')
+    expect(path).not.toContain('auth_callback_failed')
+  })
+
+  it('treats a consumed paid-plan confirmation replay as success, not failed login', () => {
+    const consumed =
+      'invalid request: both auth code and code verifier should be non-empty'
+    for (const tier of ['connect', 'inner_circle', 'elite_circle'] as const) {
+      const path = resolveAuthCallbackRedirect({
+        next: `/upgrade?plan=${tier}`,
+        type: 'signup',
+        hasCode: true,
+        hasTokenHash: false,
+        exchangeError: consumed,
+        existingEmailConfirmed: false,
+      })
+      expect(path).toBe(`/upgrade?plan=${tier}`)
+      expect(path).not.toContain('auth_callback_failed')
+    }
+  })
+
+  it('does not treat consumed confirmation replay as success for invalid next values', () => {
+    for (const next of [
+      '/upgrade?plan=not_a_tier',
+      '/home',
+      'https://evil.example',
+      '//evil.example',
+    ]) {
+      expect(
+        resolveAuthCallbackRedirect({
+          next,
+          type: 'signup',
+          hasCode: true,
+          hasTokenHash: false,
+          exchangeError: 'invalid grant',
+          existingEmailConfirmed: false,
+        })
+      ).toBe(AUTH_CALLBACK_FAILED_LOGIN_PATH)
+    }
   })
 
   it('shows the generic failure path for a genuinely expired confirmation link', () => {
@@ -113,6 +205,19 @@ describe('resolveAuthCallbackRedirect', () => {
       existingEmailConfirmed: false,
     })
     expect(path).toBe(AUTH_CALLBACK_FAILED_LOGIN_PATH)
+  })
+
+  it('still fails expired confirmation codes that point at a paid Upgrade destination', () => {
+    expect(
+      resolveAuthCallbackRedirect({
+        next: '/upgrade?plan=connect',
+        type: 'signup',
+        hasCode: true,
+        hasTokenHash: false,
+        exchangeError: 'otp_expired',
+        existingEmailConfirmed: false,
+      })
+    ).toBe(AUTH_CALLBACK_FAILED_LOGIN_PATH)
   })
 
   it('treats Supabase provider error params without a code as a genuine failure', () => {
@@ -165,6 +270,32 @@ describe('resolveAuthCallbackRedirect', () => {
         existingEmailConfirmed: true,
       })
     ).toBe('/home')
+  })
+
+  it('does not treat a consumed magic-link as a confirmation replay', () => {
+    expect(
+      resolveAuthCallbackRedirect({
+        next: '/upgrade?plan=connect',
+        type: 'magiclink',
+        hasCode: true,
+        hasTokenHash: false,
+        exchangeError: 'invalid grant',
+        existingEmailConfirmed: false,
+      })
+    ).toBe(AUTH_CALLBACK_FAILED_LOGIN_PATH)
+  })
+
+  it('does not treat a consumed recovery code as paid-plan confirmation', () => {
+    expect(
+      resolveAuthCallbackRedirect({
+        next: '/upgrade?plan=connect',
+        type: 'recovery',
+        hasCode: true,
+        hasTokenHash: false,
+        exchangeError: 'invalid grant',
+        existingEmailConfirmed: false,
+      })
+    ).toBe(AUTH_CALLBACK_FAILED_LOGIN_PATH)
   })
 
   it('never puts tokens or codes on the redirect path', () => {
@@ -247,5 +378,15 @@ describe('callback route hygiene', () => {
     expect(source).toContain('exchangeCodeForSession')
     expect(source).toContain('verifyOtp')
     expect(source).toContain('if (code && !alreadyConfirmed)')
+    expect(source).not.toContain('createMembershipCheckoutSession')
+  })
+})
+
+describe('signup confirmation redirect targets', () => {
+  it('keeps the default confirmation next and only uses a safe Upgrade return path', () => {
+    const signup = readFileSync(join(__dirname, '../app/signup/page.tsx'), 'utf8')
+    expect(signup).toContain("authCallbackUrl(returnPath ?? '/login?confirmed=1')")
+    expect(signup).toContain('safeUpgradeReturnPath(searchParams.get(\'next\'))')
+    expect(signup).not.toContain('createMembershipCheckoutSession')
   })
 })

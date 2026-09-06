@@ -36,6 +36,44 @@ export function isConfirmationCallbackNext(next: string): boolean {
   }
 }
 
+const SIGNUP_CONFIRMATION_PAID_PLANS = new Set([
+  'connect',
+  'inner_circle',
+  'elite_circle',
+])
+
+/**
+ * Canonical destinations that email-signup confirmation may resume after a
+ * consumed/replayed link. Not used for recovery, magic-link, or arbitrary next.
+ */
+export function signupConfirmationReplayPath(
+  next: string | null | undefined
+): string | null {
+  const path = safeAuthCallbackNext(next)
+  if (isConfirmationCallbackNext(path)) return EMAIL_CONFIRMED_LOGIN_PATH
+
+  try {
+    const url = new URL(path, 'http://hsc.invalid')
+    if (url.pathname !== '/upgrade') return null
+    const plan = url.searchParams.get('plan')?.trim() ?? ''
+    if (!SIGNUP_CONFIRMATION_PAID_PLANS.has(plan)) return null
+    return `/upgrade?plan=${plan}`
+  } catch {
+    return null
+  }
+}
+
+function isSignupConfirmationReplayFlow(
+  type: string | null | undefined,
+  next: string
+): boolean {
+  if (isRecoveryCallback(type, next)) return false
+  if (type === 'magiclink' || type === 'recovery' || type === 'email_change') {
+    return false
+  }
+  return signupConfirmationReplayPath(next) !== null
+}
+
 export function isRecoveryCallback(type: string | null | undefined, next: string): boolean {
   if (type === 'recovery') return true
   return safeAuthCallbackNext(next).includes('reset-password')
@@ -92,6 +130,9 @@ export function resolveAuthCallbackRedirect(input: {
   const next = safeAuthCallbackNext(input.next)
   const recovery = isRecoveryCallback(input.type, next)
   const confirmation = isConfirmationCallbackNext(next)
+  const confirmationReplayPath = isSignupConfirmationReplayFlow(input.type, next)
+    ? signupConfirmationReplayPath(next)
+    : null
 
   const successPath = recovery ? RECOVERY_LOGIN_PATH : next
 
@@ -112,8 +153,8 @@ export function resolveAuthCallbackRedirect(input: {
 
   if (input.exchangeError) {
     const kind = classifyAuthExchangeFailure(input.exchangeError)
-    if (kind === 'consumed_or_replay' && confirmation) {
-      return EMAIL_CONFIRMED_LOGIN_PATH
+    if (kind === 'consumed_or_replay' && confirmationReplayPath) {
+      return confirmationReplayPath
     }
     return AUTH_CALLBACK_FAILED_LOGIN_PATH
   }
