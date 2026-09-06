@@ -1036,6 +1036,33 @@ export function parseMembershipBilling(value: unknown): MembershipBilling {
   }
 }
 
+/**
+ * Same gate Checkout uses to refuse a second subscription.
+ * past_due is included so the member is sent to the Portal instead of Checkout.
+ */
+export function stripeSubscriptionBlocksNewCheckout(
+  billing: MembershipBilling
+): boolean {
+  return (
+    Boolean(billing.stripe_subscription_id) &&
+    (billing.subscription_status === 'active' ||
+      billing.subscription_status === 'grace' ||
+      billing.subscription_status === 'past_due')
+  )
+}
+
+export function billedPaidMembershipTier(
+  billing: MembershipBilling
+): 'connect' | 'inner_circle' | 'elite_circle' | null {
+  if (!stripeSubscriptionBlocksNewCheckout(billing)) return null
+  if (billing.tier === 'connect') return 'connect'
+  if (billing.tier === 'inner_circle') return 'inner_circle'
+  if (billing.tier === 'elite_circle' || billing.tier === 'premium_member') {
+    return 'elite_circle'
+  }
+  return null
+}
+
 export function billingStatusLabel(billing: MembershipBilling): string {
   if (billing.payment_failure.active) return 'Payment issue — action needed'
   if (billing.subscription_status === 'grace') return 'Grace period'

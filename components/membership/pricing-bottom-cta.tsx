@@ -21,10 +21,12 @@ export default function PricingBottomCta({
   variant = 'club',
   currentTier = 'member',
   selectedPlan = null,
+  hasPaidStripeSubscription = false,
 }: {
   variant?: 'club' | 'marketing'
   currentTier?: PricingPlanKey
   selectedPlan?: Exclude<PricingPlanKey, 'member'> | null
+  hasPaidStripeSubscription?: boolean
 }) {
   const mode: PricingSurfaceMode = variant === 'marketing' ? 'public' : 'member'
   const primary =
@@ -49,6 +51,7 @@ export default function PricingBottomCta({
             currentTier={currentTier}
             className={key === 'member' ? secondary : primary}
             selected={selectedPlan === key}
+            hasPaidStripeSubscription={hasPaidStripeSubscription}
           />
         ))}
       </div>

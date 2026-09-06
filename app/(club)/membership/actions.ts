@@ -4,7 +4,16 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
-import { parseMembershipBilling } from '@/lib/membership-systems'
+import {
+  parseMembershipBilling,
+  stripeSubscriptionBlocksNewCheckout,
+} from '@/lib/membership-systems'
+import {
+  BILLING_APPROVAL_REQUIRED_MESSAGE,
+  BILLING_NOT_IN_STRIPE_MESSAGE,
+  BILLING_PORTAL_UNAVAILABLE_MESSAGE,
+  DUPLICATE_SUBSCRIPTION_CHECKOUT_MESSAGE,
+} from '@/lib/membership-billing-copy'
 import {
   appBaseUrl,
   getStripe,
@@ -17,11 +26,7 @@ import {
 import { getOrCreateStripeCustomer } from '@/lib/stripe/customer'
 
 function subscriptionBlocksNewCheckout(billing: ReturnType<typeof parseMembershipBilling>) {
-  return (
-    billing.subscription_status === 'active' ||
-    billing.subscription_status === 'grace' ||
-    billing.subscription_status === 'past_due'
-  )
+  return stripeSubscriptionBlocksNewCheckout(billing)
 }
 
 export async function createMembershipCheckoutSession(tierInput: string) {
@@ -50,8 +55,7 @@ export async function createMembershipCheckoutSession(tierInput: string) {
 
   if (billing.stripe_subscription_id && subscriptionBlocksNewCheckout(billing)) {
     return {
-      error:
-        'You already have an active subscription. Manage billing in your profile.',
+      error: DUPLICATE_SUBSCRIPTION_CHECKOUT_MESSAGE,
     }
   }
 
@@ -201,7 +205,7 @@ export async function createMembershipCheckoutSession(tierInput: string) {
 export async function createBillingPortalSession() {
   // Same gate as checkout — secret key only; no price-env requirement.
   if (!isStripeConfigured()) {
-    return { error: 'Stripe billing is not configured yet.' }
+    return { error: BILLING_PORTAL_UNAVAILABLE_MESSAGE }
   }
 
   const viewer = await getViewer()
@@ -209,9 +213,13 @@ export async function createBillingPortalSession() {
     return { error: 'You must be signed in.' }
   }
 
+  if (!viewer.canAccessApp) {
+    return { error: BILLING_APPROVAL_REQUIRED_MESSAGE }
+  }
+
   const billing = parseMembershipBilling(viewer.profile?.membership_billing)
   if (!billing.stripe_customer_id) {
-    return { error: 'No billing account found. Subscribe to a paid plan first.' }
+    return { error: BILLING_NOT_IN_STRIPE_MESSAGE }
   }
 
   try {
@@ -222,13 +230,21 @@ export async function createBillingPortalSession() {
     })
 
     if (!session.url) {
-      return { error: 'Could not open billing portal.' }
+      return { error: BILLING_PORTAL_UNAVAILABLE_MESSAGE }
     }
 
     return { url: session.url }
   } catch (error) {
-    console.error('[billing_portal]', error)
-    return { error: 'Could not open billing portal.' }
+    const stripeError =
+      error && typeof error === 'object'
+        ? (error as { type?: string; code?: string })
+        : null
+    console.error('[billing_portal] session create failed', {
+      type: stripeError?.type ?? null,
+      code: stripeError?.code ?? null,
+      name: error instanceof Error ? error.name : typeof error,
+    })
+    return { error: BILLING_PORTAL_UNAVAILABLE_MESSAGE }
   }
 }
 
@@ -267,5 +283,5 @@ export async function openBillingPortal() {
   if (result.url) {
     redirect(result.url)
   }
-  return { error: 'Could not open billing portal.' }
+  return { error: BILLING_PORTAL_UNAVAILABLE_MESSAGE }
 }

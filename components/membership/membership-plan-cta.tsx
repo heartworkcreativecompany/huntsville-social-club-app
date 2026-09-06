@@ -6,6 +6,7 @@ import {
   MembershipCheckoutButton,
 } from '@/components/membership/membership-billing-buttons'
 import { PRICING_PLANS } from '@/lib/membership-pricing-copy'
+import { BILLING_NOT_IN_STRIPE_MESSAGE } from '@/lib/membership-billing-copy'
 import {
   membershipPlanCtaKind,
   signupHrefForPaidPlan,
@@ -20,14 +21,21 @@ export default function MembershipPlanCta({
   currentTier,
   className,
   selected = false,
+  hasPaidStripeSubscription = false,
 }: {
   planKey: PricingPlanKey
   mode: PricingSurfaceMode
   currentTier: PricingPlanKey
   className: string
   selected?: boolean
+  hasPaidStripeSubscription?: boolean
 }) {
-  const kind = membershipPlanCtaKind({ planKey, mode, currentTier })
+  const kind = membershipPlanCtaKind({
+    planKey,
+    mode,
+    currentTier,
+    hasPaidStripeSubscription,
+  })
   const label = PRICING_PLANS[planKey].cta
 
   if (kind === 'signup') {
@@ -60,8 +68,22 @@ export default function MembershipPlanCta({
 
   if (kind === 'current_plan') {
     return (
-      <span className="text-sm font-medium text-muted-foreground">
+      <span
+        className="text-sm font-medium text-muted-foreground"
+        data-membership-cta="current_plan"
+      >
         Current plan
+      </span>
+    )
+  }
+
+  if (kind === 'billing_unavailable') {
+    return (
+      <span
+        className="max-w-[16rem] text-sm font-medium text-muted-foreground"
+        data-membership-cta="billing_unavailable"
+      >
+        {BILLING_NOT_IN_STRIPE_MESSAGE}
       </span>
     )
   }

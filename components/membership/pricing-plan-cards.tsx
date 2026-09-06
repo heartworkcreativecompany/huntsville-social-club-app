@@ -19,12 +19,14 @@ type PricingPlanCardsProps = {
   mode: 'public' | 'member'
   currentTier?: PlanKey
   selectedPlan?: Exclude<PlanKey, 'member'> | null
+  hasPaidStripeSubscription?: boolean
 }
 
 export default function PricingPlanCards({
   mode,
   currentTier = 'member',
   selectedPlan = null,
+  hasPaidStripeSubscription = false,
 }: PricingPlanCardsProps) {
   const renderCta = (key: PlanKey) => (
     <MembershipPlanCta
@@ -33,6 +35,7 @@ export default function PricingPlanCards({
       currentTier={currentTier}
       className={key === 'member' ? buttonSecondaryClassName : buttonPrimaryClassName}
       selected={selectedPlan === key}
+      hasPaidStripeSubscription={hasPaidStripeSubscription}
     />
   )
 

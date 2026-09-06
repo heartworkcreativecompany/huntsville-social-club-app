@@ -13,6 +13,7 @@ export type MembershipPlanCtaKind =
   | 'dashboard'
   | 'checkout'
   | 'portal'
+  | 'billing_unavailable'
 
 export function paidMembershipPlanFromQuery(
   value: string | null | undefined
@@ -70,14 +71,35 @@ export function safeUpgradeReturnPath(
   return plan ? upgradePathForPlan(plan) : '/upgrade'
 }
 
+export function upgradeCtaCurrentPlanKey(input: {
+  productTier: string | null | undefined
+  billedPaidTier: PaidMembershipTier | null
+}): PricingPlanKey {
+  if (input.billedPaidTier) return input.billedPaidTier
+  if (
+    input.productTier === 'connect' ||
+    input.productTier === 'inner_circle' ||
+    input.productTier === 'elite_circle' ||
+    input.productTier === 'member'
+  ) {
+    return input.productTier
+  }
+  return 'member'
+}
+
 export function membershipPlanCtaKind(input: {
   planKey: PricingPlanKey
   mode: PricingSurfaceMode
   currentTier: PricingPlanKey
+  hasPaidStripeSubscription?: boolean
 }): MembershipPlanCtaKind {
+  const hasPaidStripeSubscription = Boolean(input.hasPaidStripeSubscription)
+
   if (input.planKey === 'member') {
     if (input.mode === 'public') return 'signup'
-    if (input.currentTier === 'member') return 'current_plan'
+    if (input.currentTier === 'member' && !hasPaidStripeSubscription) {
+      return 'current_plan'
+    }
     return 'dashboard'
   }
 
@@ -85,7 +107,9 @@ export function membershipPlanCtaKind(input: {
 
   if (input.planKey === input.currentTier) return 'current_plan'
 
+  if (hasPaidStripeSubscription) return 'portal'
+
   if (input.currentTier === 'member') return 'checkout'
 
-  return 'portal'
+  return 'billing_unavailable'
 }
