@@ -9,6 +9,7 @@ import {
   questionnaireAnswersFromStored,
 } from '@/lib/compatibility/questionnaire'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements'
 import { getViewer } from '@/lib/viewer'
 
 export default async function CompatibilityPage() {
@@ -24,6 +25,9 @@ export default async function CompatibilityPage() {
 
   const profile = viewer.profile
   const { entitlements } = await loadMemberEntitlementsForViewer()
+  if (shouldHideCuratedMatchingSurfaces(entitlements)) {
+    redirect('/dashboard')
+  }
   const { summary } = compatibilityContextForViewer(viewer, entitlements)
 
   const answers = questionnaireAnswersFromStored(

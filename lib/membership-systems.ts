@@ -223,6 +223,7 @@ export type MembershipTierKey =
   | 'applicant'
   | 'pending_review'
   | 'member'
+  | 'connect'
   | 'inner_circle'
   | 'elite_circle'
   | 'premium_member'
@@ -246,34 +247,40 @@ export const MEMBERSHIP_TIER_DEFS: MembershipTierDef[] = [
   },
   { key: 'member', label: 'Member', variant: 'category', cardPriority: 3 },
   {
+    key: 'connect',
+    label: 'Connect',
+    variant: 'accent',
+    cardPriority: 4,
+  },
+  {
     key: 'inner_circle',
     label: 'Inner Circle',
     variant: 'premium_outline',
-    cardPriority: 4,
+    cardPriority: 5,
   },
   {
     key: 'elite_circle',
     label: 'Elite Circle',
     variant: 'elite',
-    cardPriority: 5,
+    cardPriority: 6,
   },
   {
     key: 'premium_member',
     label: 'Premium member',
     variant: 'elite',
-    cardPriority: 6,
+    cardPriority: 7,
   },
   {
     key: 'vendor_reviewed',
     label: 'Vendor reviewed',
     variant: 'trust',
-    cardPriority: 7,
+    cardPriority: 8,
   },
   {
     key: 'community_partner',
     label: 'Community partner',
     variant: 'premium',
-    cardPriority: 8,
+    cardPriority: 9,
   },
 ]
 
@@ -299,6 +306,7 @@ export function resolveMembershipTier(input: {
   if (billing.tier === 'elite_circle') return 'elite_circle'
   if (billing.tier === 'premium_member') return 'elite_circle'
   if (billing.tier === 'inner_circle') return 'inner_circle'
+  if (billing.tier === 'connect') return 'connect'
 
   if (status === 'approved') return 'member'
   if (status === 'submitted' || status === 'in_review' || status === 'needs_info') {
@@ -326,6 +334,7 @@ export function cardTierBadges(tier: MembershipTierKey): DisplayBadge[] {
   const badge = membershipTierBadge(tier)
   if (
     tier === 'member' ||
+    tier === 'connect' ||
     tier === 'inner_circle' ||
     tier === 'elite_circle' ||
     tier === 'premium_member' ||
@@ -889,6 +898,7 @@ export type MembershipBilling = {
   tier:
     | 'applicant'
     | 'member'
+    | 'connect'
     | 'inner_circle'
     | 'elite_circle'
     | 'premium_member'
@@ -959,6 +969,7 @@ export function parseMembershipBilling(value: unknown): MembershipBilling {
   return {
     tier:
       tier === 'member' ||
+      tier === 'connect' ||
       tier === 'inner_circle' ||
       tier === 'elite_circle' ||
       tier === 'premium_member' ||
@@ -1032,6 +1043,9 @@ export function billingStatusLabel(billing: MembershipBilling): string {
   if (billing.subscription_status === 'cancelled') return 'Cancelled'
   if (billing.tier === 'inner_circle' && billing.subscription_status === 'active') {
     return 'Inner Circle'
+  }
+  if (billing.tier === 'connect' && billing.subscription_status === 'active') {
+    return 'Connect'
   }
   if (
     (billing.tier === 'elite_circle' || billing.tier === 'premium_member') &&

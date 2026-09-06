@@ -19,7 +19,7 @@ type PlanKey = keyof typeof PRICING_PLANS
 
 type PricingPlanCardsProps = {
   mode: 'public' | 'member'
-  currentTier?: 'member' | 'inner_circle' | 'elite_circle'
+  currentTier?: 'member' | 'connect' | 'inner_circle' | 'elite_circle'
 }
 
 export default function PricingPlanCards({
@@ -50,9 +50,7 @@ export default function PricingPlanCards({
       )
     }
 
-    const isCurrent =
-      (key === 'inner_circle' && currentTier === 'inner_circle') ||
-      (key === 'elite_circle' && currentTier === 'elite_circle')
+    const isCurrent = key === currentTier
 
     if (isCurrent) {
       return (
@@ -63,7 +61,9 @@ export default function PricingPlanCards({
     }
 
     const disabled =
-      key === 'inner_circle' && currentTier === 'elite_circle'
+      (key === 'connect' &&
+        (currentTier === 'inner_circle' || currentTier === 'elite_circle')) ||
+      (key === 'inner_circle' && currentTier === 'elite_circle')
 
     return (
       <MembershipCheckoutButton
@@ -76,11 +76,11 @@ export default function PricingPlanCards({
     )
   }
 
-  const plans: PlanKey[] = ['member', 'inner_circle', 'elite_circle']
+  const plans: PlanKey[] = ['member', 'connect', 'inner_circle', 'elite_circle']
 
   return (
     <>
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         {plans.map((key) => {
           const plan = PRICING_PLANS[key]
           const highlighted = key === 'inner_circle'
@@ -134,12 +134,16 @@ export default function PricingPlanCards({
 }
 
 export function upgradeVariantForTier(
-  currentTier: 'member' | 'inner_circle' | 'elite_circle',
-  target: 'inner_circle' | 'elite_circle'
+  currentTier: 'member' | 'connect' | 'inner_circle' | 'elite_circle',
+  target: 'connect' | 'inner_circle' | 'elite_circle'
 ): UpgradeModalVariant | null {
   if (currentTier === 'elite_circle') return null
-  if (target === 'inner_circle' && currentTier === 'member') return 'free_to_inner'
-  if (target === 'elite_circle' && currentTier === 'member') return 'free_to_elite'
+  if (target === 'inner_circle' && (currentTier === 'member' || currentTier === 'connect')) {
+    return 'free_to_inner'
+  }
+  if (target === 'elite_circle' && (currentTier === 'member' || currentTier === 'connect')) {
+    return 'free_to_elite'
+  }
   if (target === 'elite_circle' && currentTier === 'inner_circle') {
     return 'inner_to_elite'
   }

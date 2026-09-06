@@ -51,6 +51,7 @@ describe('Upgrade / pricing surfaces', () => {
     const table = renderToStaticMarkup(createElement(PricingComparisonTable))
     const html = `${cards}\n${table}`
 
+    expect(html).toContain('$9.99/month')
     expect(html).toContain('$29.99/month')
     expect(html).toContain(
       '1 included premium event credit per billing period'

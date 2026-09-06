@@ -11,6 +11,7 @@ import RecentNotifications, {
 import UpcomingEventsPreview from '@/components/dashboard/upcoming-events-preview'
 import CuratedIntroCard from '@/components/members/curated-intro-card'
 import RecentMessagesPreview from '@/components/messages/recent-messages-preview'
+import ConnectMatchesTeaser from '@/components/dashboard/connect-matches-teaser'
 import PageHeader from '@/components/ui/page-header'
 import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
 import { canAccessMatchesInbox } from '@/lib/compatibility/matches-access'
@@ -23,6 +24,7 @@ import { resolveFriendshipMatchesView } from '@/lib/friendship/matching-flag'
 import { friendshipContextForViewer } from '@/lib/friendship/viewer-context'
 import { loadCuratedMatchRecommendations } from '@/lib/load-curated-matches'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements'
 import { loadMemberNotifications } from '@/lib/load-member-notifications'
 import { loadUpcomingEventsPreview } from '@/lib/load-upcoming-events'
 import { loadRecentMessagePreviews } from '@/lib/member-messages'
@@ -48,6 +50,7 @@ export default async function DashboardPage() {
   ])
 
   const canMessage = entitlements?.canMessage ?? false
+  const showConnectMatchesTeaser = shouldHideCuratedMatchingSurfaces(entitlements)
   const datingContext = compatibilityContextForViewer(viewer, entitlements)
   const friendshipContext = friendshipContextForViewer(
     viewer,
@@ -127,6 +130,12 @@ export default async function DashboardPage() {
       {actionNeededCards.length > 0 ? (
         <div className="mb-10">
           <ActionNeeded cards={actionNeededCards} />
+        </div>
+      ) : null}
+
+      {showConnectMatchesTeaser ? (
+        <div className="mb-10">
+          <ConnectMatchesTeaser />
         </div>
       ) : null}
 

@@ -10,10 +10,12 @@ import {
 } from '@/lib/friendship/eligibility'
 import { resolveFriendshipMatchesView } from '@/lib/friendship/matching-flag'
 import {
+  connectBilling,
   freeMemberBilling,
   innerCircleBilling,
   submittedFriendshipRow,
 } from '@/lib/friendship/test-fixtures'
+import { buildMemberEntitlements } from '@/lib/membership-entitlements'
 import { canShowFriendsMatchesNav } from '@/lib/friendship/viewer-context'
 import { friendshipContextForViewer } from '@/lib/friendship/viewer-context'
 import type { Viewer } from '@/lib/viewer'
@@ -95,7 +97,7 @@ describe('intent-based match inbox navigation', () => {
     expect(canShowFriendsMatchesNav(bothIntents)).toBe(false)
   })
 
-  it('shows dating and friends tabs for unpaid members with the relevant intent', () => {
+  it('hides dating and friends tabs for unpaid members even with the relevant intent', () => {
     process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
     process.env.FRIENDSHIP_MATCHING_ENABLED = 'true'
     const unpaidDating = makeViewer({
@@ -106,8 +108,8 @@ describe('intent-based match inbox navigation', () => {
       connection_intents: ['friends'],
       membership_billing: freeMemberBilling,
     })
-    expect(canShowDatingMatchesNav(unpaidDating)).toBe(true)
-    expect(canShowFriendsMatchesNav(unpaidFriends)).toBe(true)
+    expect(canShowDatingMatchesNav(unpaidDating)).toBe(false)
+    expect(canShowFriendsMatchesNav(unpaidFriends)).toBe(false)
     expect(
       canAccessMatchesInbox(
         compatibilityContextForViewer(unpaidDating, null).summary
@@ -121,15 +123,18 @@ describe('intent-based match inbox navigation', () => {
     ).toBe(false)
   })
 
-  it('shows both tabs when both intents are selected and both flags are on', () => {
+  it('shows both tabs when both intents are selected, flags are on, and the member has Circle matching', () => {
     process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
     process.env.FRIENDSHIP_MATCHING_ENABLED = 'true'
-    const both = makeViewer({ connection_intents: ['dating', 'friends'] })
+    const both = makeViewer({
+      connection_intents: ['dating', 'friends'],
+      membership_billing: innerCircleBilling,
+    })
     expect(canShowDatingMatchesNav(both)).toBe(true)
     expect(canShowFriendsMatchesNav(both)).toBe(true)
   })
 
-  it('does not use paid entitlement or questionnaire completion for nav', () => {
+  it('does not require questionnaire completion for nav', () => {
     process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
     process.env.FRIENDSHIP_MATCHING_ENABLED = 'true'
     const incomplete = makeViewer({
@@ -139,6 +144,17 @@ describe('intent-based match inbox navigation', () => {
     })
     expect(canShowDatingMatchesNav(incomplete)).toBe(true)
     expect(canShowFriendsMatchesNav(incomplete)).toBe(true)
+  })
+
+  it('hides match tabs for Connect members with dating or friends intent', () => {
+    process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
+    process.env.FRIENDSHIP_MATCHING_ENABLED = 'true'
+    const connectDating = makeViewer({
+      connection_intents: ['dating', 'friends'],
+      membership_billing: connectBilling,
+    })
+    expect(canShowDatingMatchesNav(connectDating)).toBe(false)
+    expect(canShowFriendsMatchesNav(connectDating)).toBe(false)
   })
 })
 
@@ -263,15 +279,31 @@ describe('canonical page gates versus nav', () => {
     ).toBe('unavailable')
   })
 
-  it('treats complimentary paid access as paid on the page without using it for nav', () => {
+  it('treats complimentary Inner Circle access as matching entitlement for nav and pages', () => {
     process.env.FRIENDSHIP_MATCHING_ENABLED = 'true'
     process.env.COMPATIBILITY_MATCHING_ENABLED = 'true'
     const complimentaryNav = makeViewer({
       connection_intents: ['dating', 'friends'],
       membership_billing: freeMemberBilling,
     })
-    expect(canShowDatingMatchesNav(complimentaryNav)).toBe(true)
-    expect(canShowFriendsMatchesNav(complimentaryNav)).toBe(true)
+    expect(canShowDatingMatchesNav(complimentaryNav)).toBe(false)
+    expect(canShowFriendsMatchesNav(complimentaryNav)).toBe(false)
+
+    const complimentaryEntitlements = buildMemberEntitlements({
+      applicationApproved: true,
+      billing: freeMemberBilling,
+      accessOverride: {
+        tier: 'inner_circle',
+        startsAt: '2026-01-01T00:00:00.000Z',
+        expiresAt: null,
+      },
+    })
+    expect(canShowDatingMatchesNav(complimentaryNav, complimentaryEntitlements)).toBe(
+      true
+    )
+    expect(canShowFriendsMatchesNav(complimentaryNav, complimentaryEntitlements)).toBe(
+      true
+    )
 
     const access = evaluateFriendshipAccess({
       signedIn: true,
@@ -304,6 +336,8 @@ describe('destination pages keep loader guards', () => {
     expect(gateIndex).toBeGreaterThan(-1)
     expect(loaderIndex).toBeGreaterThan(gateIndex)
     expect(page).toContain('HowCompatibilityWorksInlineSummary')
+    expect(page).toContain('shouldHideCuratedMatchingSurfaces')
+    expect(page).toContain("redirect('/dashboard')")
   })
 
   it('loads friendship recommendations only when view.loadRecommendations is true', () => {
@@ -313,5 +347,7 @@ describe('destination pages keep loader guards', () => {
     expect(page).toContain('loadFriendshipMatchRecommendations')
     expect(page).toContain("view.kind === 'gated'")
     expect(page).not.toContain('redirect(view.href)')
+    expect(page).toContain('shouldHideCuratedMatchingSurfaces')
+    expect(page).toContain("redirect('/dashboard')")
   })
 })

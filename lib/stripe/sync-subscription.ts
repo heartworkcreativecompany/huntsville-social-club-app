@@ -1,9 +1,8 @@
 import type Stripe from 'stripe'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import {
-  startEntitlementCycle,
-} from '@/lib/membership-billing-cycles'
+import { startEntitlementCycle } from '@/lib/membership-billing-cycles'
+import { isCircleProductTier } from '@/lib/membership-tier-config'
 import {
   parseMembershipBilling,
   type MembershipBilling,
@@ -178,7 +177,10 @@ export async function syncStripeSubscription(
   }
 
   if (grantsAccess && mappedTier) {
-    if (options?.startEntitlementCycle || options?.renewEntitlementCycle) {
+    if (
+      (options?.startEntitlementCycle || options?.renewEntitlementCycle) &&
+      isCircleProductTier(mappedTier)
+    ) {
       await startEntitlementCycle(supabase, {
         userId,
         productTier: mappedTier,

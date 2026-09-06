@@ -38,6 +38,7 @@ export default async function UpgradePage({ searchParams }: UpgradePageProps) {
         currentTier={
           currentTier === 'inner_circle' ||
           currentTier === 'elite_circle' ||
+          currentTier === 'connect' ||
           currentTier === 'member'
             ? currentTier
             : 'member'

@@ -3,10 +3,12 @@ import type { Database, Json } from '@/lib/database.types'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadActiveMembershipAccessOverridesByUserIds } from '@/lib/membership-access-override/admin'
+import { loadActiveEntitlementCyclesByUserIds } from '@/lib/membership-billing-cycles'
 import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
 import {
   buildMemberEntitlements,
-  canUseMessaging,
+  canUseCuratedMatching,
+  type EntitlementCycle,
 } from '@/lib/membership-entitlements'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
 import { includesFriendsIntent } from '@/lib/member-public-intent'
@@ -80,13 +82,15 @@ export function memberHasPaidFriendshipEntitlement(profile: {
   membership_billing: unknown
   application_status: string | null
   accessOverride?: SlimMembershipAccessOverride | null
+  activeCycle?: EntitlementCycle | null
 }): boolean {
-  return canUseMessaging(
+  return canUseCuratedMatching(
     buildMemberEntitlements({
       role: profile.role,
       billing: profile.membership_billing,
       applicationApproved: profile.application_status === 'approved',
       accessOverride: profile.accessOverride ?? null,
+      activeCycle: profile.activeCycle ?? null,
     })
   )
 }
@@ -103,6 +107,7 @@ export function isFriendshipMatchPoolCandidate(input: {
     completed_at?: string | null
   } | null
   accessOverride?: SlimMembershipAccessOverride | null
+  activeCycle?: EntitlementCycle | null
 }): boolean {
   if (!isFriendshipMatchingEnabled()) {
     return false
@@ -122,6 +127,7 @@ export function isFriendshipMatchPoolCandidate(input: {
       membership_billing: input.membership_billing,
       application_status: input.application_status,
       accessOverride: input.accessOverride ?? null,
+      activeCycle: input.activeCycle ?? null,
     })
   ) {
     return false
@@ -180,6 +186,10 @@ export async function loadFriendshipMatchPool(
     createAdminClient(),
     (profiles ?? []).map((profile) => profile.id)
   )
+  const cyclesByUser = await loadActiveEntitlementCyclesByUserIds(
+    supabase,
+    (profiles ?? []).map((profile) => profile.id)
+  )
   const pool: FriendshipPoolProfile[] = []
 
   for (const profile of profiles ?? []) {
@@ -194,6 +204,7 @@ export async function loadFriendshipMatchPool(
         messaging_suspended_at: profile.messaging_suspended_at,
         questionnaire,
         accessOverride: overridesByUser.get(profile.id) ?? null,
+        activeCycle: cyclesByUser.get(profile.id) ?? null,
       })
     ) {
       continue

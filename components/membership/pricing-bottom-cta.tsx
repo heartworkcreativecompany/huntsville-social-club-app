@@ -38,6 +38,12 @@ export default function PricingBottomCta({
           href={variant === 'marketing' ? '/signup' : '/upgrade'}
           className={primary}
         >
+          {PRICING_PLANS.connect.cta}
+        </Link>
+        <Link
+          href={variant === 'marketing' ? '/signup' : '/upgrade'}
+          className={primary}
+        >
           {PRICING_PLANS.inner_circle.cta}
         </Link>
         <Link

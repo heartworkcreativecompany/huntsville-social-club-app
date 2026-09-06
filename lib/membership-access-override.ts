@@ -45,7 +45,7 @@ export function isMembershipAccessOverrideTier(
 export function membershipAccessOverrideTierLabel(
   tier: MembershipAccessOverrideTier | ProductTier
 ): string {
-  if (tier === 'inner_circle' || tier === 'elite_circle' || tier === 'member') {
+  if (tier === 'inner_circle' || tier === 'elite_circle' || tier === 'member' || tier === 'connect') {
     return PRODUCT_TIER_LABELS[tier]
   }
   return tier

@@ -33,8 +33,8 @@ export default async function ClubLayout({
       role={viewer.role}
       canAccessApp={viewer.canAccessApp}
       applicationStatus={viewer.applicationStatus}
-      showMatchesNav={canShowDatingMatchesNav(viewer)}
-      showFriendsNav={canShowFriendsMatchesNav(viewer)}
+      showMatchesNav={canShowDatingMatchesNav(viewer, entitlements)}
+      showFriendsNav={canShowFriendsMatchesNav(viewer, entitlements)}
       notifications={notificationResult.items}
       unreadNotificationCount={notificationResult.unreadCount}
     >

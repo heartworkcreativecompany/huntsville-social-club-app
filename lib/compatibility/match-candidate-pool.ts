@@ -4,12 +4,14 @@ import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadActiveMembershipAccessOverridesByUserIds } from '@/lib/membership-access-override/admin'
+import { loadActiveEntitlementCyclesByUserIds } from '@/lib/membership-billing-cycles'
 import {
   canGenerateMatches,
   isCompatibilityFeatureEnabled,
 } from '@/lib/compatibility/eligibility'
 import type { CompatibilityProfileFields } from '@/lib/compatibility/types'
 import type { ScorableMemberProfile } from '@/lib/compatibility/scoring'
+import type { EntitlementCycle } from '@/lib/membership-entitlements'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
 
 export type MatchPoolProfile = CompatibilityProfileFields &
@@ -19,6 +21,7 @@ export type MatchPoolProfile = CompatibilityProfileFields &
     last_match_generation_at: string | null
     last_match_review_at: string | null
     accessOverride?: SlimMembershipAccessOverride | null
+    activeCycle?: EntitlementCycle | null
   }
 
 const MATCH_POOL_SELECT =
@@ -30,6 +33,7 @@ export function isCandidateAvailable(
     excludeUserIds?: Set<string>
     blockedUserIds?: Set<string>
     accessOverride?: SlimMembershipAccessOverride | null
+    activeCycle?: EntitlementCycle | null
   }
 ): boolean {
   if (options?.excludeUserIds?.has(profile.id)) {
@@ -50,6 +54,7 @@ export function isCandidateAvailable(
     applicationApproved: profile.application_status === 'approved',
     accessOverride:
       options?.accessOverride ?? profile.accessOverride ?? null,
+    activeCycle: options?.activeCycle ?? profile.activeCycle ?? null,
   })
 }
 
@@ -87,10 +92,15 @@ export async function loadMatchPoolProfiles(
     createAdminClient(),
     profiles.map((profile) => profile.id)
   )
+  const cycles = await loadActiveEntitlementCyclesByUserIds(
+    supabase,
+    profiles.map((profile) => profile.id)
+  )
   return {
     profiles: profiles.map((profile) => ({
       ...profile,
       accessOverride: overrides.get(profile.id) ?? null,
+      activeCycle: cycles.get(profile.id) ?? null,
     })),
     error: null,
   }
@@ -119,9 +129,11 @@ export async function loadMatchPoolProfileForUser(
     createAdminClient(),
     [profile.id]
   )
+  const cycles = await loadActiveEntitlementCyclesByUserIds(supabase, [profile.id])
   return {
     ...profile,
     accessOverride: overrides.get(profile.id) ?? null,
+    activeCycle: cycles.get(profile.id) ?? null,
   }
 }
 
@@ -167,6 +179,7 @@ export function isEligibleRecipient(
     billing: profile.membership_billing,
     applicationApproved: profile.application_status === 'approved',
     accessOverride: accessOverride ?? profile.accessOverride ?? null,
+    activeCycle: profile.activeCycle ?? null,
   })
 }
 

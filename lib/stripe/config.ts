@@ -9,6 +9,8 @@ let stripeClient: Stripe | null = null
  * STRIPE_PRICE_ID_* env vars being present in production.
  */
 export const STRIPE_LIVE_PRICE_IDS = {
+  /** Connect — $9.99/month */
+  connect: 'price_1UCjKABei7W40myB2Mnqrtse',
   /** Inner Circle — $29.99/month (prod_UqPcL4boAOiMZT) */
   inner_circle: 'price_1TqimnBei7W40myBUKESC7wF',
   /** Elite Circle — $69.99/month (prod_UqPciS4ul6FhvF) */
@@ -70,6 +72,7 @@ export function getStripe(): Stripe {
  * Does NOT require:
  * - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
  * - STRIPE_WEBHOOK_SECRET
+ * - STRIPE_PRICE_ID_CONNECT
  * - STRIPE_PRICE_ID_INNER_CIRCLE
  * - STRIPE_PRICE_ID_ELITE_CIRCLE
  */
@@ -88,18 +91,22 @@ export function isStripeIdentityConfigured(): boolean {
   }
 }
 
-export type PaidMembershipTier = 'inner_circle' | 'elite_circle'
+export type PaidMembershipTier = 'connect' | 'inner_circle' | 'elite_circle'
 
-const PAID_TIERS: PaidMembershipTier[] = ['inner_circle', 'elite_circle']
+const PAID_TIERS: PaidMembershipTier[] = [
+  'connect',
+  'inner_circle',
+  'elite_circle',
+]
 
 export function isPaidMembershipTier(value: string): value is PaidMembershipTier {
   return PAID_TIERS.includes(value as PaidMembershipTier)
 }
 
 function envPriceIdForTier(tier: PaidMembershipTier): string | undefined {
-  return tier === 'inner_circle'
-    ? readEnv('STRIPE_PRICE_ID_INNER_CIRCLE')
-    : readEnv('STRIPE_PRICE_ID_ELITE_CIRCLE')
+  if (tier === 'connect') return readEnv('STRIPE_PRICE_ID_CONNECT')
+  if (tier === 'inner_circle') return readEnv('STRIPE_PRICE_ID_INNER_CIRCLE')
+  return readEnv('STRIPE_PRICE_ID_ELITE_CIRCLE')
 }
 
 export function stripePriceIdForTier(tier: PaidMembershipTier): string {
@@ -122,6 +129,12 @@ export function tierFromStripePriceId(
 ): PaidMembershipTier | null {
   if (!priceId) return null
 
+  const connectCandidates = new Set(
+    [
+      STRIPE_LIVE_PRICE_IDS.connect,
+      readEnv('STRIPE_PRICE_ID_CONNECT'),
+    ].filter(Boolean) as string[]
+  )
   const innerCandidates = new Set(
     [
       STRIPE_LIVE_PRICE_IDS.inner_circle,
@@ -135,6 +148,7 @@ export function tierFromStripePriceId(
     ].filter(Boolean) as string[]
   )
 
+  if (connectCandidates.has(priceId)) return 'connect'
   if (innerCandidates.has(priceId)) return 'inner_circle'
   if (eliteCandidates.has(priceId)) return 'elite_circle'
   return null

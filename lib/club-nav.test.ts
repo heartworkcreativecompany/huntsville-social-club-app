@@ -284,15 +284,15 @@ describe('ClubNav interaction wiring', () => {
 })
 
 describe('club layout match-tab flags', () => {
-  it('computes Dating Matches and Matched Friends visibility from intent and flags only', () => {
+  it('computes Dating Matches and Matched Friends visibility from matching entitlement, intent, and flags', () => {
     const source = readFileSync(
       join(__dirname, '../app/(club)/layout.tsx'),
       'utf8'
     )
-    expect(source).toContain('canShowDatingMatchesNav(viewer)')
-    expect(source).toContain('canShowFriendsMatchesNav(viewer)')
-    expect(source).toContain('showMatchesNav={canShowDatingMatchesNav(viewer)}')
-    expect(source).toContain('showFriendsNav={canShowFriendsMatchesNav(viewer)}')
+    expect(source).toContain('canShowDatingMatchesNav(viewer, entitlements)')
+    expect(source).toContain('canShowFriendsMatchesNav(viewer, entitlements)')
+    expect(source).toContain('showMatchesNav={canShowDatingMatchesNav(viewer, entitlements)}')
+    expect(source).toContain('showFriendsNav={canShowFriendsMatchesNav(viewer, entitlements)}')
     expect(source).not.toContain('canAccessMatchesInbox: showMatchesNav')
     expect(source).not.toContain('canAccessFriendsNav: showFriendsNav')
     expect(source).not.toContain('loadOwnFriendshipQuestionnaire')

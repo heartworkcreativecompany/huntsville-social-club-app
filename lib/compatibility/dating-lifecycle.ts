@@ -3,7 +3,7 @@ import type { Database } from '@/lib/database.types'
 import { queueAutoGenerateCuratedMatches } from '@/lib/compatibility/auto-generate-matches'
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import {
-  hasMessagingEntitlement,
+  hasCuratedMatchingEntitlement,
   isApprovedMember,
   isCompatibilityFeatureEnabled,
 } from '@/lib/compatibility/eligibility'
@@ -62,7 +62,7 @@ export async function onDatingConnectionAdded(
       loadActiveMembershipAccessOverride(supabase, userId),
     ])
     if (
-      hasMessagingEntitlement({
+      hasCuratedMatchingEntitlement({
         role: profile.role,
         billing: profile.membership_billing,
         applicationApproved: true,

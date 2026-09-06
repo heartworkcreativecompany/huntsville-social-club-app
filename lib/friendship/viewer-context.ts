@@ -1,4 +1,5 @@
 import { compatibilityEntitlementInputFromViewer } from '@/lib/compatibility/viewer-context'
+import { hasCuratedMatchingEntitlement } from '@/lib/compatibility/eligibility'
 import {
   evaluateFriendshipAccess,
   isFriendshipMatchingEnabled,
@@ -8,17 +9,32 @@ import type { FriendshipQuestionnaireRow } from '@/lib/friendship/types'
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
 import type { Viewer } from '@/lib/viewer'
 
-/** Intent + feature-flag nav only. Does not consider paid access or questionnaire state. */
-export function canShowFriendsMatchesNav(viewer: Viewer): boolean {
+/** Approved + intent + feature flag + curated matching entitlement. */
+export function canShowFriendsMatchesNav(
+  viewer: Viewer,
+  entitlements?: MemberEntitlements | null
+): boolean {
   const profile = viewer.profile
   if (!profile || profile.application_status !== 'approved') {
     return false
   }
 
-  return (
-    isFriendshipMatchingEnabled() &&
-    includesFriendsIntent(profile.connection_intents)
-  )
+  if (
+    !isFriendshipMatchingEnabled() ||
+    !includesFriendsIntent(profile.connection_intents)
+  ) {
+    return false
+  }
+
+  if (entitlements) {
+    return entitlements.canUseCuratedMatching
+  }
+
+  return hasCuratedMatchingEntitlement({
+    role: viewer.role,
+    billing: profile.membership_billing,
+    applicationApproved: true,
+  })
 }
 
 export function friendshipContextForViewer(

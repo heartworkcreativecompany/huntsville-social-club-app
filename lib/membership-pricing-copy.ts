@@ -8,11 +8,12 @@ import {
 export const PRICING_HEADLINE = 'Memberships designed for how social you want to be'
 
 export const PRICING_SUBHEADLINE =
-  'Join the Huntsville Social Club as a free member, unlock more with Inner Circle, or go all in with Elite Circle'
+  'Join the Huntsville Social Club as a free member, add messaging with Connect, unlock curated matches with Inner Circle, or go all in with Elite Circle'
 
 export const PRICING_SUPPORTING_LINE =
-  'All memberships begin with approval. Upgrade anytime for messaging, Circle Socials, premium credits, and more ways to connect.'
+  'All memberships begin with approval. Upgrade anytime for messaging, curated matches, Circle Socials, premium credits, and more ways to connect.'
 
+export const CONNECT_MONTHLY_PRICE = '$9.99/month'
 export const INNER_CIRCLE_MONTHLY_PRICE = '$29.99/month'
 export const ELITE_CIRCLE_MONTHLY_PRICE = '$69.99/month'
 
@@ -27,18 +28,34 @@ export const PRICING_PLANS = {
       'Free standard events',
       'Paid Circle Socials and premium events',
       'No messaging',
+      'No curated matching',
       'No Business Directory listing application',
     ],
     cta: 'Join Free',
   },
+  connect: {
+    name: 'Connect',
+    price: CONNECT_MONTHLY_PRICE,
+    description: 'Self-directed messaging and member discovery',
+    bullets: [
+      'Everything in Member',
+      'Send and receive direct messages',
+      'Browse approved member profiles with search and filters',
+      'Free standard events',
+      'Paid Circle Socials and premium events',
+      'Connect badge',
+    ],
+    cta: 'Join Connect',
+  },
   inner_circle: {
     name: 'Inner Circle',
     price: INNER_CIRCLE_MONTHLY_PRICE,
-    description: 'Messaging, Circle Socials, and premium event credits',
+    description: 'Messaging, curated matches, Circle Socials, and premium event credits',
     badge: 'Most Popular',
     bullets: [
-      'Everything in Member',
-      'Messaging access',
+      'Everything in Connect',
+      'Dating and Friendship Compatibility Questionnaires',
+      'Curated Dating Matches and Matched Friends',
       `${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credit per billing period`,
       `${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social credits per billing period`,
       'Pay for additional premium events anytime',
@@ -65,16 +82,18 @@ export const PRICING_PLANS = {
 } as const
 
 export const COMPARISON_TABLE = {
-  columns: ['Feature', 'Member', 'Inner Circle', 'Elite Circle'] as const,
+  columns: ['Feature', 'Member', 'Connect', 'Inner Circle', 'Elite Circle'] as const,
   rows: [
-    ['Approved membership', 'Yes', 'Yes', 'Yes'],
-    ['Browse member profiles', 'Yes', 'Yes', 'Yes'],
-    ['Browse Business Directory', 'Yes', 'Yes', 'Yes'],
-    ['Apply for Business Directory listing', 'No', 'No', 'Yes'],
-    ['Messaging', 'No', 'Yes', 'Yes'],
-    ['Standard events', 'Free', 'Free + can create (admin approval)', 'Free + can create (admin approval)'],
+    ['Approved membership', 'Yes', 'Yes', 'Yes', 'Yes'],
+    ['Browse member profiles', 'Yes', 'Yes', 'Yes', 'Yes'],
+    ['Browse Business Directory', 'Yes', 'Yes', 'Yes', 'Yes'],
+    ['Apply for Business Directory listing', 'No', 'No', 'No', 'Yes'],
+    ['Messaging', 'No', 'Yes', 'Yes', 'Yes'],
+    ['Curated matching', 'No', 'No', 'Yes', 'Yes'],
+    ['Standard events', 'Free', 'Free', 'Free + can create (admin approval)', 'Free + can create (admin approval)'],
     [
       'Circle Socials',
+      'Paid',
       'Paid',
       `${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included credits per billing period`,
       'All Circle Socials are included in your membership.',
@@ -82,11 +101,12 @@ export const COMPARISON_TABLE = {
     [
       'Premium event credits',
       '0 (pay per event)',
+      '0 (pay per event)',
       `${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} per billing period`,
       `${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} per billing period`,
     ],
-    ['Guest invites', 'No', 'No', `${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} per billing period`],
-    ['Badge', 'No', 'Inner Circle badge', 'Elite Circle badge'],
+    ['Guest invites', 'No', 'No', 'No', `${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} per billing period`],
+    ['Badge', 'No', 'Connect badge', 'Inner Circle badge', 'Elite Circle badge'],
   ] as const,
   footnote: `Inner Circle includes ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credit and ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} Circle Social credits per billing period. Elite includes ${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium credits, ${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite, priority RSVP, and all Circle Socials in your membership.`,
 }
@@ -103,8 +123,12 @@ export const PRICING_FAQ = [
       'Yes. Free members attend standard events at no charge. Circle Socials and premium events are available to free members by paying the event fee.',
   },
   {
+    question: 'What is included with Connect?',
+    answer: `Connect (${CONNECT_MONTHLY_PRICE}) includes messaging and member discovery. You can browse approved live profiles, use search and filters, send and receive direct messages, attend standard events free, and purchase Circle Social and premium event admission. Curated matching, event credits, and event creation are Inner Circle and Elite Circle benefits.`,
+  },
+  {
     question: 'What is included with Inner Circle?',
-    answer: `Inner Circle (${INNER_CIRCLE_MONTHLY_PRICE}) includes messaging, ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credit per billing period, ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social credits per billing period, and the ability to create standard events subject to admin approval.`,
+    answer: `Inner Circle (${INNER_CIRCLE_MONTHLY_PRICE}) includes messaging, Dating and Friendship Compatibility Questionnaires, curated matches, ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event credit per billing period, ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle Social credits per billing period, and the ability to create standard events subject to admin approval.`,
   },
   {
     question: 'Are Circle Socials counted toward premium credits?',
@@ -128,9 +152,10 @@ export const PRICING_FAQ = [
 export const BOTTOM_CTA = {
   headline: 'Find the membership that fits your social life',
   subtext:
-    'Start free, unlock more with Inner Circle, or go all in with Elite Circle',
+    'Start free, add messaging with Connect, unlock curated matches with Inner Circle, or go all in with Elite Circle',
   ctas: {
     member: 'Join Free',
+    connect: 'Join Connect',
     inner_circle: 'Join Inner Circle',
     elite_circle: 'Join Elite Circle',
   },
@@ -181,11 +206,11 @@ export type UpgradeModalVariant = keyof typeof UPGRADE_MODALS
 
 export const FEATURE_GATE_COPY = {
   messaging: {
-    title: 'Messaging is available with paid membership',
-    body: 'Upgrade to Inner Circle or Elite Circle to message other approved members and connect beyond events.',
+    title: 'Messaging is available with a paid membership',
+    body: 'Upgrade to Connect, Inner Circle, or Elite Circle to message other approved members and connect beyond events.',
     primaryCta: 'Unlock Messaging',
     secondaryCta: 'View Memberships',
-    inline: 'Upgrade to Inner Circle or Elite Circle to send messages.',
+    inline: 'Upgrade to Connect, Inner Circle, or Elite Circle to send messages.',
   },
   business_directory_apply: {
     title: 'Business Directory listings are for Elite Circle',

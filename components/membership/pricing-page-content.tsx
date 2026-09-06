@@ -10,7 +10,7 @@ import {
 
 type PricingPageContentProps = {
   mode: 'public' | 'member'
-  currentTier?: 'member' | 'inner_circle' | 'elite_circle'
+  currentTier?: 'member' | 'connect' | 'inner_circle' | 'elite_circle'
 }
 
 export default function PricingPageContent({

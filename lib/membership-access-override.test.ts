@@ -78,6 +78,7 @@ describe('complimentary override entitlements precedence', () => {
 
     expect(entitlements.productTier).toBe('inner_circle')
     expect(entitlements.canMessage).toBe(true)
+    expect(entitlements.canUseCuratedMatching).toBe(true)
     expect(entitlements.canAccessCircleSocial).toBe(true)
     expect(entitlements.billing.tier).toBe('member')
     expect(entitlements.billing.subscription_status).toBe('none')

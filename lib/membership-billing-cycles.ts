@@ -141,6 +141,35 @@ export async function loadActiveEntitlementCycle(
   return data ? toCycle(data as CycleRow) : null
 }
 
+export async function loadActiveEntitlementCyclesByUserIds(
+  supabase: SupabaseClient<Database>,
+  userIds: string[]
+): Promise<Map<string, EntitlementCycle>> {
+  const map = new Map<string, EntitlementCycle>()
+  if (userIds.length === 0) return map
+
+  const { data, error } = await supabase
+    .from('membership_entitlement_cycles')
+    .select(CYCLE_SELECT_FULL)
+    .in('user_id', userIds)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    if (error.code === '42P01') return map
+    throw new Error(error.message)
+  }
+
+  for (const row of data ?? []) {
+    const typed = row as CycleRow
+    if (!map.has(typed.user_id)) {
+      map.set(typed.user_id, toCycle(typed))
+    }
+  }
+
+  return map
+}
+
 export async function deactivateActiveCycles(
   supabase: SupabaseClient<Database>,
   userId: string
