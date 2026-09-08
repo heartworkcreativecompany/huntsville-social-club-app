@@ -152,9 +152,8 @@ describe('ClubNavMarkup', () => {
   it('keeps desktop navigation in the document and hides it below lg', () => {
     const html = renderNav({ mobileOpen: false })
     expect(html).toContain('data-club-header="desktop"')
-    expect(html).toContain('hidden max-w-6xl')
-    expect(html).toContain('lg:flex')
-    expect(html).toContain('flex flex-wrap gap-1')
+    expect(html).toContain('max-w-6xl')
+    expect(html).toContain('hidden flex-wrap gap-1 lg:flex')
     expect(html).toContain('Dashboard')
     expect(html).toContain('href="/dashboard"')
     expect(html).toContain('Members')
@@ -168,33 +167,50 @@ describe('ClubNavMarkup', () => {
 
   it('places the mobile header as bell, centered wordmark, then hamburger', () => {
     const html = renderNav({ mobileOpen: false })
-    const mobileHtml = html.slice(
+
+    expect(html).toContain('grid-cols-[44px_minmax(0,1fr)_44px]')
+    expect(html).toContain('lg:hidden')
+    expect(html).toContain('h-11 w-11 min-h-11 min-w-11')
+    expect(html).toContain('justify-center')
+    expect(html).toContain('col-start-1')
+    expect(html).toContain('col-start-2')
+    expect(html).toContain('col-start-3')
+    expect(html).toContain('pl-[max(1.25rem,env(safe-area-inset-left))]')
+    expect(html).toContain('pr-[max(1.25rem,env(safe-area-inset-right))]')
+    expect(html).toContain('sm:pl-[max(2rem,env(safe-area-inset-left))]')
+    expect(html).toContain('sm:pr-[max(2rem,env(safe-area-inset-right))]')
+
+    const headerHtml = html.slice(
       html.indexOf('data-club-header="mobile"'),
-      html.indexOf('data-club-header="desktop"')
+      html.indexOf('id="club-mobile-nav"')
     )
+    expect(headerHtml).not.toContain('sm:px-8')
 
-    expect(mobileHtml).toContain('grid-cols-[44px_minmax(0,1fr)_44px]')
-    expect(mobileHtml).toContain('lg:hidden')
-    expect(mobileHtml).toContain('h-11 w-11 min-h-11 min-w-11')
-    expect(mobileHtml).toContain('justify-center')
-
-    const bellAt = mobileHtml.indexOf('data-notifications-bell')
-    const wordmarkAt = mobileHtml.indexOf('Huntsville Social Club')
-    const hamburgerAt = mobileHtml.indexOf('aria-label="Open navigation menu"')
+    const wordmarkAt = html.indexOf('Huntsville Social Club')
+    const bellAt = html.indexOf('data-notifications-bell')
+    const hamburgerAt = html.indexOf('aria-label="Open navigation menu"')
 
     expect(bellAt).toBeGreaterThan(-1)
-    expect(wordmarkAt).toBeGreaterThan(bellAt)
-    expect(hamburgerAt).toBeGreaterThan(wordmarkAt)
+    expect(wordmarkAt).toBeGreaterThan(-1)
+    expect(wordmarkAt).toBeLessThan(bellAt)
+    expect(hamburgerAt).toBeGreaterThan(bellAt)
+  })
+
+  it('mounts exactly one notifications bell for both responsive presentations', () => {
+    const html = renderNav({ mobileOpen: false })
+    expect(html.split('data-notifications-bell="true"').length - 1).toBe(1)
+
+    const source = readFileSync(
+      join(__dirname, '../components/shell/club-nav.tsx'),
+      'utf8'
+    )
+    expect(source.match(/<NotificationsBell\b/g)).toHaveLength(1)
   })
 
   it('keeps the wordmark in the mobile header when the menu is open', () => {
     const html = renderNav({ mobileOpen: true })
-    const mobileHtml = html.slice(
-      html.indexOf('data-club-header="mobile"'),
-      html.indexOf('data-club-header="desktop"')
-    )
-    expect(mobileHtml).toContain('Huntsville Social Club')
-    expect(mobileHtml).toContain('aria-label="Close navigation menu"')
+    expect(html).toContain('Huntsville Social Club')
+    expect(html).toContain('aria-label="Close navigation menu"')
     expect(html).toContain('id="club-mobile-nav"')
     expect(html.indexOf('data-club-header="mobile"')).toBeLessThan(
       html.indexOf('id="club-mobile-nav"')
@@ -280,6 +296,7 @@ describe('ClubNav interaction wiring', () => {
     expect(source).toContain('clubHeaderOverlayAfterOpen')
     expect(source).toContain("clubHeaderOverlayAfterOpen('mobileNav')")
     expect(source).toContain("clubHeaderOverlayAfterOpen('notifications')")
+    expect(source.match(/<NotificationsBell\b/g)).toHaveLength(1)
   })
 })
 
