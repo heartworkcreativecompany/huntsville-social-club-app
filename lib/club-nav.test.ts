@@ -172,14 +172,28 @@ describe('ClubNavMarkup', () => {
     expect(html).toContain('lg:hidden')
     expect(html).toContain('h-11 w-11 min-h-11 min-w-11')
     expect(html).toContain('justify-center')
+    expect(html).toContain('col-start-1')
+    expect(html).toContain('col-start-2')
+    expect(html).toContain('col-start-3')
+    expect(html).toContain('pl-[max(1.25rem,env(safe-area-inset-left))]')
+    expect(html).toContain('pr-[max(1.25rem,env(safe-area-inset-right))]')
+    expect(html).toContain('sm:pl-[max(2rem,env(safe-area-inset-left))]')
+    expect(html).toContain('sm:pr-[max(2rem,env(safe-area-inset-right))]')
 
-    const bellAt = html.indexOf('data-notifications-bell')
+    const headerHtml = html.slice(
+      html.indexOf('data-club-header="mobile"'),
+      html.indexOf('id="club-mobile-nav"')
+    )
+    expect(headerHtml).not.toContain('sm:px-8')
+
     const wordmarkAt = html.indexOf('Huntsville Social Club')
+    const bellAt = html.indexOf('data-notifications-bell')
     const hamburgerAt = html.indexOf('aria-label="Open navigation menu"')
 
     expect(bellAt).toBeGreaterThan(-1)
-    expect(wordmarkAt).toBeGreaterThan(bellAt)
-    expect(hamburgerAt).toBeGreaterThan(wordmarkAt)
+    expect(wordmarkAt).toBeGreaterThan(-1)
+    expect(wordmarkAt).toBeLessThan(bellAt)
+    expect(hamburgerAt).toBeGreaterThan(bellAt)
   })
 
   it('mounts exactly one notifications bell for both responsive presentations', () => {
