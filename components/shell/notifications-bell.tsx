@@ -9,8 +9,10 @@ import {
 import { formatNotificationRelativeTime } from '@/lib/format-notification-time'
 import type { MemberNotificationItem } from '@/lib/load-member-notifications'
 import {
+  applyLocalNotificationReads,
   applyNotificationClick,
   planNotificationClick,
+  rememberNotificationsRead,
 } from '@/lib/notification-click'
 import {
   NOTIFICATION_PANEL_CLASS_NAME,
@@ -64,18 +66,23 @@ export default function NotificationsBell({
     }
     onOpenChange?.(value)
   }
-  const [items, setItems] = useState(initialItems)
-  const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
+  const [items, setItems] = useState(
+    () => applyLocalNotificationReads(initialItems, initialUnreadCount).items
+  )
+  const [unreadCount, setUnreadCount] = useState(
+    () => applyLocalNotificationReads(initialItems, initialUnreadCount).unreadCount
+  )
   const [markAllError, setMarkAllError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [syncedItems, setSyncedItems] = useState(initialItems)
   const [syncedUnreadCount, setSyncedUnreadCount] = useState(initialUnreadCount)
 
   if (initialItems !== syncedItems || initialUnreadCount !== syncedUnreadCount) {
+    const merged = applyLocalNotificationReads(initialItems, initialUnreadCount)
     setSyncedItems(initialItems)
     setSyncedUnreadCount(initialUnreadCount)
-    setItems(initialItems)
-    setUnreadCount(initialUnreadCount)
+    setItems(merged.items)
+    setUnreadCount(merged.unreadCount)
   }
 
   useEffect(() => {
@@ -138,6 +145,9 @@ export default function NotificationsBell({
     startTransition(async () => {
       const result = await markAllNotificationsRead()
       if ('success' in result) {
+        rememberNotificationsRead(
+          items.filter((item) => !item.readAt).map((item) => item.id)
+        )
         setItems((current) =>
           current.map((item) => ({
             ...item,

@@ -13,6 +13,38 @@ export type NotificationClickPlan = {
   navigateTo: string | null
 }
 
+const locallyReadIds = new Set<string>()
+
+/** Survives ClubNav remounts on pathname change so unread UI does not snap back. */
+export function rememberNotificationsRead(ids: string[]): void {
+  for (const id of ids) {
+    locallyReadIds.add(id)
+  }
+}
+
+export function applyLocalNotificationReads<
+  T extends { id: string; readAt: string | null },
+>(items: T[], unreadCount: number): { items: T[]; unreadCount: number } {
+  if (locallyReadIds.size === 0) {
+    return { items, unreadCount }
+  }
+
+  let reduced = 0
+  const next = items.map((item) => {
+    if (item.readAt || !locallyReadIds.has(item.id)) {
+      return item
+    }
+    reduced += 1
+    return { ...item, readAt: new Date().toISOString() }
+  })
+
+  return { items: next, unreadCount: Math.max(0, unreadCount - reduced) }
+}
+
+export function resetLocalNotificationReadsForTests(): void {
+  locallyReadIds.clear()
+}
+
 /**
  * Models the dual-mounted-bell race: every mounted bell with an open panel
  * attaches a document `mousedown` listener. A click inside the visible panel
@@ -73,6 +105,7 @@ export function applyNotificationClick(
 
   if (plan.markRead) {
     pendingIds.add(notificationId)
+    rememberNotificationsRead([notificationId])
     actions.markOptimisticRead()
   }
 

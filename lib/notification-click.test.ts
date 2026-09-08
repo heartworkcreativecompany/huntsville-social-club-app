@@ -1,11 +1,18 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  applyLocalNotificationReads,
   applyNotificationClick,
   planNotificationClick,
+  rememberNotificationsRead,
+  resetLocalNotificationReadsForTests,
   sharedNotificationPanelStaysOpenAfterMousedown,
 } from '@/lib/notification-click'
+
+beforeEach(() => {
+  resetLocalNotificationReadsForTests()
+})
 
 describe('dual responsive bell mousedown race', () => {
   it('lets a hidden twin close shared state before the visible row click', () => {
@@ -167,6 +174,38 @@ describe('safe notification click', () => {
     expect(markOptimisticRead).not.toHaveBeenCalled()
     expect(persist).not.toHaveBeenCalled()
     expect(navigate).toHaveBeenCalledWith('/profile')
+  })
+
+  it('keeps optimistic unread overlay after a ClubNav-style remount', () => {
+    applyClick(unread('/messages/thread-1'), new Set(), () => new Promise(() => undefined))
+
+    const remounted = applyLocalNotificationReads(
+      [
+        {
+          id: 'n1',
+          href: '/messages/thread-1',
+          readAt: null,
+        },
+      ],
+      1
+    )
+
+    expect(remounted.unreadCount).toBe(0)
+    expect(remounted.items[0]?.readAt).toEqual(expect.any(String))
+  })
+
+  it('does not overlay later notifications that were not marked locally', () => {
+    rememberNotificationsRead(['n1'])
+    const remounted = applyLocalNotificationReads(
+      [
+        { id: 'n1', href: '/messages/1', readAt: null },
+        { id: 'n2', href: '/messages/2', readAt: null },
+      ],
+      2
+    )
+    expect(remounted.unreadCount).toBe(1)
+    expect(remounted.items[0]?.readAt).toEqual(expect.any(String))
+    expect(remounted.items[1]?.readAt).toBeNull()
   })
 })
 

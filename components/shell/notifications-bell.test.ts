@@ -168,6 +168,7 @@ describe('NotificationsBell — click and mark-all source contracts', () => {
     expect(clickFn).not.toContain('router.push(notification.href)')
     expect(clickFn).not.toContain('await markNotificationRead')
     expect(clickFn).not.toContain('router.refresh()')
+    expect(source).toContain('applyLocalNotificationReads')
   })
 
   it('does not refresh the router on Mark all read success, and shows the approved error on failure', () => {
