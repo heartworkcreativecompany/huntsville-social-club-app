@@ -267,6 +267,24 @@ describe('billed paid-subscription CTA inputs', () => {
       })
     ).toBeNull()
     expect(
+      billedPaidMembershipTier({
+        ...base,
+        stripe_subscription_id: 'sub_test',
+        subscription_status: 'active',
+        tier: 'member',
+        stripe_price_id: 'price_1UCjKABei7W40myB2Mnqrtse',
+      })
+    ).toBe('connect')
+    expect(
+      billedPaidMembershipTier({
+        ...base,
+        stripe_subscription_id: 'sub_test',
+        subscription_status: 'active',
+        tier: 'member',
+        stripe_price_id: 'price_unknown_live',
+      })
+    ).toBeNull()
+    expect(
       upgradeCtaCurrentPlanKey({
         productTier: 'member',
         billedPaidTier: 'connect',

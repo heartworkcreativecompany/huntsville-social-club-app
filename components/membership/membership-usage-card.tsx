@@ -10,31 +10,14 @@ import {
   buttonSecondaryClassName,
 } from '@/lib/event-labels'
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
+import { membershipCardDisplay } from '@/lib/membership-card-display'
 import {
-  FREE_MEMBER_PREMIUM_CREDITS_COPY,
   dashboardPerkLinesFromSnapshot,
   hydrateMemberPerksFromServer,
-  isPaidPerksTier,
   membershipPerksSnapshotFromEntitlements,
   useMemberPerksWithFallback,
 } from '@/lib/member-perks-store'
 import MembershipPerkLines from '@/components/membership/membership-perk-lines'
-import type { SubscriptionStatus } from '@/lib/membership-systems'
-
-function subscriptionStatusLabel(status: SubscriptionStatus): string {
-  switch (status) {
-    case 'active':
-      return 'Active'
-    case 'grace':
-      return 'Grace period'
-    case 'past_due':
-      return 'Past due'
-    case 'cancelled':
-      return 'Cancelled'
-    default:
-      return 'No subscription'
-  }
-}
 
 export default function MembershipUsageCard({
   entitlements,
@@ -43,7 +26,7 @@ export default function MembershipUsageCard({
   entitlements: MemberEntitlements
   className?: string
 }) {
-  const hasPaidMembership = isPaidPerksTier(entitlements.productTier)
+  const display = membershipCardDisplay(entitlements)
   const serverPerks = membershipPerksSnapshotFromEntitlements(entitlements)
 
   useEffect(() => {
@@ -61,10 +44,9 @@ export default function MembershipUsageCard({
   ])
 
   const livePerks = useMemberPerksWithFallback(serverPerks)
-
   const billing = entitlements.billing
-  // Prefer server paid/free flag so a stale Elite store cannot override a free member.
-  const showPaidUsage = hasPaidMembership && livePerks?.hasPaidMembership === true
+  const showPaidUsage =
+    display.useCircleCreditSnapshot && livePerks?.hasPaidMembership === true
 
   const guestInvitesRemaining = showPaidUsage
     ? (livePerks?.guestInvitesRemaining ?? entitlements.guestInvitesRemaining)
@@ -77,16 +59,12 @@ export default function MembershipUsageCard({
 
   const usageLines = showPaidUsage
     ? dashboardPerkLinesFromSnapshot(livePerks!)
-    : [FREE_MEMBER_PREMIUM_CREDITS_COPY]
-
-  const hasPaidSubscription =
-    Boolean(billing.stripe_subscription_id) &&
-    (billing.subscription_status === 'active' ||
-      billing.subscription_status === 'past_due' ||
-      billing.subscription_status === 'grace')
+    : display.perkLines
 
   const onTrial =
-    billing.trial_end && new Date(billing.trial_end).getTime() > Date.now()
+    billing.trial_end &&
+    // eslint-disable-next-line react-hooks/purity -- trial window is relative to now
+    new Date(billing.trial_end).getTime() > Date.now()
 
   const statusVariant =
     billing.payment_failure.active || billing.subscription_status === 'past_due'
@@ -95,17 +73,18 @@ export default function MembershipUsageCard({
         ? 'success'
         : 'muted'
 
+  const ctaClassName =
+    display.upgradeCta?.variant === 'secondary'
+      ? buttonSecondaryClassName
+      : buttonPrimaryClassName
+
   return (
     <Card padding="sm" className={className}>
       <p className="eyebrow">Your membership</p>
-      <h2 className="text-display mt-1 text-lg font-semibold">
-        {entitlements.productTierLabel}
-      </h2>
+      <h2 className="text-display mt-1 text-lg font-semibold">{display.title}</h2>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Badge variant={statusVariant}>
-          {subscriptionStatusLabel(billing.subscription_status)}
-        </Badge>
+        <Badge variant={statusVariant}>{display.statusLabel}</Badge>
         {onTrial ? <Badge variant="accent">Trial</Badge> : null}
       </div>
 
@@ -120,19 +99,21 @@ export default function MembershipUsageCard({
         </div>
       )}
 
-      {showPaidUsage && entitlements.productTier === 'elite_circle' ? (
+      {showPaidUsage && display.showGuestInvites ? (
         <p className="mt-2 text-sm text-muted-foreground">
           Guest invites remaining this period: {guestInvitesRemaining}
         </p>
       ) : null}
 
-      {showPaidUsage && periodEnd ? (
+      {showPaidUsage && display.showPeriodMeta && periodEnd ? (
         <p className="mt-2 text-xs text-muted">
           Current period ends: {new Date(periodEnd).toLocaleDateString()}
         </p>
       ) : null}
 
-      {showPaidUsage && (billing.renewal_at || billing.trial_end) ? (
+      {showPaidUsage &&
+      display.showPeriodMeta &&
+      (billing.renewal_at || billing.trial_end) ? (
         <p className="mt-2 text-xs text-muted">
           {onTrial ? 'Trial ends' : 'Renews'}:{' '}
           {new Date(
@@ -142,24 +123,13 @@ export default function MembershipUsageCard({
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-3">
-        {!hasPaidMembership ? (
-          <Link href="/upgrade" className={buttonPrimaryClassName}>
-            View memberships
+        {display.upgradeCta ? (
+          <Link href={display.upgradeCta.href} className={ctaClassName}>
+            {display.upgradeCta.label}
           </Link>
         ) : null}
 
-        {entitlements.productTier === 'inner_circle' ? (
-          <>
-            <Link href="/upgrade" className={buttonSecondaryClassName}>
-              Change plan
-            </Link>
-            {hasPaidSubscription ? <BillingPortalButton /> : null}
-          </>
-        ) : null}
-
-        {entitlements.productTier === 'elite_circle' && hasPaidSubscription ? (
-          <BillingPortalButton />
-        ) : null}
+        {display.showBillingPortal ? <BillingPortalButton /> : null}
       </div>
     </Card>
   )

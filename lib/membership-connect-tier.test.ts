@@ -685,6 +685,26 @@ describe('Connect membership tier', () => {
       })
     ).toBeNull()
     expect(
+      effectivePublicTier({
+        role: 'member',
+        billing: {
+          ...connectBilling,
+          tier: 'member',
+          stripe_price_id: STRIPE_LIVE_PRICE_IDS.connect,
+        },
+      })
+    ).toBe('connect')
+    expect(
+      buildMemberEntitlements({
+        applicationApproved: true,
+        billing: {
+          ...connectBilling,
+          tier: 'member',
+          stripe_price_id: STRIPE_LIVE_PRICE_IDS.connect,
+        },
+      }).productTier
+    ).toBe('connect')
+    expect(
       buildMemberEntitlements({
         role: 'admin',
         applicationApproved: true,

@@ -17,6 +17,7 @@ import {
   type RegistrationMethod,
 } from '@/lib/membership-tier-config'
 import {
+  CONNECT_MEMBERSHIP_INCLUDED_COPY,
   ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
   FEATURE_GATE_COPY,
   INNER_CIRCLE_SOCIAL_CREDITS_EXHAUSTED_MESSAGE,
@@ -34,6 +35,7 @@ import {
   parseMembershipBilling,
   type MembershipBilling,
 } from '@/lib/membership-systems'
+import { tierFromStripePriceId } from '@/lib/stripe/config'
 
 export type EntitlementCycle = {
   id: string
@@ -161,6 +163,13 @@ export function resolveProductTier(input: {
 
   if (normalized === 'connect') {
     return subscriptionIsActive(billing) ? 'connect' : 'member'
+  }
+
+  // Stale `membership_billing.tier` (often `member`) with a mapped active/grace
+  // Stripe price must still grant that paid tier — not a display-only label.
+  if (subscriptionIsActive(billing)) {
+    const fromPrice = tierFromStripePriceId(billing.stripe_price_id)
+    if (fromPrice) return fromPrice
   }
 
   if (input.applicationApproved) {
@@ -637,9 +646,7 @@ export function membershipPerkCopyLines(
     return [memberFreeSummary()]
   }
   if (entitlements.productTier === 'connect') {
-    return [
-      'Standard events are free. Circle Socials and premium events require payment. Upgrade to Inner Circle for curated matches, event credits, and event creation.',
-    ]
+    return [CONNECT_MEMBERSHIP_INCLUDED_COPY]
   }
   return []
 }
