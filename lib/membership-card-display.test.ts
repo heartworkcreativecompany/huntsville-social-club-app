@@ -76,12 +76,102 @@ describe('membership card display from resolved entitlements', () => {
     expect(card.showGuestInvites).toBe(false)
   })
 
-  it('shows Connect during grace with the canonical Connect price', () => {
-    const entitlements = entitlementsForBilling(staleConnectBilling('grace'))
+  it('keeps persisted Connect through the existing grace status', () => {
+    const entitlements = entitlementsForBilling({
+      ...connectBilling,
+      subscription_status: 'grace',
+    })
     const card = membershipCardDisplay(entitlements)
     expect(entitlements.productTier).toBe('connect')
+    expect(entitlements.canMessage).toBe(true)
+    expect(entitlements.canUseCuratedMatching).toBe(false)
     expect(card.title).toBe('Connect')
     expect(card.statusLabel).toBe('Grace period')
+  })
+
+  it('does not grant Connect from a stored price while status is still grace', () => {
+    const billing = staleConnectBilling('grace')
+    const entitlements = entitlementsForBilling(billing)
+    const card = membershipCardDisplay(entitlements)
+    expect(entitlements.productTier).toBe('member')
+    expect(entitlements.canMessage).toBe(false)
+    expect(entitlements.canUseCuratedMatching).toBe(false)
+    expect(card.title).toBe('Member')
+    expect(effectivePublicTier({ role: 'member', billing })).toBeNull()
+    expect(billedPaidMembershipTier(billing)).toBeNull()
+  })
+
+  it('keeps persisted Inner Circle through grace and blocks stale Member + Inner price', () => {
+    const persisted = entitlementsForBilling({
+      ...innerCircleBilling,
+      stripe_price_id: STRIPE_LIVE_PRICE_IDS.inner_circle,
+      subscription_status: 'grace',
+    })
+    expect(persisted.productTier).toBe('inner_circle')
+    expect(persisted.canMessage).toBe(true)
+    expect(persisted.canUseCuratedMatching).toBe(true)
+
+    const stale = {
+      ...emptyMembershipBilling(),
+      tier: 'member' as const,
+      subscription_status: 'grace' as const,
+      stripe_subscription_id: 'sub_inner_live',
+      stripe_price_id: STRIPE_LIVE_PRICE_IDS.inner_circle,
+    }
+    const staleEntitlements = entitlementsForBilling(stale)
+    expect(staleEntitlements.productTier).toBe('member')
+    expect(staleEntitlements.canMessage).toBe(false)
+    expect(staleEntitlements.canUseCuratedMatching).toBe(false)
+    expect(staleEntitlements.premiumCreditsRemaining).toBeNull()
+    expect(effectivePublicTier({ role: 'member', billing: stale })).toBeNull()
+    expect(billedPaidMembershipTier(stale)).toBeNull()
+  })
+
+  it('keeps persisted Elite Circle through grace and blocks stale Member + Elite price', () => {
+    const persisted = entitlementsForBilling({
+      ...innerCircleBilling,
+      tier: 'elite_circle',
+      stripe_price_id: STRIPE_LIVE_PRICE_IDS.elite_circle,
+      subscription_status: 'grace',
+    })
+    expect(persisted.productTier).toBe('elite_circle')
+    expect(persisted.canMessage).toBe(true)
+    expect(persisted.canUseCuratedMatching).toBe(true)
+
+    const stale = {
+      ...emptyMembershipBilling(),
+      tier: 'member' as const,
+      subscription_status: 'grace' as const,
+      stripe_subscription_id: 'sub_elite_live',
+      stripe_price_id: STRIPE_LIVE_PRICE_IDS.elite_circle,
+    }
+    const staleEntitlements = entitlementsForBilling(stale)
+    expect(staleEntitlements.productTier).toBe('member')
+    expect(staleEntitlements.canMessage).toBe(false)
+    expect(staleEntitlements.canUseCuratedMatching).toBe(false)
+    expect(effectivePublicTier({ role: 'member', billing: stale })).toBeNull()
+    expect(billedPaidMembershipTier(stale)).toBeNull()
+  })
+
+  it('does not grant paid access from an unknown price in active or grace', () => {
+    const unknownActive = {
+      ...emptyMembershipBilling(),
+      tier: 'member' as const,
+      subscription_status: 'active' as const,
+      stripe_subscription_id: 'sub_unknown',
+      stripe_price_id: unknownLivePrice,
+    }
+    const unknownGrace = {
+      ...unknownActive,
+      subscription_status: 'grace' as const,
+    }
+    for (const billing of [unknownActive, unknownGrace]) {
+      const entitlements = entitlementsForBilling(billing)
+      expect(entitlements.productTier).toBe('member')
+      expect(entitlements.canMessage).toBe(false)
+      expect(billedPaidMembershipTier(billing)).toBeNull()
+      expect(effectivePublicTier({ role: 'member', billing })).toBeNull()
+    }
   })
 
   it('keeps free Member display when there is no Stripe subscription', () => {
@@ -208,6 +298,15 @@ describe('membership card display from resolved entitlements', () => {
     expect(effectivePublicTier({ role: 'member', billing })).toBeNull()
     expect(membershipCardDisplay(entitlements).title).toBe('Member')
   })
+
+  it('does not treat a past_due stale Member record as Connect', () => {
+    const billing = staleConnectBilling('past_due')
+    const entitlements = entitlementsForBilling(billing)
+    expect(entitlements.productTier).toBe('member')
+    expect(entitlements.canMessage).toBe(false)
+    expect(billedPaidMembershipTier(billing)).toBeNull()
+    expect(membershipCardDisplay(entitlements).title).toBe('Member')
+  })
 })
 
 describe('membership card consumers', () => {
@@ -229,6 +328,6 @@ describe('membership card consumers', () => {
       join(repoRoot, 'lib/public-member-badges.ts'),
       'utf8'
     )
-    expect(badges).toContain('tierFromStripePriceId')
+    expect(badges).toContain('paidTierFromActiveStoredPriceId')
   })
 })

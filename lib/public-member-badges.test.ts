@@ -166,6 +166,18 @@ describe('effective public tier', () => {
         now,
       })
     ).toBeNull()
+    expect(
+      effectivePublicTier({
+        role: 'member',
+        billing: {
+          ...freeMemberBilling,
+          subscription_status: 'grace',
+          stripe_subscription_id: 'sub_connect',
+          stripe_price_id: 'price_1UCjKABei7W40myB2Mnqrtse',
+        },
+        now,
+      })
+    ).toBeNull()
   })
 
   it('does not treat Admin or Host role entitlements as a public paid tier', () => {

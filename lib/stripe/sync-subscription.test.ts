@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type Stripe from 'stripe'
 import {
+  paidTierFromActiveStoredPriceId,
   primarySubscriptionPriceId,
   resolvePaidTierForSubscription,
 } from '@/lib/stripe/resolve-paid-tier'
@@ -119,6 +120,35 @@ describe('resolvePaidTierForSubscription', () => {
       resolvePaidTierForSubscription(
         stubSubscription({ priceId: 'price_unknown_live', priceAs: 'string' })
       )
+    ).toBeNull()
+  })
+})
+
+describe('paidTierFromActiveStoredPriceId', () => {
+  it('maps a canonical Connect price only while the stored status is active', () => {
+    expect(
+      paidTierFromActiveStoredPriceId({
+        subscription_status: 'active',
+        stripe_price_id: STRIPE_LIVE_PRICE_IDS.connect,
+      })
+    ).toBe('connect')
+    expect(
+      paidTierFromActiveStoredPriceId({
+        subscription_status: 'grace',
+        stripe_price_id: STRIPE_LIVE_PRICE_IDS.connect,
+      })
+    ).toBeNull()
+    expect(
+      paidTierFromActiveStoredPriceId({
+        subscription_status: 'past_due',
+        stripe_price_id: STRIPE_LIVE_PRICE_IDS.inner_circle,
+      })
+    ).toBeNull()
+    expect(
+      paidTierFromActiveStoredPriceId({
+        subscription_status: 'active',
+        stripe_price_id: 'price_unknown_live',
+      })
     ).toBeNull()
   })
 })

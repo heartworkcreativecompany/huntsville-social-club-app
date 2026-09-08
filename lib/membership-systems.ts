@@ -14,7 +14,7 @@ import {
   resolveApplicationStatus,
   type ApplicationStatus,
 } from '@/lib/application'
-import { tierFromStripePriceId } from '@/lib/stripe/config'
+import { paidTierFromActiveStoredPriceId } from '@/lib/stripe/resolve-paid-tier'
 
 // ---------------------------------------------------------------------------
 // Shared gate / review status
@@ -1061,7 +1061,7 @@ export function billedPaidMembershipTier(
   if (billing.tier === 'elite_circle' || billing.tier === 'premium_member') {
     return 'elite_circle'
   }
-  return tierFromStripePriceId(billing.stripe_price_id)
+  return paidTierFromActiveStoredPriceId(billing)
 }
 
 export function billingStatusLabel(billing: MembershipBilling): string {

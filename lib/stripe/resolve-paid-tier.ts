@@ -67,3 +67,17 @@ export function resolvePaidTierForSubscription(
 
   return null
 }
+
+/**
+ * Self-heal a stale persisted `membership_billing.tier` from a stored canonical
+ * Stripe price. Active subscriptions only: Stripe `incomplete`/`paused` sync as
+ * `grace` with `tier: member` and a price ID, which must not grant paid access.
+ * Already-persisted paid tiers keep their existing grace semantics separately.
+ */
+export function paidTierFromActiveStoredPriceId(billing: {
+  subscription_status?: string | null
+  stripe_price_id?: string | null
+}): PaidMembershipTier | null {
+  if (billing.subscription_status !== 'active') return null
+  return tierFromStripePriceId(billing.stripe_price_id)
+}

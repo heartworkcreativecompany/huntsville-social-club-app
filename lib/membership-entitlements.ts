@@ -35,7 +35,7 @@ import {
   parseMembershipBilling,
   type MembershipBilling,
 } from '@/lib/membership-systems'
-import { tierFromStripePriceId } from '@/lib/stripe/config'
+import { paidTierFromActiveStoredPriceId } from '@/lib/stripe/resolve-paid-tier'
 
 export type EntitlementCycle = {
   id: string
@@ -165,12 +165,12 @@ export function resolveProductTier(input: {
     return subscriptionIsActive(billing) ? 'connect' : 'member'
   }
 
-  // Stale `membership_billing.tier` (often `member`) with a mapped active/grace
+  // Stale `membership_billing.tier` (often `member`) with a mapped *active*
   // Stripe price must still grant that paid tier — not a display-only label.
-  if (subscriptionIsActive(billing)) {
-    const fromPrice = tierFromStripePriceId(billing.stripe_price_id)
-    if (fromPrice) return fromPrice
-  }
+  // Do not use `grace` here: Stripe `incomplete`/`paused` map to grace and
+  // sync intentionally leaves `tier` at `member` until payment succeeds.
+  const fromStoredPrice = paidTierFromActiveStoredPriceId(billing)
+  if (fromStoredPrice) return fromStoredPrice
 
   if (input.applicationApproved) {
     return 'member'
