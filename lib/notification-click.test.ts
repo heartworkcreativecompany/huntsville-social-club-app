@@ -226,20 +226,33 @@ describe('safe notification click', () => {
   })
 
   it('mark-all overlay zeros the full unread count, including rows not in the panel', () => {
-    rememberAllNotificationsRead()
+    rememberAllNotificationsRead(['visible'])
     const remounted = applyLocalNotificationReads(
       [
         {
           id: 'visible',
           href: '/messages/1',
           readAt: null,
-          createdAt: '2026-01-01T00:00:00.000Z',
         },
       ],
       25
     )
     expect(remounted.unreadCount).toBe(0)
     expect(remounted.items[0]?.readAt).toEqual(expect.any(String))
+  })
+
+  it('does not hide a later unread that was not part of mark-all', () => {
+    rememberAllNotificationsRead(['old'])
+    const remounted = applyLocalNotificationReads(
+      [
+        { id: 'old', href: '/messages/1', readAt: null },
+        { id: 'new', href: '/messages/2', readAt: null },
+      ],
+      2
+    )
+    expect(remounted.unreadCount).toBe(1)
+    expect(remounted.items[0]?.readAt).toEqual(expect.any(String))
+    expect(remounted.items[1]?.readAt).toBeNull()
   })
 })
 

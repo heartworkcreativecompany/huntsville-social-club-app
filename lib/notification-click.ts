@@ -14,7 +14,8 @@ export type NotificationClickPlan = {
 }
 
 const locallyReadIds = new Set<string>()
-let locallyMarkedAllBefore: string | null = null
+let markAllActive = false
+let markAllSnapshotIds = new Set<string>()
 
 function persistReturnedError(result: unknown): boolean {
   return Boolean(result && typeof result === 'object' && 'error' in result)
@@ -33,41 +34,46 @@ export function forgetNotificationsRead(ids: string[]): void {
   }
 }
 
-export function rememberAllNotificationsRead(): void {
-  locallyMarkedAllBefore = new Date().toISOString()
+export function rememberAllNotificationsRead(visibleUnreadIds: string[]): void {
+  markAllActive = true
+  markAllSnapshotIds = new Set(visibleUnreadIds)
 }
 
 export function applyLocalNotificationReads<
-  T extends { id: string; readAt: string | null; createdAt?: string | null },
+  T extends { id: string; readAt: string | null },
 >(items: T[], unreadCount: number): { items: T[]; unreadCount: number } {
-  if (locallyReadIds.size === 0 && !locallyMarkedAllBefore) {
+  if (locallyReadIds.size === 0 && !markAllActive) {
     return { items, unreadCount }
   }
+
+  if (markAllActive && unreadCount === 0) {
+    return { items, unreadCount: 0 }
+  }
+
+  const incomingUnreadIds = items
+    .filter((item) => !item.readAt)
+    .map((item) => item.id)
+  const hideAllVisible =
+    markAllActive && incomingUnreadIds.every((id) => markAllSnapshotIds.has(id))
 
   let reduced = 0
   const next = items.map((item) => {
     if (item.readAt) {
       return item
     }
-    const markedIndividually = locallyReadIds.has(item.id)
-    const markedByAll =
-      locallyMarkedAllBefore != null &&
-      (!item.createdAt || item.createdAt <= locallyMarkedAllBefore)
-    if (!markedIndividually && !markedByAll) {
+    const overlay =
+      locallyReadIds.has(item.id) ||
+      hideAllVisible ||
+      (markAllActive && markAllSnapshotIds.has(item.id))
+    if (!overlay) {
       return item
     }
     reduced += 1
-    return { ...item, readAt: locallyMarkedAllBefore ?? new Date().toISOString() }
+    return { ...item, readAt: new Date().toISOString() }
   })
 
-  if (locallyMarkedAllBefore) {
-    const newerUnread = next.filter(
-      (item) =>
-        !item.readAt &&
-        item.createdAt &&
-        item.createdAt > locallyMarkedAllBefore!
-    ).length
-    return { items: next, unreadCount: newerUnread }
+  if (hideAllVisible) {
+    return { items: next, unreadCount: 0 }
   }
 
   return { items: next, unreadCount: Math.max(0, unreadCount - reduced) }
@@ -75,7 +81,8 @@ export function applyLocalNotificationReads<
 
 export function resetLocalNotificationReadsForTests(): void {
   locallyReadIds.clear()
-  locallyMarkedAllBefore = null
+  markAllActive = false
+  markAllSnapshotIds = new Set()
 }
 
 /**

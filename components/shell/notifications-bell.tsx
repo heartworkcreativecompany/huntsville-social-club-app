@@ -145,7 +145,9 @@ export default function NotificationsBell({
     startTransition(async () => {
       const result = await markAllNotificationsRead()
       if ('success' in result) {
-        rememberAllNotificationsRead()
+        rememberAllNotificationsRead(
+          items.filter((item) => !item.readAt).map((item) => item.id)
+        )
         setItems((current) =>
           current.map((item) => ({
             ...item,
