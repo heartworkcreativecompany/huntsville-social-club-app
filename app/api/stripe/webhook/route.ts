@@ -94,13 +94,20 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
 
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
-      const subscription = event.data.object as Stripe.Subscription
+      const incoming = event.data.object as Stripe.Subscription
+      const subscription = await stripe.subscriptions.retrieve(incoming.id)
       const userId = await resolveUserIdForSubscription(subscription)
       if (!userId) return
 
       await syncStripeSubscription(admin, {
         userId,
         subscription,
+        productTierFallback:
+          typeof incoming.metadata?.product_tier === 'string'
+            ? incoming.metadata.product_tier
+            : typeof subscription.metadata?.product_tier === 'string'
+              ? subscription.metadata.product_tier
+              : null,
       })
       return
     }

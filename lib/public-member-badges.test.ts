@@ -141,6 +141,45 @@ describe('effective public tier', () => {
     ).toBeNull()
   })
 
+  it('maps an active Connect Stripe price even when billing.tier is still member', () => {
+    expect(
+      effectivePublicTier({
+        role: 'member',
+        billing: {
+          ...freeMemberBilling,
+          subscription_status: 'active',
+          stripe_subscription_id: 'sub_connect',
+          stripe_price_id: 'price_1UCjKABei7W40myB2Mnqrtse',
+        },
+        now,
+      })
+    ).toBe('connect')
+    expect(
+      effectivePublicTier({
+        role: 'member',
+        billing: {
+          ...freeMemberBilling,
+          subscription_status: 'active',
+          stripe_subscription_id: 'sub_unknown',
+          stripe_price_id: 'price_unknown_live',
+        },
+        now,
+      })
+    ).toBeNull()
+    expect(
+      effectivePublicTier({
+        role: 'member',
+        billing: {
+          ...freeMemberBilling,
+          subscription_status: 'grace',
+          stripe_subscription_id: 'sub_connect',
+          stripe_price_id: 'price_1UCjKABei7W40myB2Mnqrtse',
+        },
+        now,
+      })
+    ).toBeNull()
+  })
+
   it('does not treat Admin or Host role entitlements as a public paid tier', () => {
     expect(
       effectivePublicTier({

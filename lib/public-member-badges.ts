@@ -14,6 +14,7 @@ import {
   SEEDED_RECOGNITION_BADGES,
   type PublicRecognitionBadge,
 } from '@/lib/recognition-badges/catalog'
+import { paidTierFromActiveStoredPriceId } from '@/lib/stripe/resolve-paid-tier'
 
 export type PublicPaidTier = 'connect' | 'inner_circle' | 'elite_circle'
 
@@ -60,7 +61,7 @@ export function effectivePublicTier(input: {
   if (billing.tier === 'connect') {
     return 'connect'
   }
-  return null
+  return paidTierFromActiveStoredPriceId(billing)
 }
 
 export function resolvePublicMembershipTier(input: {

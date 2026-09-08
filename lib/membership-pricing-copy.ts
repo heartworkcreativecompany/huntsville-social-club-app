@@ -14,6 +14,10 @@ export const PRICING_SUPPORTING_LINE =
   'All memberships begin with approval. Upgrade anytime for messaging, curated matches, Circle Socials, premium credits, and more ways to connect.'
 
 export const CONNECT_MONTHLY_PRICE = '$9.99/month'
+
+/** Membership card / entitlement copy for Connect. No credit or Circle matching claims. */
+export const CONNECT_MEMBERSHIP_INCLUDED_COPY =
+  'Direct messaging and member discovery are included with Connect.'
 export const INNER_CIRCLE_MONTHLY_PRICE = '$29.99/month'
 export const ELITE_CIRCLE_MONTHLY_PRICE = '$69.99/month'
 

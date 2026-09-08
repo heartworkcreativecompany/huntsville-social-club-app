@@ -5,8 +5,39 @@ import {
   type PaidMembershipTier,
 } from '@/lib/stripe/config'
 
-function primaryPriceId(subscription: Stripe.Subscription): string | null {
-  return subscription.items.data[0]?.price?.id ?? null
+function stripePriceIdFromField(
+  price: Stripe.Price | Stripe.DeletedPrice | string | null | undefined
+): string | null {
+  if (!price) return null
+  if (typeof price === 'string') {
+    return price.startsWith('price_') ? price : null
+  }
+  if ('deleted' in price && price.deleted) return null
+  if (typeof price.id === 'string' && price.id.startsWith('price_')) {
+    return price.id
+  }
+  return null
+}
+
+/**
+ * Webhook payloads may leave `price` as an ID string instead of an expanded
+ * Price object. `.price?.id` is undefined in that case, which dropped Connect
+ * mapping while still writing `subscription_status: active`.
+ */
+export function primarySubscriptionPriceId(
+  subscription: Stripe.Subscription
+): string | null {
+  const items = subscription.items?.data ?? []
+  for (const item of items) {
+    const fromPrice = stripePriceIdFromField(item.price)
+    if (fromPrice) return fromPrice
+
+    const planId = item.plan?.id
+    if (typeof planId === 'string' && planId.startsWith('price_')) {
+      return planId
+    }
+  }
+  return null
 }
 
 function paidTierFromMetadata(
@@ -24,7 +55,7 @@ export function resolvePaidTierForSubscription(
   subscription: Stripe.Subscription,
   fallbackTier?: string | null
 ): PaidMembershipTier | null {
-  const fromPrice = tierFromStripePriceId(primaryPriceId(subscription))
+  const fromPrice = tierFromStripePriceId(primarySubscriptionPriceId(subscription))
   if (fromPrice) return fromPrice
 
   const fromSubscriptionMeta = paidTierFromMetadata(subscription.metadata)
@@ -37,8 +68,16 @@ export function resolvePaidTierForSubscription(
   return null
 }
 
-export function primarySubscriptionPriceId(
-  subscription: Stripe.Subscription
-): string | null {
-  return primaryPriceId(subscription)
+/**
+ * Self-heal a stale persisted `membership_billing.tier` from a stored canonical
+ * Stripe price. Active subscriptions only: Stripe `incomplete`/`paused` sync as
+ * `grace` with `tier: member` and a price ID, which must not grant paid access.
+ * Already-persisted paid tiers keep their existing grace semantics separately.
+ */
+export function paidTierFromActiveStoredPriceId(billing: {
+  subscription_status?: string | null
+  stripe_price_id?: string | null
+}): PaidMembershipTier | null {
+  if (billing.subscription_status !== 'active') return null
+  return tierFromStripePriceId(billing.stripe_price_id)
 }
