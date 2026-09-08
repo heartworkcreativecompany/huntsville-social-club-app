@@ -14,6 +14,11 @@ export type NotificationClickPlan = {
 }
 
 const locallyReadIds = new Set<string>()
+let locallyMarkedAllBefore: string | null = null
+
+function persistReturnedError(result: unknown): boolean {
+  return Boolean(result && typeof result === 'object' && 'error' in result)
+}
 
 /** Survives ClubNav remounts on pathname change so unread UI does not snap back. */
 export function rememberNotificationsRead(ids: string[]): void {
@@ -22,27 +27,55 @@ export function rememberNotificationsRead(ids: string[]): void {
   }
 }
 
+export function forgetNotificationsRead(ids: string[]): void {
+  for (const id of ids) {
+    locallyReadIds.delete(id)
+  }
+}
+
+export function rememberAllNotificationsRead(): void {
+  locallyMarkedAllBefore = new Date().toISOString()
+}
+
 export function applyLocalNotificationReads<
-  T extends { id: string; readAt: string | null },
+  T extends { id: string; readAt: string | null; createdAt?: string | null },
 >(items: T[], unreadCount: number): { items: T[]; unreadCount: number } {
-  if (locallyReadIds.size === 0) {
+  if (locallyReadIds.size === 0 && !locallyMarkedAllBefore) {
     return { items, unreadCount }
   }
 
   let reduced = 0
   const next = items.map((item) => {
-    if (item.readAt || !locallyReadIds.has(item.id)) {
+    if (item.readAt) {
+      return item
+    }
+    const markedIndividually = locallyReadIds.has(item.id)
+    const markedByAll =
+      locallyMarkedAllBefore != null &&
+      (!item.createdAt || item.createdAt <= locallyMarkedAllBefore)
+    if (!markedIndividually && !markedByAll) {
       return item
     }
     reduced += 1
-    return { ...item, readAt: new Date().toISOString() }
+    return { ...item, readAt: locallyMarkedAllBefore ?? new Date().toISOString() }
   })
+
+  if (locallyMarkedAllBefore) {
+    const newerUnread = next.filter(
+      (item) =>
+        !item.readAt &&
+        item.createdAt &&
+        item.createdAt > locallyMarkedAllBefore!
+    ).length
+    return { items: next, unreadCount: newerUnread }
+  }
 
   return { items: next, unreadCount: Math.max(0, unreadCount - reduced) }
 }
 
 export function resetLocalNotificationReadsForTests(): void {
   locallyReadIds.clear()
+  locallyMarkedAllBefore = null
 }
 
 /**
@@ -116,9 +149,12 @@ export function applyNotificationClick(
   if (plan.markRead) {
     void (async () => {
       try {
-        await actions.persistRead()
+        const result = await actions.persistRead()
+        if (persistReturnedError(result)) {
+          forgetNotificationsRead([notificationId])
+        }
       } catch {
-        // Optimistic unread/read UI already applied; persistence errors stay local.
+        forgetNotificationsRead([notificationId])
       } finally {
         pendingIds.delete(notificationId)
       }

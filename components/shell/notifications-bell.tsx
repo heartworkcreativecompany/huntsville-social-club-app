@@ -12,7 +12,7 @@ import {
   applyLocalNotificationReads,
   applyNotificationClick,
   planNotificationClick,
-  rememberNotificationsRead,
+  rememberAllNotificationsRead,
 } from '@/lib/notification-click'
 import {
   NOTIFICATION_PANEL_CLASS_NAME,
@@ -145,9 +145,7 @@ export default function NotificationsBell({
     startTransition(async () => {
       const result = await markAllNotificationsRead()
       if ('success' in result) {
-        rememberNotificationsRead(
-          items.filter((item) => !item.readAt).map((item) => item.id)
-        )
+        rememberAllNotificationsRead()
         setItems((current) =>
           current.map((item) => ({
             ...item,
