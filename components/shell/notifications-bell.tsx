@@ -9,7 +9,10 @@ import {
 import { formatNotificationRelativeTime } from '@/lib/format-notification-time'
 import type { MemberNotificationItem } from '@/lib/load-member-notifications'
 import {
-  isSafeInAppHref,
+  applyNotificationClick,
+  planNotificationClick,
+} from '@/lib/notification-click'
+import {
   NOTIFICATION_PANEL_CLASS_NAME,
   notificationUnreadBadgeLabel,
 } from '@/lib/notification-ui'
@@ -49,6 +52,7 @@ export default function NotificationsBell({
 }) {
   const router = useRouter()
   const panelRef = useRef<HTMLDivElement>(null)
+  const pendingReadIdsRef = useRef(new Set<string>())
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const isControlled = openProp !== undefined
   const open = isControlled ? openProp : uncontrolledOpen
@@ -64,11 +68,15 @@ export default function NotificationsBell({
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
   const [markAllError, setMarkAllError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [syncedItems, setSyncedItems] = useState(initialItems)
+  const [syncedUnreadCount, setSyncedUnreadCount] = useState(initialUnreadCount)
 
-  useEffect(() => {
+  if (initialItems !== syncedItems || initialUnreadCount !== syncedUnreadCount) {
+    setSyncedItems(initialItems)
+    setSyncedUnreadCount(initialUnreadCount)
     setItems(initialItems)
     setUnreadCount(initialUnreadCount)
-  }, [initialItems, initialUnreadCount])
+  }
 
   useEffect(() => {
     if (!open) {
@@ -103,29 +111,25 @@ export default function NotificationsBell({
   }, [open, isControlled, onOpenChange])
 
   const handleNotificationClick = (notification: MemberNotificationItem) => {
-    setOpen(false)
-
-    if (!notification.readAt) {
-      setItems((current) =>
-        current.map((item) =>
-          item.id === notification.id
-            ? { ...item, readAt: new Date().toISOString() }
-            : item
+    const plan = planNotificationClick(notification, pendingReadIdsRef.current)
+    applyNotificationClick(plan, pendingReadIdsRef.current, notification.id, {
+      closePanel: () => {
+        setOpen(false)
+      },
+      markOptimisticRead: () => {
+        setItems((current) =>
+          current.map((item) =>
+            item.id === notification.id
+              ? { ...item, readAt: new Date().toISOString() }
+              : item
+          )
         )
-      )
-      setUnreadCount((count) => Math.max(0, count - 1))
-    }
-
-    const safeHref = isSafeInAppHref(notification.href) ? notification.href : null
-
-    startTransition(async () => {
-      if (!notification.readAt) {
-        await markNotificationRead(notification.id)
-      }
-      if (safeHref) {
-        router.push(safeHref)
-        router.refresh()
-      }
+        setUnreadCount((count) => Math.max(0, count - 1))
+      },
+      persistRead: () => markNotificationRead(notification.id),
+      navigate: (href) => {
+        router.push(href)
+      },
     })
   }
 
@@ -152,7 +156,7 @@ export default function NotificationsBell({
   const badgeLabel = notificationUnreadBadgeLabel(unreadCount)
 
   return (
-    <div className="relative" ref={panelRef}>
+    <div className="relative" ref={panelRef} data-notifications-bell="true">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}

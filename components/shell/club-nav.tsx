@@ -88,40 +88,29 @@ export function ClubNavMarkup({
     >
       <div
         data-club-header="mobile"
-        className="mx-auto grid max-w-6xl grid-cols-[44px_minmax(0,1fr)_44px] items-center px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))] pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] lg:hidden"
+        className="mx-auto grid max-w-6xl grid-cols-[44px_minmax(0,1fr)_44px] items-center px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))] pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:px-8 lg:flex lg:items-center lg:justify-between lg:gap-3"
       >
-        <div className="flex h-11 w-11 items-center justify-center justify-self-start overflow-visible">
+        <div className="flex h-11 w-11 items-center justify-center justify-self-start overflow-visible lg:order-2 lg:ml-auto lg:h-auto lg:w-auto lg:shrink-0 lg:gap-1">
           <NotificationsBell
             items={notifications}
             unreadCount={unreadNotificationCount}
-            buttonClassName="relative inline-flex h-11 w-11 min-h-11 min-w-11 items-center justify-center rounded-full text-accent transition hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            buttonClassName={`${navLinkClassName(false)} relative inline-flex h-11 w-11 min-h-11 min-w-11 items-center justify-center px-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface lg:h-auto lg:min-h-0 lg:w-auto lg:min-w-0 lg:px-2.5`}
             open={notificationsOpen}
             onOpenChange={onNotificationsOpenChange}
           />
+          <form action={signOut} className="hidden lg:block">
+            <button type="submit" className={navLinkClassName(false)}>
+              Sign out
+            </button>
+          </form>
         </div>
-        <div className="flex min-w-0 justify-center">
+        <div className="flex min-w-0 justify-center lg:order-1 lg:flex-1 lg:items-center lg:justify-start lg:gap-6">
           <BrandLogo href={logoHref} variant="wordmark" size="md" />
-        </div>
-        <button
-          ref={toggleRef}
-          type="button"
-          className="inline-flex h-11 w-11 min-h-11 min-w-11 items-center justify-center justify-self-end rounded-full text-accent transition hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-          aria-label={mobileNavToggleLabel(mobileOpen)}
-          aria-expanded={mobileOpen}
-          aria-controls={CLUB_MOBILE_NAV_ID}
-          onClick={onToggleMobileNav}
-        >
-          <MenuIcon open={mobileOpen} />
-        </button>
-      </div>
-
-      <div
-        data-club-header="desktop"
-        className="mx-auto hidden max-w-6xl items-center justify-between gap-3 px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-8 lg:flex"
-      >
-        <div className="flex min-w-0 items-center gap-6">
-          <BrandLogo href={logoHref} variant="wordmark" size="md" />
-          <nav className="flex flex-wrap gap-1" aria-label="Club">
+          <nav
+            data-club-header="desktop"
+            className="hidden flex-wrap gap-1 lg:flex"
+            aria-label="Club"
+          >
             {items.map((item) => (
               <Link
                 key={`desktop-${item.href}`}
@@ -133,20 +122,17 @@ export function ClubNavMarkup({
             ))}
           </nav>
         </div>
-
-        <div className="flex shrink-0 items-center gap-1">
-          <NotificationsBell
-            items={notifications}
-            unreadCount={unreadNotificationCount}
-            open={notificationsOpen}
-            onOpenChange={onNotificationsOpenChange}
-          />
-          <form action={signOut}>
-            <button type="submit" className={navLinkClassName(false)}>
-              Sign out
-            </button>
-          </form>
-        </div>
+        <button
+          ref={toggleRef}
+          type="button"
+          className="inline-flex h-11 w-11 min-h-11 min-w-11 items-center justify-center justify-self-end rounded-full text-accent transition hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface lg:hidden"
+          aria-label={mobileNavToggleLabel(mobileOpen)}
+          aria-expanded={mobileOpen}
+          aria-controls={CLUB_MOBILE_NAV_ID}
+          onClick={onToggleMobileNav}
+        >
+          <MenuIcon open={mobileOpen} />
+        </button>
       </div>
 
       <nav

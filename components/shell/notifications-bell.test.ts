@@ -157,11 +157,17 @@ describe('NotificationsBell — click and mark-all source contracts', () => {
     'utf8'
   )
 
-  it('validates href with isSafeInAppHref and only pushes a safe internal path', () => {
-    expect(source).toContain('isSafeInAppHref(notification.href)')
-    expect(source).toContain('if (safeHref) {')
-    expect(source).toContain('router.push(safeHref)')
-    expect(source).not.toContain('router.push(notification.href)')
+  it('plans clicks with isSafeInAppHref and pushes only the planned safe href', () => {
+    const clickFn = source.slice(
+      source.indexOf('const handleNotificationClick'),
+      source.indexOf('const handleMarkAllRead')
+    )
+    expect(clickFn).toContain('planNotificationClick(notification, pendingReadIdsRef.current)')
+    expect(clickFn).toContain('applyNotificationClick(plan, pendingReadIdsRef.current, notification.id')
+    expect(clickFn).toContain('router.push(href)')
+    expect(clickFn).not.toContain('router.push(notification.href)')
+    expect(clickFn).not.toContain('await markNotificationRead')
+    expect(clickFn).not.toContain('router.refresh()')
   })
 
   it('does not refresh the router on Mark all read success, and shows the approved error on failure', () => {
@@ -171,6 +177,7 @@ describe('NotificationsBell — click and mark-all source contracts', () => {
     )
     const withoutComments = markAllFn.replace(/\/\/.*$/gm, '')
     expect(withoutComments).not.toContain('router.refresh()')
+    expect(withoutComments).not.toContain('router.push')
     expect(markAllFn).toContain("setMarkAllError('Could not mark notifications as read. Please try again.')")
     expect(markAllFn).toContain("if ('success' in result)")
     expect(markAllFn).toContain('setUnreadCount(0)')

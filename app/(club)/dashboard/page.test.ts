@@ -239,6 +239,17 @@ describe('dashboard notification href safety', () => {
     expect(isSafeInAppHref('javascript:alert(1)')).toBe(false)
   })
 
+  it('wraps only safe href rows in links and leaves unsafe rows non-navigable', () => {
+    const source = notificationsPreviewSource()
+    expect(source).toContain('isSafeInAppHref(item.href)')
+    expect(source).toContain('<Link href={href}')
+    expect(source).toContain('{href ? (')
+    expect(source).toContain(': (')
+    expect(source).toContain('{body}')
+    expect(source).not.toContain('router.push')
+    expect(source).not.toContain('NotificationsBell')
+  })
+
   it('uses the approved empty-state copy and does not invent notification types', () => {
     expect(DASHBOARD_NOTIFICATIONS_EMPTY).toEqual({
       title: 'No recent notifications',
