@@ -15,6 +15,7 @@ import {
   applicationGoBackToStepPrefix,
   applicationStepHeadingId,
 } from '@/lib/application-form-content'
+import { logicalChipCount } from '@/lib/chip-selection'
 import type { ApplicationDraft } from '@/lib/application'
 import { parseIndustryValue } from '@/lib/industries'
 import { parseConnectionIntents } from '@/lib/member-public-intent'
@@ -298,12 +299,13 @@ export function collectApplicationValidationIssues(
     issues.push(issue('industry', 'select an industry.'))
   }
 
-  if (workAndInterests.interests.length < INTEREST_MIN) {
+  const interestCount = logicalChipCount(workAndInterests.interests)
+  if (interestCount < INTEREST_MIN) {
     issues.push(
       issue('interests_min', `select at least ${INTEREST_MIN} interests.`)
     )
   }
-  if (workAndInterests.interests.length > INTEREST_MAX) {
+  if (interestCount > INTEREST_MAX) {
     issues.push(
       issue(
         'interests_max',

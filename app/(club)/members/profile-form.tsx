@@ -12,8 +12,13 @@ import {
   SOCIAL_VIBE_OPTIONS,
 } from '@/lib/application-fields'
 import {
+  EVENT_INTEREST_HEADING,
+  EVENT_INTEREST_HINT,
   EVENT_INTEREST_OPTIONS,
+  INTEREST_MAX,
+  INTEREST_MIN,
   INTEREST_OPTIONS,
+  INTEREST_SELECTION_HINT,
   LIFESTYLE_TAG_OPTIONS,
   PROMPT_MAX_CHARS,
 } from '@/lib/application-form-content'
@@ -286,6 +291,10 @@ export default function ProfileForm({
             options={INTEREST_OPTIONS}
             selected={selectedInterests}
             onChange={setSelectedInterests}
+            min={INTEREST_MIN}
+            max={INTEREST_MAX}
+            hint={INTEREST_SELECTION_HINT}
+            ariaLabel="Interests"
           />
         </div>
 
@@ -316,11 +325,17 @@ export default function ProfileForm({
         </label>
 
         <div className="grid gap-1.5 text-sm">
-          <span className="font-medium text-foreground">Event interests</span>
+          <span className="font-medium text-foreground">
+            {EVENT_INTEREST_HEADING}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {EVENT_INTEREST_HINT}
+          </span>
           <ChipMultiSelect
             options={EVENT_INTEREST_OPTIONS}
             selected={selectedEventInterests}
             onChange={setSelectedEventInterests}
+            ariaLabel={EVENT_INTEREST_HEADING}
           />
         </div>
 
