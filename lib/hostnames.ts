@@ -110,6 +110,21 @@ export function membersOrigin(): string {
 }
 
 /**
+ * Landing-page Sign in / Join hrefs.
+ * Preview and local hosts keep the visitor on the current origin.
+ * Production marketing continues to send portal CTAs to the members host.
+ */
+export function portalCtaHref(
+  kind: HostKind,
+  path: '/login' | '/signup'
+): string {
+  if (kind === 'preview') {
+    return path
+  }
+  return `${membersOrigin()}${path}`
+}
+
+/**
  * Paths that must stay on the marketing host (or are infrastructure),
  * and therefore must not be redirected to the members portal.
  */
