@@ -52,6 +52,12 @@ export const PHOTO_MAX_COUNT = 6
 export const INTEREST_MIN = 3
 export const INTEREST_MAX = 6
 
+export const INTEREST_SELECTION_HINT = 'Choose 3–6 interests'
+
+export const EVENT_INTEREST_HEADING =
+  'What kinds of events would you like to attend?'
+export const EVENT_INTEREST_HINT = 'Choose any that interest you.'
+
 export const GENDER_OPTIONS = [
   { value: '', label: 'Prefer not to say' },
   { value: 'woman', label: 'Female' },
@@ -61,21 +67,32 @@ export const GENDER_OPTIONS = [
 ] as const
 
 export const INTEREST_OPTIONS = [
-  'Arts & culture',
-  'Food & dining',
-  'Outdoors & fitness',
-  'Music & nightlife',
-  'Professional networking',
-  'Family & parenting',
-  'Volunteering & civic life',
-  'Books & learning',
-  'Wellness',
-  'Sports',
-  'Tech & startups',
-  'Faith & fellowship',
-  'Games & hobbies',
-  'Travel',
+  'Animals & Pets',
+  'Arts & Crafts',
+  'Board Games',
+  'Books & Reading',
+  'Coffee & Cafés',
+  'Comedy & Live Entertainment',
+  'Cooking & Baking',
+  'Culture, Museums & Local History',
+  'Dining Out & Trying New Restaurants',
+  'Faith & Spirituality',
+  'Family & Parenting',
+  'Farmers Markets & Local Shopping',
+  'Fitness & Wellness',
+  'Food, Wine & Tastings',
+  'Hiking, Walking & Nature',
+  'Live Music & Concerts',
+  'Movies & TV',
+  'Networking & Entrepreneurship',
+  'Outdoor Adventures',
+  'Personal Growth & Learning',
   'Photography',
+  'Recreational Sports',
+  'Travel',
+  'Trivia & Puzzles',
+  'Video Games',
+  'Volunteering & Community Service',
 ] as const
 
 export const LIFESTYLE_TAG_OPTIONS = [
@@ -90,13 +107,15 @@ export const LIFESTYLE_TAG_OPTIONS = [
 ] as const
 
 export const EVENT_INTEREST_OPTIONS = [
-  'Small dinners',
-  'Coffee meetups',
-  'Outdoor adventures',
-  'Cultural outings',
-  'Professional mixers',
-  'Family-friendly events',
-  'Members-only gatherings',
+  'Low-key coffee or conversation',
+  'Small-group activities',
+  'Game nights',
+  'Outdoor meetups',
+  'Creative workshops',
+  'Live events',
+  'Volunteer/community activities',
+  'Professional networking',
+  'Larger social gatherings',
 ] as const
 
 /** Shared helper for the two required About you prompts that stay off the public profile. */

@@ -15,11 +15,14 @@ import {
   APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE_ID,
   APPLICATION_PROMPTS,
   APPLICATION_TOTAL_STEPS,
+  EVENT_INTEREST_HEADING,
+  EVENT_INTEREST_HINT,
   EVENT_INTEREST_OPTIONS,
   GENDER_OPTIONS,
   INTEREST_MAX,
   INTEREST_MIN,
   INTEREST_OPTIONS,
+  INTEREST_SELECTION_HINT,
   LIFESTYLE_TAG_OPTIONS,
   PROMPT_MAX_CHARS,
   REQUIRED_PROMPT_KEYS,
@@ -726,6 +729,8 @@ export default function ApplicationForm({
                 onChange={(interests) => updateWork({ interests })}
                 min={INTEREST_MIN}
                 max={INTEREST_MAX}
+                hint={INTEREST_SELECTION_HINT}
+                ariaLabel="Interests"
               />
             </div>
             <div className="text-sm">
@@ -737,11 +742,14 @@ export default function ApplicationForm({
               />
             </div>
             <div className="text-sm">
-              <FieldLabel hint="Optional.">Event interests</FieldLabel>
+              <FieldLabel hint={EVENT_INTEREST_HINT}>
+                {EVENT_INTEREST_HEADING}
+              </FieldLabel>
               <ChipMultiSelect
                 options={EVENT_INTEREST_OPTIONS}
                 selected={draft.workAndInterests.eventInterests}
                 onChange={(eventInterests) => updateWork({ eventInterests })}
+                ariaLabel={EVENT_INTEREST_HEADING}
               />
             </div>
           </section>
