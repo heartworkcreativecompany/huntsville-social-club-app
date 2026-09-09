@@ -340,6 +340,27 @@ describe('member interest chip rendering', () => {
     expect(gamesButton).toContain('aria-pressed="true"')
   })
 
+  it('renders a saved Games & Hobbies value as a selected legacy chip', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChipMultiSelect, {
+        options: INTEREST_OPTIONS,
+        selected: ['Games & Hobbies', 'Travel', 'Photography'],
+        onChange: () => undefined,
+        min: INTEREST_MIN,
+        max: INTEREST_MAX,
+        hint: INTEREST_SELECTION_HINT,
+      })
+    )
+
+    expect(html).toContain('Games &amp; Hobbies')
+    const gamesIndex = html.indexOf('Games &amp; Hobbies')
+    const gamesButton = html.slice(
+      html.lastIndexOf('<button', gamesIndex),
+      html.indexOf('</button>', gamesIndex)
+    )
+    expect(gamesButton).toContain('aria-pressed="true"')
+  })
+
   it('renders all nine event-interest choices and allows an empty selection', () => {
     const html = renderToStaticMarkup(
       createElement(ChipMultiSelect, {

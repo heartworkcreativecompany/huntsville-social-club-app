@@ -3,6 +3,8 @@
 import { useId } from 'react'
 import {
   chipOptionsWithLegacySelected,
+  isChipSelected,
+  logicalChipCount,
   toggleChipSelection,
 } from '@/lib/chip-selection'
 import { chipActiveClassName, chipInactiveClassName } from '@/lib/event-labels'
@@ -26,6 +28,7 @@ export default function ChipMultiSelect({
 }) {
   const hintId = useId()
   const visibleOptions = chipOptionsWithLegacySelected(options, selected)
+  const selectedCount = logicalChipCount(selected)
   const rangeHint =
     hint ??
     (min !== undefined && max !== undefined
@@ -37,7 +40,7 @@ export default function ChipMultiSelect({
           : null)
   const showStatus = rangeHint != null
   const statusText = showStatus
-    ? [rangeHint, selected.length > 0 ? `${selected.length} selected` : null]
+    ? [rangeHint, selectedCount > 0 ? `${selectedCount} selected` : null]
         .filter(Boolean)
         .join(' · ')
     : null
@@ -60,9 +63,9 @@ export default function ChipMultiSelect({
       ) : null}
       <div className="flex flex-wrap gap-2">
         {visibleOptions.map((option) => {
-          const active = selected.includes(option)
+          const active = isChipSelected(selected, option)
           const atMax =
-            max !== undefined && !active && selected.length >= max
+            max !== undefined && !active && selectedCount >= max
           return (
             <button
               key={option}
