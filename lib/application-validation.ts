@@ -1,4 +1,10 @@
+import { evaluateMembershipAgeEligibility } from '@/lib/application-age-eligibility'
 import {
+  APPLICATION_AGE_ACK_ERROR,
+  APPLICATION_DOB_FUTURE_ERROR,
+  APPLICATION_DOB_INVALID_ERROR,
+  APPLICATION_DOB_MISSING_ERROR,
+  APPLICATION_DOB_UNDERAGE_ERROR,
   APPLICATION_PROMPTS,
   INTEREST_MAX,
   INTEREST_MIN,
@@ -31,6 +37,11 @@ export const APPLICATION_FIELD_IDS = {
   lastName: 'application-field-last-name',
   displayName: 'application-field-display-name',
   dateOfBirth: 'application-field-dob',
+  dateOfBirthHint: 'application-field-dob-hint',
+  dateOfBirthError: 'application-field-dob-error',
+  ageAcknowledgement: 'application-field-age-acknowledgement',
+  ageAcknowledgementHint: 'application-field-age-acknowledgement-hint',
+  ageAcknowledgementError: 'application-field-age-acknowledgement-error',
   connectionIntents: 'application-field-connection-intents',
   city: 'application-field-city',
   neighborhood: 'application-field-neighborhood',
@@ -49,6 +60,9 @@ export type ApplicationIssueCode =
   | 'last_name'
   | 'display_name'
   | 'date_of_birth'
+  | 'date_of_birth_invalid'
+  | 'date_of_birth_underage'
+  | 'age_acknowledgement'
   | 'connection_intents'
   | 'city_state_zip'
   | 'neighborhood'
@@ -73,6 +87,8 @@ export type ApplicationValidationIssue = {
   focusId: string
   /** Full user-facing message, including the Go-back-to-step prefix. */
   message: string
+  /** Field-level copy shown next to the control. Must not include the DOB value. */
+  inlineMessage?: string
 }
 
 const ISSUE_STEP: Record<ApplicationIssueCode, number> = {
@@ -80,6 +96,9 @@ const ISSUE_STEP: Record<ApplicationIssueCode, number> = {
   last_name: 1,
   display_name: 1,
   date_of_birth: 1,
+  date_of_birth_invalid: 1,
+  date_of_birth_underage: 1,
+  age_acknowledgement: 1,
   connection_intents: 1,
   city_state_zip: 2,
   neighborhood: 2,
@@ -104,6 +123,9 @@ const ISSUE_FOCUS_ID: Record<ApplicationIssueCode, string> = {
   last_name: APPLICATION_FIELD_IDS.lastName,
   display_name: APPLICATION_FIELD_IDS.displayName,
   date_of_birth: APPLICATION_FIELD_IDS.dateOfBirth,
+  date_of_birth_invalid: APPLICATION_FIELD_IDS.dateOfBirth,
+  date_of_birth_underage: APPLICATION_FIELD_IDS.dateOfBirth,
+  age_acknowledgement: APPLICATION_FIELD_IDS.ageAcknowledgement,
   connection_intents: APPLICATION_FIELD_IDS.connectionIntents,
   city_state_zip: APPLICATION_FIELD_IDS.city,
   neighborhood: APPLICATION_FIELD_IDS.neighborhood,
@@ -130,7 +152,8 @@ function issueMessage(code: ApplicationIssueCode, remainder: string): string {
 
 function issue(
   code: ApplicationIssueCode,
-  remainder: string
+  remainder: string,
+  inlineMessage?: string
 ): ApplicationValidationIssue {
   const stepId = ISSUE_STEP[code]
   return {
@@ -138,6 +161,7 @@ function issue(
     stepId,
     focusId: ISSUE_FOCUS_ID[code] || applicationStepHeadingId(stepId),
     message: issueMessage(code, remainder),
+    ...(inlineMessage ? { inlineMessage } : {}),
   }
 }
 
@@ -171,8 +195,51 @@ export function collectApplicationValidationIssues(
   if (!profile.displayName.trim()) {
     issues.push(issue('display_name', 'enter a display name.'))
   }
-  if (!profile.dateOfBirth.trim()) {
-    issues.push(issue('date_of_birth', 'enter your date of birth.'))
+  const ageEligibility = evaluateMembershipAgeEligibility(profile.dateOfBirth)
+  if (!ageEligibility.ok) {
+    if (ageEligibility.code === 'missing') {
+      issues.push(
+        issue(
+          'date_of_birth',
+          'enter your date of birth.',
+          APPLICATION_DOB_MISSING_ERROR
+        )
+      )
+    } else if (ageEligibility.code === 'invalid') {
+      issues.push(
+        issue(
+          'date_of_birth_invalid',
+          'enter a valid date of birth.',
+          APPLICATION_DOB_INVALID_ERROR
+        )
+      )
+    } else if (ageEligibility.code === 'future') {
+      issues.push(
+        issue(
+          'date_of_birth_invalid',
+          'enter a date of birth that is not in the future.',
+          APPLICATION_DOB_FUTURE_ERROR
+        )
+      )
+    } else {
+      issues.push(
+        issue(
+          'date_of_birth_underage',
+          'confirm you are at least 18 years old to apply for Huntsville Social Club membership.',
+          APPLICATION_DOB_UNDERAGE_ERROR
+        )
+      )
+    }
+  }
+
+  if (!agreements.ageEligibilityConfirmed) {
+    issues.push(
+      issue(
+        'age_acknowledgement',
+        'confirm that you are at least 18 years old.',
+        APPLICATION_AGE_ACK_ERROR
+      )
+    )
   }
 
   if (profile.connectionIntents.length < 1) {

@@ -10,6 +10,10 @@ import ChipMultiSelect from '@/components/application/chip-multi-select'
 import Card from '@/components/ui/card'
 import {
   AGREEMENT_ITEMS,
+  APPLICATION_AGE_ACK_HINT,
+  APPLICATION_AGE_ACK_LABEL,
+  APPLICATION_DOB_HINT,
+  APPLICATION_DOB_PRIVACY_NOTICE,
   APPLICATION_FORM_INTRO,
   APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE,
   APPLICATION_INTERNAL_REVIEW_PROMPTS_NOTICE_ID,
@@ -65,6 +69,20 @@ import {
 } from '@/lib/application-mobile-ui'
 import { trackEvent } from '@/lib/analytics'
 import { saveApplicationDraft, submitApplication } from './actions'
+
+const DATE_OF_BIRTH_ISSUE_CODES = [
+  'date_of_birth',
+  'date_of_birth_invalid',
+  'date_of_birth_underage',
+] as const
+
+function isDateOfBirthIssue(
+  item: ApplicationValidationIssue
+): boolean {
+  return (DATE_OF_BIRTH_ISSUE_CODES as readonly string[]).includes(
+    item.code
+  )
+}
 
 function FieldLabel({
   children,
@@ -317,6 +335,10 @@ export default function ApplicationForm({
   }
 
   const promptsDone = completedPromptCount(draft)
+  const dateOfBirthIssue = issues.find(isDateOfBirthIssue)
+  const ageAcknowledgementIssue = issues.find(
+    (item) => item.code === 'age_acknowledgement'
+  )
 
   return (
     <div id="form" className="scroll-mt-8 min-w-0">
@@ -420,20 +442,90 @@ export default function ApplicationForm({
                 autoComplete="nickname"
               />
             </label>
-            <label className="grid gap-1.5 text-sm">
-              <FieldLabel required privateField>
-                Date of birth
-              </FieldLabel>
-              <input
-                type="date"
-                id={APPLICATION_FIELD_IDS.dateOfBirth}
-                className={inputClassName}
-                value={draft.profile.dateOfBirth}
-                onChange={(e) =>
-                  updateProfile({ dateOfBirth: e.target.value })
-                }
-              />
-            </label>
+            <div className="grid gap-3 text-sm">
+              <label className="grid gap-1.5">
+                <FieldLabel required privateField>
+                  Date of birth
+                </FieldLabel>
+                <span
+                  id={APPLICATION_FIELD_IDS.dateOfBirthHint}
+                  className={APPLICATION_HELPER_TEXT_CLASS}
+                >
+                  {APPLICATION_DOB_HINT}
+                </span>
+                <input
+                  type="date"
+                  id={APPLICATION_FIELD_IDS.dateOfBirth}
+                  className={inputClassName}
+                  value={draft.profile.dateOfBirth}
+                  aria-invalid={Boolean(dateOfBirthIssue)}
+                  aria-describedby={[
+                    APPLICATION_FIELD_IDS.dateOfBirthHint,
+                    dateOfBirthIssue
+                      ? APPLICATION_FIELD_IDS.dateOfBirthError
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onChange={(e) =>
+                    updateProfile({ dateOfBirth: e.target.value })
+                  }
+                />
+                {dateOfBirthIssue ? (
+                  <span
+                    id={APPLICATION_FIELD_IDS.dateOfBirthError}
+                    className="text-xs text-danger"
+                    role="alert"
+                  >
+                    {dateOfBirthIssue.inlineMessage}
+                  </span>
+                ) : null}
+              </label>
+              <div className="grid gap-1.5">
+                <label className={AGREEMENT_ROW_CLASS}>
+                  <input
+                    type="checkbox"
+                    id={APPLICATION_FIELD_IDS.ageAcknowledgement}
+                    checked={draft.agreements.ageEligibilityConfirmed}
+                    aria-invalid={Boolean(ageAcknowledgementIssue)}
+                    aria-describedby={[
+                      APPLICATION_FIELD_IDS.ageAcknowledgementHint,
+                      ageAcknowledgementIssue
+                        ? APPLICATION_FIELD_IDS.ageAcknowledgementError
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onChange={(e) =>
+                      updateAgreements({
+                        ageEligibilityConfirmed: e.target.checked,
+                      })
+                    }
+                    className="mt-1 h-5 w-5 shrink-0"
+                  />
+                  <span className="min-w-0 grid gap-1 leading-relaxed break-words">
+                    <span className="font-medium text-foreground">
+                      {APPLICATION_AGE_ACK_LABEL}
+                    </span>
+                    <span
+                      id={APPLICATION_FIELD_IDS.ageAcknowledgementHint}
+                      className={APPLICATION_HELPER_TEXT_CLASS}
+                    >
+                      {APPLICATION_AGE_ACK_HINT}
+                    </span>
+                  </span>
+                </label>
+                {ageAcknowledgementIssue ? (
+                  <span
+                    id={APPLICATION_FIELD_IDS.ageAcknowledgementError}
+                    className="text-xs text-danger"
+                    role="alert"
+                  >
+                    {ageAcknowledgementIssue.inlineMessage}
+                  </span>
+                ) : null}
+              </div>
+            </div>
             <label className="grid gap-1.5 text-sm">
               <FieldLabel hint="Optional. Used only if needed for club operations.">
                 Gender
@@ -909,6 +1001,9 @@ export default function ApplicationForm({
               </div>
             </dl>
             <div id={APPLICATION_FIELD_IDS.agreements} className="grid gap-3" tabIndex={-1}>
+              <p className={APPLICATION_HELPER_TEXT_CLASS}>
+                {APPLICATION_DOB_PRIVACY_NOTICE}
+              </p>
               {AGREEMENT_ITEMS.map((item) => (
                 <label key={item.key} className={AGREEMENT_ROW_CLASS}>
                   <input
