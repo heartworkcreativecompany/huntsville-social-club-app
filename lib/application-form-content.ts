@@ -146,6 +146,31 @@ export const APPLICATION_PROMPTS = [
   },
 ] as const
 
+export const APPLICATION_DOB_HINT =
+  'You must be at least 18 years old to apply for membership.'
+
+export const APPLICATION_DOB_UNDERAGE_ERROR =
+  'You must be at least 18 years old to apply for Huntsville Social Club membership.'
+
+export const APPLICATION_DOB_INVALID_ERROR = 'Enter a valid date of birth.'
+
+export const APPLICATION_DOB_FUTURE_ERROR =
+  'Enter a date of birth that is not in the future.'
+
+export const APPLICATION_DOB_MISSING_ERROR = 'Enter your date of birth.'
+
+export const APPLICATION_AGE_ACK_LABEL =
+  'I confirm that I am at least 18 years old.'
+
+export const APPLICATION_AGE_ACK_HINT =
+  'Huntsville Social Club is for adults age 18 and older.'
+
+export const APPLICATION_AGE_ACK_ERROR =
+  'Confirm that you are at least 18 years old.'
+
+export const APPLICATION_DOB_PRIVACY_NOTICE =
+  'We collect your date of birth to confirm that you meet the Club’s minimum age requirement and for membership administration. Your full date of birth is not displayed publicly.'
+
 export const AGREEMENT_ITEMS = [
   {
     key: 'codeOfConduct' as const,
