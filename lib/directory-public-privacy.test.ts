@@ -33,5 +33,7 @@ describe('directory / public profile privacy', () => {
     expect(keys).not.toContain('stripe_customer_id' as never)
     expect(keys).not.toContain('stripe_subscription_id' as never)
     expect(keys).not.toContain('credits_used' as never)
+    expect(keys).not.toContain('dateOfBirth' as never)
+    expect(keys).not.toContain('application_draft' as never)
   })
 })

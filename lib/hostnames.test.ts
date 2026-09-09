@@ -9,6 +9,7 @@ import {
   membersOrigin,
   membersRedirectUrl,
   normalizeHost,
+  portalCtaHref,
   proxyHostAction,
   resolveRequestHost,
   rootRouteAction,
@@ -200,6 +201,45 @@ describe('vercel.app preview keeps full member app behavior', () => {
     ]) {
       expect(proxyHostAction('preview', path, '?q=1')).toEqual({ type: 'next' })
     }
+  })
+})
+
+describe('landing portal CTAs', () => {
+  it('keeps Preview Sign in and Join on the current host', () => {
+    process.env.NEXT_PUBLIC_MEMBERS_URL =
+      'https://members.huntsvillesocialclub.com'
+    process.env.NEXT_PUBLIC_APP_URL =
+      'https://members.huntsvillesocialclub.com'
+    expect(classifyHost('huntsville-s-git-8194c7-heartworkcreativecompany-6809s-projects.vercel.app')).toBe(
+      'preview'
+    )
+    expect(portalCtaHref('preview', '/login')).toBe('/login')
+    expect(portalCtaHref('preview', '/signup')).toBe('/signup')
+  })
+
+  it('keeps Production marketing CTAs on the members host', () => {
+    process.env.NEXT_PUBLIC_MEMBERS_URL =
+      'https://members.huntsvillesocialclub.com'
+    expect(portalCtaHref('marketing', '/login')).toBe(
+      'https://members.huntsvillesocialclub.com/login'
+    )
+    expect(portalCtaHref('marketing', '/signup')).toBe(
+      'https://members.huntsvillesocialclub.com/signup'
+    )
+  })
+
+  it('keeps local development on the current preview host', () => {
+    process.env.NEXT_PUBLIC_MEMBERS_URL = 'http://localhost:3000'
+    expect(classifyHost('localhost:3000')).toBe('preview')
+    expect(portalCtaHref('preview', '/login')).toBe('/login')
+    expect(portalCtaHref('preview', '/signup')).toBe('/signup')
+  })
+
+  it('wires the landing page through portalCtaHref', () => {
+    const page = readFileSync(join(REPO_ROOT, 'app/page.tsx'), 'utf8')
+    expect(page).toContain("portalCtaHref(hostKind, '/login')")
+    expect(page).toContain("portalCtaHref(hostKind, '/signup')")
+    expect(page).not.toContain('membersOrigin()')
   })
 })
 

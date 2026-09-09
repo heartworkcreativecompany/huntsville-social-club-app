@@ -7,7 +7,7 @@ import PublicFeatureCard from '@/components/marketing/public-feature-card'
 import SiteFooter from '@/components/shell/site-footer'
 import {
   classifyHost,
-  membersOrigin,
+  portalCtaHref,
   resolveRequestHost,
   rootRouteAction,
 } from '@/lib/hostnames'
@@ -32,9 +32,8 @@ export default async function PublicHomePage() {
     redirect(action.location)
   }
 
-  // Absolute portal CTAs so login/signup always land on the members host.
-  const loginHref = `${membersOrigin()}/login`
-  const signupHref = `${membersOrigin()}/signup`
+  const loginHref = portalCtaHref(hostKind, '/login')
+  const signupHref = portalCtaHref(hostKind, '/signup')
 
   return (
     <div className="min-h-screen bg-background text-foreground">

@@ -74,6 +74,8 @@ export type ApplicationDraft = {
     informationAccurate: boolean
     approvalRequired: boolean
     verificationConsent: boolean
+    /** Required on final submit only. Drafts may leave this unchecked. */
+    ageEligibilityConfirmed: boolean
   }
 }
 
@@ -327,6 +329,7 @@ export function emptyDraft(): ApplicationDraft {
       informationAccurate: false,
       approvalRequired: false,
       verificationConsent: false,
+      ageEligibilityConfirmed: false,
     },
   }
 }
@@ -504,6 +507,7 @@ export function parseApplicationDraft(value: unknown): ApplicationDraft {
       informationAccurate: Boolean(agreements.informationAccurate),
       approvalRequired: Boolean(agreements.approvalRequired),
       verificationConsent: Boolean(agreements.verificationConsent),
+      ageEligibilityConfirmed: Boolean(agreements.ageEligibilityConfirmed),
     },
   }
 }
