@@ -5,6 +5,11 @@ import { createClient } from '@/lib/supabase/server'
 import { isApprovedMember } from '@/lib/application'
 import { parseAttendanceMax } from '@/lib/event-attendance'
 import { isMissingCoverImageColumnError } from '@/lib/event-cover-image-column'
+import {
+  isMissingRsvpQuestionColumnError,
+  normalizeEventRsvpQuestionConfig,
+  omitRsvpQuestionFields,
+} from '@/lib/event-rsvp-question'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import {
   parseDatetimeLocalToIso,
@@ -55,6 +60,24 @@ function getEventWriteErrorMessage(error: {
   return error.message
 }
 
+function stripUnknownEventWriteColumns<T extends Record<string, unknown>>(
+  payload: T,
+  error: { message: string; code?: string; details?: string; hint?: string }
+): T | null {
+  if (isMissingCoverImageColumnError(error) && 'cover_image_url' in payload) {
+    const rest = { ...payload }
+    delete rest.cover_image_url
+    return rest
+  }
+  if (
+    isMissingRsvpQuestionColumnError(error) &&
+    ('rsvp_question' in payload || 'rsvp_question_required' in payload)
+  ) {
+    return omitRsvpQuestionFields(payload) as T
+  }
+  return null
+}
+
 export async function createEvent(input: {
   title: string
   location: string
@@ -69,6 +92,8 @@ export async function createEvent(input: {
   attendanceMax?: string
   coverImageUrl?: string
   sponsorIds?: string[]
+  rsvpQuestion?: string
+  rsvpQuestionRequired?: boolean
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -96,6 +121,14 @@ export async function createEvent(input: {
   const attendanceParsed = parseAttendanceMax(input.attendanceMax)
   if ('error' in attendanceParsed) {
     return { error: attendanceParsed.error }
+  }
+
+  const rsvpQuestionConfig = normalizeEventRsvpQuestionConfig({
+    question: input.rsvpQuestion,
+    required: input.rsvpQuestionRequired,
+  })
+  if ('error' in rsvpQuestionConfig) {
+    return { error: rsvpQuestionConfig.error }
   }
 
   const coverImageUrl = input.coverImageUrl?.trim() || null
@@ -150,6 +183,8 @@ export async function createEvent(input: {
     sponsorship_eligible: sponsorshipEligible,
     attendance_max: attendanceParsed.value,
     cover_image_url: coverImageUrl,
+    rsvp_question: rsvpQuestionConfig.rsvp_question,
+    rsvp_question_required: rsvpQuestionConfig.rsvp_question_required,
     ...(privileged
       ? {
           fee_cents: feeCents,
@@ -159,17 +194,20 @@ export async function createEvent(input: {
       : {}),
   }
 
+  let insertAttempt: Record<string, unknown> = insertPayload
   let { data: newEvent, error: eventError } = await supabase
     .from('events')
     .insert(insertPayload)
     .select('id')
     .single()
 
-  if (eventError && isMissingCoverImageColumnError(eventError)) {
-    const { cover_image_url: _omit, ...withoutCover } = insertPayload
+  for (let i = 0; i < 2 && eventError; i += 1) {
+    const stripped = stripUnknownEventWriteColumns(insertAttempt, eventError)
+    if (!stripped) break
+    insertAttempt = stripped
     const retry = await supabase
       .from('events')
-      .insert(withoutCover)
+      .insert(insertAttempt as typeof insertPayload)
       .select('id')
       .single()
     newEvent = retry.data
@@ -243,6 +281,8 @@ export async function updateEvent(input: {
   attendanceMax?: string
   coverImageUrl?: string
   sponsorIds?: string[]
+  rsvpQuestion?: string
+  rsvpQuestionRequired?: boolean
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -276,6 +316,14 @@ export async function updateEvent(input: {
   const attendanceParsed = parseAttendanceMax(input.attendanceMax)
   if ('error' in attendanceParsed) {
     return { error: attendanceParsed.error }
+  }
+
+  const rsvpQuestionConfig = normalizeEventRsvpQuestionConfig({
+    question: input.rsvpQuestion,
+    required: input.rsvpQuestionRequired,
+  })
+  if ('error' in rsvpQuestionConfig) {
+    return { error: rsvpQuestionConfig.error }
   }
 
   const coverImageUrl =
@@ -337,6 +385,8 @@ export async function updateEvent(input: {
     visibility: 'public' as const,
     attendance_max: attendanceParsed.value,
     updated_at: new Date().toISOString(),
+    rsvp_question: rsvpQuestionConfig.rsvp_question,
+    rsvp_question_required: rsvpQuestionConfig.rsvp_question_required,
     ...(coverImageUrl !== undefined ? { cover_image_url: coverImageUrl } : {}),
     ...(canManageTypeAndFee
       ? {
@@ -348,18 +398,19 @@ export async function updateEvent(input: {
       : {}),
   }
 
+  let updateAttempt: Record<string, unknown> = updatePayload
   let { error } = await supabase
     .from('events')
     .update(updatePayload)
     .eq('id', input.eventId)
 
-  if (error && isMissingCoverImageColumnError(error)) {
-    const { cover_image_url: _omit, ...withoutCover } = updatePayload as {
-      cover_image_url?: string | null
-    } & typeof updatePayload
+  for (let i = 0; i < 2 && error; i += 1) {
+    const stripped = stripUnknownEventWriteColumns(updateAttempt, error)
+    if (!stripped) break
+    updateAttempt = stripped
     const retry = await supabase
       .from('events')
-      .update(withoutCover)
+      .update(updateAttempt as typeof updatePayload)
       .eq('id', input.eventId)
     error = retry.error
   }

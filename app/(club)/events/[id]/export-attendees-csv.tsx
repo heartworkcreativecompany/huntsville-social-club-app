@@ -8,6 +8,7 @@ export type AttendeeExportRow = {
   attendeeName: string
   attendeeEmail: string
   rsvpStatus: string
+  rsvpAnswer: string
   respondedAt: string
 }
 
@@ -34,6 +35,7 @@ export default function ExportAttendeesCsv({
       'Attendee name',
       'Attendee email',
       'RSVP status',
+      'RSVP answer',
       'Responded at',
     ]
 
@@ -46,6 +48,7 @@ export default function ExportAttendeesCsv({
           row.attendeeName,
           row.attendeeEmail,
           row.rsvpStatus,
+          row.rsvpAnswer,
           row.respondedAt,
         ]
           .map(escapeCsvValue)

@@ -13,6 +13,7 @@ import { createEvent } from '@/app/(club)/events/actions'
 import { createSponsorForAdmin } from '@/app/(club)/events/sponsor-actions'
 import { uploadEventCoverImage } from '@/lib/event-image-storage'
 import type { SponsorOption } from '@/lib/event-sponsors'
+import EventRsvpQuestionFields from '@/components/events/event-rsvp-question-fields'
 
 type EventFormProps = {
   /** Admin/host can create all types and choose publish status. */
@@ -49,6 +50,8 @@ export default function EventForm({
   const [coverImageUrl, setCoverImageUrl] = useState('')
   const [coverImageName, setCoverImageName] = useState('')
   const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [rsvpQuestion, setRsvpQuestion] = useState('')
+  const [rsvpQuestionRequired, setRsvpQuestionRequired] = useState(false)
   const [availableSponsors, setAvailableSponsors] =
     useState<SponsorOption[]>(initialSponsors)
   const [selectedSponsorIds, setSelectedSponsorIds] = useState<string[]>([])
@@ -89,6 +92,8 @@ export default function EventForm({
         endsAt,
         attendanceMax,
         coverImageUrl,
+        rsvpQuestion,
+        rsvpQuestionRequired,
         ...(isAdminCreator
           ? {
               eventType,
@@ -115,6 +120,8 @@ export default function EventForm({
       setPriorityRsvpOpensAt('')
       setGeneralRsvpOpensAt('')
       setAttendanceMax('')
+      setRsvpQuestion('')
+      setRsvpQuestionRequired(false)
       clearCoverImage()
       setSelectedSponsorIds([])
       setEventType('standard_event')
@@ -236,6 +243,14 @@ export default function EventForm({
             Optional. Leave blank for unlimited attendance.
           </p>
         </div>
+
+        <EventRsvpQuestionFields
+          question={rsvpQuestion}
+          required={rsvpQuestionRequired}
+          disabled={isPending || isUploadingImage}
+          onQuestionChange={setRsvpQuestion}
+          onRequiredChange={setRsvpQuestionRequired}
+        />
 
         {isAdminCreator ? (
           <select
