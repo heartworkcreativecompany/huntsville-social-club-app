@@ -1132,6 +1132,30 @@ export interface Database {
         }
         Relationships: []
       }
+      event_rsvp_pending_answers: {
+        Row: {
+          event_id: string
+          user_id: string
+          rsvp_answer: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          event_id: string
+          user_id: string
+          rsvp_answer: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          event_id?: string
+          user_id?: string
+          rsvp_answer?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       membership_entitlement_cycles: {
         Row: {
           id: string

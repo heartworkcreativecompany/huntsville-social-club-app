@@ -34,9 +34,15 @@ import {
   isMissingRsvpAnswerColumnError,
   isMissingRsvpQuestionColumnError,
   omitRsvpAnswerField,
+  paidCheckoutPendingAnswerPlan,
   rsvpAnswerWriteFields,
   withNullRsvpQuestion,
 } from '@/lib/event-rsvp-question'
+import { persistPaidCheckoutPendingAnswer } from '@/lib/event-rsvp-pending-answer'
+import {
+  paidCheckoutAttendeeWrite,
+  startPaidGoingAfterPersistingAnswer,
+} from '@/lib/event-rsvp-paid-checkout'
 
 export type RsvpStatus = 'going' | 'maybe' | 'not_going'
 
@@ -325,26 +331,36 @@ export async function updateEventRsvp(input: {
       })
     ) {
       const feeCents = eventRow.fee_cents ?? 0
-      const checkout = await createEventFeeCheckoutSession({
-        supabase,
-        eventId: input.eventId,
-        eventTitle: eventRow.title?.trim() || 'Event registration',
-        feeCents,
-        userId,
-        email: viewer.email,
+      const checkout = await startPaidGoingAfterPersistingAnswer({
+        persistPending: () =>
+          persistPaidCheckoutPendingAnswer(supabase, {
+            eventId: input.eventId,
+            userId,
+            plan: paidCheckoutPendingAnswerPlan(answerWrite),
+          }),
+        createCheckout: () =>
+          createEventFeeCheckoutSession({
+            supabase,
+            eventId: input.eventId,
+            eventTitle: eventRow.title?.trim() || 'Event registration',
+            feeCents,
+            userId,
+            email: viewer.email,
+          }),
       })
 
       if ('error' in checkout) {
         return { error: checkout.error }
       }
 
-      const answerPatch =
-        'rsvp_answer' in answerWrite ? answerWrite : {}
-
-      // Persist the member's own answer before Stripe redirect. Do not put
-      // answers in checkout metadata. Webhook Going writes omit rsvp_answer
-      // so an existing row keeps this value.
-      if (hasUnpaidGoingPlaceholder && existingRow) {
+      // Legacy unpaid Going placeholders must not count as confirmed Going
+      // (capacity). Do not insert a new attendee row and do not store the
+      // RSVP answer on event_attendees until payment confirms Going.
+      const attendeeWrite = paidCheckoutAttendeeWrite({
+        hasUnpaidGoingPlaceholder,
+        hasExistingAttendeeRow: Boolean(existingRow),
+      })
+      if (attendeeWrite === 'clear_unpaid_going_placeholder' && existingRow) {
         await writeOwnAttendeeRow(supabase, {
           existing: true,
           eventId: input.eventId,
@@ -354,25 +370,6 @@ export async function updateEventRsvp(input: {
             payment_status: 'pending',
             registration_method: 'paid_per_event',
             cancelled_at: new Date().toISOString(),
-            ...answerPatch,
-          },
-        })
-      } else if (existingRow && 'rsvp_answer' in answerPatch) {
-        await writeOwnAttendeeRow(supabase, {
-          existing: true,
-          eventId: input.eventId,
-          userId,
-          payload: answerPatch,
-        })
-      } else if (!existingRow && answerPatch.rsvp_answer) {
-        await writeOwnAttendeeRow(supabase, {
-          existing: false,
-          eventId: input.eventId,
-          userId,
-          payload: {
-            status: 'not_going',
-            payment_status: 'pending',
-            ...answerPatch,
           },
         })
       }

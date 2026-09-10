@@ -8,6 +8,15 @@ import {
 import { appendRegistrationLedger } from '@/lib/membership-billing-cycles'
 import { appBaseUrl, getStripe, isStripeConfigured } from '@/lib/stripe/config'
 import { getOrCreateStripeCustomer } from '@/lib/stripe/customer'
+import {
+  deletePendingRsvpAnswer,
+  loadPendingRsvpAnswer,
+} from '@/lib/event-rsvp-pending-answer'
+import {
+  goingPayloadWithPendingAnswer,
+  isMissingRsvpAnswerColumnError,
+  omitRsvpAnswerField,
+} from '@/lib/event-rsvp-question'
 
 export const EVENT_FEE_CHECKOUT_TYPE = 'event_fee'
 
@@ -174,10 +183,15 @@ export async function markEventFeePaidFromCheckout(session: {
 
   const { data: existing } = await admin
     .from('event_attendees')
-    .select('status, payment_status')
+    .select('status, payment_status, rsvp_answer')
     .eq('event_id', eventId)
     .eq('user_id', userId)
     .maybeSingle()
+
+  const pendingAnswer = await loadPendingRsvpAnswer(admin, {
+    eventId,
+    userId,
+  })
 
   if (
     existing?.status === 'going' &&
@@ -185,6 +199,18 @@ export async function markEventFeePaidFromCheckout(session: {
       existing.payment_status === 'waived' ||
       existing.payment_status === 'not_required')
   ) {
+    const existingAnswer =
+      typeof existing.rsvp_answer === 'string' ? existing.rsvp_answer.trim() : ''
+    if (pendingAnswer && !existingAnswer) {
+      await admin
+        .from('event_attendees')
+        .update({ rsvp_answer: pendingAnswer })
+        .eq('event_id', eventId)
+        .eq('user_id', userId)
+    }
+    if (pendingAnswer) {
+      await deletePendingRsvpAnswer(admin, { eventId, userId })
+    }
     return { ok: true }
   }
 
@@ -211,28 +237,46 @@ export async function markEventFeePaidFromCheckout(session: {
   }
 
   const registeredAt = new Date().toISOString()
-  const payload = {
-    event_id: eventId,
-    user_id: userId,
-    status: 'going' as const,
-    registration_method: 'paid_per_event',
-    payment_status: 'paid',
-    credit_consumed: false,
-    credit_returned: false,
-    registered_at: registeredAt,
-    cancelled_at: null,
-  }
+  const payload = goingPayloadWithPendingAnswer(
+    {
+      event_id: eventId,
+      user_id: userId,
+      status: 'going' as const,
+      registration_method: 'paid_per_event',
+      payment_status: 'paid',
+      credit_consumed: false,
+      credit_returned: false,
+      registered_at: registeredAt,
+      cancelled_at: null,
+    },
+    pendingAnswer
+  )
 
-  const { error: upsertError } = existing
-    ? await admin
-        .from('event_attendees')
-        .update(payload)
-        .eq('event_id', eventId)
-        .eq('user_id', userId)
-    : await admin.from('event_attendees').insert(payload)
+  const writeGoing = (nextPayload: typeof payload) =>
+    existing
+      ? admin
+          .from('event_attendees')
+          .update(nextPayload)
+          .eq('event_id', eventId)
+          .eq('user_id', userId)
+      : admin.from('event_attendees').insert(nextPayload)
+
+  let { error: upsertError } = await writeGoing(payload)
+  if (
+    upsertError &&
+    isMissingRsvpAnswerColumnError(upsertError) &&
+    'rsvp_answer' in payload
+  ) {
+    const retry = await writeGoing(omitRsvpAnswerField(payload))
+    upsertError = retry.error
+  }
 
   if (upsertError) {
     return { error: upsertError.message }
+  }
+
+  if (pendingAnswer) {
+    await deletePendingRsvpAnswer(admin, { eventId, userId })
   }
 
   await appendRegistrationLedger(admin, {

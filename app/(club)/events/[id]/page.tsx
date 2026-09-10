@@ -30,6 +30,7 @@ import {
   isMissingRsvpQuestionColumnError,
   withNullRsvpQuestion,
 } from '@/lib/event-rsvp-question'
+import { loadPendingRsvpAnswer } from '@/lib/event-rsvp-pending-answer'
 import { isEventPast, memberGoingLabel, availabilityLabel } from '@/lib/event-display'
 import {
   EVENT_AT_CAPACITY_MESSAGE,
@@ -209,10 +210,17 @@ export default async function EventDetailPage({ params }: PageProps) {
   const currentGuestName = currentUserAttendee?.guest_name ?? null
   const currentGuestInviteConsumed =
     currentUserAttendee?.guest_invite_consumed === true
-  const currentUserRsvpAnswer =
+  const savedUserRsvpAnswer =
     typeof currentUserAttendee?.rsvp_answer === 'string'
       ? currentUserAttendee.rsvp_answer
       : null
+  const pendingUserRsvpAnswer = savedUserRsvpAnswer
+    ? null
+    : await loadPendingRsvpAnswer(supabase, {
+        eventId: event.id,
+        userId: user.id,
+      })
+  const currentUserRsvpAnswer = savedUserRsvpAnswer ?? pendingUserRsvpAnswer
 
   const isMine = event.owner_id === user.id
   const eventType = (event.event_type ?? 'standard_event') as EventAccessType

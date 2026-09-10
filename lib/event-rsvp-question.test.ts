@@ -4,6 +4,7 @@ import {
   RSVP_ANSWER_REQUIRED_MESSAGE,
   RSVP_QUESTION_MAX_CHARS,
   RSVP_QUESTION_TOO_LONG_MESSAGE,
+  canViewerAccessPendingRsvpAnswer,
   canViewerReadRsvpAnswer,
   canViewerWriteRsvpAnswer,
   goingRsvpAnswerRejection,
@@ -252,6 +253,33 @@ describe('RSVP answer authorization', () => {
       canViewerWriteRsvpAnswer({
         viewerUserId: 'host-1',
         attendeeUserId: member,
+      })
+    ).toBe(false)
+  })
+
+  it('keeps pending checkout answers own-row only, including from hosts and admins', () => {
+    expect(
+      canViewerAccessPendingRsvpAnswer({
+        viewerUserId: member,
+        pendingUserId: member,
+      })
+    ).toBe(true)
+    expect(
+      canViewerAccessPendingRsvpAnswer({
+        viewerUserId: other,
+        pendingUserId: member,
+      })
+    ).toBe(false)
+    expect(
+      canViewerAccessPendingRsvpAnswer({
+        viewerUserId: 'host-1',
+        pendingUserId: member,
+      })
+    ).toBe(false)
+    expect(
+      canViewerAccessPendingRsvpAnswer({
+        viewerUserId: 'admin-1',
+        pendingUserId: member,
       })
     ).toBe(false)
   })

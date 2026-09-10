@@ -3,6 +3,7 @@
  * and one answer per member RSVP (not a guest answer).
  *
  * Migration: supabase/migrations/20260910000000_event_rsvp_question.sql
+ * Paid checkout staging: supabase/migrations/20260910010000_event_rsvp_pending_answers.sql
  */
 
 export const RSVP_QUESTION_MAX_CHARS = 300
@@ -25,6 +26,8 @@ export const RSVP_ANSWER_PRIVACY_COPY =
 export const RSVP_QUESTION_TOO_LONG_MESSAGE = `RSVP question must be ${RSVP_QUESTION_MAX_CHARS} characters or fewer.`
 export const RSVP_ANSWER_TOO_LONG_MESSAGE = `Your answer must be ${RSVP_ANSWER_MAX_CHARS} characters or fewer.`
 export const RSVP_ANSWER_REQUIRED_MESSAGE = RSVP_ANSWER_REQUIRED_HELP
+export const RSVP_ANSWER_SAVE_FAILED_MESSAGE =
+  'Your RSVP answer could not be saved. Please try again before continuing to payment.'
 
 export const EVENT_RSVP_QUESTION_SELECT_FIELDS =
   'rsvp_question, rsvp_question_required' as const
@@ -87,6 +90,28 @@ export function isMissingRsvpAnswerColumnError(
     | undefined
 ): boolean {
   return isMissingColumnError(error, 'rsvp_answer')
+}
+
+export function isMissingPendingRsvpAnswerTableError(
+  error: {
+    message?: string
+    code?: string
+    details?: string
+    hint?: string
+  } | null
+    | undefined
+): boolean {
+  if (!error) return false
+  const haystack = [error.message, error.details, error.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return (
+    haystack.includes('event_rsvp_pending_answers') &&
+    (haystack.includes('does not exist') ||
+      haystack.includes('schema cache') ||
+      haystack.includes('could not find'))
+  )
 }
 
 export function withNullRsvpQuestion<T extends Record<string, unknown>>(
@@ -191,6 +216,36 @@ export function rsvpAnswerWriteFields(input: {
   return { rsvp_answer: parsedAnswer.value }
 }
 
+export type PaidCheckoutPendingAnswerPlan =
+  | { action: 'skip' }
+  | { action: 'upsert'; rsvp_answer: string }
+  | { action: 'clear' }
+
+export function paidCheckoutPendingAnswerPlan(
+  answerWrite: { rsvp_answer: string | null } | { error: string } | Record<string, never>
+): PaidCheckoutPendingAnswerPlan {
+  if (!answerWrite || 'error' in answerWrite) {
+    return { action: 'skip' }
+  }
+  if (!('rsvp_answer' in answerWrite)) {
+    return { action: 'skip' }
+  }
+  if (typeof answerWrite.rsvp_answer === 'string' && answerWrite.rsvp_answer.length > 0) {
+    return { action: 'upsert', rsvp_answer: answerWrite.rsvp_answer }
+  }
+  return { action: 'clear' }
+}
+
+export function goingPayloadWithPendingAnswer<T extends Record<string, unknown>>(
+  payload: T,
+  pendingAnswer: string | null | undefined
+): T & { rsvp_answer?: string } {
+  if (typeof pendingAnswer === 'string' && pendingAnswer.length > 0) {
+    return { ...payload, rsvp_answer: pendingAnswer }
+  }
+  return payload
+}
+
 export function canViewerReadRsvpAnswer(input: {
   viewerUserId: string
   attendeeUserId: string
@@ -207,6 +262,14 @@ export function canViewerWriteRsvpAnswer(input: {
   attendeeUserId: string
 }): boolean {
   return input.viewerUserId === input.attendeeUserId
+}
+
+/** Pending checkout answers are never host/admin visible. Own-row only. */
+export function canViewerAccessPendingRsvpAnswer(input: {
+  viewerUserId: string
+  pendingUserId: string
+}): boolean {
+  return input.viewerUserId === input.pendingUserId
 }
 
 export function omitRsvpQuestionFields<T extends Record<string, unknown>>(

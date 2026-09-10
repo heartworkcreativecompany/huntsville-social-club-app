@@ -79,15 +79,19 @@ describe('RSVP answers stay out of public and ordinary payloads', () => {
     )
     expect(emailHandler).not.toContain('rsvp_answer')
 
-    const metadata = buildEventFeeCheckoutSessionParams({
+    const params = buildEventFeeCheckoutSessionParams({
       eventId: 'event-1',
       eventTitle: 'Mixer',
       feeCents: 2500,
       userId: 'user-1',
       customerId: 'cus_1',
-    }).metadata
-    expect(metadata).not.toHaveProperty('rsvp_answer')
-    expect(JSON.stringify(metadata)).not.toContain('rsvp_answer')
+    })
+    expect(params.metadata).not.toHaveProperty('rsvp_answer')
+    expect(JSON.stringify(params)).not.toContain('rsvp_answer')
+    expect(JSON.stringify(params.line_items)).not.toContain('rsvp_answer')
+    expect(JSON.stringify(params.payment_intent_data)).not.toContain(
+      'rsvp_answer'
+    )
   })
 
   it('keeps events-list attendee reads to status counts only', () => {
@@ -112,10 +116,11 @@ describe('existing RSVP-adjacent flows stay unchanged', () => {
     expect(guestInvites).not.toContain('rsvp_answer')
   })
 
-  it('does not include rsvp_answer in the paid-event webhook Going payload', () => {
+  it('copies a pending answer onto Going only after paid webhook confirmation', () => {
     const checkout = readRepoFile('lib/stripe/event-fee-checkout.ts')
-    expect(checkout).toContain("status: 'going' as const")
-    expect(checkout).not.toContain('rsvp_answer')
+    expect(checkout).toContain('goingPayloadWithPendingAnswer')
+    expect(checkout).toContain('loadPendingRsvpAnswer')
+    expect(checkout).not.toContain('session.metadata?.rsvp_answer')
   })
 
   it('enforces required answers in both the RSVP UI and server Going path', () => {
@@ -123,5 +128,59 @@ describe('existing RSVP-adjacent flows stay unchanged', () => {
     const server = readRepoFile('app/(club)/events/rsvp-actions.ts')
     expect(ui).toContain('goingRsvpAnswerRejection')
     expect(server).toContain('goingRsvpAnswerRejection')
+  })
+})
+
+describe('pending paid-checkout answers stay off host and public surfaces', () => {
+  it('restricts pending-answer RLS to the member’s own row', () => {
+    const migration = readRepoFile(
+      'supabase/migrations/20260910010000_event_rsvp_pending_answers.sql'
+    )
+    expect(migration).toContain('enable row level security')
+    expect(migration).toContain('user_id = (select auth.uid())')
+    expect(migration).not.toContain('is_admin')
+    expect(migration).not.toContain('owner_id')
+    expect(migration).not.toContain('to anon')
+    expect(migration).toContain('to authenticated')
+    expect(migration).toContain('to service_role')
+  })
+
+  it('does not let paid checkout insert a host-visible not_going placeholder', () => {
+    const rsvpActions = readRepoFile('app/(club)/events/rsvp-actions.ts')
+    expect(rsvpActions).toContain('startPaidGoingAfterPersistingAnswer')
+    expect(rsvpActions).toContain('paidCheckoutAttendeeWrite')
+    expect(rsvpActions).toContain('persistPaidCheckoutPendingAnswer')
+    expect(rsvpActions).not.toContain("status: 'not_going',\n            payment_status: 'pending',\n            ...answerPatch")
+    expect(rsvpActions).not.toMatch(
+      /existing: false[\s\S]*status: 'not_going'/
+    )
+  })
+
+  it('builds host attendee lists, CSV, and counts from event_attendees only', () => {
+    const eventPage = readRepoFile('app/(club)/events/[id]/page.tsx')
+    expect(eventPage).toContain("from('event_attendees')")
+    expect(eventPage).toContain('exportRows: AttendeeExportRow[] = (attendeeRows ?? []).map')
+    expect(eventPage).toContain('loadPendingRsvpAnswer')
+    expect(eventPage).not.toMatch(
+      /exportRows[\s\S]*event_rsvp_pending_answers/
+    )
+    expect(eventPage).not.toMatch(
+      /goingRows[\s\S]*event_rsvp_pending_answers/
+    )
+
+    const eventsPage = readRepoFile('app/(club)/events/page.tsx')
+    expect(eventsPage).not.toContain('event_rsvp_pending_answers')
+    expect(eventsPage).not.toContain('rsvp_answer')
+  })
+
+  it('does not put pending answers in ledger, notifications, or emails', () => {
+    const rsvpActions = readRepoFile('app/(club)/events/rsvp-actions.ts')
+    expect(rsvpActions).not.toMatch(
+      /appendRegistrationLedger[\s\S]{0,400}rsvp_answer/
+    )
+
+    const notifications = readRepoFile('lib/load-member-notifications.ts')
+    expect(notifications).not.toContain('event_rsvp_pending_answers')
+    expect(notifications).not.toContain('rsvp_answer')
   })
 })

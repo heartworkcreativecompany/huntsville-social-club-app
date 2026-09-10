@@ -13,9 +13,15 @@ vi.mock('@/lib/stripe/config', () => ({
 }))
 
 const upsertState = {
-  existing: null as null | { status: string; payment_status: string | null },
+  existing: null as null | {
+    status: string
+    payment_status: string | null
+    rsvp_answer?: string | null
+  },
   goingCount: 0,
   attendanceMax: null as number | null,
+  pendingAnswer: null as string | null,
+  pendingDeletes: 0,
   updates: [] as unknown[],
   inserts: [] as unknown[],
   ledger: [] as unknown[],
@@ -24,6 +30,31 @@ const upsertState = {
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
     from: (table: string) => {
+      if (table === 'event_rsvp_pending_answers') {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: upsertState.pendingAnswer
+                    ? { rsvp_answer: upsertState.pendingAnswer }
+                    : null,
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+          delete: () => ({
+            eq: () => ({
+              eq: async () => {
+                upsertState.pendingDeletes += 1
+                upsertState.pendingAnswer = null
+                return { error: null }
+              },
+            }),
+          }),
+        }
+      }
       if (table === 'event_attendees') {
         return {
           select: (_cols: string, opts?: { count?: string; head?: boolean }) => {
@@ -185,6 +216,8 @@ describe('markEventFeePaidFromCheckout', () => {
     upsertState.existing = null
     upsertState.goingCount = 0
     upsertState.attendanceMax = null
+    upsertState.pendingAnswer = null
+    upsertState.pendingDeletes = 0
     upsertState.updates = []
     upsertState.inserts = []
     upsertState.ledger = []
@@ -214,10 +247,122 @@ describe('markEventFeePaidFromCheckout', () => {
       registration_method: 'paid_per_event',
       payment_status: 'paid',
     })
+    expect(upsertState.inserts[0]).not.toHaveProperty('rsvp_answer')
     expect(upsertState.ledger[0]).toMatchObject({
       action: 'payment_complete',
       event_id: 'evt_1',
       user_id: 'user_1',
+    })
+    expect(JSON.stringify(upsertState.ledger[0])).not.toContain('rsvp_answer')
+  })
+
+  it('attaches a previously saved pending answer on first paid confirmation', async () => {
+    upsertState.pendingAnswer = 'Driving'
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+        fee_cents: '2500',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.inserts[0]).toMatchObject({
+      status: 'going',
+      payment_status: 'paid',
+      rsvp_answer: 'Driving',
+    })
+    expect(upsertState.pendingDeletes).toBe(1)
+    expect(upsertState.pendingAnswer).toBeNull()
+  })
+
+  it('is idempotent on webhook retry and does not duplicate the attendee or answer', async () => {
+    upsertState.existing = {
+      status: 'going',
+      payment_status: 'paid',
+      rsvp_answer: 'Driving',
+    }
+    upsertState.pendingAnswer = 'Driving'
+
+    const first = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+    const second = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(first).toEqual({ ok: true })
+    expect(second).toEqual({ ok: true })
+    expect(upsertState.inserts).toHaveLength(0)
+    expect(upsertState.updates).toHaveLength(0)
+    expect(upsertState.ledger).toHaveLength(0)
+    expect(upsertState.pendingDeletes).toBe(1)
+  })
+
+  it('attaches a leftover pending answer when Going is already paid without one', async () => {
+    upsertState.existing = {
+      status: 'going',
+      payment_status: 'paid',
+      rsvp_answer: null,
+    }
+    upsertState.pendingAnswer = 'Window seat'
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_retry',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.updates).toEqual([{ rsvp_answer: 'Window seat' }])
+    expect(upsertState.inserts).toHaveLength(0)
+    expect(upsertState.pendingDeletes).toBe(1)
+  })
+
+  it('preserves a prior Maybe row by updating it to Going after payment', async () => {
+    upsertState.existing = {
+      status: 'maybe',
+      payment_status: null,
+      rsvp_answer: null,
+    }
+    upsertState.pendingAnswer = 'Driving'
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.inserts).toHaveLength(0)
+    expect(upsertState.updates[0]).toMatchObject({
+      status: 'going',
+      payment_status: 'paid',
+      rsvp_answer: 'Driving',
     })
   })
 
