@@ -8,6 +8,21 @@ import {
 import { appendRegistrationLedger } from '@/lib/membership-billing-cycles'
 import { appBaseUrl, getStripe, isStripeConfigured } from '@/lib/stripe/config'
 import { getOrCreateStripeCustomer } from '@/lib/stripe/customer'
+import {
+  deletePendingRsvpAnswer,
+  loadPendingRsvpAnswer,
+} from '@/lib/event-rsvp-pending-answer'
+import {
+  EVENT_ATTENDEE_STATUS_SELECT,
+  EVENT_ATTENDEE_STATUS_SELECT_WITH_ANSWER,
+  goingPayloadWithPendingAnswer,
+  isMissingRsvpAnswerColumnError,
+  omitRsvpAnswerField,
+  PAID_GOING_WRITE_SELECT,
+  PAID_GOING_WRITE_SELECT_WITH_ANSWER,
+  pendingRsvpAnswerMayBeDeleted,
+  resolvePendingRsvpAnswerDisposition,
+} from '@/lib/event-rsvp-question'
 
 export const EVENT_FEE_CHECKOUT_TYPE = 'event_fee'
 
@@ -127,6 +142,83 @@ export async function createEventFeeCheckoutSession(input: {
   }
 }
 
+function payloadIncludesRsvpAnswer(
+  payload: Record<string, unknown>
+): boolean {
+  return Object.prototype.hasOwnProperty.call(payload, 'rsvp_answer')
+}
+
+async function loadExistingAttendeeForPaidConfirmation(
+  admin: SupabaseClient<Database>,
+  eventId: string,
+  userId: string
+): Promise<{
+  row: {
+    status: string
+    payment_status: string | null
+    rsvp_answer?: string | null
+  } | null
+  answerColumnAvailable: boolean
+}> {
+  const withAnswer = await admin
+    .from('event_attendees')
+    .select(EVENT_ATTENDEE_STATUS_SELECT_WITH_ANSWER)
+    .eq('event_id', eventId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!withAnswer.error) {
+    return { row: withAnswer.data, answerColumnAvailable: true }
+  }
+
+  if (!isMissingRsvpAnswerColumnError(withAnswer.error)) {
+    return { row: withAnswer.data, answerColumnAvailable: true }
+  }
+
+  const fallback = await admin
+    .from('event_attendees')
+    .select(EVENT_ATTENDEE_STATUS_SELECT)
+    .eq('event_id', eventId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  return {
+    row: fallback.data
+      ? { ...fallback.data, rsvp_answer: null }
+      : null,
+    answerColumnAvailable: false,
+  }
+}
+
+function writePaidGoingAttendee(
+  admin: SupabaseClient<Database>,
+  input: {
+    hasExistingRow: boolean
+    eventId: string
+    userId: string
+    payload: Record<string, unknown>
+    includeAnswerSelect: boolean
+  }
+) {
+  if (input.hasExistingRow) {
+    const updated = admin
+      .from('event_attendees')
+      .update(input.payload as never)
+      .eq('event_id', input.eventId)
+      .eq('user_id', input.userId)
+    return input.includeAnswerSelect
+      ? updated.select(PAID_GOING_WRITE_SELECT_WITH_ANSWER)
+      : updated.select(PAID_GOING_WRITE_SELECT)
+  }
+
+  const inserted = admin
+    .from('event_attendees')
+    .insert(input.payload as never)
+  return input.includeAnswerSelect
+    ? inserted.select(PAID_GOING_WRITE_SELECT_WITH_ANSWER)
+    : inserted.select(PAID_GOING_WRITE_SELECT)
+}
+
 /**
  * Confirm Going after a successful event-fee Checkout Session.
  * Idempotent: safe if the attendee is already Going + paid.
@@ -172,12 +264,17 @@ export async function markEventFeePaidFromCheckout(session: {
         ? session.payment_intent.id
         : null
 
-  const { data: existing } = await admin
-    .from('event_attendees')
-    .select('status, payment_status')
-    .eq('event_id', eventId)
-    .eq('user_id', userId)
-    .maybeSingle()
+  const { row: existing, answerColumnAvailable } =
+    await loadExistingAttendeeForPaidConfirmation(admin, eventId, userId)
+
+  const pendingAnswer = await loadPendingRsvpAnswer(admin, {
+    eventId,
+    userId,
+  })
+  const disposition = resolvePendingRsvpAnswerDisposition({
+    existingAnswer: answerColumnAvailable ? existing?.rsvp_answer : null,
+    pendingAnswer,
+  })
 
   if (
     existing?.status === 'going' &&
@@ -185,6 +282,35 @@ export async function markEventFeePaidFromCheckout(session: {
       existing.payment_status === 'waived' ||
       existing.payment_status === 'not_required')
   ) {
+    if (!answerColumnAvailable) {
+      return { ok: true }
+    }
+    if (disposition.kind === 'transfer') {
+      const { data, error } = await admin
+        .from('event_attendees')
+        .update({ rsvp_answer: disposition.rsvp_answer })
+        .eq('event_id', eventId)
+        .eq('user_id', userId)
+        .select(PAID_GOING_WRITE_SELECT_WITH_ANSWER)
+
+      const omittedAnswerColumn = Boolean(
+        error && isMissingRsvpAnswerColumnError(error)
+      )
+      const writtenRows = data ?? []
+      if (
+        pendingRsvpAnswerMayBeDeleted({
+          disposition,
+          writtenAnswer: writtenRows[0]?.rsvp_answer,
+          omittedAnswerColumn,
+          rowsAffected: writtenRows.length,
+          writeError: error,
+        })
+      ) {
+        await deletePendingRsvpAnswer(admin, { eventId, userId })
+      }
+    } else if (disposition.kind === 'keep_existing') {
+      await deletePendingRsvpAnswer(admin, { eventId, userId })
+    }
     return { ok: true }
   }
 
@@ -211,28 +337,80 @@ export async function markEventFeePaidFromCheckout(session: {
   }
 
   const registeredAt = new Date().toISOString()
-  const payload = {
-    event_id: eventId,
-    user_id: userId,
-    status: 'going' as const,
-    registration_method: 'paid_per_event',
-    payment_status: 'paid',
-    credit_consumed: false,
-    credit_returned: false,
-    registered_at: registeredAt,
-    cancelled_at: null,
+  const payload = goingPayloadWithPendingAnswer(
+    {
+      event_id: eventId,
+      user_id: userId,
+      status: 'going' as const,
+      registration_method: 'paid_per_event',
+      payment_status: 'paid',
+      credit_consumed: false,
+      credit_returned: false,
+      registered_at: registeredAt,
+      cancelled_at: null,
+    },
+    answerColumnAvailable ? pendingAnswer : null,
+    answerColumnAvailable ? existing?.rsvp_answer : null
+  )
+
+  const writeGoing = (
+    nextPayload: typeof payload,
+    includeAnswerSelect: boolean
+  ) =>
+    writePaidGoingAttendee(admin, {
+      hasExistingRow: Boolean(existing),
+      eventId,
+      userId,
+      payload: nextPayload,
+      includeAnswerSelect,
+    })
+
+  const includeAnswerSelect =
+    answerColumnAvailable && payloadIncludesRsvpAnswer(payload)
+  let writeResult = await writeGoing(payload, includeAnswerSelect)
+  let omittedAnswerColumn = !answerColumnAvailable
+  if (
+    answerColumnAvailable &&
+    writeResult.error &&
+    isMissingRsvpAnswerColumnError(writeResult.error)
+  ) {
+    omittedAnswerColumn = true
+    writeResult = await writeGoing(omitRsvpAnswerField(payload), false)
   }
 
-  const { error: upsertError } = existing
-    ? await admin
-        .from('event_attendees')
-        .update(payload)
-        .eq('event_id', eventId)
-        .eq('user_id', userId)
-    : await admin.from('event_attendees').insert(payload)
+  if (writeResult.error) {
+    return { error: writeResult.error.message }
+  }
 
-  if (upsertError) {
-    return { error: upsertError.message }
+  const writtenRows = writeResult.data ?? []
+  const writtenUserId =
+    writtenRows[0] &&
+    typeof (writtenRows[0] as { user_id?: string }).user_id === 'string'
+      ? (writtenRows[0] as { user_id: string }).user_id
+      : null
+  if (!writtenUserId) {
+    return { error: 'Could not save event registration.' }
+  }
+
+  const writtenRow = writtenRows[0] as
+    | { rsvp_answer?: string | null }
+    | undefined
+  const writtenAnswer = answerColumnAvailable
+    ? typeof writtenRow?.rsvp_answer === 'string'
+      ? writtenRow.rsvp_answer
+      : existing?.rsvp_answer ?? null
+    : null
+
+  if (
+    pendingRsvpAnswerMayBeDeleted({
+      disposition,
+      writtenAnswer,
+      omittedAnswerColumn,
+      rowsAffected: writtenRows.length,
+      writeError: writeResult.error,
+    })
+  ) {
+    await deletePendingRsvpAnswer(admin, { eventId, userId })
   }
 
   await appendRegistrationLedger(admin, {

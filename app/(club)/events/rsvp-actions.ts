@@ -28,6 +28,21 @@ import {
 import type { MembershipPerksSnapshot } from '@/lib/event-rsvp-window'
 import { createEventFeeCheckoutSession } from '@/lib/stripe/event-fee-checkout'
 import { getViewer } from '@/lib/viewer'
+import {
+  EVENT_RSVP_QUESTION_SELECT_FIELDS,
+  goingRsvpAnswerRejection,
+  isMissingRsvpAnswerColumnError,
+  isMissingRsvpQuestionColumnError,
+  omitRsvpAnswerField,
+  paidCheckoutPendingAnswerPlan,
+  rsvpAnswerWriteFields,
+  withNullRsvpQuestion,
+} from '@/lib/event-rsvp-question'
+import { persistPaidCheckoutPendingAnswer } from '@/lib/event-rsvp-pending-answer'
+import {
+  paidCheckoutAttendeeWrite,
+  startPaidGoingAfterPersistingAnswer,
+} from '@/lib/event-rsvp-paid-checkout'
 
 export type RsvpStatus = 'going' | 'maybe' | 'not_going'
 
@@ -39,6 +54,8 @@ type EventRow = {
   title?: string | null
   fee_cents?: number | null
   attendance_max?: number | null
+  rsvp_question?: string | null
+  rsvp_question_required?: boolean | null
 }
 
 type AttendeeRow = {
@@ -98,10 +115,49 @@ function perksFromEntitlements(
   return membershipPerksSnapshotFromEntitlements(entitlements)
 }
 
+async function writeOwnAttendeeRow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  input: {
+    existing: boolean
+    eventId: string
+    userId: string
+    payload: Record<string, unknown>
+  }
+) {
+  const fields = { ...input.payload }
+  delete fields.event_id
+  delete fields.user_id
+
+  const run = (payload: Record<string, unknown>) =>
+    input.existing
+      ? supabase
+          .from('event_attendees')
+          .update(payload as never)
+          .eq('event_id', input.eventId)
+          .eq('user_id', input.userId)
+      : supabase.from('event_attendees').insert({
+          event_id: input.eventId,
+          user_id: input.userId,
+          ...payload,
+        } as never)
+
+  let { error } = await run(fields)
+  if (
+    error &&
+    isMissingRsvpAnswerColumnError(error) &&
+    'rsvp_answer' in fields
+  ) {
+    const retry = await run(omitRsvpAnswerField(fields))
+    error = retry.error
+  }
+  return error
+}
+
 export async function updateEventRsvp(input: {
   eventId: string
   status: RsvpStatus
   registrationPreference?: 'included' | 'paid'
+  rsvpAnswer?: string | null
 }) {
   const auth = await requireEntitledViewer()
   if ('error' in auth && auth.error) {
@@ -114,22 +170,56 @@ export async function updateEventRsvp(input: {
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'id, title, starts_at, status, event_type, fee_cents, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max'
+      `id, title, starts_at, status, event_type, fee_cents, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max, ${EVENT_RSVP_QUESTION_SELECT_FIELDS}`
     )
     .eq('id', input.eventId)
     .single()
 
-  if (eventError || !event) {
-    return { error: eventError?.message ?? 'Event not found.' }
+  let loadedEvent: Record<string, unknown> | null = event
+  let loadedEventError = eventError
+  if (loadedEventError && isMissingRsvpQuestionColumnError(loadedEventError)) {
+    const fallback = await supabase
+      .from('events')
+      .select(
+        'id, title, starts_at, status, event_type, fee_cents, priority_rsvp_opens_at, general_rsvp_opens_at, attendance_max'
+      )
+      .eq('id', input.eventId)
+      .single()
+    loadedEvent = (fallback.data as Record<string, unknown> | null) ?? null
+    loadedEventError = fallback.error
   }
 
-  const eventRow = event as EventRow & {
+  if (loadedEventError || !loadedEvent) {
+    return { error: loadedEventError?.message ?? 'Event not found.' }
+  }
+
+  const eventRow = withNullRsvpQuestion(loadedEvent as Record<string, unknown>) as EventRow & {
     priority_rsvp_opens_at?: string | null
     general_rsvp_opens_at?: string | null
     attendance_max?: number | null
+    rsvp_question: string | null
+    rsvp_question_required: boolean
   }
   const eventType = (eventRow.event_type ?? 'standard_event') as EventAccessType
   const isGoing = input.status === 'going'
+
+  const answerRejection = goingRsvpAnswerRejection({
+    status: input.status,
+    question: eventRow.rsvp_question,
+    required: eventRow.rsvp_question_required,
+    answer: input.rsvpAnswer,
+  })
+  if (answerRejection) {
+    return { error: answerRejection }
+  }
+
+  const answerWrite = rsvpAnswerWriteFields({
+    status: input.status,
+    answer: input.rsvpAnswer,
+  })
+  if ('error' in answerWrite) {
+    return { error: answerWrite.error }
+  }
 
   const { data: existing } = await supabase
     .from('event_attendees')
@@ -241,32 +331,47 @@ export async function updateEventRsvp(input: {
       })
     ) {
       const feeCents = eventRow.fee_cents ?? 0
-      const checkout = await createEventFeeCheckoutSession({
-        supabase,
-        eventId: input.eventId,
-        eventTitle: eventRow.title?.trim() || 'Event registration',
-        feeCents,
-        userId,
-        email: viewer.email,
+      const checkout = await startPaidGoingAfterPersistingAnswer({
+        persistPending: () =>
+          persistPaidCheckoutPendingAnswer(supabase, {
+            eventId: input.eventId,
+            userId,
+            plan: paidCheckoutPendingAnswerPlan(answerWrite),
+          }),
+        createCheckout: () =>
+          createEventFeeCheckoutSession({
+            supabase,
+            eventId: input.eventId,
+            eventTitle: eventRow.title?.trim() || 'Event registration',
+            feeCents,
+            userId,
+            email: viewer.email,
+          }),
       })
 
       if ('error' in checkout) {
         return { error: checkout.error }
       }
 
-      // Clear legacy unpaid Going placeholders so UI/capacity stay honest
-      // until checkout.session.completed confirms payment.
-      if (hasUnpaidGoingPlaceholder && existingRow) {
-        await supabase
-          .from('event_attendees')
-          .update({
+      // Legacy unpaid Going placeholders must not count as confirmed Going
+      // (capacity). Do not insert a new attendee row and do not store the
+      // RSVP answer on event_attendees until payment confirms Going.
+      const attendeeWrite = paidCheckoutAttendeeWrite({
+        hasUnpaidGoingPlaceholder,
+        hasExistingAttendeeRow: Boolean(existingRow),
+      })
+      if (attendeeWrite === 'clear_unpaid_going_placeholder' && existingRow) {
+        await writeOwnAttendeeRow(supabase, {
+          existing: true,
+          eventId: input.eventId,
+          userId,
+          payload: {
             status: 'not_going',
             payment_status: 'pending',
             registration_method: 'paid_per_event',
             cancelled_at: new Date().toISOString(),
-          })
-          .eq('event_id', input.eventId)
-          .eq('user_id', userId)
+          },
+        })
       }
 
       await appendRegistrationLedger(supabase, {
@@ -424,15 +529,22 @@ export async function updateEventRsvp(input: {
       credit_returned: false,
       registered_at: new Date().toISOString(),
       cancelled_at: null,
+      ...answerWrite,
     }
 
-    const { error } = existingRow
-      ? await supabase
-          .from('event_attendees')
-          .update(payload)
-          .eq('event_id', input.eventId)
-          .eq('user_id', userId)
-      : await supabase.from('event_attendees').insert(payload)
+    const error = existingRow
+      ? await writeOwnAttendeeRow(supabase, {
+          existing: true,
+          eventId: input.eventId,
+          userId,
+          payload,
+        })
+      : await writeOwnAttendeeRow(supabase, {
+          existing: false,
+          eventId: input.eventId,
+          userId,
+          payload,
+        })
 
     if (error) {
       if (creditConsumed && entitlementCycleId) {
@@ -527,19 +639,15 @@ export async function updateEventRsvp(input: {
     existingRow?.guest_invite_consumed
       ? { guest_name: null, guest_invite_consumed: false }
       : {}),
+    ...answerWrite,
   }
 
-  const { error } = existingRow
-    ? await supabase
-        .from('event_attendees')
-        .update(simplePayload)
-        .eq('event_id', input.eventId)
-        .eq('user_id', userId)
-    : await supabase.from('event_attendees').insert({
-        event_id: input.eventId,
-        user_id: userId,
-        ...simplePayload,
-      })
+  const error = await writeOwnAttendeeRow(supabase, {
+    existing: Boolean(existingRow),
+    eventId: input.eventId,
+    userId,
+    payload: simplePayload,
+  })
 
   if (error) {
     return { error: error.message }

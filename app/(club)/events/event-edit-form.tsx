@@ -16,6 +16,7 @@ import { updateEvent } from '@/app/(club)/events/actions'
 import { createSponsorForAdmin } from '@/app/(club)/events/sponsor-actions'
 import { uploadEventCoverImage } from '@/lib/event-image-storage'
 import type { SponsorOption } from '@/lib/event-sponsors'
+import EventRsvpQuestionFields from '@/components/events/event-rsvp-question-fields'
 
 type EventEditFormProps = {
   eventId: string
@@ -31,6 +32,8 @@ type EventEditFormProps = {
   initialGeneralRsvpOpensAt?: string | null
   initialAttendanceMax?: number | null
   initialCoverImageUrl?: string | null
+  initialRsvpQuestion?: string | null
+  initialRsvpQuestionRequired?: boolean | null
   initialSponsorIds?: string[]
   availableSponsors?: SponsorOption[]
   /** Admins can edit type, status, fee, RSVP windows, and sponsors. */
@@ -51,6 +54,8 @@ export default function EventEditForm({
   initialGeneralRsvpOpensAt = null,
   initialAttendanceMax = null,
   initialCoverImageUrl = null,
+  initialRsvpQuestion = null,
+  initialRsvpQuestionRequired = false,
   initialSponsorIds = [],
   availableSponsors: initialAvailableSponsors = [],
   isAdminEditor = false,
@@ -80,6 +85,10 @@ export default function EventEditForm({
     initialCoverImageUrl ? 'Current cover image' : ''
   )
   const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [rsvpQuestion, setRsvpQuestion] = useState(initialRsvpQuestion ?? '')
+  const [rsvpQuestionRequired, setRsvpQuestionRequired] = useState(
+    Boolean(initialRsvpQuestion?.trim()) && Boolean(initialRsvpQuestionRequired)
+  )
   const [availableSponsors, setAvailableSponsors] = useState<SponsorOption[]>(
     initialAvailableSponsors
   )
@@ -123,6 +132,8 @@ export default function EventEditForm({
         endsAt,
         attendanceMax,
         coverImageUrl,
+        rsvpQuestion,
+        rsvpQuestionRequired,
         ...(isAdminEditor
           ? {
               eventType,
@@ -245,6 +256,14 @@ export default function EventEditForm({
             Optional. Leave blank for unlimited attendance.
           </p>
         </div>
+
+        <EventRsvpQuestionFields
+          question={rsvpQuestion}
+          required={rsvpQuestionRequired}
+          disabled={isPending || isUploadingImage}
+          onQuestionChange={setRsvpQuestion}
+          onRequiredChange={setRsvpQuestionRequired}
+        />
 
         {isAdminEditor ? (
           <>

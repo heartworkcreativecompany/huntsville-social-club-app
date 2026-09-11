@@ -832,6 +832,8 @@ export interface Database {
           general_rsvp_opens_at: string | null
           attendance_max: number | null
           cover_image_url: string | null
+          rsvp_question: string | null
+          rsvp_question_required: boolean
           created_at: string
           updated_at: string
         }
@@ -852,6 +854,8 @@ export interface Database {
           general_rsvp_opens_at?: string | null
           attendance_max?: number | null
           cover_image_url?: string | null
+          rsvp_question?: string | null
+          rsvp_question_required?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -872,6 +876,8 @@ export interface Database {
           general_rsvp_opens_at?: string | null
           attendance_max?: number | null
           cover_image_url?: string | null
+          rsvp_question?: string | null
+          rsvp_question_required?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1088,6 +1094,7 @@ export interface Database {
           credit_returned: boolean
           guest_name: string | null
           guest_invite_consumed: boolean
+          rsvp_answer: string | null
         }
         Insert: {
           event_id: string
@@ -1104,6 +1111,7 @@ export interface Database {
           credit_returned?: boolean
           guest_name?: string | null
           guest_invite_consumed?: boolean
+          rsvp_answer?: string | null
         }
         Update: {
           event_id?: string
@@ -1120,6 +1128,31 @@ export interface Database {
           credit_returned?: boolean
           guest_name?: string | null
           guest_invite_consumed?: boolean
+          rsvp_answer?: string | null
+        }
+        Relationships: []
+      }
+      event_rsvp_pending_answers: {
+        Row: {
+          event_id: string
+          user_id: string
+          rsvp_answer: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          event_id: string
+          user_id: string
+          rsvp_answer: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          event_id?: string
+          user_id?: string
+          rsvp_answer?: string
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1244,8 +1277,14 @@ export interface Database {
         Relationships: []
       }
     }
-    Functions: {}
-    Enums: {}
-    CompositeTypes: {}
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }

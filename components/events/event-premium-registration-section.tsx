@@ -27,6 +27,9 @@ type EventPremiumRegistrationSectionProps = {
   guestInviteConsumed: boolean
   isElite: boolean
   initialPerks: MembershipPerksSnapshot
+  rsvpQuestion?: string | null
+  rsvpQuestionRequired?: boolean
+  initialRsvpAnswer?: string | null
 }
 
 export default function EventPremiumRegistrationSection({
@@ -42,37 +45,71 @@ export default function EventPremiumRegistrationSection({
   guestInviteConsumed,
   isElite,
   initialPerks,
+  rsvpQuestion = null,
+  rsvpQuestionRequired = false,
+  initialRsvpAnswer = null,
 }: EventPremiumRegistrationSectionProps) {
   const [isGoing, setIsGoing] = useState(currentStatus === 'going')
+  const [prevCurrentStatus, setPrevCurrentStatus] = useState(currentStatus)
   const [localGuestName, setLocalGuestName] = useState(guestName)
   const [localGuestConsumed, setLocalGuestConsumed] = useState(
     guestInviteConsumed
   )
+  const [prevGuestName, setPrevGuestName] = useState(guestName)
+  const [prevGuestConsumed, setPrevGuestConsumed] = useState(guestInviteConsumed)
 
-  // Seed once from server; later updates come from RSVP/guest store mutations.
-  // Hydrate merges use min(credits) so stale RSC refresh cannot restore spent credits.
-  useEffect(() => {
-    hydrateMemberPerksFromServer(initialPerks)
-  }, [
-    initialPerks.productTier,
-    initialPerks.hasPaidMembership,
-    initialPerks.premiumCreditsRemaining,
-    initialPerks.circleSocialCreditsRemaining,
-    initialPerks.creditsGranted,
-    initialPerks.circleSocialCreditsGranted,
-    initialPerks.guestInvitesRemaining,
-    initialPerks.periodStart,
-    initialPerks.periodEnd,
-  ])
-
-  useEffect(() => {
+  if (currentStatus !== prevCurrentStatus) {
+    setPrevCurrentStatus(currentStatus)
     setIsGoing(currentStatus === 'going')
-  }, [currentStatus])
+  }
 
-  useEffect(() => {
+  if (
+    guestName !== prevGuestName ||
+    guestInviteConsumed !== prevGuestConsumed
+  ) {
+    setPrevGuestName(guestName)
+    setPrevGuestConsumed(guestInviteConsumed)
     setLocalGuestName(guestName)
     setLocalGuestConsumed(guestInviteConsumed)
-  }, [guestName, guestInviteConsumed])
+  }
+
+  const {
+    productTier,
+    hasPaidMembership,
+    premiumCreditsRemaining,
+    creditsGranted,
+    circleSocialCreditsRemaining,
+    circleSocialCreditsGranted,
+    guestInvitesRemaining,
+    periodStart,
+    periodEnd,
+  } = initialPerks
+
+  // Seed from server; later updates come from RSVP/guest store mutations.
+  // Hydrate merges use min(credits) so stale RSC refresh cannot restore spent credits.
+  useEffect(() => {
+    hydrateMemberPerksFromServer({
+      productTier,
+      hasPaidMembership,
+      premiumCreditsRemaining,
+      creditsGranted,
+      circleSocialCreditsRemaining,
+      circleSocialCreditsGranted,
+      guestInvitesRemaining,
+      periodStart,
+      periodEnd,
+    })
+  }, [
+    productTier,
+    hasPaidMembership,
+    premiumCreditsRemaining,
+    creditsGranted,
+    circleSocialCreditsRemaining,
+    circleSocialCreditsGranted,
+    guestInvitesRemaining,
+    periodStart,
+    periodEnd,
+  ])
 
   const livePerks = useMemberPerks()
   const perks = livePerks ?? initialPerks
@@ -89,6 +126,9 @@ export default function EventPremiumRegistrationSection({
         atCapacityMessage={atCapacityMessage}
         feeCents={feeCents}
         premiumLayout
+        rsvpQuestion={rsvpQuestion}
+        rsvpQuestionRequired={rsvpQuestionRequired}
+        initialRsvpAnswer={initialRsvpAnswer}
         onRsvpSuccess={(result) => {
           if (result.status) {
             setIsGoing(result.status === 'going')

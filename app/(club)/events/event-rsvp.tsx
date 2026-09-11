@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -11,6 +11,7 @@ import {
   buttonDisabledMutedClassName,
   buttonPrimaryClassName,
   buttonSecondaryClassName,
+  textareaClassName,
 } from '@/lib/event-labels'
 import {
   resolveGoingButtonClassName,
@@ -26,6 +27,14 @@ import {
 import { formatFeeCents } from '@/lib/membership-tier-config'
 import type { EventRegistrationDecision } from '@/lib/membership-tier-config'
 import { FEATURE_GATE_COPY } from '@/lib/membership-pricing-copy'
+import {
+  RSVP_ANSWER_MAX_CHARS,
+  RSVP_ANSWER_OPTIONAL_LABEL,
+  RSVP_ANSWER_PRIVACY_COPY,
+  RSVP_ANSWER_REQUIRED_HELP,
+  goingRsvpAnswerRejection,
+  isRsvpQuestionConfigured,
+} from '@/lib/event-rsvp-question'
 
 export type RsvpSuccessPayload = {
   status?: RsvpStatus
@@ -44,6 +53,11 @@ type EventRsvpProps = {
   feeCents?: number | null
   /** Compact premium bubble: grey RSVP card with fee/credit body copy. */
   premiumLayout?: boolean
+  /** Host-configured RSVP question shown immediately before Going. */
+  rsvpQuestion?: string | null
+  rsvpQuestionRequired?: boolean
+  /** This member's previously saved answer, if any. */
+  initialRsvpAnswer?: string | null
   /** Called after a successful RSVP so Membership Perks can update credits. */
   onRsvpSuccess?: (result: RsvpSuccessPayload) => void
 }
@@ -63,6 +77,9 @@ export default function EventRsvp({
   atCapacityMessage = null,
   feeCents = null,
   premiumLayout = false,
+  rsvpQuestion = null,
+  rsvpQuestionRequired = false,
+  initialRsvpAnswer = null,
   onRsvpSuccess,
 }: EventRsvpProps) {
   const router = useRouter()
@@ -71,10 +88,13 @@ export default function EventRsvp({
   const [localStatus, setLocalStatus] = useState<string | null | undefined>(
     currentStatus
   )
+  const [prevCurrentStatus, setPrevCurrentStatus] = useState(currentStatus)
+  const [rsvpAnswer, setRsvpAnswer] = useState(initialRsvpAnswer ?? '')
 
-  useEffect(() => {
+  if (currentStatus !== prevCurrentStatus) {
+    setPrevCurrentStatus(currentStatus)
     setLocalStatus(currentStatus)
-  }, [currentStatus])
+  }
 
   const status = eventStatus ?? 'published'
 
@@ -86,16 +106,35 @@ export default function EventRsvp({
     )
   }
 
+  const questionConfigured = isRsvpQuestionConfigured(rsvpQuestion)
+  const questionRequired = questionConfigured && Boolean(rsvpQuestionRequired)
+  const answerFieldId = `event-rsvp-answer-${eventId}`
+  const answerHelpId = `${answerFieldId}-help`
+  const answerPrivacyId = `${answerFieldId}-privacy`
+
   const submitRsvp = (
     rsvpStatus: RsvpStatus,
     registrationPreference?: 'included' | 'paid'
   ) => {
     setMessage('')
+    if (rsvpStatus === 'going') {
+      const rejection = goingRsvpAnswerRejection({
+        status: 'going',
+        question: rsvpQuestion,
+        required: rsvpQuestionRequired,
+        answer: rsvpAnswer,
+      })
+      if (rejection) {
+        setMessage(rejection)
+        return
+      }
+    }
     startTransition(async () => {
       const result = await updateEventRsvp({
         eventId,
         status: rsvpStatus,
         registrationPreference,
+        rsvpAnswer,
       })
 
       if (result.error) {
@@ -214,6 +253,47 @@ export default function EventRsvp({
     preview && !preview.allowed && preview.code === 'priority_window'
 
   const isRegisteredGoing = localStatus === 'going'
+
+  const questionField = questionConfigured ? (
+    <div className="mb-4">
+      <label
+        htmlFor={answerFieldId}
+        className="block text-sm font-medium text-foreground"
+      >
+        {rsvpQuestion?.trim()}
+        {!questionRequired ? (
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            {RSVP_ANSWER_OPTIONAL_LABEL}
+          </span>
+        ) : null}
+      </label>
+      {questionRequired ? (
+        <p id={answerHelpId} className="mt-1 text-xs text-muted-foreground">
+          {RSVP_ANSWER_REQUIRED_HELP}
+        </p>
+      ) : (
+        <p id={answerHelpId} className="sr-only">
+          {RSVP_ANSWER_OPTIONAL_LABEL}
+        </p>
+      )}
+      <textarea
+        id={answerFieldId}
+        value={rsvpAnswer}
+        onChange={(event) => setRsvpAnswer(event.target.value)}
+        maxLength={RSVP_ANSWER_MAX_CHARS}
+        required={questionRequired}
+        aria-required={questionRequired}
+        aria-describedby={`${answerHelpId} ${answerPrivacyId}`}
+        className={`${textareaClassName} mt-2 min-h-[5.5rem]`}
+      />
+      <p
+        id={answerPrivacyId}
+        className="mt-2 text-xs leading-relaxed text-muted-foreground"
+      >
+        {RSVP_ANSWER_PRIVACY_COPY}
+      </p>
+    </div>
+  ) : null
 
   const buttons = (
     <div className="flex flex-wrap gap-2">
@@ -388,6 +468,7 @@ export default function EventRsvp({
           </p>
         ) : null}
         <div className="mt-4">{notices}</div>
+        <div className="mt-4">{questionField}</div>
         <div className="mt-4">{buttons}</div>
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
           {PREMIUM_RSVP_NO_REFUND_COPY}
@@ -416,6 +497,7 @@ export default function EventRsvp({
             ? 'Your RSVP'
             : 'RSVP to this event'}
       </p>
+      {questionField}
       {buttons}
       {message ? (
         <p className="mt-2 text-sm text-muted-foreground" role="alert">

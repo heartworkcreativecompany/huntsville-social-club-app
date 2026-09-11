@@ -24,6 +24,13 @@ import {
   isMissingCoverImageColumnError,
   withNullCoverImage,
 } from '@/lib/event-cover-image-column'
+import {
+  EVENT_RSVP_QUESTION_SELECT_FIELDS,
+  isMissingRsvpAnswerColumnError,
+  isMissingRsvpQuestionColumnError,
+  withNullRsvpQuestion,
+} from '@/lib/event-rsvp-question'
+import { loadPendingRsvpAnswer } from '@/lib/event-rsvp-pending-answer'
 import { isEventPast, memberGoingLabel, availabilityLabel } from '@/lib/event-display'
 import {
   EVENT_AT_CAPACITY_MESSAGE,
@@ -97,9 +104,23 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   let { data: event, error: eventError } = await supabase
     .from('events')
-    .select(EVENT_DETAIL_SELECT_FIELDS_WITH_COVER)
+    .select(
+      `${EVENT_DETAIL_SELECT_FIELDS_WITH_COVER}, ${EVENT_RSVP_QUESTION_SELECT_FIELDS}`
+    )
     .eq('id', id)
     .single()
+
+  if (eventError && isMissingRsvpQuestionColumnError(eventError)) {
+    const withoutQuestion = await supabase
+      .from('events')
+      .select(EVENT_DETAIL_SELECT_FIELDS_WITH_COVER)
+      .eq('id', id)
+      .single()
+    event = withoutQuestion.data
+      ? withNullRsvpQuestion(withNullCoverImage(withoutQuestion.data))
+      : withoutQuestion.data
+    eventError = withoutQuestion.error
+  }
 
   if (eventError && isMissingCoverImageColumnError(eventError)) {
     const fallback = await supabase
@@ -107,8 +128,12 @@ export default async function EventDetailPage({ params }: PageProps) {
       .select(EVENT_DETAIL_SELECT_FIELDS_BASE)
       .eq('id', id)
       .single()
-    event = fallback.data ? withNullCoverImage(fallback.data) : null
+    event = fallback.data
+      ? withNullRsvpQuestion(withNullCoverImage(fallback.data))
+      : null
     eventError = fallback.error
+  } else if (event) {
+    event = withNullRsvpQuestion(withNullCoverImage(event))
   }
 
   if (eventError || !event) {
@@ -134,13 +159,33 @@ export default async function EventDetailPage({ params }: PageProps) {
   const userRole = viewer.role
   const canExportAttendees =
     user.id === event.owner_id || userRole === 'admin'
+  const canManageEvent = user.id === event.owner_id || userRole === 'admin'
 
-  const { data: attendeeRows } = await supabase
+  const attendeeSelectWithAnswer =
+    'event_id, user_id, status, payment_status, created_at, guest_name, guest_invite_consumed, rsvp_answer'
+  const attendeeSelectBase =
+    'event_id, user_id, status, payment_status, created_at, guest_name, guest_invite_consumed'
+
+  const firstAttendeeQuery = await supabase
     .from('event_attendees')
-    .select(
-      'event_id, user_id, status, payment_status, created_at, guest_name, guest_invite_consumed'
-    )
+    .select(attendeeSelectWithAnswer)
     .eq('event_id', event.id)
+
+  let attendeeRows = firstAttendeeQuery.data
+
+  if (
+    firstAttendeeQuery.error &&
+    isMissingRsvpAnswerColumnError(firstAttendeeQuery.error)
+  ) {
+    const fallbackAttendees = await supabase
+      .from('event_attendees')
+      .select(attendeeSelectBase)
+      .eq('event_id', event.id)
+    attendeeRows = (fallbackAttendees.data ?? []).map((row) => ({
+      ...row,
+      rsvp_answer: null,
+    }))
+  }
 
   const attendeeUserIds = [
     ...new Set((attendeeRows ?? []).map((row) => row.user_id)),
@@ -165,6 +210,17 @@ export default async function EventDetailPage({ params }: PageProps) {
   const currentGuestName = currentUserAttendee?.guest_name ?? null
   const currentGuestInviteConsumed =
     currentUserAttendee?.guest_invite_consumed === true
+  const savedUserRsvpAnswer =
+    typeof currentUserAttendee?.rsvp_answer === 'string'
+      ? currentUserAttendee.rsvp_answer
+      : null
+  const pendingUserRsvpAnswer = savedUserRsvpAnswer
+    ? null
+    : await loadPendingRsvpAnswer(supabase, {
+        eventId: event.id,
+        userId: user.id,
+      })
+  const currentUserRsvpAnswer = savedUserRsvpAnswer ?? pendingUserRsvpAnswer
 
   const isMine = event.owner_id === user.id
   const eventType = (event.event_type ?? 'standard_event') as EventAccessType
@@ -276,6 +332,8 @@ export default async function EventDetailPage({ params }: PageProps) {
     ? await loadProfileAccountEmails(attendeeUserIds)
     : new Map<string, string | null>()
 
+  const configuredRsvpQuestion = event.rsvp_question?.trim() ?? ''
+
   const exportRows: AttendeeExportRow[] = (attendeeRows ?? []).map((row) => {
     const profile = attendeeProfilesById[row.user_id]
     return {
@@ -284,19 +342,16 @@ export default async function EventDetailPage({ params }: PageProps) {
       attendeeName: profile?.full_name ?? '',
       attendeeEmail: attendeeAccountEmails.get(row.user_id) ?? '',
       rsvpStatus: row.status.replace('_', ' '),
+      rsvpAnswer: canExportAttendees
+        ? (row.rsvp_answer ?? '').trim()
+        : '',
       respondedAt: row.created_at
         ? new Date(row.created_at).toLocaleString()
         : '',
     }
   })
 
-  function AttendeeList({
-    title,
-    rows,
-  }: {
-    title: string
-    rows: typeof goingRows
-  }) {
+  function renderAttendeeList(title: string, rows: typeof goingRows) {
     return (
       <div>
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
@@ -315,6 +370,13 @@ export default async function EventDetailPage({ params }: PageProps) {
                     {' '}
                     (+ guest: {row.guest_name})
                   </span>
+                ) : null}
+                {configuredRsvpQuestion ? (
+                  <p className="mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground">
+                    {row.rsvp_answer?.trim()
+                      ? row.rsvp_answer.trim()
+                      : 'No answer'}
+                  </p>
                 ) : null}
               </li>
             ))}
@@ -414,6 +476,9 @@ export default async function EventDetailPage({ params }: PageProps) {
               guestInviteConsumed={currentGuestInviteConsumed}
               isElite={entitlements?.productTier === 'elite_circle'}
               initialPerks={membershipPerksSnapshot}
+              rsvpQuestion={event.rsvp_question}
+              rsvpQuestionRequired={event.rsvp_question_required}
+              initialRsvpAnswer={currentUserRsvpAnswer}
             />
           ) : (
             <EventRsvp
@@ -425,6 +490,9 @@ export default async function EventDetailPage({ params }: PageProps) {
               atCapacityMessage={atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null}
               feeCents={event.fee_cents}
               premiumLayout
+              rsvpQuestion={event.rsvp_question}
+              rsvpQuestionRequired={event.rsvp_question_required}
+              initialRsvpAnswer={currentUserRsvpAnswer}
             />
           )}
           {sponsorshipEligible ? (
@@ -479,6 +547,9 @@ export default async function EventDetailPage({ params }: PageProps) {
                     atCapacity ? EVENT_AT_CAPACITY_MESSAGE : null
                   }
                   feeCents={event.fee_cents}
+                  rsvpQuestion={event.rsvp_question}
+                  rsvpQuestionRequired={event.rsvp_question_required}
+                  initialRsvpAnswer={currentUserRsvpAnswer}
                 />
                 <EventGuestInviteControls
                   eventId={event.id}
@@ -521,7 +592,7 @@ export default async function EventDetailPage({ params }: PageProps) {
         </section>
       ) : null}
 
-      {isMine ? (
+      {canExportAttendees ? (
         <section className="mb-8">
           <div className="mb-2 flex flex-wrap items-center gap-3">
             <h2 className="text-display text-xl font-medium text-foreground">
@@ -539,15 +610,15 @@ export default async function EventDetailPage({ params }: PageProps) {
             />
           ) : (
             <Card className="grid gap-6 sm:grid-cols-3">
-              <AttendeeList title="Going" rows={goingRows} />
-              <AttendeeList title="Maybe" rows={maybeRows} />
-              <AttendeeList title="Not going" rows={notGoingRows} />
+              {renderAttendeeList('Going', goingRows)}
+              {renderAttendeeList('Maybe', maybeRows)}
+              {renderAttendeeList('Not going', notGoingRows)}
             </Card>
           )}
         </section>
       ) : null}
 
-      {isMine ? (
+      {canManageEvent ? (
         <section>
           <h2 className="text-display mb-4 text-xl font-medium text-foreground">
             Edit event
@@ -567,6 +638,8 @@ export default async function EventDetailPage({ params }: PageProps) {
               initialGeneralRsvpOpensAt={event.general_rsvp_opens_at}
               initialAttendanceMax={event.attendance_max}
               initialCoverImageUrl={event.cover_image_url}
+              initialRsvpQuestion={event.rsvp_question}
+              initialRsvpQuestionRequired={event.rsvp_question_required}
               initialSponsorIds={eventSponsors.map((sponsor) => sponsor.id)}
               availableSponsors={availableSponsors}
               isAdminEditor={userRole === 'admin'}
