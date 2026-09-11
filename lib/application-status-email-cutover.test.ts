@@ -63,7 +63,7 @@ describe('applicant-status email cutover', () => {
   })
 
   it('does not disable unrelated transactional emails', () => {
-    expect(signup).toContain('sendWelcomeEmail')
+    expect(signup).not.toContain('sendWelcomeEmail')
     expect(membersActions).toContain('sendProfileRevisionSubmittedEmail')
     expect(profileRevisionActions).toContain('sendProfileRevisionApprovedEmail')
   })

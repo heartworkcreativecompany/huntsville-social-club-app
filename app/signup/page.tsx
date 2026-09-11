@@ -18,7 +18,6 @@ import {
 import { authCallbackUrl } from '@/lib/site'
 import { safeUpgradeReturnPath, loginHrefForReturnPath } from '@/lib/membership-plan-links'
 import { trackEvent } from '@/lib/analytics'
-import { sendWelcomeEmail } from '@/lib/transactional-email'
 import {
   buttonPrimaryClassName,
   inputClassName,
@@ -86,7 +85,6 @@ function SignUpForm() {
     }
 
     trackEvent('auth_account_created')
-    void sendWelcomeEmail(trimmedEmail)
     setSuccess(true)
     setIsPending(false)
   }
