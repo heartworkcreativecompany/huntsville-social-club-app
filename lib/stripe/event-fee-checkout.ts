@@ -152,7 +152,14 @@ async function loadExistingAttendeeForPaidConfirmation(
   admin: SupabaseClient<Database>,
   eventId: string,
   userId: string
-) {
+): Promise<{
+  row: {
+    status: string
+    payment_status: string | null
+    rsvp_answer?: string | null
+  } | null
+  answerColumnAvailable: boolean
+}> {
   const withAnswer = await admin
     .from('event_attendees')
     .select(EVENT_ATTENDEE_STATUS_SELECT_WITH_ANSWER)
@@ -161,11 +168,11 @@ async function loadExistingAttendeeForPaidConfirmation(
     .maybeSingle()
 
   if (!withAnswer.error) {
-    return withAnswer.data
+    return { row: withAnswer.data, answerColumnAvailable: true }
   }
 
   if (!isMissingRsvpAnswerColumnError(withAnswer.error)) {
-    return withAnswer.data
+    return { row: withAnswer.data, answerColumnAvailable: true }
   }
 
   const fallback = await admin
@@ -175,8 +182,12 @@ async function loadExistingAttendeeForPaidConfirmation(
     .eq('user_id', userId)
     .maybeSingle()
 
-  if (!fallback.data) return null
-  return { ...fallback.data, rsvp_answer: null }
+  return {
+    row: fallback.data
+      ? { ...fallback.data, rsvp_answer: null }
+      : null,
+    answerColumnAvailable: false,
+  }
 }
 
 function writePaidGoingAttendee(
@@ -253,18 +264,15 @@ export async function markEventFeePaidFromCheckout(session: {
         ? session.payment_intent.id
         : null
 
-  const existing = await loadExistingAttendeeForPaidConfirmation(
-    admin,
-    eventId,
-    userId
-  )
+  const { row: existing, answerColumnAvailable } =
+    await loadExistingAttendeeForPaidConfirmation(admin, eventId, userId)
 
   const pendingAnswer = await loadPendingRsvpAnswer(admin, {
     eventId,
     userId,
   })
   const disposition = resolvePendingRsvpAnswerDisposition({
-    existingAnswer: existing?.rsvp_answer,
+    existingAnswer: answerColumnAvailable ? existing?.rsvp_answer : null,
     pendingAnswer,
   })
 
@@ -274,6 +282,9 @@ export async function markEventFeePaidFromCheckout(session: {
       existing.payment_status === 'waived' ||
       existing.payment_status === 'not_required')
   ) {
+    if (!answerColumnAvailable) {
+      return { ok: true }
+    }
     if (disposition.kind === 'transfer') {
       const { data, error } = await admin
         .from('event_attendees')
@@ -338,8 +349,8 @@ export async function markEventFeePaidFromCheckout(session: {
       registered_at: registeredAt,
       cancelled_at: null,
     },
-    pendingAnswer,
-    existing?.rsvp_answer
+    answerColumnAvailable ? pendingAnswer : null,
+    answerColumnAvailable ? existing?.rsvp_answer : null
   )
 
   const writeGoing = (
@@ -354,10 +365,15 @@ export async function markEventFeePaidFromCheckout(session: {
       includeAnswerSelect,
     })
 
-  const includeAnswerSelect = payloadIncludesRsvpAnswer(payload)
+  const includeAnswerSelect =
+    answerColumnAvailable && payloadIncludesRsvpAnswer(payload)
   let writeResult = await writeGoing(payload, includeAnswerSelect)
-  let omittedAnswerColumn = false
-  if (writeResult.error && isMissingRsvpAnswerColumnError(writeResult.error)) {
+  let omittedAnswerColumn = !answerColumnAvailable
+  if (
+    answerColumnAvailable &&
+    writeResult.error &&
+    isMissingRsvpAnswerColumnError(writeResult.error)
+  ) {
     omittedAnswerColumn = true
     writeResult = await writeGoing(omitRsvpAnswerField(payload), false)
   }
@@ -367,17 +383,23 @@ export async function markEventFeePaidFromCheckout(session: {
   }
 
   const writtenRows = writeResult.data ?? []
-  if (writtenRows.length < 1) {
+  const writtenUserId =
+    writtenRows[0] &&
+    typeof (writtenRows[0] as { user_id?: string }).user_id === 'string'
+      ? (writtenRows[0] as { user_id: string }).user_id
+      : null
+  if (!writtenUserId) {
     return { error: 'Could not save event registration.' }
   }
 
   const writtenRow = writtenRows[0] as
     | { rsvp_answer?: string | null }
     | undefined
-  const writtenAnswer =
-    typeof writtenRow?.rsvp_answer === 'string'
+  const writtenAnswer = answerColumnAvailable
+    ? typeof writtenRow?.rsvp_answer === 'string'
       ? writtenRow.rsvp_answer
       : existing?.rsvp_answer ?? null
+    : null
 
   if (
     pendingRsvpAnswerMayBeDeleted({

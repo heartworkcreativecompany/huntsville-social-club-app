@@ -24,6 +24,7 @@ const upsertState = {
   pendingDeletes: 0,
   writeError: null as { message: string } | null,
   missingAnswerColumn: false,
+  missingAnswerColumnOnWrite: false,
   zeroRows: false,
   updates: [] as unknown[],
   inserts: [] as unknown[],
@@ -35,7 +36,7 @@ const upsertState = {
 
 function attendeeWriteResult(payload: Record<string, unknown>, cols: string) {
   if (
-    upsertState.missingAnswerColumn &&
+    (upsertState.missingAnswerColumn || upsertState.missingAnswerColumnOnWrite) &&
     (Object.prototype.hasOwnProperty.call(payload, 'rsvp_answer') ||
       cols.includes('rsvp_answer'))
   ) {
@@ -283,6 +284,7 @@ describe('markEventFeePaidFromCheckout', () => {
     upsertState.pendingDeletes = 0
     upsertState.writeError = null
     upsertState.missingAnswerColumn = false
+    upsertState.missingAnswerColumnOnWrite = false
     upsertState.zeroRows = false
     upsertState.writeSelects = []
     upsertState.successfulWrites = 0
@@ -530,9 +532,9 @@ describe('markEventFeePaidFromCheckout', () => {
     expect(upsertState.ledger).toHaveLength(0)
   })
 
-  it('keeps pending when a missing-column fallback omits rsvp_answer', async () => {
+  it('retries a missing-column Going write without selecting rsvp_answer', async () => {
     upsertState.pendingAnswer = 'Driving'
-    upsertState.missingAnswerColumn = true
+    upsertState.missingAnswerColumnOnWrite = true
 
     const result = await markEventFeePaidFromCheckout({
       id: 'cs_test',
@@ -555,6 +557,41 @@ describe('markEventFeePaidFromCheckout', () => {
     expect(upsertState.writeSelects[0]).toContain('rsvp_answer')
     expect(upsertState.writeSelects[1]).toBe('user_id')
     expect(upsertState.writeSelects[1]).not.toContain('rsvp_answer')
+    expect(upsertState.successfulWrites).toBe(1)
+    expect(upsertState.pendingDeletes).toBe(0)
+    expect(upsertState.pendingAnswer).toBe('Driving')
+  })
+
+  it('keeps pending when a missing-column lookup fallback omits rsvp_answer', async () => {
+    upsertState.pendingAnswer = 'Driving'
+    upsertState.missingAnswerColumn = true
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.attendeeSelects[0]).toBe(
+      'status, payment_status, rsvp_answer'
+    )
+    expect(
+      [...upsertState.attendeeSelects.slice(1), ...upsertState.writeSelects].some(
+        (cols) => cols.includes('rsvp_answer')
+      )
+    ).toBe(false)
+    expect(upsertState.inserts).toHaveLength(1)
+    expect(upsertState.inserts[0]).not.toHaveProperty('rsvp_answer')
+    expect(upsertState.inserts[0]).toMatchObject({
+      status: 'going',
+      payment_status: 'paid',
+    })
+    expect(upsertState.writeSelects).toEqual(['user_id'])
     expect(upsertState.successfulWrites).toBe(1)
     expect(upsertState.pendingDeletes).toBe(0)
     expect(upsertState.pendingAnswer).toBe('Driving')
@@ -590,6 +627,37 @@ describe('markEventFeePaidFromCheckout', () => {
     expect(upsertState.writeSelects).toEqual(['user_id'])
     expect(upsertState.pendingDeletes).toBe(0)
     expect(upsertState.pendingAnswer).toBeNull()
+  })
+
+  it('does not query rsvp_answer after the attendee lookup fallback', async () => {
+    upsertState.existing = {
+      status: 'going',
+      payment_status: 'paid',
+      rsvp_answer: null,
+    }
+    upsertState.pendingAnswer = 'Driving'
+    upsertState.missingAnswerColumn = true
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_retry',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.attendeeSelects[0]).toContain('rsvp_answer')
+    expect(
+      upsertState.attendeeSelects.slice(1).some((cols) => cols.includes('rsvp_answer'))
+    ).toBe(false)
+    expect(upsertState.writeSelects).toEqual([])
+    expect(upsertState.updates).toHaveLength(0)
+    expect(upsertState.inserts).toHaveLength(0)
+    expect(upsertState.pendingDeletes).toBe(0)
+    expect(upsertState.pendingAnswer).toBe('Driving')
   })
 
   it('keeps pending when the attendee update matches zero rows', async () => {
