@@ -108,7 +108,7 @@ Prefer migrations + `db push` over one-off dashboard edits once this workflow is
 ## 9. Commands to avoid unless you mean it
 
 - `npx supabase db reset` — resets **local** dev database; destructive for local data.
-- `npx supabase migration repair` — fixes migration history; only use when you understand drift.
+- `npx supabase migration repair` — fixes migration history; only use when you understand drift. See §14 before using it for `application_email_log`.
 - Do not run `db push` until you have reviewed migration files.
 
 ## 10. Commit to Git
@@ -161,3 +161,19 @@ npx supabase db push
 For **local** `supabase start`, the same bucket is declared in `supabase/config.toml` under `[storage.buckets.application-photos]`.
 
 If uploads fail with a bucket or permissions error, confirm `.env.local` points at the same project you migrated, then re-run `db push`.
+
+## 14. Out-of-order `application_email_log` history (do not apply from this section)
+
+Production `public.application_email_log` was created outside Git using live column names (`resend_email_id`, `error_message`, `provider_event`). The historical file `supabase/migrations/20260828032531_create_application_email_log.sql` still expects the unused names `provider_email_id`, `error_text`, and `provider_metadata`. Because it uses `CREATE TABLE IF NOT EXISTS`, a `db push` skips table creation and then fails on `COMMENT ON COLUMN … provider_email_id`.
+
+**Do not edit that historical file in place.** Do not re-run it against Production.
+
+Forward-only reconciliation lives in:
+
+```text
+supabase/migrations/20260910020000_reconcile_application_email_log.sql
+```
+
+That file preserves the live table and rows, adds missing FKs/checks/indexes/RLS/grants/comments against the live names, and includes `queued` in `delivery_status`. It does not rewrite email-log data and does not alter `profiles`.
+
+Marking `20260828032531` as applied in remote history (`npx supabase migration repair … --status applied`) is a **separate, explicitly approved** step. This documentation does not perform that step. After that approval, remaining pending migrations can be pushed with `npx supabase db push --include-all` and verified with `npx supabase migration list`.
