@@ -5,8 +5,9 @@
  * - Hosted Supabase (staging/prod): confirmation is controlled in the Dashboard
  *   (Authentication → Providers → Email). Confirmation emails are sent by
  *   **Supabase Auth** (built-in mailer or custom SMTP) — not by Resend.
- * - Resend (RESEND_API_KEY) is only for app transactional mail (welcome, approvals, etc.)
- *   and does not deliver the Auth confirmation link.
+ * - Resend (RESEND_API_KEY) is only for app transactional mail (application-status,
+ *   profile, messaging, etc.) and does not deliver the Auth confirmation link.
+ *   Signup does not send a separate branded welcome email.
  */
 
 export function isAuthEmailConfirmationRequired(): boolean {
@@ -27,11 +28,4 @@ export const ACCOUNT_CREATED_CONFIRMATION_BODY =
 
 export function accountCreatedSuccessMessage(): string {
   return ACCOUNT_CREATED_CONFIRMATION_BODY
-}
-
-export function welcomeEmailConfirmationParagraph(): string {
-  if (!isAuthEmailConfirmationRequired()) {
-    return '<p>In this environment you can usually sign in right away. If your Supabase project requires email confirmation, use the confirmation link Supabase sends (or Resend confirmation on the sign-in page).</p>'
-  }
-  return '<p>Confirm your email using the link Supabase Auth sent (separate from this welcome note), then sign in to start your membership application.</p>'
 }

@@ -1,9 +1,5 @@
 'use server'
 
-import {
-  isAuthEmailConfirmationRequired,
-  welcomeEmailConfirmationParagraph,
-} from '@/lib/auth-email'
 import { BRAND_ASSETS } from '@/lib/brand-assets'
 import { appOrigin, SUPPORT_EMAIL } from '@/lib/site'
 
@@ -75,25 +71,6 @@ function emailShell(title: string, body: string, cta?: { label: string; href: st
   const text = `${title}\n\n${body.replace(/<[^>]+>/g, '')}${cta ? `\n\n${cta.label}: ${cta.href}` : ''}\n\nQuestions: ${SUPPORT_EMAIL}`
 
   return { html, text }
-}
-
-export async function sendWelcomeEmail(to: string) {
-  const origin = appOrigin()
-  const { html, text } = emailShell(
-    'Welcome to Huntsville Social Club',
-    `${welcomeEmailConfirmationParagraph()}
-     <p>We review every application thoughtfully — save progress anytime and submit when you are ready.</p>`,
-    { label: 'Sign in', href: `${origin}/login` }
-  )
-
-  return sendEmail({
-    to,
-    subject: isAuthEmailConfirmationRequired()
-      ? 'Welcome — confirm your email'
-      : 'Welcome to Huntsville Social Club',
-    html,
-    text,
-  })
 }
 
 export async function sendApplicationSubmittedEmail(to: string) {
