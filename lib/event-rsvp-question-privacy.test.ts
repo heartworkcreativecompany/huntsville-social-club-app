@@ -116,9 +116,10 @@ describe('existing RSVP-adjacent flows stay unchanged', () => {
     expect(guestInvites).not.toContain('rsvp_answer')
   })
 
-  it('copies a pending answer onto Going only after paid webhook confirmation', () => {
+  it('copies a pending answer onto Going only after confirmed paid webhook transfer', () => {
     const checkout = readRepoFile('lib/stripe/event-fee-checkout.ts')
-    expect(checkout).toContain('goingPayloadWithPendingAnswer')
+    expect(checkout).toContain('resolvePendingRsvpAnswerDisposition')
+    expect(checkout).toContain('pendingRsvpAnswerMayBeDeleted')
     expect(checkout).toContain('loadPendingRsvpAnswer')
     expect(checkout).not.toContain('session.metadata?.rsvp_answer')
   })

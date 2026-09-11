@@ -16,6 +16,8 @@ import {
   goingPayloadWithPendingAnswer,
   isMissingRsvpAnswerColumnError,
   omitRsvpAnswerField,
+  pendingRsvpAnswerMayBeDeleted,
+  resolvePendingRsvpAnswerDisposition,
 } from '@/lib/event-rsvp-question'
 
 export const EVENT_FEE_CHECKOUT_TYPE = 'event_fee'
@@ -192,6 +194,10 @@ export async function markEventFeePaidFromCheckout(session: {
     eventId,
     userId,
   })
+  const disposition = resolvePendingRsvpAnswerDisposition({
+    existingAnswer: existing?.rsvp_answer,
+    pendingAnswer,
+  })
 
   if (
     existing?.status === 'going' &&
@@ -199,16 +205,30 @@ export async function markEventFeePaidFromCheckout(session: {
       existing.payment_status === 'waived' ||
       existing.payment_status === 'not_required')
   ) {
-    const existingAnswer =
-      typeof existing.rsvp_answer === 'string' ? existing.rsvp_answer.trim() : ''
-    if (pendingAnswer && !existingAnswer) {
-      await admin
+    if (disposition.kind === 'transfer') {
+      const { data, error } = await admin
         .from('event_attendees')
-        .update({ rsvp_answer: pendingAnswer })
+        .update({ rsvp_answer: disposition.rsvp_answer })
         .eq('event_id', eventId)
         .eq('user_id', userId)
-    }
-    if (pendingAnswer) {
+        .select('rsvp_answer')
+
+      const omittedAnswerColumn = Boolean(
+        error && isMissingRsvpAnswerColumnError(error)
+      )
+      const writtenRows = data ?? []
+      if (
+        pendingRsvpAnswerMayBeDeleted({
+          disposition,
+          writtenAnswer: writtenRows[0]?.rsvp_answer,
+          omittedAnswerColumn,
+          rowsAffected: writtenRows.length,
+          writeError: error,
+        })
+      ) {
+        await deletePendingRsvpAnswer(admin, { eventId, userId })
+      }
+    } else if (disposition.kind === 'keep_existing') {
       await deletePendingRsvpAnswer(admin, { eventId, userId })
     }
     return { ok: true }
@@ -249,7 +269,8 @@ export async function markEventFeePaidFromCheckout(session: {
       registered_at: registeredAt,
       cancelled_at: null,
     },
-    pendingAnswer
+    pendingAnswer,
+    existing?.rsvp_answer
   )
 
   const writeGoing = (nextPayload: typeof payload) =>
@@ -259,23 +280,43 @@ export async function markEventFeePaidFromCheckout(session: {
           .update(nextPayload)
           .eq('event_id', eventId)
           .eq('user_id', userId)
-      : admin.from('event_attendees').insert(nextPayload)
+          .select('rsvp_answer')
+      : admin.from('event_attendees').insert(nextPayload).select('rsvp_answer')
 
-  let { error: upsertError } = await writeGoing(payload)
+  let writeResult = await writeGoing(payload)
+  let omittedAnswerColumn = false
   if (
-    upsertError &&
-    isMissingRsvpAnswerColumnError(upsertError) &&
+    writeResult.error &&
+    isMissingRsvpAnswerColumnError(writeResult.error) &&
     'rsvp_answer' in payload
   ) {
-    const retry = await writeGoing(omitRsvpAnswerField(payload))
-    upsertError = retry.error
+    omittedAnswerColumn = true
+    writeResult = await writeGoing(omitRsvpAnswerField(payload))
   }
 
-  if (upsertError) {
-    return { error: upsertError.message }
+  if (writeResult.error) {
+    return { error: writeResult.error.message }
   }
 
-  if (pendingAnswer) {
+  const writtenRows = writeResult.data ?? []
+  if (writtenRows.length < 1) {
+    return { error: 'Could not save event registration.' }
+  }
+
+  const writtenAnswer =
+    typeof writtenRows[0]?.rsvp_answer === 'string'
+      ? writtenRows[0].rsvp_answer
+      : existing?.rsvp_answer ?? null
+
+  if (
+    pendingRsvpAnswerMayBeDeleted({
+      disposition,
+      writtenAnswer,
+      omittedAnswerColumn,
+      rowsAffected: writtenRows.length,
+      writeError: writeResult.error,
+    })
+  ) {
     await deletePendingRsvpAnswer(admin, { eventId, userId })
   }
 

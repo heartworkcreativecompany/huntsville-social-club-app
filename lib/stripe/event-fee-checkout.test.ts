@@ -22,9 +22,40 @@ const upsertState = {
   attendanceMax: null as number | null,
   pendingAnswer: null as string | null,
   pendingDeletes: 0,
+  writeError: null as { message: string } | null,
+  missingAnswerColumn: false,
+  zeroRows: false,
   updates: [] as unknown[],
   inserts: [] as unknown[],
   ledger: [] as unknown[],
+}
+
+function attendeeWriteResult(payload: Record<string, unknown>) {
+  if (
+    upsertState.missingAnswerColumn &&
+    Object.prototype.hasOwnProperty.call(payload, 'rsvp_answer')
+  ) {
+    return {
+      error: {
+        message: 'column rsvp_answer does not exist',
+        code: '42703',
+      },
+      data: null,
+    }
+  }
+  if (upsertState.writeError) {
+    return { error: upsertState.writeError, data: null }
+  }
+  if (upsertState.zeroRows) {
+    return { error: null, data: [] as { rsvp_answer: string | null }[] }
+  }
+  const rsvp_answer = Object.prototype.hasOwnProperty.call(payload, 'rsvp_answer')
+    ? (payload.rsvp_answer as string | null | undefined) ?? null
+    : upsertState.existing?.rsvp_answer ?? null
+  return {
+    error: null,
+    data: [{ rsvp_answer }],
+  }
 }
 
 vi.mock('@/lib/supabase/admin', () => ({
@@ -76,18 +107,22 @@ vi.mock('@/lib/supabase/admin', () => ({
               }),
             }
           },
-          update: (payload: unknown) => ({
+          update: (payload: Record<string, unknown>) => ({
             eq: () => ({
-              eq: async () => {
-                upsertState.updates.push(payload)
-                return { error: null }
-              },
+              eq: () => ({
+                select: async () => {
+                  upsertState.updates.push(payload)
+                  return attendeeWriteResult(payload)
+                },
+              }),
             }),
           }),
-          insert: async (payload: unknown) => {
-            upsertState.inserts.push(payload)
-            return { error: null }
-          },
+          insert: (payload: Record<string, unknown>) => ({
+            select: async () => {
+              upsertState.inserts.push(payload)
+              return attendeeWriteResult(payload)
+            },
+          }),
         }
       }
       if (table === 'events') {
@@ -218,6 +253,9 @@ describe('markEventFeePaidFromCheckout', () => {
     upsertState.attendanceMax = null
     upsertState.pendingAnswer = null
     upsertState.pendingDeletes = 0
+    upsertState.writeError = null
+    upsertState.missingAnswerColumn = false
+    upsertState.zeroRows = false
     upsertState.updates = []
     upsertState.inserts = []
     upsertState.ledger = []
@@ -383,6 +421,150 @@ describe('markEventFeePaidFromCheckout', () => {
     expect(upsertState.inserts).toHaveLength(0)
     expect(upsertState.updates).toHaveLength(0)
     expect(upsertState.ledger).toHaveLength(0)
+  })
+
+  it('does not overwrite a nonblank attendee answer during paid confirmation', async () => {
+    upsertState.existing = {
+      status: 'maybe',
+      payment_status: null,
+      rsvp_answer: 'Train',
+    }
+    upsertState.pendingAnswer = 'Driving'
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.inserts).toHaveLength(0)
+    expect(upsertState.updates[0]).toMatchObject({
+      status: 'going',
+      payment_status: 'paid',
+    })
+    expect(upsertState.updates[0]).not.toHaveProperty('rsvp_answer')
+    expect(upsertState.pendingDeletes).toBe(1)
+    expect(upsertState.pendingAnswer).toBeNull()
+  })
+
+  it('does not overwrite a nonblank answer on the already-paid retry path', async () => {
+    upsertState.existing = {
+      status: 'going',
+      payment_status: 'paid',
+      rsvp_answer: 'Train',
+    }
+    upsertState.pendingAnswer = 'Driving'
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_retry',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.updates).toHaveLength(0)
+    expect(upsertState.inserts).toHaveLength(0)
+    expect(upsertState.pendingDeletes).toBe(1)
+  })
+
+  it('keeps pending when the Going answer write fails', async () => {
+    upsertState.pendingAnswer = 'Driving'
+    upsertState.writeError = { message: 'write failed' }
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ error: 'write failed' })
+    expect(upsertState.pendingDeletes).toBe(0)
+    expect(upsertState.pendingAnswer).toBe('Driving')
+    expect(upsertState.ledger).toHaveLength(0)
+  })
+
+  it('keeps pending when a missing-column fallback omits rsvp_answer', async () => {
+    upsertState.pendingAnswer = 'Driving'
+    upsertState.missingAnswerColumn = true
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.inserts).toHaveLength(2)
+    expect(upsertState.inserts[0]).toMatchObject({ rsvp_answer: 'Driving' })
+    expect(upsertState.inserts[1]).not.toHaveProperty('rsvp_answer')
+    expect(upsertState.pendingDeletes).toBe(0)
+    expect(upsertState.pendingAnswer).toBe('Driving')
+  })
+
+  it('keeps pending when the attendee update matches zero rows', async () => {
+    upsertState.existing = {
+      status: 'maybe',
+      payment_status: null,
+      rsvp_answer: null,
+    }
+    upsertState.pendingAnswer = 'Driving'
+    upsertState.zeroRows = true
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ error: 'Could not save event registration.' })
+    expect(upsertState.pendingDeletes).toBe(0)
+    expect(upsertState.pendingAnswer).toBe('Driving')
+    expect(upsertState.ledger).toHaveLength(0)
+  })
+
+  it('keeps pending when already-paid attach fails to write the answer', async () => {
+    upsertState.existing = {
+      status: 'going',
+      payment_status: 'paid',
+      rsvp_answer: null,
+    }
+    upsertState.pendingAnswer = 'Driving'
+    upsertState.writeError = { message: 'write failed' }
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_retry',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.pendingDeletes).toBe(0)
+    expect(upsertState.pendingAnswer).toBe('Driving')
   })
 
   it('rejects unpaid sessions', async () => {

@@ -11,7 +11,10 @@ import {
   isRsvpQuestionConfigured,
   normalizeEventRsvpAnswer,
   normalizeEventRsvpQuestionConfig,
+  pendingRsvpAnswerMayBeDeleted,
+  resolvePendingRsvpAnswerDisposition,
   rsvpAnswerWriteFields,
+  goingPayloadWithPendingAnswer,
   withNullRsvpQuestion,
 } from '@/lib/event-rsvp-question'
 
@@ -280,6 +283,84 @@ describe('RSVP answer authorization', () => {
       canViewerAccessPendingRsvpAnswer({
         viewerUserId: 'admin-1',
         pendingUserId: member,
+      })
+    ).toBe(false)
+  })
+})
+
+describe('pending RSVP answer disposition', () => {
+  it('lets an existing nonblank attendee answer win', () => {
+    expect(
+      resolvePendingRsvpAnswerDisposition({
+        existingAnswer: 'Train',
+        pendingAnswer: 'Driving',
+      })
+    ).toEqual({ kind: 'keep_existing' })
+    expect(
+      goingPayloadWithPendingAnswer(
+        { status: 'going' },
+        'Driving',
+        'Train'
+      )
+    ).toEqual({ status: 'going' })
+    expect(
+      pendingRsvpAnswerMayBeDeleted({
+        disposition: { kind: 'keep_existing' },
+      })
+    ).toBe(true)
+  })
+
+  it('transfers a nonblank pending answer onto an empty attendee answer', () => {
+    expect(
+      resolvePendingRsvpAnswerDisposition({
+        existingAnswer: '   ',
+        pendingAnswer: 'Driving',
+      })
+    ).toEqual({ kind: 'transfer', rsvp_answer: 'Driving' })
+    expect(
+      goingPayloadWithPendingAnswer({ status: 'going' }, 'Driving', null)
+    ).toEqual({ status: 'going', rsvp_answer: 'Driving' })
+  })
+
+  it('deletes pending only after a confirmed transfer or existing nonblank answer', () => {
+    const transfer = {
+      kind: 'transfer' as const,
+      rsvp_answer: 'Driving',
+    }
+    expect(
+      pendingRsvpAnswerMayBeDeleted({
+        disposition: transfer,
+        writtenAnswer: 'Driving',
+        rowsAffected: 1,
+      })
+    ).toBe(true)
+    expect(
+      pendingRsvpAnswerMayBeDeleted({
+        disposition: transfer,
+        writeError: { message: 'write failed' },
+        rowsAffected: 0,
+      })
+    ).toBe(false)
+    expect(
+      pendingRsvpAnswerMayBeDeleted({
+        disposition: transfer,
+        omittedAnswerColumn: true,
+        writtenAnswer: null,
+        rowsAffected: 1,
+      })
+    ).toBe(false)
+    expect(
+      pendingRsvpAnswerMayBeDeleted({
+        disposition: transfer,
+        writtenAnswer: 'Driving',
+        rowsAffected: 0,
+      })
+    ).toBe(false)
+    expect(
+      pendingRsvpAnswerMayBeDeleted({
+        disposition: { kind: 'none' },
+        writtenAnswer: 'Driving',
+        rowsAffected: 1,
       })
     ).toBe(false)
   })

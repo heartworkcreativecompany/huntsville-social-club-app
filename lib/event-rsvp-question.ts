@@ -236,12 +236,65 @@ export function paidCheckoutPendingAnswerPlan(
   return { action: 'clear' }
 }
 
+export function isNonblankRsvpAnswer(
+  value: string | null | undefined
+): boolean {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+export type PendingRsvpAnswerDisposition =
+  | { kind: 'none' }
+  | { kind: 'keep_existing' }
+  | { kind: 'transfer'; rsvp_answer: string }
+
+/**
+ * Existing nonblank attendee answers win. Otherwise a nonblank pending
+ * answer may be transferred. Deletion is decided separately after a
+ * confirmed durable write or confirmed existing answer.
+ */
+export function resolvePendingRsvpAnswerDisposition(input: {
+  existingAnswer?: string | null
+  pendingAnswer?: string | null
+}): PendingRsvpAnswerDisposition {
+  if (!isNonblankRsvpAnswer(input.pendingAnswer)) {
+    return { kind: 'none' }
+  }
+  if (isNonblankRsvpAnswer(input.existingAnswer)) {
+    return { kind: 'keep_existing' }
+  }
+  return { kind: 'transfer', rsvp_answer: input.pendingAnswer as string }
+}
+
+export function pendingRsvpAnswerMayBeDeleted(input: {
+  disposition: PendingRsvpAnswerDisposition
+  writtenAnswer?: string | null
+  omittedAnswerColumn?: boolean
+  rowsAffected?: number
+  writeError?: unknown
+}): boolean {
+  if (input.disposition.kind === 'none') return false
+  if (input.disposition.kind === 'keep_existing') return true
+  if (input.writeError) return false
+  if (input.omittedAnswerColumn) return false
+  if ((input.rowsAffected ?? 0) < 1) return false
+  return (
+    isNonblankRsvpAnswer(input.writtenAnswer) &&
+    (input.writtenAnswer as string).trim() ===
+      input.disposition.rsvp_answer.trim()
+  )
+}
+
 export function goingPayloadWithPendingAnswer<T extends Record<string, unknown>>(
   payload: T,
-  pendingAnswer: string | null | undefined
+  pendingAnswer: string | null | undefined,
+  existingAnswer?: string | null
 ): T & { rsvp_answer?: string } {
-  if (typeof pendingAnswer === 'string' && pendingAnswer.length > 0) {
-    return { ...payload, rsvp_answer: pendingAnswer }
+  const disposition = resolvePendingRsvpAnswerDisposition({
+    existingAnswer,
+    pendingAnswer,
+  })
+  if (disposition.kind === 'transfer') {
+    return { ...payload, rsvp_answer: disposition.rsvp_answer }
   }
   return payload
 }
