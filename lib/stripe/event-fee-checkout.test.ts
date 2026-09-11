@@ -28,12 +28,16 @@ const upsertState = {
   updates: [] as unknown[],
   inserts: [] as unknown[],
   ledger: [] as unknown[],
+  writeSelects: [] as string[],
+  successfulWrites: 0,
+  attendeeSelects: [] as string[],
 }
 
-function attendeeWriteResult(payload: Record<string, unknown>) {
+function attendeeWriteResult(payload: Record<string, unknown>, cols: string) {
   if (
     upsertState.missingAnswerColumn &&
-    Object.prototype.hasOwnProperty.call(payload, 'rsvp_answer')
+    (Object.prototype.hasOwnProperty.call(payload, 'rsvp_answer') ||
+      cols.includes('rsvp_answer'))
   ) {
     return {
       error: {
@@ -47,14 +51,17 @@ function attendeeWriteResult(payload: Record<string, unknown>) {
     return { error: upsertState.writeError, data: null }
   }
   if (upsertState.zeroRows) {
-    return { error: null, data: [] as { rsvp_answer: string | null }[] }
+    return { error: null, data: [] as { user_id?: string; rsvp_answer?: string | null }[] }
   }
   const rsvp_answer = Object.prototype.hasOwnProperty.call(payload, 'rsvp_answer')
     ? (payload.rsvp_answer as string | null | undefined) ?? null
     : upsertState.existing?.rsvp_answer ?? null
+  upsertState.successfulWrites += 1
   return {
     error: null,
-    data: [{ rsvp_answer }],
+    data: cols.includes('rsvp_answer')
+      ? [{ user_id: 'user_1', rsvp_answer }]
+      : [{ user_id: 'user_1' }],
   }
 }
 
@@ -88,13 +95,32 @@ vi.mock('@/lib/supabase/admin', () => ({
       }
       if (table === 'event_attendees') {
         return {
-          select: (_cols: string, opts?: { count?: string; head?: boolean }) => {
+          select: (cols: string, opts?: { count?: string; head?: boolean }) => {
+            upsertState.attendeeSelects.push(cols)
             if (opts?.head) {
               return {
                 eq: () => ({
                   eq: async () => ({
                     count: upsertState.goingCount,
                     error: null,
+                  }),
+                }),
+              }
+            }
+            if (
+              upsertState.missingAnswerColumn &&
+              cols.includes('rsvp_answer')
+            ) {
+              return {
+                eq: () => ({
+                  eq: () => ({
+                    maybeSingle: async () => ({
+                      data: null,
+                      error: {
+                        message: 'column rsvp_answer does not exist',
+                        code: '42703',
+                      },
+                    }),
                   }),
                 }),
               }
@@ -110,17 +136,19 @@ vi.mock('@/lib/supabase/admin', () => ({
           update: (payload: Record<string, unknown>) => ({
             eq: () => ({
               eq: () => ({
-                select: async () => {
+                select: async (cols: string) => {
                   upsertState.updates.push(payload)
-                  return attendeeWriteResult(payload)
+                  upsertState.writeSelects.push(cols)
+                  return attendeeWriteResult(payload, cols)
                 },
               }),
             }),
           }),
           insert: (payload: Record<string, unknown>) => ({
-            select: async () => {
+            select: async (cols: string) => {
               upsertState.inserts.push(payload)
-              return attendeeWriteResult(payload)
+              upsertState.writeSelects.push(cols)
+              return attendeeWriteResult(payload, cols)
             },
           }),
         }
@@ -256,6 +284,9 @@ describe('markEventFeePaidFromCheckout', () => {
     upsertState.writeError = null
     upsertState.missingAnswerColumn = false
     upsertState.zeroRows = false
+    upsertState.writeSelects = []
+    upsertState.successfulWrites = 0
+    upsertState.attendeeSelects = []
     upsertState.updates = []
     upsertState.inserts = []
     upsertState.ledger = []
@@ -286,6 +317,9 @@ describe('markEventFeePaidFromCheckout', () => {
       payment_status: 'paid',
     })
     expect(upsertState.inserts[0]).not.toHaveProperty('rsvp_answer')
+    expect(upsertState.writeSelects.every((cols) => !cols.includes('rsvp_answer'))).toBe(
+      true
+    )
     expect(upsertState.ledger[0]).toMatchObject({
       action: 'payment_complete',
       event_id: 'evt_1',
@@ -514,8 +548,48 @@ describe('markEventFeePaidFromCheckout', () => {
     expect(upsertState.inserts).toHaveLength(2)
     expect(upsertState.inserts[0]).toMatchObject({ rsvp_answer: 'Driving' })
     expect(upsertState.inserts[1]).not.toHaveProperty('rsvp_answer')
+    expect(upsertState.inserts[1]).toMatchObject({
+      status: 'going',
+      payment_status: 'paid',
+    })
+    expect(upsertState.writeSelects[0]).toContain('rsvp_answer')
+    expect(upsertState.writeSelects[1]).toBe('user_id')
+    expect(upsertState.writeSelects[1]).not.toContain('rsvp_answer')
+    expect(upsertState.successfulWrites).toBe(1)
     expect(upsertState.pendingDeletes).toBe(0)
     expect(upsertState.pendingAnswer).toBe('Driving')
+    expect(upsertState.ledger).toHaveLength(1)
+  })
+
+  it('marks no-question paid Going on old schema without referencing rsvp_answer', async () => {
+    upsertState.missingAnswerColumn = true
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(upsertState.successfulWrites).toBe(1)
+    expect(upsertState.inserts).toHaveLength(1)
+    expect(upsertState.inserts[0]).not.toHaveProperty('rsvp_answer')
+    expect(upsertState.inserts[0]).toMatchObject({
+      status: 'going',
+      payment_status: 'paid',
+    })
+    expect(
+      [...upsertState.attendeeSelects, ...upsertState.writeSelects].filter(
+        (cols) => cols.includes('rsvp_answer')
+      )
+    ).toEqual(['status, payment_status, rsvp_answer'])
+    expect(upsertState.writeSelects).toEqual(['user_id'])
+    expect(upsertState.pendingDeletes).toBe(0)
+    expect(upsertState.pendingAnswer).toBeNull()
   })
 
   it('keeps pending when the attendee update matches zero rows', async () => {

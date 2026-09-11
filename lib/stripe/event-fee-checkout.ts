@@ -13,9 +13,13 @@ import {
   loadPendingRsvpAnswer,
 } from '@/lib/event-rsvp-pending-answer'
 import {
+  EVENT_ATTENDEE_STATUS_SELECT,
+  EVENT_ATTENDEE_STATUS_SELECT_WITH_ANSWER,
   goingPayloadWithPendingAnswer,
   isMissingRsvpAnswerColumnError,
   omitRsvpAnswerField,
+  PAID_GOING_WRITE_SELECT,
+  PAID_GOING_WRITE_SELECT_WITH_ANSWER,
   pendingRsvpAnswerMayBeDeleted,
   resolvePendingRsvpAnswerDisposition,
 } from '@/lib/event-rsvp-question'
@@ -138,6 +142,72 @@ export async function createEventFeeCheckoutSession(input: {
   }
 }
 
+function payloadIncludesRsvpAnswer(
+  payload: Record<string, unknown>
+): boolean {
+  return Object.prototype.hasOwnProperty.call(payload, 'rsvp_answer')
+}
+
+async function loadExistingAttendeeForPaidConfirmation(
+  admin: SupabaseClient<Database>,
+  eventId: string,
+  userId: string
+) {
+  const withAnswer = await admin
+    .from('event_attendees')
+    .select(EVENT_ATTENDEE_STATUS_SELECT_WITH_ANSWER)
+    .eq('event_id', eventId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!withAnswer.error) {
+    return withAnswer.data
+  }
+
+  if (!isMissingRsvpAnswerColumnError(withAnswer.error)) {
+    return withAnswer.data
+  }
+
+  const fallback = await admin
+    .from('event_attendees')
+    .select(EVENT_ATTENDEE_STATUS_SELECT)
+    .eq('event_id', eventId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!fallback.data) return null
+  return { ...fallback.data, rsvp_answer: null }
+}
+
+function writePaidGoingAttendee(
+  admin: SupabaseClient<Database>,
+  input: {
+    hasExistingRow: boolean
+    eventId: string
+    userId: string
+    payload: Record<string, unknown>
+    includeAnswerSelect: boolean
+  }
+) {
+  if (input.hasExistingRow) {
+    const updated = admin
+      .from('event_attendees')
+      .update(input.payload as never)
+      .eq('event_id', input.eventId)
+      .eq('user_id', input.userId)
+    return input.includeAnswerSelect
+      ? updated.select(PAID_GOING_WRITE_SELECT_WITH_ANSWER)
+      : updated.select(PAID_GOING_WRITE_SELECT)
+  }
+
+  const inserted = admin
+    .from('event_attendees')
+    .insert(input.payload as never)
+  return input.includeAnswerSelect
+    ? inserted.select(PAID_GOING_WRITE_SELECT_WITH_ANSWER)
+    : inserted.select(PAID_GOING_WRITE_SELECT)
+}
+
 /**
  * Confirm Going after a successful event-fee Checkout Session.
  * Idempotent: safe if the attendee is already Going + paid.
@@ -183,12 +253,11 @@ export async function markEventFeePaidFromCheckout(session: {
         ? session.payment_intent.id
         : null
 
-  const { data: existing } = await admin
-    .from('event_attendees')
-    .select('status, payment_status, rsvp_answer')
-    .eq('event_id', eventId)
-    .eq('user_id', userId)
-    .maybeSingle()
+  const existing = await loadExistingAttendeeForPaidConfirmation(
+    admin,
+    eventId,
+    userId
+  )
 
   const pendingAnswer = await loadPendingRsvpAnswer(admin, {
     eventId,
@@ -211,7 +280,7 @@ export async function markEventFeePaidFromCheckout(session: {
         .update({ rsvp_answer: disposition.rsvp_answer })
         .eq('event_id', eventId)
         .eq('user_id', userId)
-        .select('rsvp_answer')
+        .select(PAID_GOING_WRITE_SELECT_WITH_ANSWER)
 
       const omittedAnswerColumn = Boolean(
         error && isMissingRsvpAnswerColumnError(error)
@@ -273,25 +342,24 @@ export async function markEventFeePaidFromCheckout(session: {
     existing?.rsvp_answer
   )
 
-  const writeGoing = (nextPayload: typeof payload) =>
-    existing
-      ? admin
-          .from('event_attendees')
-          .update(nextPayload)
-          .eq('event_id', eventId)
-          .eq('user_id', userId)
-          .select('rsvp_answer')
-      : admin.from('event_attendees').insert(nextPayload).select('rsvp_answer')
+  const writeGoing = (
+    nextPayload: typeof payload,
+    includeAnswerSelect: boolean
+  ) =>
+    writePaidGoingAttendee(admin, {
+      hasExistingRow: Boolean(existing),
+      eventId,
+      userId,
+      payload: nextPayload,
+      includeAnswerSelect,
+    })
 
-  let writeResult = await writeGoing(payload)
+  const includeAnswerSelect = payloadIncludesRsvpAnswer(payload)
+  let writeResult = await writeGoing(payload, includeAnswerSelect)
   let omittedAnswerColumn = false
-  if (
-    writeResult.error &&
-    isMissingRsvpAnswerColumnError(writeResult.error) &&
-    'rsvp_answer' in payload
-  ) {
+  if (writeResult.error && isMissingRsvpAnswerColumnError(writeResult.error)) {
     omittedAnswerColumn = true
-    writeResult = await writeGoing(omitRsvpAnswerField(payload))
+    writeResult = await writeGoing(omitRsvpAnswerField(payload), false)
   }
 
   if (writeResult.error) {
@@ -303,9 +371,12 @@ export async function markEventFeePaidFromCheckout(session: {
     return { error: 'Could not save event registration.' }
   }
 
+  const writtenRow = writtenRows[0] as
+    | { rsvp_answer?: string | null }
+    | undefined
   const writtenAnswer =
-    typeof writtenRows[0]?.rsvp_answer === 'string'
-      ? writtenRows[0].rsvp_answer
+    typeof writtenRow?.rsvp_answer === 'string'
+      ? writtenRow.rsvp_answer
       : existing?.rsvp_answer ?? null
 
   if (

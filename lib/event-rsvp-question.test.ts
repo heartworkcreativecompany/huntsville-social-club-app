@@ -11,6 +11,9 @@ import {
   isRsvpQuestionConfigured,
   normalizeEventRsvpAnswer,
   normalizeEventRsvpQuestionConfig,
+  paidGoingAttendeeSelectFields,
+  PAID_GOING_WRITE_SELECT,
+  PAID_GOING_WRITE_SELECT_WITH_ANSWER,
   pendingRsvpAnswerMayBeDeleted,
   resolvePendingRsvpAnswerDisposition,
   rsvpAnswerWriteFields,
@@ -363,6 +366,14 @@ describe('pending RSVP answer disposition', () => {
         rowsAffected: 1,
       })
     ).toBe(false)
+  })
+
+  it('selects rsvp_answer only when the confirmation path needs it', () => {
+    expect(paidGoingAttendeeSelectFields(false)).toBe(PAID_GOING_WRITE_SELECT)
+    expect(paidGoingAttendeeSelectFields(false)).not.toContain('rsvp_answer')
+    expect(paidGoingAttendeeSelectFields(true)).toBe(
+      PAID_GOING_WRITE_SELECT_WITH_ANSWER
+    )
   })
 })
 

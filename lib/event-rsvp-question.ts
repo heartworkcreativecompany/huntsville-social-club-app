@@ -92,6 +92,19 @@ export function isMissingRsvpAnswerColumnError(
   return isMissingColumnError(error, 'rsvp_answer')
 }
 
+export const EVENT_ATTENDEE_STATUS_SELECT = 'status, payment_status' as const
+export const EVENT_ATTENDEE_STATUS_SELECT_WITH_ANSWER =
+  'status, payment_status, rsvp_answer' as const
+export const PAID_GOING_WRITE_SELECT = 'user_id' as const
+export const PAID_GOING_WRITE_SELECT_WITH_ANSWER =
+  'user_id, rsvp_answer' as const
+
+export function paidGoingAttendeeSelectFields(includeAnswer: boolean) {
+  return includeAnswer
+    ? PAID_GOING_WRITE_SELECT_WITH_ANSWER
+    : PAID_GOING_WRITE_SELECT
+}
+
 export function isMissingPendingRsvpAnswerTableError(
   error: {
     message?: string
