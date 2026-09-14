@@ -118,11 +118,18 @@ describe('application journey source wiring', () => {
     expect(phone).toContain('autoComplete="tel"')
   })
 
-  it('hides the landing-header Join control below sm so Sign in and the wordmark fit at 320px', () => {
-    const source = readFileSync(join(repoRoot, 'app/page.tsx'), 'utf8')
-    expect(source).toContain('max-sm:hidden px-3 text-xs sm:px-6 sm:text-sm')
-    expect(source).toContain('marketingNavLinkClassName')
-    expect(source).toContain('w-full sm:w-auto')
+  it('hides the landing-header Apply control below sm so Sign in and the wordmark fit at 320px', () => {
+    const header = readFileSync(
+      join(repoRoot, 'components/marketing/public-home-header.tsx'),
+      'utf8'
+    )
+    const content = readFileSync(
+      join(repoRoot, 'components/marketing/public-home-content.tsx'),
+      'utf8'
+    )
+    expect(header).toContain('max-sm:hidden px-3 text-xs sm:px-6 sm:text-sm')
+    expect(header).toContain('marketingNavLinkClassName')
+    expect(content).toContain('w-full sm:w-auto')
   })
 
   it('clips horizontal overflow at the document root without hiding vertical scroll', () => {

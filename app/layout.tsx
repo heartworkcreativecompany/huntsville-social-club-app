@@ -24,7 +24,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'Huntsville Social Club',
   description:
-    'Mingle mixers, speed dating, and curated socials — where Huntsville connects in real life.',
+    'Join Huntsville Social Club for free and meet people through thoughtful gatherings, local experiences, and plans worth getting out for.',
 }
 
 export default function RootLayout({

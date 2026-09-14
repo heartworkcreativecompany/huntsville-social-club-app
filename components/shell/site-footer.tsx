@@ -5,9 +5,11 @@ import { SUPPORT_EMAIL } from '@/lib/site'
 export default function SiteFooter({
   className = '',
   variant = 'minimal',
+  signupHref = '/signup',
 }: {
   className?: string
   variant?: 'minimal' | 'marketing'
+  signupHref?: string
 }) {
   if (variant === 'marketing') {
     return (
@@ -18,15 +20,15 @@ export default function SiteFooter({
           <div>
             <BrandLogo href="/" variant="circle" size="footer" />
             <p className="mt-4 max-w-xs text-sm text-muted">
-              Mingle mixers, speed dating, and curated socials for people who want
-              to meet in real life in Rocket City.
+              A membership community for people who want more ways to meet in
+              Huntsville.
             </p>
           </div>
 
           <div className="text-sm">
-            <h4 className="font-brand mb-3 text-xs tracking-[0.2em] text-accent uppercase">
+            <h2 className="font-brand mb-3 text-xs tracking-[0.2em] text-accent uppercase">
               The Club
-            </h4>
+            </h2>
             <ul className="space-y-2 text-muted-foreground">
               <li>
                 <Link href="/pricing" className="link-brand hover:text-foreground">
@@ -34,8 +36,8 @@ export default function SiteFooter({
                 </Link>
               </li>
               <li>
-                <Link href="/signup" className="link-brand hover:text-foreground">
-                  Join
+                <Link href={signupHref} className="link-brand hover:text-foreground">
+                  Apply for free membership
                 </Link>
               </li>
               <li>
@@ -60,9 +62,9 @@ export default function SiteFooter({
           </div>
 
           <div className="text-sm">
-            <h4 className="font-brand mb-3 text-xs tracking-[0.2em] text-accent uppercase">
+            <h2 className="font-brand mb-3 text-xs tracking-[0.2em] text-accent uppercase">
               Visit
-            </h4>
+            </h2>
             <p className="text-muted-foreground">Huntsville, AL</p>
             <p className="mt-2">
               <a
