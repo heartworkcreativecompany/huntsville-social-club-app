@@ -23,13 +23,13 @@ export const mobileFullButtonClassName = 'w-full sm:w-auto'
 
 /** Marketing / public pages — matches Lovable prototype (rounded-md, hero overlays). */
 export const marketingButtonPrimaryClassName =
-  'inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-5 py-3 text-sm font-medium tracking-wide whitespace-nowrap text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6'
+  'inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-5 py-3 text-sm font-medium tracking-wide whitespace-nowrap text-accent-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 sm:px-6'
 
 export const marketingButtonSecondaryClassName =
-  'inline-flex min-h-11 items-center justify-center rounded-md border border-white/40 px-5 py-3 text-sm font-medium tracking-wide whitespace-nowrap text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6'
+  'inline-flex min-h-11 items-center justify-center rounded-md border border-white/40 px-5 py-3 text-sm font-medium tracking-wide whitespace-nowrap text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 sm:px-6'
 
 export const marketingNavLinkClassName =
-  'inline-flex min-h-11 items-center px-2 py-2 text-xs font-medium uppercase tracking-wide text-white/80 transition hover:text-white sm:px-3 sm:tracking-widest'
+  'inline-flex min-h-11 items-center px-2 py-2 text-xs font-medium uppercase tracking-wide text-white/80 transition hover:text-white focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-3 sm:tracking-widest'
 
 export const chipActiveClassName =
   'inline-flex min-h-11 max-w-full items-center rounded-full border border-accent bg-accent px-3.5 py-2 text-left font-brand text-xs font-medium break-words whitespace-normal text-accent-foreground'
