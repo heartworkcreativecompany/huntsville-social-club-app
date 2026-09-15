@@ -10,9 +10,9 @@ export const PUBLIC_SIGNUP_PATH = '/signup' as const
 export const PUBLIC_LOGIN_PATH = '/login' as const
 export const PUBLIC_PRICING_PATH = '/pricing' as const
 
-export const HOME_HERO_IMAGE_SRC = '/brand/hsc-hero-lounge-club.jpg'
+export const HOME_HERO_IMAGE_SRC = '/brand/hsc-hero-lounge-abstract-responsive.png'
 export const HOME_HERO_IMAGE_ALT =
-  'Members lounge interior with velvet seating, brass sconces, candlelight, and abstract wall paintings'
+  'Dark private-club lounge with a copy-safe wall, velvet seating, and a large abstract painting'
 
 export const HOME_HERO_EYEBROW = 'Huntsville, Alabama'
 export const HOME_HERO_HEADLINE = 'Where Huntsville Connects'

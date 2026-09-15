@@ -38,7 +38,7 @@ describe('public homepage copy', () => {
     expect(HOME_HERO_BODY).not.toMatch(/speed dating|mixers|singles/i)
     expect(HOME_HERO_SUPPORT_LINE_PRIMARY).toBe('Free to apply.')
     expect(HOME_HERO_SUPPORT_LINE_SECONDARY).toContain('after approval')
-    expect(HOME_HERO_IMAGE_SRC).toBe('/brand/hsc-hero-lounge-club.jpg')
+    expect(HOME_HERO_IMAGE_SRC).toBe('/brand/hsc-hero-lounge-abstract-responsive.png')
     expect(PRICING_SUPPORTING_LINE).toContain('All memberships begin with approval')
   })
 

@@ -54,9 +54,16 @@ export default function PublicHomeContent({
           fill
           priority
           sizes="100vw"
-          className="object-cover object-[center_42%]"
+          className="object-cover object-[72%_center] sm:object-[48%_center] lg:object-[22%_center]"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/35 to-black/88" />
+        <div
+          className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/35 to-black/88"
+          aria-hidden
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent max-md:via-black/10 lg:from-black/50"
+          aria-hidden
+        />
         <div className="grain absolute inset-0" aria-hidden />
 
         <div className="relative z-10 flex min-h-[100svh] flex-col md:min-h-[92vh]">
