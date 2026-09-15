@@ -72,29 +72,44 @@ describe('public homepage copy', () => {
     expect(FINAL_CTA_REASSURANCE).toBe('Free to apply. Thoughtful review. No pressure.')
   })
 
-  it('keeps five implied-plan cards with local images and no public calendar copy', () => {
-    expect(IMPLIED_EXPERIENCES).toHaveLength(5)
+  it('keeps six implied-plan cards with local images and no public calendar copy', () => {
+    expect(IMPLIED_EXPERIENCES).toHaveLength(6)
     expect(IMPLIED_EXPERIENCES.map((item) => item.title)).toEqual([
       'Premium Nights Out',
       'Easy Daytime Plans',
       'Creative Activities',
       'Game Nights',
-      'Culture and nights out',
+      'Outdoors and wellness',
+      'Member-led plans',
     ])
     expect(IMPLIED_EXPERIENCES.map((item) => item.description)).toEqual([
       'Dinner and drinks, live events, and things worth experiencing together.',
       'Coffee, brunch, and easy daytime plans.',
       'Workshops and local experiences',
       'Interactive games with new friends',
-      'Culture, live events, and things worth trying together.',
+      'Outdoors, wellness, and active gatherings.',
+      'Member-led plans around shared interests.',
     ])
     expect(IMPLIED_EXPERIENCES.map((item) => item.imageSrc)).toEqual([
       '/brand/hsc-scene-dinner.jpg',
       '/brand/hsc-scene-cafe.jpg',
       '/brand/hsc-scene-workshop.jpg',
       '/brand/hsc-scene-game-night.jpg',
-      '/brand/hsc-event-rooftop.jpg',
+      '/brand/hsc-event-hike.jpeg',
+      '/brand/hsc-scene-rooftop.jpg',
     ])
+    expect(IMPLIED_EXPERIENCES[4]).toMatchObject({
+      title: 'Outdoors and wellness',
+      description: 'Outdoors, wellness, and active gatherings.',
+      imageSrc: '/brand/hsc-event-hike.jpeg',
+      imageAlt: 'An outdoor trail through trees',
+    })
+    expect(IMPLIED_EXPERIENCES[5]).toMatchObject({
+      title: 'Member-led plans',
+      description: 'Member-led plans around shared interests.',
+      imageSrc: '/brand/hsc-scene-rooftop.jpg',
+      imageAlt: 'Lounge seating on a rooftop terrace',
+    })
     for (const item of IMPLIED_EXPERIENCES) {
       expect(item.imageSrc).toMatch(/^\/brand\//)
       expect(item.imageSrc).not.toMatch(/^https?:\/\//)
@@ -161,6 +176,8 @@ describe('public homepage source protections', () => {
     expect(combined).not.toContain('Coming later')
     expect(combined).not.toContain('A note from the founder')
     expect(combined).not.toMatch(/Small[- ][Gg]roup [Mm]oments/)
+    expect(combined).not.toContain('Culture and nights out')
+    expect(copy).not.toContain('/brand/hsc-event-rooftop.jpg')
     expect(combined).not.toMatch(/&ldquo;|&rdquo;|“|”/)
     expect(combined).not.toMatch(/\d[\d,]*\s+(members|guests|attendees)/i)
   })

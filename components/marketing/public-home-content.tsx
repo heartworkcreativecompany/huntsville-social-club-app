@@ -151,7 +151,7 @@ export default function PublicHomeContent({
             {IMPLIED_EXPERIENCES.map((item) => (
               <li
                 key={item.title}
-                className="group relative min-h-[16rem] overflow-hidden rounded-xl border border-border sm:last:col-span-2 xl:last:col-span-1"
+                className="group relative min-h-[16rem] overflow-hidden rounded-xl border border-border"
               >
                 <Image
                   src={item.imageSrc}

@@ -78,10 +78,16 @@ export const IMPLIED_EXPERIENCES = [
     imageAlt: 'Four adults playing a board game around a candlelit table',
   },
   {
-    title: 'Culture and nights out',
-    description: 'Culture, live events, and things worth trying together.',
-    imageSrc: '/brand/hsc-event-rooftop.jpg',
-    imageAlt: 'Evening rooftop gathering under string lights at sunset',
+    title: 'Outdoors and wellness',
+    description: 'Outdoors, wellness, and active gatherings.',
+    imageSrc: '/brand/hsc-event-hike.jpeg',
+    imageAlt: 'An outdoor trail through trees',
+  },
+  {
+    title: 'Member-led plans',
+    description: 'Member-led plans around shared interests.',
+    imageSrc: '/brand/hsc-scene-rooftop.jpg',
+    imageAlt: 'Lounge seating on a rooftop terrace',
   },
 ] as const
 
