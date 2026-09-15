@@ -118,7 +118,7 @@ describe('application journey source wiring', () => {
     expect(phone).toContain('autoComplete="tel"')
   })
 
-  it('hides the landing-header Apply control below sm so Sign in and the wordmark fit at 320px', () => {
+  it('keeps the landing-header Join control visible on small screens beside Sign In', () => {
     const header = readFileSync(
       join(repoRoot, 'components/marketing/public-home-header.tsx'),
       'utf8'
@@ -127,8 +127,10 @@ describe('application journey source wiring', () => {
       join(repoRoot, 'components/marketing/public-home-content.tsx'),
       'utf8'
     )
-    expect(header).toContain('max-sm:hidden px-3 text-xs sm:px-6 sm:text-sm')
+    expect(header).toContain('HOME_HEADER_JOIN_CTA')
+    expect(header).not.toContain('max-sm:hidden')
     expect(header).toContain('marketingNavLinkClassName')
+    expect(content).toContain('w-fit')
     expect(content).toContain('w-full sm:w-auto')
   })
 

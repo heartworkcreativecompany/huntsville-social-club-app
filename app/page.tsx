@@ -1,7 +1,6 @@
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import PublicHomeContent from '@/components/marketing/public-home-content'
-import PublicHomeHeader from '@/components/marketing/public-home-header'
 import SiteFooter from '@/components/shell/site-footer'
 import {
   classifyHost,
@@ -36,9 +35,8 @@ export default async function PublicHomePage() {
       >
         Skip to content
       </a>
-      <PublicHomeHeader loginHref={loginHref} signupHref={signupHref} />
       <main id="main-content">
-        <PublicHomeContent signupHref={signupHref} />
+        <PublicHomeContent loginHref={loginHref} signupHref={signupHref} />
       </main>
       <SiteFooter variant="marketing" signupHref={signupHref} />
     </div>

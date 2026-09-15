@@ -2,17 +2,25 @@ import { PRICING_PLANS } from '@/lib/membership-pricing-copy'
 
 /** Public homepage primary CTA. Routes to account creation, then the application. */
 export const APPLY_FOR_FREE_MEMBERSHIP_CTA = 'Apply for free membership'
+export const APPLY_FOR_MEMBERSHIP_CTA = 'Apply for Membership'
+export const HOME_HEADER_SIGN_IN = 'Sign In'
+export const HOME_HEADER_JOIN_CTA = 'Join the Club'
 
 export const PUBLIC_SIGNUP_PATH = '/signup' as const
 export const PUBLIC_LOGIN_PATH = '/login' as const
 export const PUBLIC_PRICING_PATH = '/pricing' as const
 
-export const HOME_HERO_EYEBROW = 'Huntsville · Rocket City'
-export const HOME_HERO_HEADLINE = 'Your next favorite people are in Huntsville.'
+export const HOME_HERO_IMAGE_SRC = '/brand/hsc-hero-lounge-abstract-responsive.png'
+export const HOME_HERO_IMAGE_ALT =
+  'Dark private-club lounge with a copy-safe wall, velvet seating, and a large abstract painting'
+
+export const HOME_HERO_EYEBROW = 'Huntsville, Alabama'
+export const HOME_HERO_HEADLINE = 'Where Huntsville Connects'
 export const HOME_HERO_BODY =
-  'Join Huntsville Social Club for free and meet people through thoughtful gatherings, local experiences, and plans worth getting out for. Optional paid tiers offer added benefits and savings on eligible event attendance.'
-export const HOME_HERO_MICROCOPY =
-  'Free to apply. Optional paid tiers are available after approval.'
+  'Join the Huntsville Social Club to meet people through thoughtful gatherings, local experiences, and plans worth getting out for. Optional paid tiers offer added benefits and savings on eligible event attendance.'
+export const HOME_HERO_SUPPORT_LINE_PRIMARY = 'Free to apply.'
+export const HOME_HERO_SUPPORT_LINE_SECONDARY =
+  'Optional paid tiers for added benefits and savings are available after approval.'
 
 export const SOCIAL_INTRO_HEADLINE =
   'See what a more connected Huntsville can feel like.'

@@ -2,15 +2,20 @@ import Image from 'next/image'
 import Link from 'next/link'
 import ApplyMembershipCta from '@/components/marketing/apply-membership-cta'
 import FounderNotePlaceholder from '@/components/marketing/founder-note-placeholder'
+import PublicHomeHeader from '@/components/marketing/public-home-header'
 import SocialIntroVideo from '@/components/marketing/social-intro-video'
 import {
+  APPLY_FOR_MEMBERSHIP_CTA,
   FINAL_CTA_BODY,
   FINAL_CTA_HEADLINE,
   FINAL_CTA_REASSURANCE,
   HOME_HERO_BODY,
   HOME_HERO_EYEBROW,
   HOME_HERO_HEADLINE,
-  HOME_HERO_MICROCOPY,
+  HOME_HERO_IMAGE_ALT,
+  HOME_HERO_IMAGE_SRC,
+  HOME_HERO_SUPPORT_LINE_PRIMARY,
+  HOME_HERO_SUPPORT_LINE_SECONDARY,
   HOME_MEMBERSHIP_TIERS,
   HOW_MEMBERSHIP_WORKS_HEADLINE,
   HOW_MEMBERSHIP_WORKS_STEPS,
@@ -31,47 +36,65 @@ import {
 } from '@/lib/marketing-home-copy'
 
 export default function PublicHomeContent({
+  loginHref,
   signupHref,
 }: {
+  loginHref: string
   signupHref: string
 }) {
   return (
     <>
       <section
         aria-labelledby="home-hero-heading"
-        className="relative flex min-h-[92vh] items-end overflow-hidden"
+        className="relative isolate overflow-hidden"
       >
         <Image
-          src="/brand/hsc-hero-lounge.jpg"
-          alt="Members lounge interior with velvet seating, brass sconces, and candlelight"
+          src={HOME_HERO_IMAGE_SRC}
+          alt={HOME_HERO_IMAGE_ALT}
           fill
           priority
           sizes="100vw"
-          className="object-cover"
+          className="object-cover object-[72%_center] sm:object-[48%_center] lg:object-[22%_center]"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/85" />
+        <div
+          className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/35 to-black/88"
+          aria-hidden
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent max-md:via-black/10 lg:from-black/50"
+          aria-hidden
+        />
         <div className="grain absolute inset-0" aria-hidden />
 
-        <div className="relative z-10 mx-auto w-full min-w-0 max-w-6xl px-5 pb-16 text-white sm:px-6 md:px-10 md:pb-28">
-          <span className="hero-eyebrow">
-            <span className="hero-eyebrow-line" aria-hidden />
-            {HOME_HERO_EYEBROW}
-          </span>
-          <h1
-            id="home-hero-heading"
-            className="font-brand mt-5 max-w-3xl text-4xl leading-[1.08] font-semibold sm:text-5xl md:text-7xl"
-          >
-            {HOME_HERO_HEADLINE}
-          </h1>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/85 md:text-xl">
-            {HOME_HERO_BODY}
-          </p>
-          <div className="mt-9 flex flex-col gap-3">
-            <ApplyMembershipCta
-              href={signupHref}
-              className="w-full sm:w-auto"
-            />
-            <p className="max-w-xl text-sm text-white/70">{HOME_HERO_MICROCOPY}</p>
+        <div className="relative z-10 flex min-h-[100svh] flex-col md:min-h-[92vh]">
+          <PublicHomeHeader loginHref={loginHref} signupHref={signupHref} />
+          <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col justify-end px-5 pt-6 pb-16 text-white sm:px-6 md:px-10 md:pt-8 md:pb-28">
+            <span className="hero-eyebrow">
+              <span className="hero-eyebrow-line" aria-hidden />
+              {HOME_HERO_EYEBROW}
+            </span>
+            <h1
+              id="home-hero-heading"
+              className="font-brand mt-5 max-w-3xl text-4xl leading-[1.08] font-semibold text-balance sm:text-5xl md:text-7xl"
+            >
+              {HOME_HERO_HEADLINE}
+            </h1>
+            <p className="mt-6 max-w-xl text-left text-lg leading-relaxed text-white/85 md:text-xl">
+              {HOME_HERO_BODY}
+            </p>
+            <div className="mt-9 max-w-xl">
+              <ApplyMembershipCta
+                href={signupHref}
+                label={APPLY_FOR_MEMBERSHIP_CTA}
+                className="w-fit"
+              />
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/80">
+                {HOME_HERO_SUPPORT_LINE_PRIMARY}
+              </p>
+              <p className="mt-1 max-w-xl text-sm leading-relaxed text-white/65">
+                {HOME_HERO_SUPPORT_LINE_SECONDARY}
+              </p>
+            </div>
           </div>
         </div>
       </section>
