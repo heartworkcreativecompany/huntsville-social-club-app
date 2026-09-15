@@ -17,6 +17,8 @@ import {
   HOW_MEMBERSHIP_WORKS_HEADLINE,
   HOW_MEMBERSHIP_WORKS_STEPS,
   IMPLIED_EXPERIENCES,
+  IMPLIED_EXPERIENCES_HEADLINE,
+  IMPLIED_EXPERIENCES_INTRO,
   MEMBERSHIP_VALUE_HEADLINE,
   PUBLIC_SIGNUP_PATH,
   WHO_IT_IS_FOR_HEADLINE,
@@ -82,8 +84,12 @@ describe('public homepage copy', () => {
       'Outdoors and wellness',
       'Member-led plans',
     ])
+    expect(IMPLIED_EXPERIENCES_HEADLINE).toBe('The kinds of plans we make')
+    expect(IMPLIED_EXPERIENCES_INTRO).toBe(
+      'Gatherings are for approved members. Here are the plans to expect when the club gets together.'
+    )
     expect(IMPLIED_EXPERIENCES.map((item) => item.description)).toEqual([
-      'Dinner and drinks, live events, and things worth experiencing together.',
+      'Special events worth experiencing together',
       'Coffee, brunch, and easy daytime plans.',
       'Workshops and local experiences',
       'Interactive games with new friends',
@@ -110,6 +116,19 @@ describe('public homepage copy', () => {
       imageSrc: '/brand/hsc-scene-rooftop.jpg',
       imageAlt: 'Lounge seating on a rooftop terrace',
     })
+    expect(IMPLIED_EXPERIENCES[0]).toMatchObject({
+      title: 'Premium Nights Out',
+      description: 'Special events worth experiencing together',
+      imageSrc: '/brand/hsc-scene-dinner.jpg',
+    })
+    expect(
+      IMPLIED_EXPERIENCES.filter(
+        (item) => item.description === 'Special events worth experiencing together'
+      )
+    ).toHaveLength(1)
+    expect(IMPLIED_EXPERIENCES_INTRO).not.toContain(
+      'Gatherings are for members. Here is the spirit'
+    )
     for (const item of IMPLIED_EXPERIENCES) {
       expect(item.imageSrc).toMatch(/^\/brand\//)
       expect(item.imageSrc).not.toMatch(/^https?:\/\//)
@@ -178,6 +197,12 @@ describe('public homepage source protections', () => {
     expect(combined).not.toMatch(/Small[- ][Gg]roup [Mm]oments/)
     expect(combined).not.toContain('Culture and nights out')
     expect(copy).not.toContain('/brand/hsc-event-rooftop.jpg')
+    expect(combined).not.toContain(
+      'Dinner and drinks, live events, and things worth experiencing together.'
+    )
+    expect(combined).not.toContain(
+      'Gatherings are for members. Here is the spirit of what we get together for'
+    )
     expect(combined).not.toMatch(/&ldquo;|&rdquo;|“|”/)
     expect(combined).not.toMatch(/\d[\d,]*\s+(members|guests|attendees)/i)
   })

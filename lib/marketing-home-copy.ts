@@ -49,13 +49,12 @@ export const WHY_EXISTS_CARDS = [
 
 export const IMPLIED_EXPERIENCES_HEADLINE = 'The kinds of plans we make'
 export const IMPLIED_EXPERIENCES_INTRO =
-  'Gatherings are for members. Here is the spirit of what we get together for — not a public calendar.'
+  'Gatherings are for approved members. Here are the plans to expect when the club gets together.'
 
 export const IMPLIED_EXPERIENCES = [
   {
     title: 'Premium Nights Out',
-    description:
-      'Dinner and drinks, live events, and things worth experiencing together.',
+    description: 'Special events worth experiencing together',
     imageSrc: '/brand/hsc-scene-dinner.jpg',
     imageAlt: 'A candlelit dinner table set with wine glasses and gold flatware',
   },
