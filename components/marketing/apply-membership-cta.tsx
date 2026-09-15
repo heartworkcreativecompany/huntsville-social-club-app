@@ -5,13 +5,15 @@ import { marketingButtonPrimaryClassName } from '@/lib/event-labels'
 export default function ApplyMembershipCta({
   href,
   className = '',
+  label = APPLY_FOR_FREE_MEMBERSHIP_CTA,
 }: {
   href: string
   className?: string
+  label?: string
 }) {
   return (
     <Link href={href} className={`${marketingButtonPrimaryClassName} ${className}`}>
-      {APPLY_FOR_FREE_MEMBERSHIP_CTA}
+      {label}
     </Link>
   )
 }

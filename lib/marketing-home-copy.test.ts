@@ -3,10 +3,17 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   APPLY_FOR_FREE_MEMBERSHIP_CTA,
+  APPLY_FOR_MEMBERSHIP_CTA,
   FINAL_CTA_REASSURANCE,
   FOUNDER_NOTE_PLACEHOLDER_BODY,
+  HOME_HEADER_JOIN_CTA,
+  HOME_HEADER_SIGN_IN,
+  HOME_HERO_BODY,
+  HOME_HERO_EYEBROW,
   HOME_HERO_HEADLINE,
-  HOME_HERO_MICROCOPY,
+  HOME_HERO_IMAGE_SRC,
+  HOME_HERO_SUPPORT_LINE_PRIMARY,
+  HOME_HERO_SUPPORT_LINE_SECONDARY,
   HOME_MEMBERSHIP_TIERS,
   HOW_MEMBERSHIP_WORKS_STEPS,
   IMPLIED_EXPERIENCES,
@@ -21,9 +28,17 @@ const repoRoot = join(__dirname, '..')
 describe('public homepage copy', () => {
   it('keeps the primary CTA and signup destination aligned with account creation', () => {
     expect(APPLY_FOR_FREE_MEMBERSHIP_CTA).toBe('Apply for free membership')
+    expect(APPLY_FOR_MEMBERSHIP_CTA).toBe('Apply for Membership')
+    expect(HOME_HEADER_SIGN_IN).toBe('Sign In')
+    expect(HOME_HEADER_JOIN_CTA).toBe('Join the Club')
     expect(PUBLIC_SIGNUP_PATH).toBe('/signup')
-    expect(HOME_HERO_HEADLINE).toBe('Your next favorite people are in Huntsville.')
-    expect(HOME_HERO_MICROCOPY).toContain('after approval')
+    expect(HOME_HERO_EYEBROW).toBe('Huntsville, Alabama')
+    expect(HOME_HERO_HEADLINE).toBe('Where Huntsville Connects')
+    expect(HOME_HERO_BODY).toContain('Join the Huntsville Social Club to meet people')
+    expect(HOME_HERO_BODY).not.toMatch(/speed dating|mixers|singles/i)
+    expect(HOME_HERO_SUPPORT_LINE_PRIMARY).toBe('Free to apply.')
+    expect(HOME_HERO_SUPPORT_LINE_SECONDARY).toContain('after approval')
+    expect(HOME_HERO_IMAGE_SRC).toBe('/brand/hsc-hero-lounge-club.jpg')
     expect(PRICING_SUPPORTING_LINE).toContain('All memberships begin with approval')
   })
 
@@ -86,8 +101,11 @@ describe('public homepage source protections', () => {
   it('keeps landing CTAs on the signup path through portalCtaHref', () => {
     expect(page).toContain("portalCtaHref(hostKind, '/login')")
     expect(page).toContain("portalCtaHref(hostKind, '/signup')")
-    expect(header).toContain('ApplyMembershipCta')
+    expect(header).toContain('HOME_HEADER_JOIN_CTA')
+    expect(header).toContain('signupHref')
     expect(content).toContain('ApplyMembershipCta')
+    expect(content).toContain('APPLY_FOR_MEMBERSHIP_CTA')
+    expect(content).toContain('w-fit')
   })
 
   it('does not render fake testimonials or invented social proof', () => {
