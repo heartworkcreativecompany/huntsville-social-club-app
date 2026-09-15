@@ -5,7 +5,6 @@ import {
   APPLY_FOR_FREE_MEMBERSHIP_CTA,
   APPLY_FOR_MEMBERSHIP_CTA,
   FINAL_CTA_REASSURANCE,
-  FOUNDER_NOTE_PLACEHOLDER_BODY,
   HOME_HEADER_JOIN_CTA,
   HOME_HEADER_SIGN_IN,
   HOME_HERO_BODY,
@@ -15,10 +14,13 @@ import {
   HOME_HERO_SUPPORT_LINE_PRIMARY,
   HOME_HERO_SUPPORT_LINE_SECONDARY,
   HOME_MEMBERSHIP_TIERS,
+  HOW_MEMBERSHIP_WORKS_HEADLINE,
   HOW_MEMBERSHIP_WORKS_STEPS,
   IMPLIED_EXPERIENCES,
   MEMBERSHIP_VALUE_HEADLINE,
   PUBLIC_SIGNUP_PATH,
+  WHO_IT_IS_FOR_HEADLINE,
+  WHO_IT_IS_FOR_ITEMS,
   WHY_EXISTS_HEADLINE,
 } from '@/lib/marketing-home-copy'
 import { PRICING_PLANS, PRICING_SUPPORTING_LINE } from '@/lib/membership-pricing-copy'
@@ -59,18 +61,58 @@ describe('public homepage copy', () => {
   })
 
   it('explains joining without promising automatic acceptance or a review clock', () => {
-    expect(HOW_MEMBERSHIP_WORKS_STEPS[2]).toContain('review every application')
+    expect(HOW_MEMBERSHIP_WORKS_HEADLINE).toBe('Joining is simple.')
+    expect(HOW_MEMBERSHIP_WORKS_STEPS).toEqual([
+      'Create your account.',
+      'Tell us a little about yourself through a short membership application.',
+      'We review every application thoughtfully.',
+      'Once approved, start connecting and join in when a gathering feels right.',
+    ])
     expect(HOW_MEMBERSHIP_WORKS_STEPS.join(' ')).not.toMatch(/\d+\s*(hours?|days?)/i)
     expect(FINAL_CTA_REASSURANCE).toBe('Free to apply. Thoughtful review. No pressure.')
   })
 
-  it('describes implied plans rather than public event listings', () => {
-    expect(IMPLIED_EXPERIENCES.map((item) => item.description)).toContain(
-      'Dinner and drinks at local spots.'
-    )
+  it('keeps five implied-plan cards with local images and no public calendar copy', () => {
+    expect(IMPLIED_EXPERIENCES).toHaveLength(5)
+    expect(IMPLIED_EXPERIENCES.map((item) => item.title)).toEqual([
+      'Premium Nights Out',
+      'Easy Daytime Plans',
+      'Creative Activities',
+      'Game Nights',
+      'Culture and nights out',
+    ])
+    expect(IMPLIED_EXPERIENCES.map((item) => item.description)).toEqual([
+      'Dinner and drinks, live events, and things worth experiencing together.',
+      'Coffee, brunch, and easy daytime plans.',
+      'Workshops and local experiences',
+      'Interactive games with new friends',
+      'Culture, live events, and things worth trying together.',
+    ])
+    expect(IMPLIED_EXPERIENCES.map((item) => item.imageSrc)).toEqual([
+      '/brand/hsc-scene-dinner.jpg',
+      '/brand/hsc-scene-cafe.jpg',
+      '/brand/hsc-scene-workshop.jpg',
+      '/brand/hsc-scene-game-night.jpg',
+      '/brand/hsc-event-rooftop.jpg',
+    ])
+    for (const item of IMPLIED_EXPERIENCES) {
+      expect(item.imageSrc).toMatch(/^\/brand\//)
+      expect(item.imageSrc).not.toMatch(/^https?:\/\//)
+    }
     expect(WHY_EXISTS_HEADLINE).toBe(
       'Huntsville is growing. Connection should grow with it.'
     )
+  })
+
+  it('keeps the belonging statements exact', () => {
+    expect(WHO_IT_IS_FOR_HEADLINE).toBe('You’ll probably feel at home here if you…')
+    expect(WHO_IT_IS_FOR_ITEMS).toEqual([
+      'Want more meaningful ways to meet people in Huntsville.',
+      'Are open to trying new places and saying yes to plans.',
+      'Value kindness, curiosity, and showing up for others.',
+      'Want a welcoming community without forced networking.',
+      'Are new to Huntsville, in a new season of life, or ready to expand your circle.',
+    ])
   })
 })
 
@@ -84,11 +126,8 @@ describe('public homepage source protections', () => {
     join(repoRoot, 'components/marketing/public-home-header.tsx'),
     'utf8'
   )
-  const founder = readFileSync(
-    join(repoRoot, 'components/marketing/founder-note-placeholder.tsx'),
-    'utf8'
-  )
-  const combined = `${page}\n${content}\n${header}`
+  const copy = readFileSync(join(repoRoot, 'lib/marketing-home-copy.ts'), 'utf8')
+  const combined = `${page}\n${content}\n${header}\n${copy}`
 
   it('does not fetch or link member-only events', () => {
     expect(combined).not.toMatch(/from '@\/app\/\(club\)\/events/)
@@ -108,12 +147,26 @@ describe('public homepage source protections', () => {
     expect(content).toContain('w-fit')
   })
 
-  it('does not render fake testimonials or invented social proof', () => {
-    expect(FOUNDER_NOTE_PLACEHOLDER_BODY).toBe(
-      'This space is reserved for a future founder note or member stories. Nothing here is a testimonial yet.'
-    )
-    expect(founder).toContain('FOUNDER_NOTE_PLACEHOLDER_BODY')
-    expect(founder).not.toMatch(/&ldquo;|&rdquo;|“|”/)
+  it('places belonging immediately before joining and removes placeholders', () => {
+    const whoIndex = content.indexOf('id="who-it-is-for-heading"')
+    const joinIndex = content.indexOf('id="how-membership-works-heading"')
+    const plansIndex = content.indexOf('id="implied-experiences-heading"')
+    expect(whoIndex).toBeGreaterThan(plansIndex)
+    expect(joinIndex).toBeGreaterThan(whoIndex)
+    expect(content).not.toContain('SocialIntroVideo')
+    expect(content).not.toContain('FounderNotePlaceholder')
+    expect(content).not.toContain('SOCIAL_INTRO')
+    expect(combined).not.toContain('See what a more connected Huntsville can feel like.')
+    expect(combined).not.toContain('A short intro video is coming soon.')
+    expect(combined).not.toContain('Coming later')
+    expect(combined).not.toContain('A note from the founder')
+    expect(combined).not.toMatch(/Small[- ][Gg]roup [Mm]oments/)
+    expect(combined).not.toMatch(/&ldquo;|&rdquo;|“|”/)
     expect(combined).not.toMatch(/\d[\d,]*\s+(members|guests|attendees)/i)
+  })
+
+  it('does not introduce remote image hosts on the homepage', () => {
+    expect(content).not.toMatch(/src=["']https?:\/\//)
+    expect(copy).not.toMatch(/imageSrc:\s*['"]https?:\/\//)
   })
 })

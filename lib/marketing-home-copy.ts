@@ -22,11 +22,6 @@ export const HOME_HERO_SUPPORT_LINE_PRIMARY = 'Free to apply.'
 export const HOME_HERO_SUPPORT_LINE_SECONDARY =
   'Optional paid tiers for added benefits and savings are available after approval.'
 
-export const SOCIAL_INTRO_HEADLINE =
-  'See what a more connected Huntsville can feel like.'
-export const SOCIAL_INTRO_SUPPORTING =
-  'A short intro video is coming soon.'
-
 export const WHY_EXISTS_HEADLINE =
   'Huntsville is growing. Connection should grow with it.'
 export const WHY_EXISTS_INTRO =
@@ -58,47 +53,35 @@ export const IMPLIED_EXPERIENCES_INTRO =
 
 export const IMPLIED_EXPERIENCES = [
   {
-    title: 'Dinner and drinks',
-    description: 'Dinner and drinks at local spots.',
+    title: 'Premium Nights Out',
+    description:
+      'Dinner and drinks, live events, and things worth experiencing together.',
     imageSrc: '/brand/hsc-scene-dinner.jpg',
-    imageAlt: 'A warmly lit dinner table set for a small group',
+    imageAlt: 'A candlelit dinner table set with wine glasses and gold flatware',
   },
   {
-    title: 'Easy daytime plans',
+    title: 'Easy Daytime Plans',
     description: 'Coffee, brunch, and easy daytime plans.',
-    imageSrc: '/brand/hsc-huntsville.jpg',
-    imageAlt: 'Daytime view of Huntsville',
+    imageSrc: '/brand/hsc-scene-cafe.jpg',
+    imageAlt: 'Two coffee cups on a sunlit cafe table beside a window',
   },
   {
-    title: 'Make and try',
-    description: 'Creative workshops and local experiences.',
-    imageSrc: '/brand/hsc-event-wine.jpg',
-    imageAlt: 'Wine glasses on a table during a gathering',
+    title: 'Creative Activities',
+    description: 'Workshops and local experiences',
+    imageSrc: '/brand/hsc-scene-workshop.jpg',
+    imageAlt: 'Hands shaping clay on a pottery wheel in a sunlit studio',
+  },
+  {
+    title: 'Game Nights',
+    description: 'Interactive games with new friends',
+    imageSrc: '/brand/hsc-scene-game-night.jpg',
+    imageAlt: 'Four adults playing a board game around a candlelit table',
   },
   {
     title: 'Culture and nights out',
     description: 'Culture, live events, and things worth trying together.',
     imageSrc: '/brand/hsc-event-rooftop.jpg',
-    imageAlt: 'Evening rooftop seating with city lights',
-  },
-  {
-    title: 'Outdoors and wellness',
-    description: 'Outdoors, wellness, and active gatherings.',
-    imageSrc: '/brand/hsc-event-hike.jpeg',
-    imageAlt: 'An outdoor trail through trees',
-  },
-  {
-    title: 'Member-led plans',
-    description: 'Member-led plans around shared interests.',
-    imageSrc: '/brand/hsc-scene-rooftop.jpg',
-    imageAlt: 'Lounge seating on a rooftop terrace',
-  },
-  {
-    title: 'Small-group moments',
-    description:
-      'Small-group moments that can turn into real friendships.',
-    imageSrc: '/brand/hsc-hero-lounge.jpg',
-    imageAlt: 'A lounge interior with velvet seating and warm lighting',
+    imageAlt: 'Evening rooftop gathering under string lights at sunset',
   },
 ] as const
 
@@ -136,6 +119,7 @@ export const HOME_MEMBERSHIP_TIERS = [
   },
 ] as const
 
+export const HOW_MEMBERSHIP_WORKS_EYEBROW = 'How it works'
 export const HOW_MEMBERSHIP_WORKS_HEADLINE = 'Joining is simple.'
 export const HOW_MEMBERSHIP_WORKS_STEPS = [
   'Create your account.',
@@ -144,6 +128,7 @@ export const HOW_MEMBERSHIP_WORKS_STEPS = [
   'Once approved, start connecting and join in when a gathering feels right.',
 ] as const
 
+export const WHO_IT_IS_FOR_EYEBROW = 'Who belongs'
 export const WHO_IT_IS_FOR_HEADLINE = 'You’ll probably feel at home here if you…'
 export const WHO_IT_IS_FOR_ITEMS = [
   'Want more meaningful ways to meet people in Huntsville.',
@@ -152,11 +137,6 @@ export const WHO_IT_IS_FOR_ITEMS = [
   'Want a welcoming community without forced networking.',
   'Are new to Huntsville, in a new season of life, or ready to expand your circle.',
 ] as const
-
-export const FOUNDER_NOTE_PLACEHOLDER_EYEBROW = 'A note from the founder'
-export const FOUNDER_NOTE_PLACEHOLDER_HEADLINE = 'Coming later'
-export const FOUNDER_NOTE_PLACEHOLDER_BODY =
-  'This space is reserved for a future founder note or member stories. Nothing here is a testimonial yet.'
 
 export const FINAL_CTA_HEADLINE =
   'Your next connection could start with one hello.'

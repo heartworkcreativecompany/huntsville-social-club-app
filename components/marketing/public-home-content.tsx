@@ -1,9 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import ApplyMembershipCta from '@/components/marketing/apply-membership-cta'
-import FounderNotePlaceholder from '@/components/marketing/founder-note-placeholder'
 import PublicHomeHeader from '@/components/marketing/public-home-header'
-import SocialIntroVideo from '@/components/marketing/social-intro-video'
 import {
   APPLY_FOR_MEMBERSHIP_CTA,
   FINAL_CTA_BODY,
@@ -17,6 +15,7 @@ import {
   HOME_HERO_SUPPORT_LINE_PRIMARY,
   HOME_HERO_SUPPORT_LINE_SECONDARY,
   HOME_MEMBERSHIP_TIERS,
+  HOW_MEMBERSHIP_WORKS_EYEBROW,
   HOW_MEMBERSHIP_WORKS_HEADLINE,
   HOW_MEMBERSHIP_WORKS_STEPS,
   IMPLIED_EXPERIENCES,
@@ -26,8 +25,7 @@ import {
   MEMBERSHIP_VALUE_DETAILS_LABEL,
   MEMBERSHIP_VALUE_HEADLINE,
   PUBLIC_PRICING_PATH,
-  SOCIAL_INTRO_HEADLINE,
-  SOCIAL_INTRO_SUPPORTING,
+  WHO_IT_IS_FOR_EYEBROW,
   WHO_IT_IS_FOR_HEADLINE,
   WHO_IT_IS_FOR_ITEMS,
   WHY_EXISTS_CARDS,
@@ -100,26 +98,6 @@ export default function PublicHomeContent({
       </section>
 
       <section
-        aria-labelledby="social-intro-heading"
-        className="border-b border-white/10 bg-surface"
-      >
-        <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-16 sm:px-6 sm:py-20 md:grid-cols-[minmax(0,1fr)_20rem] md:px-10 lg:gap-16">
-          <div>
-            <h2
-              id="social-intro-heading"
-              className="font-brand text-3xl font-semibold text-foreground sm:text-4xl"
-            >
-              {SOCIAL_INTRO_HEADLINE}
-            </h2>
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-              {SOCIAL_INTRO_SUPPORTING}
-            </p>
-          </div>
-          <SocialIntroVideo />
-        </div>
-      </section>
-
-      <section
         aria-labelledby="why-exists-heading"
         className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 md:px-10"
       >
@@ -169,17 +147,17 @@ export default function PublicHomeContent({
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
             {IMPLIED_EXPERIENCES_INTRO}
           </p>
-          <ul className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {IMPLIED_EXPERIENCES.map((item) => (
               <li
                 key={item.title}
-                className="group relative min-h-[16rem] overflow-hidden rounded-xl border border-border"
+                className="group relative min-h-[16rem] overflow-hidden rounded-xl border border-border sm:last:col-span-2 xl:last:col-span-1"
               >
                 <Image
                   src={item.imageSrc}
                   alt={item.imageAlt}
                   fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
                   className="object-cover transition duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
@@ -196,6 +174,100 @@ export default function PublicHomeContent({
           </ul>
           <div className="mt-10">
             <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto" />
+          </div>
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="who-it-is-for-heading"
+        className="relative overflow-hidden"
+      >
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_circle_at_12%_0%,rgba(175,139,90,0.08),transparent_55%)]"
+          aria-hidden
+        />
+        <div className="grain absolute inset-0 opacity-40" aria-hidden />
+        <div className="relative mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 md:px-10">
+          <p className="hero-eyebrow">
+            <span className="hero-eyebrow-line" aria-hidden />
+            {WHO_IT_IS_FOR_EYEBROW}
+          </p>
+          <h2
+            id="who-it-is-for-heading"
+            className="font-brand mt-5 max-w-3xl text-3xl font-semibold sm:text-4xl"
+          >
+            {WHO_IT_IS_FOR_HEADLINE}
+          </h2>
+          <ol className="mt-10 grid gap-4 sm:grid-cols-2">
+            {WHO_IT_IS_FOR_ITEMS.map((item, index) => (
+              <li
+                key={item}
+                className={`relative overflow-hidden border border-white/10 bg-surface/90 px-5 py-6 shadow-[inset_0_1px_0_rgba(175,139,90,0.16)] sm:px-6 ${
+                  index === WHO_IT_IS_FOR_ITEMS.length - 1
+                    ? 'sm:col-span-2 sm:max-w-xl sm:justify-self-center lg:max-w-none'
+                    : ''
+                }`}
+              >
+                <span
+                  className="absolute inset-y-4 left-0 w-px bg-accent/55"
+                  aria-hidden
+                />
+                <p className="font-brand text-[0.7rem] font-medium tracking-[0.28em] text-accent uppercase">
+                  <span className="sr-only">Statement </span>
+                  {String(index + 1).padStart(2, '0')}
+                </p>
+                <p className="mt-3 text-base leading-relaxed text-foreground sm:text-[1.05rem]">
+                  {item}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="how-membership-works-heading"
+        className="relative overflow-hidden border-y border-white/10 bg-surface"
+      >
+        <div
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(175,139,90,0.05),transparent_28%)]"
+          aria-hidden
+        />
+        <div className="relative mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 md:px-10">
+          <p className="hero-eyebrow">
+            <span className="hero-eyebrow-line" aria-hidden />
+            {HOW_MEMBERSHIP_WORKS_EYEBROW}
+          </p>
+          <h2
+            id="how-membership-works-heading"
+            className="font-brand mt-5 text-3xl font-semibold sm:text-4xl"
+          >
+            {HOW_MEMBERSHIP_WORKS_HEADLINE}
+          </h2>
+          <div className="relative mt-12">
+            <span
+              className="pointer-events-none absolute top-5 right-[12%] left-[12%] hidden h-px bg-gradient-to-r from-accent/15 via-accent/55 to-accent/15 md:block"
+              aria-hidden
+            />
+            <ol className="relative ms-1 border-s border-accent/35 ps-8 md:ms-0 md:border-s-0 md:ps-0 md:grid md:grid-cols-4 md:gap-6">
+            {HOW_MEMBERSHIP_WORKS_STEPS.map((step, index) => (
+              <li key={step} className="relative pb-10 last:pb-0 md:pb-0">
+                <span
+                  className="font-brand absolute top-0 -left-8 z-10 flex h-10 w-10 -translate-x-1/2 items-center justify-center border border-accent/50 bg-surface text-sm font-semibold text-accent md:static md:mb-5 md:translate-x-0"
+                  aria-hidden
+                >
+                  {index + 1}
+                </span>
+                <p className="pt-1.5 text-base leading-relaxed text-foreground md:max-w-[16rem] md:pt-0">
+                  <span className="sr-only">Step {index + 1}. </span>
+                  {step}
+                </p>
+              </li>
+            ))}
+            </ol>
+          </div>
+          <div className="mt-10">
+            <ApplyMembershipCta href={signupHref} className="w-fit" />
           </div>
         </div>
       </section>
@@ -240,67 +312,6 @@ export default function PublicHomeContent({
           </Link>
         </div>
       </section>
-
-      <section
-        aria-labelledby="how-membership-works-heading"
-        className="border-y border-white/10 bg-surface"
-      >
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 md:px-10">
-          <h2
-            id="how-membership-works-heading"
-            className="font-brand text-3xl font-semibold sm:text-4xl"
-          >
-            {HOW_MEMBERSHIP_WORKS_HEADLINE}
-          </h2>
-          <ol className="mt-10 grid gap-5 md:grid-cols-2">
-            {HOW_MEMBERSHIP_WORKS_STEPS.map((step, index) => (
-              <li
-                key={step}
-                className="flex gap-4 rounded-xl border border-border bg-background p-6"
-              >
-                <span
-                  aria-hidden
-                  className="font-brand flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground"
-                >
-                  {index + 1}
-                </span>
-                <p className="pt-1.5 text-base leading-relaxed text-foreground">
-                  {step}
-                </p>
-              </li>
-            ))}
-          </ol>
-          <div className="mt-10">
-            <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto" />
-          </div>
-        </div>
-      </section>
-
-      <section
-        aria-labelledby="who-it-is-for-heading"
-        className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 md:px-10"
-      >
-        <h2
-          id="who-it-is-for-heading"
-          className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl"
-        >
-          {WHO_IT_IS_FOR_HEADLINE}
-        </h2>
-        <ul className="mt-8 grid gap-4 sm:grid-cols-2">
-          {WHO_IT_IS_FOR_ITEMS.map((item) => (
-            <li
-              key={item}
-              className="rounded-xl border border-border bg-surface px-5 py-4 text-sm leading-relaxed text-foreground sm:text-base"
-            >
-              {item}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <div className="mx-auto max-w-6xl px-5 sm:px-6 md:px-10">
-        <FounderNotePlaceholder />
-      </div>
 
       <section
         aria-labelledby="final-cta-heading"
