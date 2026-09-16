@@ -10,6 +10,7 @@ import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { buttonPrimaryClassName } from '@/lib/event-labels'
 import {
   BUSINESS_DIRECTORY_GRID_CLASS,
+  PUBLIC_BUSINESS_LISTING_SELECT,
   groupPublicBusinessListingsByIndustry,
 } from '@/lib/business-listing-directory'
 import { FEATURE_GATE_COPY } from '@/lib/membership-pricing-copy'
@@ -24,9 +25,7 @@ export default async function BusinessDirectoryPage() {
 
   const { data: listings } = await supabase
     .from('business_listings')
-    .select(
-      'id, business_name, description, industry, website_url, city, club_offer, header_image_url, status'
-    )
+    .select(PUBLIC_BUSINESS_LISTING_SELECT)
     .eq('status', 'approved')
     .order('business_name', { ascending: true })
 

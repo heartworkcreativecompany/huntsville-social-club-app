@@ -4,11 +4,15 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import BusinessDirectoryCard from '@/components/business/business-directory-card'
-import type { PublicBusinessListing } from '@/lib/business-listing-directory'
+import {
+  businessListingDetailHref,
+  type PublicBusinessListing,
+} from '@/lib/business-listing-directory'
 
 const phoneNumber = '2564341119'
 const ownerId = 'owner_123456789'
-const listingId = 'listing-venus-1'
+const listingId = 'a1b2c3d4-e5f6-4789-a012-3456789abcde'
+const detailHref = `/business/${listingId}`
 
 function listing(
   patch: Partial<PublicBusinessListing> = {}
@@ -27,7 +31,22 @@ function listing(
   }
 }
 
+function hasNestedAnchors(html: string): boolean {
+  return /<a\b[^>]*>(?:(?!<\/a>)[\s\S])*?<a\b/i.test(html)
+}
+
 describe('BusinessDirectoryCard', () => {
+  it('renders an internal View details link using the listing UUID slug', () => {
+    const html = renderToStaticMarkup(
+      createElement(BusinessDirectoryCard, { listing: listing() })
+    )
+
+    expect(businessListingDetailHref(listing())).toBe(detailHref)
+    expect(html).toContain(`href="${detailHref}"`)
+    expect(html).toContain('View details →')
+    expect(html).toContain('View The Venus Body Shop details')
+  })
+
   it('renders www.TheVenusBodyShop.com as an external https link in a new tab', () => {
     const html = renderToStaticMarkup(
       createElement(BusinessDirectoryCard, { listing: listing() })
@@ -39,6 +58,19 @@ describe('BusinessDirectoryCard', () => {
     expect(html).toContain('rel="noopener noreferrer"')
     expect(html).toContain('Visit The Venus Body Shop website')
     expect(html).toContain('Visit website ↗')
+    expect(html).not.toContain('href="/business/https://www.TheVenusBodyShop.com"')
+  })
+
+  it('keeps the external website link separate from the internal detail href', () => {
+    const html = renderToStaticMarkup(
+      createElement(BusinessDirectoryCard, { listing: listing() })
+    )
+
+    expect(html).toContain(`href="${detailHref}"`)
+    expect(html).toContain('href="https://www.TheVenusBodyShop.com"')
+    expect(html).toContain('View details →')
+    expect(html).toContain('Visit website ↗')
+    expect(hasNestedAnchors(html)).toBe(false)
   })
 
   it('keeps an existing https:// website URL', () => {
@@ -72,7 +104,20 @@ describe('BusinessDirectoryCard', () => {
 
     expect(html).not.toContain('javascript:')
     expect(html).not.toContain('Visit website')
-    expect(html).not.toMatch(/<a\s/i)
+    expect(html).toContain(`href="${detailHref}"`)
+    expect(html).toContain('View details →')
+  })
+
+  it('does not turn a relative website value into an internal members-site path', () => {
+    const html = renderToStaticMarkup(
+      createElement(BusinessDirectoryCard, {
+        listing: listing({ website_url: '/business' }),
+      })
+    )
+
+    expect(html).not.toContain('Visit website')
+    expect(html).toContain(`href="${detailHref}"`)
+    expect(html).toContain('View details →')
   })
 
   it('does not render a public phone, user, or listing numeric identifier', () => {
@@ -87,9 +132,10 @@ describe('BusinessDirectoryCard', () => {
 
     expect(html).not.toContain(phoneNumber)
     expect(html).not.toContain(ownerId)
+    expect(html).not.toContain(`>${listingId}<`)
   })
 
-  it('renders content in image → name → location → description → Club Offer → website order', () => {
+  it('renders content in image → name → location → description → Club Offer → details → website order', () => {
     const html = renderToStaticMarkup(
       createElement(BusinessDirectoryCard, { listing: listing() })
     )
@@ -102,6 +148,7 @@ describe('BusinessDirectoryCard', () => {
     )
     const offerLabelIdx = html.indexOf('Club Offer')
     const offerTextIdx = html.indexOf('10% off for club members')
+    const detailsIdx = html.indexOf('View details →')
     const websiteIdx = html.indexOf('Visit website ↗')
 
     expect(imageIdx).toBeGreaterThanOrEqual(0)
@@ -110,7 +157,8 @@ describe('BusinessDirectoryCard', () => {
     expect(descriptionIdx).toBeGreaterThan(cityIdx)
     expect(offerLabelIdx).toBeGreaterThan(descriptionIdx)
     expect(offerTextIdx).toBeGreaterThan(offerLabelIdx)
-    expect(websiteIdx).toBeGreaterThan(offerTextIdx)
+    expect(detailsIdx).toBeGreaterThan(offerTextIdx)
+    expect(websiteIdx).toBeGreaterThan(detailsIdx)
   })
 
   it('uses contain + padding for logo images and cover for photo jpegs', () => {
@@ -129,14 +177,16 @@ describe('BusinessDirectoryCard', () => {
     expect(photoHtml).not.toContain('object-contain')
   })
 
-  it('does not use Next.js Link for merchant websites', () => {
+  it('uses Next.js Link for internal details and a plain anchor for merchant websites', () => {
     const source = readFileSync(
       join(__dirname, 'business-directory-card.tsx'),
       'utf8'
     )
-    expect(source).not.toContain("from 'next/link'")
-    expect(source).not.toContain('from "next/link"')
-    expect(source).toContain('normalizeBusinessWebsiteUrl')
+    expect(source).toContain("from 'next/link'")
+    expect(source).toContain('businessListingDetailHref')
+    expect(source).toContain('View details →')
+    expect(source).toContain('BusinessWebsiteLink')
+    expect(source).not.toMatch(/<Link[^>]*websiteHref/)
     expect(source).not.toMatch(/\bphone\b/)
   })
 })

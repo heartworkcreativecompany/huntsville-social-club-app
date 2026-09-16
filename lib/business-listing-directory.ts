@@ -3,8 +3,17 @@ import {
   formatBusinessListingIndustryLabel,
 } from '@/lib/business-listing-industries'
 
+export const BUSINESS_DIRECTORY_PATH = '/business'
+
 export const BUSINESS_DIRECTORY_GRID_CLASS =
   'grid gap-5 sm:grid-cols-2 lg:grid-cols-3'
+
+/** Public directory/detail fields only — never select phone, owner, or admin notes. */
+export const PUBLIC_BUSINESS_LISTING_SELECT =
+  'id, business_name, description, industry, website_url, city, club_offer, header_image_url, status'
+
+const LISTING_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export type PublicBusinessListing = {
   id: string
@@ -31,6 +40,34 @@ export function isApprovedBusinessListing(
   listing: Pick<PublicBusinessListing, 'status'>
 ): boolean {
   return listing.status === 'approved'
+}
+
+/**
+ * Public detail slug is the listing row UUID — the stable canonical identifier.
+ * Business names are not unique and there is no slug column.
+ */
+export function parseBusinessListingDetailSlug(
+  value: string | null | undefined
+): string | null {
+  const trimmed = value?.trim() ?? ''
+  if (!trimmed || !LISTING_ID_PATTERN.test(trimmed)) return null
+  return trimmed
+}
+
+export function businessListingDetailHref(
+  listing: Pick<PublicBusinessListing, 'id'>
+): string {
+  return `${BUSINESS_DIRECTORY_PATH}/${listing.id}`
+}
+
+export function resolveApprovedPublicBusinessListing(
+  slug: string | null | undefined,
+  listing: PublicBusinessListing | null | undefined
+): PublicBusinessListing | null {
+  const listingId = parseBusinessListingDetailSlug(slug)
+  if (!listingId || !listing || listing.id !== listingId) return null
+  if (!isApprovedBusinessListing(listing)) return null
+  return listing
 }
 
 export function groupPublicBusinessListingsByIndustry<
