@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { requireAdminClient } from '@/lib/supabase/require-admin-client'
 import AdminApplicationQueue from '@/components/admin/admin-application-queue'
+import AdminBusinessListingsCard from '@/components/admin/admin-business-listings-card'
 import Badge from '@/components/ui/badge'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
@@ -101,6 +101,8 @@ export default async function AdminApplicationsPage() {
           )
         }
       />
+
+      <AdminBusinessListingsCard />
 
       <div className="mb-6 flex flex-wrap gap-3 text-sm">
         <Link href="/admin/users" className="font-medium text-accent underline">
