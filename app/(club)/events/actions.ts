@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { isApprovedMember } from '@/lib/application'
 import { parseAttendanceMax } from '@/lib/event-attendance'
+import { persistEventDescription } from '@/lib/event-description'
 import { isMissingCoverImageColumnError } from '@/lib/event-cover-image-column'
 import {
   isMissingRsvpQuestionColumnError,
@@ -204,7 +205,7 @@ export async function createEvent(input: {
     title,
     location,
     starts_at: startsAt,
-    description: input.description?.trim() || null,
+    description: persistEventDescription(input.description),
     ends_at: endsAt,
     visibility: 'public' as const,
     event_type: eventType,
@@ -417,7 +418,7 @@ export async function updateEvent(input: {
     title,
     location: location || null,
     starts_at: startsAt,
-    description: input.description?.trim() || null,
+    description: persistEventDescription(input.description),
     ends_at: endsAt,
     visibility: 'public' as const,
     attendance_max: attendanceParsed.value,

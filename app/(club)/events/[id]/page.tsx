@@ -10,6 +10,7 @@ import EventMetaBadges from '@/components/events/event-meta-badges'
 import EventPremiumRegistrationSection from '@/components/events/event-premium-registration-section'
 import EventPriorityRsvpBubble from '@/components/events/event-priority-rsvp-bubble'
 import EventRsvpCounts from '@/components/events/event-rsvp-counts'
+import EventDescription from '@/components/events/event-description'
 import EventTypeBadge from '@/components/events/event-type-badge'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
@@ -454,9 +455,7 @@ export default async function EventDetailPage({ params }: PageProps) {
       </div>
 
       {event.description?.trim() ? (
-        <p className="mb-8 text-base leading-relaxed text-foreground">
-          {event.description.trim()}
-        </p>
+        <EventDescription text={event.description} />
       ) : null}
 
       {!isPast && !isCancelled && isPremiumEvent ? (

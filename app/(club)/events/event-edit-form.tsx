@@ -175,12 +175,19 @@ export default function EventEditForm({
           className={inputClassName}
         />
 
-        <textarea
-          placeholder="Event description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className={`${inputClassName} min-h-[120px] resize-y`}
-        />
+        <label className="grid gap-1 text-sm">
+          <span className="text-muted-foreground">Description</span>
+          <textarea
+            placeholder="Event description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className={`${inputClassName} min-h-[120px] resize-y`}
+            aria-label="Event description"
+          />
+          <span className="text-xs text-muted-foreground">
+            Use blank lines to separate paragraphs.
+          </span>
+        </label>
 
         <label className="grid gap-1 text-sm">
           <span className="text-muted-foreground">Start (Central Time)</span>

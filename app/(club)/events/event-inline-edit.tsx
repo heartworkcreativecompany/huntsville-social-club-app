@@ -12,6 +12,7 @@ import {
   parseChicagoDatetimeLocalToIso,
   toChicagoDatetimeLocalValue,
 } from '@/lib/event-time'
+import { persistEventDescription } from '@/lib/event-description'
 
 function getEditErrorMessage(error: {
   message: string
@@ -112,7 +113,7 @@ export default function EventInlineEdit({
         title,
         location: location || null,
         starts_at: startsAtIso,
-        description: description || null,
+        description: persistEventDescription(description),
         ends_at: endsAtIso,
         visibility,
         status,
@@ -160,12 +161,19 @@ export default function EventInlineEdit({
         className={inputClassName}
       />
 
-      <textarea
-        placeholder="Event description"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        className={`${inputClassName} min-h-[100px] resize-y`}
-      />
+      <label className="grid gap-1 text-sm">
+        <span className="text-muted-foreground">Description</span>
+        <textarea
+          placeholder="Event description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className={`${inputClassName} min-h-[100px] resize-y`}
+          aria-label="Event description"
+        />
+        <span className="text-xs text-muted-foreground">
+          Use blank lines to separate paragraphs.
+        </span>
+      </label>
 
       <label className="grid gap-1 text-sm">
         <span className="text-muted-foreground">Start (Central Time)</span>
