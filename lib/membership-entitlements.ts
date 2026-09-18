@@ -36,6 +36,7 @@ import {
   type MembershipBilling,
 } from '@/lib/membership-systems'
 import { paidTierFromActiveStoredPriceId } from '@/lib/stripe/resolve-paid-tier'
+import { formatEventTimestampInChicago } from '@/lib/event-time'
 
 export type EntitlementCycle = {
   id: string
@@ -378,7 +379,7 @@ export function evaluatePriorityRsvpWindow(input: {
     return {
       allowed: false,
       code: 'priority_window',
-      message: `Priority RSVP opens for Elite Circle at ${priorityAt.toLocaleString()}. General RSVP opens ${generalAt.toLocaleString()}.`,
+      message: `Priority RSVP opens for Elite Circle at ${formatEventTimestampInChicago(priorityAt.toISOString())}. General RSVP opens ${formatEventTimestampInChicago(generalAt.toISOString())}.`,
       generalRsvpOpensAt: general,
       upgradeTier: 'elite_circle',
     }
@@ -387,7 +388,7 @@ export function evaluatePriorityRsvpWindow(input: {
   return {
     allowed: false,
     code: 'priority_window',
-    message: `Priority RSVP is open for Elite Circle until ${generalAt.toLocaleString()}. General RSVP opens then.`,
+    message: `Priority RSVP is open for Elite Circle until ${formatEventTimestampInChicago(generalAt.toISOString())}. General RSVP opens then.`,
     generalRsvpOpensAt: general,
     upgradeTier: 'elite_circle',
   }

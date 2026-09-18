@@ -9,6 +9,7 @@ import AdminEventApprovalControls from '@/components/admin/admin-event-approval-
 import AdminSponsorshipApproveButton from '@/components/admin/admin-sponsorship-approve-button'
 import EventTypeBadge from '@/components/events/event-type-badge'
 import { EVENT_SPONSORSHIP_AMOUNT_CENTS, EVENT_SPONSORSHIP_PRICE_LABEL } from '@/lib/membership-tier-config'
+import { formatEventDate } from '@/lib/event-labels'
 
 export default async function AdminEventsPage() {
   const viewer = await getViewer()
@@ -68,7 +69,7 @@ export default async function AdminEventsPage() {
                       {event.title}
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {new Date(event.starts_at).toLocaleString()}
+                      {formatEventDate(event.starts_at)}
                       {event.location ? ` · ${event.location}` : ''}
                       {event.attendance_max
                         ? ` · Max ${event.attendance_max} attending`

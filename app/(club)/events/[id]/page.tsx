@@ -322,7 +322,7 @@ export default async function EventDetailPage({ params }: PageProps) {
   const notGoingRows =
     attendeeRows?.filter((row) => row.status === 'not_going') ?? []
 
-  const eventDateLabel = new Date(event.starts_at).toLocaleString()
+  const eventDateLabel = formatEventDate(event.starts_at)
   const exportFilename = `${event.title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

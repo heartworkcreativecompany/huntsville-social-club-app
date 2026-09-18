@@ -161,22 +161,8 @@ export function formatFeeCents(cents: number | null | undefined): string {
   return (cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)
 }
 
-/** Parse datetime-local value to ISO, or null if empty. */
-export function parseDatetimeLocalToIso(raw: string): string | null {
-  const trimmed = raw.trim()
-  if (!trimmed) return null
-  const date = new Date(trimmed)
-  if (Number.isNaN(date.getTime())) {
-    throw new Error('Enter a valid date and time.')
-  }
-  return date.toISOString()
-}
-
-/** Format ISO timestamp for datetime-local inputs. */
-export function toDatetimeLocalValue(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
+/** Parse datetime-local value as America/Chicago wall time to a UTC ISO instant. */
+export {
+  parseChicagoDatetimeLocalToIso as parseDatetimeLocalToIso,
+  toChicagoDatetimeLocalValue as toDatetimeLocalValue,
+} from '@/lib/event-time'

@@ -8,15 +8,10 @@ import {
   buttonSecondaryClassName,
   inputClassName,
 } from '@/lib/event-labels'
-
-function toDatetimeLocalValue(iso: string | null): string {
-  if (!iso) return ''
-
-  const date = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
+import {
+  parseChicagoDatetimeLocalToIso,
+  toChicagoDatetimeLocalValue,
+} from '@/lib/event-time'
 
 function getEditErrorMessage(error: {
   message: string
@@ -66,9 +61,11 @@ export default function EventInlineEdit({
   const [isEditing, setIsEditing] = useState(false)
   const [title, setTitle] = useState(initialTitle)
   const [location, setLocation] = useState(initialLocation ?? '')
-  const [startsAt, setStartsAt] = useState(toDatetimeLocalValue(initialStartsAt))
+  const [startsAt, setStartsAt] = useState(
+    toChicagoDatetimeLocalValue(initialStartsAt)
+  )
   const [description, setDescription] = useState(initialDescription ?? '')
-  const [endsAt, setEndsAt] = useState(toDatetimeLocalValue(initialEndsAt))
+  const [endsAt, setEndsAt] = useState(toChicagoDatetimeLocalValue(initialEndsAt))
   const [visibility, setVisibility] = useState(initialVisibility)
   const [status, setStatus] = useState(initialStatus || 'published')
   const [message, setMessage] = useState('')
@@ -76,9 +73,9 @@ export default function EventInlineEdit({
   const resetForm = () => {
     setTitle(initialTitle)
     setLocation(initialLocation ?? '')
-    setStartsAt(toDatetimeLocalValue(initialStartsAt))
+    setStartsAt(toChicagoDatetimeLocalValue(initialStartsAt))
     setDescription(initialDescription ?? '')
-    setEndsAt(toDatetimeLocalValue(initialEndsAt))
+    setEndsAt(toChicagoDatetimeLocalValue(initialEndsAt))
     setVisibility(initialVisibility)
     setStatus(initialStatus || 'published')
     setMessage('')
@@ -92,14 +89,31 @@ export default function EventInlineEdit({
   const handleSave = async () => {
     setMessage('Saving...')
 
+    let startsAtIso: string | null
+    let endsAtIso: string | null
+    try {
+      startsAtIso = parseChicagoDatetimeLocalToIso(startsAt)
+      endsAtIso = parseChicagoDatetimeLocalToIso(endsAt)
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : 'Enter a valid date and time.'
+      )
+      return
+    }
+
+    if (!startsAtIso) {
+      setMessage('Title, location, and start time are required.')
+      return
+    }
+
     const { error } = await supabase
       .from('events')
       .update({
         title,
         location: location || null,
-        starts_at: startsAt,
+        starts_at: startsAtIso,
         description: description || null,
-        ends_at: endsAt || null,
+        ends_at: endsAtIso,
         visibility,
         status,
         updated_at: new Date().toISOString(),
@@ -153,19 +167,27 @@ export default function EventInlineEdit({
         className={`${inputClassName} min-h-[100px] resize-y`}
       />
 
-      <input
-        type="datetime-local"
-        value={startsAt}
-        onChange={(e) => setStartsAt(e.target.value)}
-        className={inputClassName}
-      />
+      <label className="grid gap-1 text-sm">
+        <span className="text-muted-foreground">Start (Central Time)</span>
+        <input
+          type="datetime-local"
+          value={startsAt}
+          onChange={(e) => setStartsAt(e.target.value)}
+          className={inputClassName}
+          aria-label="Start time (Central Time)"
+        />
+      </label>
 
-      <input
-        type="datetime-local"
-        value={endsAt}
-        onChange={(e) => setEndsAt(e.target.value)}
-        className={inputClassName}
-      />
+      <label className="grid gap-1 text-sm">
+        <span className="text-muted-foreground">End (Central Time)</span>
+        <input
+          type="datetime-local"
+          value={endsAt}
+          onChange={(e) => setEndsAt(e.target.value)}
+          className={inputClassName}
+          aria-label="End time (Central Time)"
+        />
+      </label>
 
       <select
         value={visibility}

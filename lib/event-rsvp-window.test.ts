@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyRsvpPerksSnapshot,
   formatCountdownRemaining,
+  formatEventWindowTimestamp,
   membershipPerksSummaryFromSnapshot,
   premiumCreditsSummary,
   resolveEventAccessMembershipCta,
@@ -334,5 +335,14 @@ describe('Membership Perks after RSVP credit changes', () => {
     expect(membershipPerksSummaryFromSnapshot(after)).toContain(
       '1 of 2 included Circle Social credit'
     )
+  })
+})
+
+describe('formatEventWindowTimestamp', () => {
+  it('formats RSVP window times in America/Chicago', () => {
+    expect(formatEventWindowTimestamp('2026-10-04T22:00:00.000Z')).toBe(
+      'Sun, Oct 4, 5:00 PM'
+    )
+    expect(formatEventWindowTimestamp(null)).toBeNull()
   })
 })
