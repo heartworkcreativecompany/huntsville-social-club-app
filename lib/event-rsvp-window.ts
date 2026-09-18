@@ -7,6 +7,7 @@ import {
 import {
   ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
 } from '@/lib/membership-tier-config'
+import { formatEventTimestampInChicago } from '@/lib/event-time'
 
 export type EventRsvpWindowPhase =
   | 'before_priority'
@@ -198,9 +199,7 @@ export function resolveEventAccessMembershipCta(input: {
 export function formatEventWindowTimestamp(
   iso: string | null | undefined
 ): string | null {
-  const date = parseDate(iso)
-  if (!date) return null
-  return date.toLocaleString()
+  return formatEventTimestampInChicago(iso)
 }
 
 export function formatCountdownRemaining(

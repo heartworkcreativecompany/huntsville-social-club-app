@@ -182,19 +182,27 @@ export default function EventEditForm({
           className={`${inputClassName} min-h-[120px] resize-y`}
         />
 
-        <input
-          type="datetime-local"
-          value={startsAt}
-          onChange={(e) => setStartsAt(e.target.value)}
-          className={inputClassName}
-        />
+        <label className="grid gap-1 text-sm">
+          <span className="text-muted-foreground">Start (Central Time)</span>
+          <input
+            type="datetime-local"
+            value={startsAt}
+            onChange={(e) => setStartsAt(e.target.value)}
+            className={inputClassName}
+            aria-label="Start time (Central Time)"
+          />
+        </label>
 
-        <input
-          type="datetime-local"
-          value={endsAt}
-          onChange={(e) => setEndsAt(e.target.value)}
-          className={inputClassName}
-        />
+        <label className="grid gap-1 text-sm">
+          <span className="text-muted-foreground">End (Central Time)</span>
+          <input
+            type="datetime-local"
+            value={endsAt}
+            onChange={(e) => setEndsAt(e.target.value)}
+            className={inputClassName}
+            aria-label="End time (Central Time)"
+          />
+        </label>
 
         <div className="grid gap-1.5">
           <label className="text-sm font-medium text-foreground">
@@ -305,7 +313,7 @@ export default function EventEditForm({
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">
-                  Priority RSVP opens (Elite)
+                  Priority RSVP opens (Elite, Central Time)
                 </span>
                 <input
                   type="datetime-local"
@@ -315,7 +323,9 @@ export default function EventEditForm({
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="text-muted-foreground">General RSVP opens</span>
+                <span className="text-muted-foreground">
+                  General RSVP opens (Central Time)
+                </span>
                 <input
                   type="datetime-local"
                   value={generalRsvpOpensAt}

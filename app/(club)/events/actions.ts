@@ -38,6 +38,27 @@ function isPrivilegedEventManager(role: string | null | undefined): boolean {
   return role === 'admin' || role === 'host'
 }
 
+function parseEventSchedule(input: {
+  startsAt: string
+  endsAt?: string
+}): { error: string } | { startsAt: string; endsAt: string | null } {
+  try {
+    const startsAt = parseDatetimeLocalToIso(input.startsAt)
+    if (!startsAt) {
+      return { error: 'Title, location, and start time are required.' }
+    }
+    return {
+      startsAt,
+      endsAt: parseDatetimeLocalToIso(input.endsAt ?? ''),
+    }
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error ? error.message : 'Enter a valid date and time.',
+    }
+  }
+}
+
 function getEventWriteErrorMessage(error: {
   message: string
   code?: string
@@ -113,10 +134,18 @@ export async function createEvent(input: {
 
   const title = input.title.trim()
   const location = input.location.trim()
-  const startsAt = input.startsAt.trim()
-  if (!title || !location || !startsAt) {
+  if (!title || !location || !input.startsAt.trim()) {
     return { error: 'Title, location, and start time are required.' }
   }
+
+  const schedule = parseEventSchedule({
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+  })
+  if ('error' in schedule) {
+    return { error: schedule.error }
+  }
+  const { startsAt, endsAt } = schedule
 
   const attendanceParsed = parseAttendanceMax(input.attendanceMax)
   if ('error' in attendanceParsed) {
@@ -176,7 +205,7 @@ export async function createEvent(input: {
     location,
     starts_at: startsAt,
     description: input.description?.trim() || null,
-    ends_at: input.endsAt?.trim() || null,
+    ends_at: endsAt,
     visibility: 'public' as const,
     event_type: eventType,
     status,
@@ -308,10 +337,18 @@ export async function updateEvent(input: {
 
   const title = input.title.trim()
   const location = input.location.trim()
-  const startsAt = input.startsAt.trim()
-  if (!title || !location || !startsAt) {
+  if (!title || !location || !input.startsAt.trim()) {
     return { error: 'Title, location, and start time are required.' }
   }
+
+  const schedule = parseEventSchedule({
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+  })
+  if ('error' in schedule) {
+    return { error: schedule.error }
+  }
+  const { startsAt, endsAt } = schedule
 
   const attendanceParsed = parseAttendanceMax(input.attendanceMax)
   if ('error' in attendanceParsed) {
@@ -381,7 +418,7 @@ export async function updateEvent(input: {
     location: location || null,
     starts_at: startsAt,
     description: input.description?.trim() || null,
-    ends_at: input.endsAt?.trim() || null,
+    ends_at: endsAt,
     visibility: 'public' as const,
     attendance_max: attendanceParsed.value,
     updated_at: new Date().toISOString(),

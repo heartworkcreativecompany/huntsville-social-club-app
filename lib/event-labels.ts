@@ -37,15 +37,7 @@ export const chipActiveClassName =
 export const chipInactiveClassName =
   'inline-flex min-h-11 max-w-full items-center rounded-full border border-border bg-surface px-3.5 py-2 text-left font-brand text-xs font-medium break-words whitespace-normal text-muted-foreground transition hover:border-accent/40 hover:bg-accent-soft hover:text-foreground'
 
-export function formatEventDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
+export { formatEventDateInChicago as formatEventDate } from '@/lib/event-time'
 
 export function eventStatusLabel(status: string | null | undefined): string {
   const value = status ?? 'published'
