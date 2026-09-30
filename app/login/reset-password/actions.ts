@@ -7,7 +7,10 @@ import {
   RECOVERY_LINK_INVALID_MESSAGE,
   friendlyAuthError,
 } from '@/lib/auth-errors'
-import { validatePassword, validatePasswordConfirmation } from '@/lib/auth-validation'
+import {
+  friendlyPasswordPolicyError,
+  preparePasswordResetSubmit,
+} from '@/lib/password-policy'
 import {
   PASSWORD_RECOVERY_COOKIE,
   passwordRecoveryCookieOptions,
@@ -23,11 +26,8 @@ export async function updatePasswordFromRecovery(
   password: string,
   confirmPassword: string
 ): Promise<{ error: string }> {
-  const passwordError = validatePassword(password)
-  if (passwordError) return { error: passwordError }
-
-  const confirmError = validatePasswordConfirmation(password, confirmPassword)
-  if (confirmError) return { error: confirmError }
+  const decision = preparePasswordResetSubmit(password, confirmPassword)
+  if (!decision.ok) return { error: decision.error }
 
   const cookieStore = await cookies()
   const markerUserId = await verifyPasswordRecoveryMarker(
@@ -46,6 +46,8 @@ export async function updatePasswordFromRecovery(
 
   const { error } = await supabase.auth.updateUser({ password })
   if (error) {
+    const policyError = friendlyPasswordPolicyError(error.message, password)
+    if (policyError) return { error: policyError }
     const friendly = friendlyAuthError(error.message)
     return {
       error: friendly === GENERIC_AUTH_ERROR ? PASSWORD_UPDATE_FAILED_MESSAGE : friendly,

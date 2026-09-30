@@ -1,3 +1,5 @@
+import { PASSWORD_MIN_LENGTH_MESSAGE, PASSWORD_SPECIAL_CHARACTER_MESSAGE } from '@/lib/password-policy'
+
 /** Map Supabase auth errors to friendly copy without leaking account existence. */
 
 export const INVALID_LOGIN_CREDENTIALS_MESSAGE =
@@ -34,7 +36,11 @@ export function friendlyAuthError(message: string): string {
   }
 
   if (lower.includes('password should be at least')) {
-    return 'Password must be at least 8 characters.'
+    return PASSWORD_MIN_LENGTH_MESSAGE
+  }
+
+  if (lower.includes('password should contain at least one character of each')) {
+    return PASSWORD_SPECIAL_CHARACTER_MESSAGE
   }
 
   if (lower.includes('signup requires a valid password')) {

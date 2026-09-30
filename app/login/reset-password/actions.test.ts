@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   PASSWORD_UPDATE_FAILED_MESSAGE,
   RECOVERY_LINK_INVALID_MESSAGE,
+  TEMPORARY_AUTH_PROBLEM_MESSAGE,
 } from '@/lib/auth-errors'
+import { PASSWORD_SPECIAL_CHARACTER_MESSAGE, PASSWORD_UPPERCASE_MESSAGE } from '@/lib/password-policy'
 import { PASSWORD_RECOVERY_COOKIE, createPasswordRecoveryMarker } from '@/lib/password-recovery'
 
 const USER_A = '11111111-1111-4111-8111-111111111111'
@@ -103,6 +105,51 @@ describe('updatePasswordFromRecovery', () => {
       '',
       expect.objectContaining({ httpOnly: true, maxAge: 0, path: '/' })
     )
+  })
+
+  it('does not update a password that is missing a special character', async () => {
+    state.cookieValue = (await createPasswordRecoveryMarker(USER_A, SECRET)) ?? undefined
+    const password = 'Letters1234'
+    const result = await updatePasswordFromRecovery(password, password)
+    expect(result.error).toBe(PASSWORD_SPECIAL_CHARACTER_MESSAGE)
+    expect(result.error).not.toContain(password)
+    expect(updateUser).not.toHaveBeenCalled()
+  })
+
+  it('maps an Auth password-policy rejection to the unmet rule', async () => {
+    state.cookieValue = (await createPasswordRecoveryMarker(USER_A, SECRET)) ?? undefined
+    const password = 'letters123!'
+    updateUser.mockResolvedValue({
+      error: {
+        message:
+          'Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz:ABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789:!@#$%^&*',
+      },
+    })
+    const result = await updatePasswordFromRecovery(password, password)
+    expect(result.error).toBe(PASSWORD_UPPERCASE_MESSAGE)
+    expect(result.error).not.toContain(password)
+    expect(result.error).not.toContain('There was an error processing your request')
+    expect(updateUser).toHaveBeenCalledTimes(1)
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unexpected Auth failure generic', async () => {
+    state.cookieValue = (await createPasswordRecoveryMarker(USER_A, SECRET)) ?? undefined
+    updateUser.mockResolvedValue({
+      error: { message: 'There was an error processing your request.' },
+    })
+    const result = await updatePasswordFromRecovery('new-password-1', 'new-password-1')
+    expect(result.error).toBe(PASSWORD_UPDATE_FAILED_MESSAGE)
+    expect(result.error).not.toContain('There was an error processing your request')
+    expect(updateUser).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a temporary Auth failure generic', async () => {
+    state.cookieValue = (await createPasswordRecoveryMarker(USER_A, SECRET)) ?? undefined
+    updateUser.mockResolvedValue({ error: { message: 'fetch failed' } })
+    const result = await updatePasswordFromRecovery('new-password-1', 'new-password-1')
+    expect(result.error).toBe(TEMPORARY_AUTH_PROBLEM_MESSAGE)
+    expect(updateUser).toHaveBeenCalledTimes(1)
   })
 
   it('hides raw provider details when the password update fails', async () => {
