@@ -38,7 +38,7 @@ export default async function PublicHomePage() {
       <main id="main-content">
         <PublicHomeContent loginHref={loginHref} signupHref={signupHref} />
       </main>
-      <SiteFooter variant="marketing" signupHref={signupHref} />
+      <SiteFooter variant="marketing" signupHref={signupHref} className="!mt-0" />
     </div>
   )
 }
