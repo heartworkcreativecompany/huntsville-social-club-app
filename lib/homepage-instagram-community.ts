@@ -1,4 +1,4 @@
-/** Curated homepage gallery. These are editorial photos, not a live Instagram feed. */
+/** Profile follow button only. Not a substitute for an individual post permalink. */
 export const HSC_INSTAGRAM_PROFILE_URL =
   'https://www.instagram.com/huntsvillesocialclub/' as const
 
@@ -9,45 +9,49 @@ export const HOMEPAGE_INSTAGRAM_BODY =
 export const HOMEPAGE_INSTAGRAM_HANDLE = '@huntsvillesocialclub'
 export const HOMEPAGE_INSTAGRAM_CTA = 'Follow on Instagram'
 export const HOMEPAGE_INSTAGRAM_OVERLAY_LABEL = 'View on Instagram'
+export const HOMEPAGE_INSTAGRAM_UNCONFIGURED_LABEL = 'Thumbnail and post link needed'
 
 export type HomepageInstagramTile = {
+  /** Local thumbnail path, for example `/brand/instagram/post-1.jpg`. */
   image: string
+  /** Description of that exact thumbnail. */
   alt: string
+  /** Exact post permalink: `https://www.instagram.com/p/<id>/` or `/reel/<id>/`. */
   href: string
 }
 
-export const HOMEPAGE_INSTAGRAM_TILES: readonly HomepageInstagramTile[] = [
-  {
-    image: '/brand/hsc-event-wine.jpg',
-    alt: 'Guests talking along a candlelit dinner table set with wine glasses',
-    href: HSC_INSTAGRAM_PROFILE_URL,
-  },
-  {
-    image: '/brand/hsc-event-rooftop.jpg',
-    alt: 'People holding drinks at a rooftop gathering under string lights at sunset',
-    href: HSC_INSTAGRAM_PROFILE_URL,
-  },
-  {
-    image: '/brand/hsc-hero-lounge.jpg',
-    alt: 'A dim lounge with a green velvet banquette, marble tables, and candles',
-    href: HSC_INSTAGRAM_PROFILE_URL,
-  },
-  {
-    image: '/brand/hsc-scene-cafe.jpg',
-    alt: 'Two coffee cups on a sunlit cafe table beside a window',
-    href: HSC_INSTAGRAM_PROFILE_URL,
-  },
-  {
-    image: '/brand/hsc-scene-workshop.jpg',
-    alt: 'Hands shaping a clay cup on a pottery wheel beside ceramic bowls',
-    href: HSC_INSTAGRAM_PROFILE_URL,
-  },
+/**
+ * Five slots for owner-supplied Instagram posts.
+ * Each slot stays blank until the local thumbnail, alt text, and that post's permalink are all known.
+ */
+export const HOMEPAGE_INSTAGRAM_POST_SLOTS: readonly HomepageInstagramTile[] = [
+  { image: '', alt: '', href: '' },
+  { image: '', alt: '', href: '' },
+  { image: '', alt: '', href: '' },
+  { image: '', alt: '', href: '' },
+  { image: '', alt: '', href: '' },
 ]
 
-export function homepageInstagramLinkLabel(alt: string): string {
-  const description = alt.trim()
-  if (!description) {
-    return 'View Huntsville Social Club on Instagram'
+const INSTAGRAM_POST_PERMALINK =
+  /^https:\/\/www\.instagram\.com\/(?:p|reel)\/[A-Za-z0-9_-]+\/?$/
+
+export function isConfiguredInstagramPost(tile: HomepageInstagramTile): boolean {
+  const image = tile.image.trim()
+  const alt = tile.alt.trim()
+  const href = tile.href.trim()
+
+  if (!image.startsWith('/') || image.includes('..') || /^https?:/i.test(image)) {
+    return false
   }
-  return `View Huntsville Social Club on Instagram: ${description}`
+  if (!alt || alt.toLowerCase() === HOMEPAGE_INSTAGRAM_HANDLE.toLowerCase()) {
+    return false
+  }
+  if (href === HSC_INSTAGRAM_PROFILE_URL || href === 'https://www.instagram.com/huntsvillesocialclub') {
+    return false
+  }
+  return INSTAGRAM_POST_PERMALINK.test(href)
+}
+
+export function homepageInstagramLinkLabel(alt: string): string {
+  return `View this Huntsville Social Club Instagram post: ${alt.trim()}`
 }
