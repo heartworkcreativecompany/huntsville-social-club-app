@@ -10,7 +10,7 @@ import {
   parseApprovalGates,
   verificationStateFromGates,
   parseVerificationState,
-  emptyMembershipBilling,
+  membershipBillingForApproval,
   parseMembershipBilling,
 } from '@/lib/membership-systems'
 import { trackServerEvent } from '@/lib/analytics'
@@ -79,13 +79,7 @@ export async function updateApplicationStatus(
 
   const billing = parseMembershipBilling(applicant?.membership_billing)
   const billingUpdate =
-    status === 'approved'
-      ? {
-          ...billing,
-          tier: 'member' as const,
-          subscription_status: 'none' as const,
-        }
-      : billing
+    status === 'approved' ? membershipBillingForApproval(billing) : billing
 
   const { error } = await auth.supabase
     .from('profiles')

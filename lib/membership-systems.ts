@@ -1052,6 +1052,63 @@ export function stripeSubscriptionBlocksNewCheckout(
   )
 }
 
+function isStripeSubscriptionId(value: string | null): boolean {
+  return typeof value === 'string' && /^sub_[A-Za-z0-9]+$/.test(value)
+}
+
+/**
+ * Paid-tier evidence other than a subscription id: a recognized paid tier, or
+ * an active subscription whose stored price maps to Connect, Inner, or Elite.
+ * Grace/past_due price fallback is intentionally not evidence — that helper
+ * only trusts `active`.
+ */
+function hasRecognizedPaidTierEvidence(billing: MembershipBilling): boolean {
+  return (
+    billing.tier === 'connect' ||
+    billing.tier === 'inner_circle' ||
+    billing.tier === 'elite_circle' ||
+    billing.tier === 'premium_member' ||
+    paidTierFromActiveStoredPriceId(billing) != null
+  )
+}
+
+/**
+ * Re-approval may keep billing only for a still-open paid subscription.
+ * Requires active, grace, or past_due, plus a Stripe subscription id or other
+ * paid-tier evidence. Leftover Stripe ids with status `none` are the clobbered
+ * shape and are not valid paid state.
+ */
+export function hasPreservablePaidMembershipBilling(
+  billing: MembershipBilling
+): boolean {
+  const payable =
+    billing.subscription_status === 'active' ||
+    billing.subscription_status === 'grace' ||
+    billing.subscription_status === 'past_due'
+  if (!payable) return false
+
+  if (
+    stripeSubscriptionBlocksNewCheckout(billing) &&
+    isStripeSubscriptionId(billing.stripe_subscription_id)
+  ) {
+    return true
+  }
+
+  return hasRecognizedPaidTierEvidence(billing)
+}
+
+/** Approval billing write. Preserves valid paid state; otherwise free member. */
+export function membershipBillingForApproval(
+  existing: MembershipBilling
+): MembershipBilling {
+  if (hasPreservablePaidMembershipBilling(existing)) return existing
+  return {
+    ...existing,
+    tier: 'member',
+    subscription_status: 'none',
+  }
+}
+
 export function billedPaidMembershipTier(
   billing: MembershipBilling
 ): 'connect' | 'inner_circle' | 'elite_circle' | null {
