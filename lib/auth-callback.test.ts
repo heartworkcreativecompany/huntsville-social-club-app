@@ -6,13 +6,17 @@ import { join } from 'node:path'
 import {
   AUTH_CALLBACK_FAILED_LOGIN_PATH,
   EMAIL_CONFIRMED_LOGIN_PATH,
+  RECOVERY_BROWSER_PATH,
+  RECOVERY_LINK_INVALID_PATH,
   RECOVERY_LOGIN_PATH,
   authCallbackRedirectExposesSecrets,
   classifyAuthExchangeFailure,
   isConfirmationCallbackNext,
   loginStatusFromSearch,
+  recoveryFailurePath,
   resolveAuthCallbackRedirect,
   safeAuthCallbackNext,
+  shouldExchangeAuthCode,
   signupConfirmationReplayPath,
 } from '@/lib/auth-callback'
 import { EMAIL_CONFIRMED_SUCCESS } from '@/lib/auth-errors'
@@ -247,16 +251,58 @@ describe('resolveAuthCallbackRedirect', () => {
   })
 
   it('does not treat a failed recovery exchange as email confirmation', () => {
+    const path = resolveAuthCallbackRedirect({
+      next: '/login/reset-password',
+      type: 'recovery',
+      hasCode: true,
+      hasTokenHash: false,
+      exchangeError: 'otp_expired',
+      existingEmailConfirmed: false,
+    })
+    expect(path).toBe(RECOVERY_LINK_INVALID_PATH)
+    expect(path).not.toContain('confirmed=1')
+    expect(authCallbackRedirectExposesSecrets(path)).toBe(false)
+  })
+
+  it('does not open reset-password when a confirmed session fails the recovery exchange', () => {
+    const path = resolveAuthCallbackRedirect({
+      next: '/login/reset-password',
+      type: 'recovery',
+      hasCode: true,
+      hasTokenHash: false,
+      exchangeError: 'both auth code and code verifier should be non-empty',
+      existingEmailConfirmed: true,
+    })
+    expect(path).toBe(RECOVERY_BROWSER_PATH)
+    expect(path).not.toBe(RECOVERY_LOGIN_PATH)
+    expect(authCallbackRedirectExposesSecrets(path)).toBe(false)
+  })
+
+  it('does not open reset-password when the recovery callback has no code', () => {
     expect(
       resolveAuthCallbackRedirect({
         next: '/login/reset-password',
         type: 'recovery',
-        hasCode: true,
+        hasCode: false,
         hasTokenHash: false,
-        exchangeError: 'otp_expired',
-        existingEmailConfirmed: false,
+        exchangeError: null,
+        existingEmailConfirmed: true,
       })
-    ).toBe(AUTH_CALLBACK_FAILED_LOGIN_PATH)
+    ).toBe(RECOVERY_LINK_INVALID_PATH)
+  })
+
+  it('keeps an external recovery next on this site', () => {
+    const path = resolveAuthCallbackRedirect({
+      next: 'https://evil.example/login/reset-password',
+      type: 'recovery',
+      hasCode: true,
+      hasTokenHash: false,
+      exchangeError: null,
+      existingEmailConfirmed: true,
+    })
+    expect(path).toBe(RECOVERY_LOGIN_PATH)
+    expect(path).not.toContain('evil.example')
+    expect(recoveryFailurePath('otp_expired')).not.toContain('evil.example')
   })
 
   it('keeps magic-link success on the requested next path', () => {
@@ -286,16 +332,17 @@ describe('resolveAuthCallbackRedirect', () => {
   })
 
   it('does not treat a consumed recovery code as paid-plan confirmation', () => {
-    expect(
-      resolveAuthCallbackRedirect({
-        next: '/upgrade?plan=connect',
-        type: 'recovery',
-        hasCode: true,
-        hasTokenHash: false,
-        exchangeError: 'invalid grant',
-        existingEmailConfirmed: false,
-      })
-    ).toBe(AUTH_CALLBACK_FAILED_LOGIN_PATH)
+    const path = resolveAuthCallbackRedirect({
+      next: '/upgrade?plan=connect',
+      type: 'recovery',
+      hasCode: true,
+      hasTokenHash: false,
+      exchangeError: 'invalid grant',
+      existingEmailConfirmed: false,
+    })
+    expect(path).toBe(RECOVERY_BROWSER_PATH)
+    expect(path).not.toContain('/upgrade')
+    expect(authCallbackRedirectExposesSecrets(path)).toBe(false)
   })
 
   it('never puts tokens or codes on the redirect path', () => {
@@ -342,6 +389,23 @@ describe('loginStatusFromSearch', () => {
       })
     ).toBe('reset')
   })
+
+  it('maps recovery failures to generic login states', () => {
+    expect(
+      loginStatusFromSearch({
+        confirmed: null,
+        reset: null,
+        error: 'recovery_link',
+      })
+    ).toBe('recovery_link')
+    expect(
+      loginStatusFromSearch({
+        confirmed: null,
+        reset: null,
+        error: 'recovery_browser',
+      })
+    ).toBe('recovery_browser')
+  })
 })
 
 describe('confirmation copy', () => {
@@ -368,17 +432,23 @@ describe('confirmation copy', () => {
 })
 
 describe('callback route hygiene', () => {
-  it('does not log callback secrets and skips a second code exchange when already confirmed', () => {
+  it('always exchanges a callback code before choosing a redirect', () => {
     const source = readFileSync(
       join(__dirname, '../app/auth/callback/route.ts'),
       'utf8'
     )
+    const exchangeAt = source.lastIndexOf('exchangeCodeForSession')
+    const redirectAt = source.lastIndexOf('resolveAuthCallbackRedirect')
     expect(source).not.toContain('console.log')
-    expect(source).toContain('alreadyConfirmed')
-    expect(source).toContain('exchangeCodeForSession')
+    expect(source).not.toContain('alreadyConfirmed')
+    expect(source).not.toContain('if (code && !alreadyConfirmed)')
+    expect(source).toContain('shouldExchangeAuthCode(code)')
     expect(source).toContain('verifyOtp')
-    expect(source).toContain('if (code && !alreadyConfirmed)')
+    expect(exchangeAt).toBeGreaterThan(-1)
+    expect(redirectAt).toBeGreaterThan(exchangeAt)
     expect(source).not.toContain('createMembershipCheckoutSession')
+    expect(shouldExchangeAuthCode('valid-recovery-code')).toBe(true)
+    expect(shouldExchangeAuthCode(null)).toBe(false)
   })
 })
 

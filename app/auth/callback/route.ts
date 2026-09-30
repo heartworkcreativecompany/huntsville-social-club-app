@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server'
 import { syncEmailApprovalGateForUser } from '@/lib/approval-gate-sync'
 import {
+  RECOVERY_LINK_INVALID_PATH,
+  RECOVERY_LOGIN_PATH,
+  isRecoveryCallback,
   resolveAuthCallbackRedirect,
+  safeAuthCallbackNext,
+  shouldExchangeAuthCode,
+  shouldVerifyAuthTokenHash,
   toEmailOtpCallbackType,
 } from '@/lib/auth-callback'
 import { paidPlanFromSafeNext } from '@/lib/membership-plan-links'
+import {
+  PASSWORD_RECOVERY_COOKIE,
+  createPasswordRecoveryMarker,
+  passwordRecoveryCookieOptions,
+  passwordRecoverySecret,
+} from '@/lib/password-recovery'
 import { setPendingMembershipPlanOnResponse } from '@/lib/pending-membership-plan'
 import { createClient } from '@/lib/supabase/server'
 
@@ -14,10 +26,9 @@ import { createClient } from '@/lib/supabase/server'
  * NEXT_PUBLIC_APP_URL (see lib/site.ts authCallbackUrl).
  * Email verified gate sync uses Auth `email_confirmed_at` as source of truth.
  *
- * Confirmation is often completed by Supabase's verify endpoint *before* this
- * app exchanges the one-time `code`. A missing verifier, email-client prefetch,
- * or a second GET must not show “Link could not be verified” if the address is
- * already confirmed or the code was simply already consumed.
+ * A callback `code` is always exchanged before the redirect is chosen. An
+ * existing confirmed session must not skip that exchange, or a password
+ * recovery link would authorize the already signed-in account.
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -28,31 +39,23 @@ export async function GET(request: Request) {
   const providerAuthError = Boolean(
     searchParams.get('error') || searchParams.get('error_code')
   )
+  const recoveryAttempt = isRecoveryCallback(type, safeAuthCallbackNext(next))
 
   const supabase = await createClient()
-  const {
-    data: { user: existingUser },
-  } = await supabase.auth.getUser()
 
-  let sessionUser = existingUser
+  let sessionUser: { id: string; email_confirmed_at?: string | null } | null = null
   let exchangeError: string | null = null
 
-  const alreadyConfirmed = Boolean(existingUser?.email_confirmed_at)
-
-  if (code && !alreadyConfirmed) {
+  if (code && shouldExchangeAuthCode(code)) {
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(
       code
     )
     if (error) {
       exchangeError = error.message
-      const {
-        data: { user: afterErrorUser },
-      } = await supabase.auth.getUser()
-      sessionUser = afterErrorUser ?? sessionUser
     } else {
-      sessionUser = sessionData.user ?? sessionUser
+      sessionUser = sessionData.user ?? null
     }
-  } else if (!code && tokenHash && !alreadyConfirmed) {
+  } else if (tokenHash && shouldVerifyAuthTokenHash(code, tokenHash)) {
     const otpType = toEmailOtpCallbackType(type)
     if (!otpType) {
       exchangeError = 'expired'
@@ -63,17 +66,20 @@ export async function GET(request: Request) {
       })
       if (error) {
         exchangeError = error.message
-        const {
-          data: { user: afterErrorUser },
-        } = await supabase.auth.getUser()
-        sessionUser = afterErrorUser ?? sessionUser
       } else {
-        sessionUser = otpData.user ?? sessionUser
+        sessionUser = otpData.user ?? null
       }
     }
   }
 
-  const destination = resolveAuthCallbackRedirect({
+  if (!sessionUser) {
+    const {
+      data: { user: fallbackUser },
+    } = await supabase.auth.getUser()
+    sessionUser = fallbackUser
+  }
+
+  let destination = resolveAuthCallbackRedirect({
     next,
     type,
     hasCode: Boolean(code),
@@ -87,7 +93,39 @@ export async function GET(request: Request) {
     await syncEmailApprovalGateForUser(supabase, sessionUser.id, true)
   }
 
+  let recoveryMarker: string | null = null
+  if (
+    recoveryAttempt &&
+    !exchangeError &&
+    sessionUser?.id &&
+    destination === RECOVERY_LOGIN_PATH
+  ) {
+    recoveryMarker = await createPasswordRecoveryMarker(
+      sessionUser.id,
+      passwordRecoverySecret()
+    )
+    if (!recoveryMarker) {
+      destination = RECOVERY_LINK_INVALID_PATH
+    }
+  }
+
   const redirectResponse = NextResponse.redirect(`${origin}${destination}`)
+  if (recoveryAttempt) {
+    if (recoveryMarker) {
+      redirectResponse.cookies.set(
+        PASSWORD_RECOVERY_COOKIE,
+        recoveryMarker,
+        passwordRecoveryCookieOptions()
+      )
+    } else {
+      redirectResponse.cookies.set(
+        PASSWORD_RECOVERY_COOKIE,
+        '',
+        passwordRecoveryCookieOptions(0)
+      )
+    }
+  }
+
   const pendingPlan = paidPlanFromSafeNext(next)
   if (pendingPlan) {
     setPendingMembershipPlanOnResponse(redirectResponse, pendingPlan)

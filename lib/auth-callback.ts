@@ -7,6 +7,10 @@ export const AUTH_CALLBACK_FAILED_PARAM = 'auth_callback_failed'
 export const EMAIL_CONFIRMED_LOGIN_PATH = '/login?confirmed=1'
 export const AUTH_CALLBACK_FAILED_LOGIN_PATH = `/login?error=${AUTH_CALLBACK_FAILED_PARAM}`
 export const RECOVERY_LOGIN_PATH = '/login/reset-password'
+export const RECOVERY_LINK_INVALID_PARAM = 'recovery_link'
+export const RECOVERY_BROWSER_PARAM = 'recovery_browser'
+export const RECOVERY_LINK_INVALID_PATH = `/login?error=${RECOVERY_LINK_INVALID_PARAM}`
+export const RECOVERY_BROWSER_PATH = `/login?error=${RECOVERY_BROWSER_PARAM}`
 
 const EMAIL_OTP_TYPES = [
   'signup',
@@ -79,6 +83,34 @@ export function isRecoveryCallback(type: string | null | undefined, next: string
   return safeAuthCallbackNext(next).includes('reset-password')
 }
 
+/**
+ * A one-time callback code is always exchanged. An existing confirmed or
+ * signed-in session is not a reason to skip it — that would let password
+ * recovery update the wrong account.
+ */
+export function shouldExchangeAuthCode(code: string | null | undefined): boolean {
+  return Boolean(code?.trim())
+}
+
+/** OTP verification runs only when the callback did not already carry a code. */
+export function shouldVerifyAuthTokenHash(
+  code: string | null | undefined,
+  tokenHash: string | null | undefined
+): boolean {
+  return !shouldExchangeAuthCode(code) && Boolean(tokenHash?.trim())
+}
+
+/** Static login path for a failed recovery exchange. Never includes the code. */
+export function recoveryFailurePath(exchangeError: string | null | undefined): string {
+  if (
+    exchangeError &&
+    classifyAuthExchangeFailure(exchangeError) === 'consumed_or_replay'
+  ) {
+    return RECOVERY_BROWSER_PATH
+  }
+  return RECOVERY_LINK_INVALID_PATH
+}
+
 export function toEmailOtpCallbackType(
   type: string | null | undefined
 ): EmailOtpCallbackType | null {
@@ -136,6 +168,13 @@ export function resolveAuthCallbackRedirect(input: {
 
   const successPath = recovery ? RECOVERY_LOGIN_PATH : next
 
+  if (recovery) {
+    const exchanged =
+      !input.exchangeError && (input.hasCode || input.hasTokenHash)
+    if (exchanged) return RECOVERY_LOGIN_PATH
+    return recoveryFailurePath(input.exchangeError)
+  }
+
   if (input.existingEmailConfirmed) {
     if (confirmation) return EMAIL_CONFIRMED_LOGIN_PATH
     return successPath
@@ -163,7 +202,13 @@ export function resolveAuthCallbackRedirect(input: {
   return successPath
 }
 
-export type LoginStatusKind = 'confirmed' | 'reset' | 'callback_failed' | 'none'
+export type LoginStatusKind =
+  | 'confirmed'
+  | 'reset'
+  | 'callback_failed'
+  | 'recovery_link'
+  | 'recovery_browser'
+  | 'none'
 
 /** `confirmed=1` wins over a stale callback error so a replay cannot show failure. */
 export function loginStatusFromSearch(input: {
@@ -174,6 +219,8 @@ export function loginStatusFromSearch(input: {
   if (input.confirmed === '1') return 'confirmed'
   if (input.reset === 'success') return 'reset'
   if (input.error === AUTH_CALLBACK_FAILED_PARAM) return 'callback_failed'
+  if (input.error === RECOVERY_LINK_INVALID_PARAM) return 'recovery_link'
+  if (input.error === RECOVERY_BROWSER_PARAM) return 'recovery_browser'
   return 'none'
 }
 
