@@ -28,6 +28,10 @@ function isQuestionVisible(
   question: CompatibilityQuestionDefinition,
   answers: CompatibilityQuestionnaireAnswers
 ): boolean {
+  if (question.retired) {
+    return false
+  }
+
   if (!question.visibleWhen) {
     return true
   }

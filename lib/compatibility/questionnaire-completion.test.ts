@@ -17,6 +17,9 @@ const completeAnswers: CompatibilityQuestionnaireAnswers = {
   matchInterests: ['men'],
   relationshipIntention: 2,
   faithValues: 2,
+  shared_faith_importance: 3,
+  core_values_alignment_importance: 4,
+  shared_worldview_importance: 2,
   valuesVsChemistry: 2,
   partnershipDailyLife: 3,
   socialRhythm: 3,
@@ -80,7 +83,7 @@ describe('questionnaire completion', () => {
     })
   })
 
-  it('accepts a full v2 questionnaire as complete', () => {
+  it('accepts a full current questionnaire as complete', () => {
     const questionnaire = buildCompatibilityQuestionnaire(completeAnswers)
 
     expect(isQuestionnaireComplete(questionnaire)).toBe(true)

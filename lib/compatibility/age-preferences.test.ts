@@ -26,7 +26,7 @@ import {
 import type { CompatibilityQuestionnaireAnswers } from '@/lib/compatibility/questionnaire'
 import { passesCompatibilityHardFilters } from '@/lib/compatibility/match-hard-filters'
 import { canGenerateMatches } from '@/lib/compatibility/eligibility'
-import { COMPATIBILITY_QUESTIONNAIRE_VERSION } from '@/lib/compatibility/questionnaire-config'
+import { COMPATIBILITY_QUESTIONNAIRE_V2_VERSION } from '@/lib/compatibility/questionnaire-config'
 import type { CompatibilityQuestionnaireV2 } from '@/lib/compatibility/types'
 
 const completeAnswers: CompatibilityQuestionnaireAnswers = {
@@ -38,6 +38,9 @@ const completeAnswers: CompatibilityQuestionnaireAnswers = {
   matchInterests: ['men'],
   relationshipIntention: 2,
   faithValues: 2,
+  shared_faith_importance: 3,
+  core_values_alignment_importance: 4,
+  shared_worldview_importance: 2,
   valuesVsChemistry: 2,
   partnershipDailyLife: 3,
   socialRhythm: 3,
@@ -71,7 +74,7 @@ function questionnaire(
   overrides: Partial<CompatibilityQuestionnaireV2> = {}
 ): CompatibilityQuestionnaireV2 {
   return {
-    version: COMPATIBILITY_QUESTIONNAIRE_VERSION,
+    version: COMPATIBILITY_QUESTIONNAIRE_V2_VERSION,
     gender: 'woman',
     genderSelfDescribe: null,
     age: 32,

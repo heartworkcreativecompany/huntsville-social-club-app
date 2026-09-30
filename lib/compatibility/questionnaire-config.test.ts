@@ -8,8 +8,8 @@ import {
 
 describe('COMPATIBILITY_QUESTIONNAIRE_QUESTIONS', () => {
   it('defines the full planned questionnaire', () => {
-    expect(COMPATIBILITY_QUESTIONNAIRE_VERSION).toBe(2)
-    expect(COMPATIBILITY_QUESTIONNAIRE_QUESTIONS).toHaveLength(34)
+    expect(COMPATIBILITY_QUESTIONNAIRE_VERSION).toBe(3)
+    expect(COMPATIBILITY_QUESTIONNAIRE_QUESTIONS).toHaveLength(37)
 
     const prompts = COMPATIBILITY_QUESTIONNAIRE_QUESTIONS.map(
       (question) => question.prompt
@@ -98,6 +98,6 @@ describe('COMPATIBILITY_QUESTIONNAIRE_QUESTIONS', () => {
       'maritalHistory'
     )
     expect(familyQuestions).toHaveLength(6)
-    expect(valuesQuestions).toHaveLength(8)
+    expect(valuesQuestions).toHaveLength(11)
   })
 })

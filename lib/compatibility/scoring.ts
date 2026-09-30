@@ -4,9 +4,13 @@ import {
   parseCompatibilityQuestionnaire,
   questionnaireV2,
 } from '@/lib/compatibility/questionnaire'
-import type { CompatibilityOrdinalQuestionId } from '@/lib/compatibility/questionnaire-config'
-import { COMPATIBILITY_ORDINAL_QUESTION_IDS } from '@/lib/compatibility/questionnaire-config'
-import type { CompatibilityQuestionnaireV2 } from '@/lib/compatibility/types'
+import {
+  ALIGNMENT_IMPORTANCE_QUESTION_IDS,
+  COMPATIBILITY_ORDINAL_QUESTION_IDS,
+  type AlignmentImportanceQuestionId,
+  type CompatibilityOrdinalQuestionId,
+} from '@/lib/compatibility/questionnaire-config'
+import type { CompatibilityQuestionnaireComplete } from '@/lib/compatibility/types'
 
 export type ScorableMemberProfile = {
   compatibility_questionnaire: unknown
@@ -23,7 +27,6 @@ export type CompatibilityScoreResult = {
 const ORDINAL_WEIGHTS: Partial<Record<CompatibilityOrdinalQuestionId, number>> =
   {
     relationshipIntention: 12,
-    faithValues: 10,
     valuesVsChemistry: 8,
     partnershipDailyLife: 8,
     socialRhythm: 7,
@@ -112,9 +115,127 @@ function ageProximityPoints(
   return 0
 }
 
+const ALIGNMENT_CAUTION_LABELS: Record<AlignmentImportanceQuestionId, string> = {
+  shared_faith_importance: 'Large difference in how important shared faith is',
+  core_values_alignment_importance:
+    'Large difference in how important core-value alignment is',
+  shared_worldview_importance:
+    'Large difference in how important a similar worldview is',
+}
+
+function readOrdinal(
+  questionnaire: CompatibilityQuestionnaireComplete,
+  key: string
+): number | null {
+  const value = (questionnaire as Record<string, unknown>)[key]
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5
+    ? value
+    : null
+}
+
+function importanceWeight(level: number): number {
+  if (level >= 5) return 12
+  if (level >= 3) return 8
+  return 3
+}
+
+/** Compares how important alignment is. It does not describe anyone's beliefs. */
+export function alignmentImportancePoints(left: number, right: number): number {
+  const weight = Math.max(importanceWeight(left), importanceWeight(right))
+  const distance = Math.abs(left - right)
+  if (distance === 0) return weight
+  if (distance === 1) return Math.round(weight * 0.8)
+  if (distance === 2) return Math.round(weight * 0.4)
+  if (distance === 3) return Math.round(weight * 0.15)
+  return Math.round(weight * 0.05)
+}
+
+function hasAllAlignmentAnswers(
+  questionnaire: CompatibilityQuestionnaireComplete
+): boolean {
+  return ALIGNMENT_IMPORTANCE_QUESTION_IDS.every(
+    (key) => readOrdinal(questionnaire, key) != null
+  )
+}
+
+/**
+ * Pulls a capped score back down when importance differs.
+ * One answer cannot drop an otherwise full score below the recommendation minimum.
+ */
+function alignmentScorePenalty(
+  viewer: CompatibilityQuestionnaireComplete,
+  candidate: CompatibilityQuestionnaireComplete
+): number {
+  if (!hasAllAlignmentAnswers(viewer) || !hasAllAlignmentAnswers(candidate)) {
+    return 0
+  }
+
+  let penalty = 0
+  for (const key of ALIGNMENT_IMPORTANCE_QUESTION_IDS) {
+    const left = readOrdinal(viewer, key)!
+    const right = readOrdinal(candidate, key)!
+    const distance = Math.abs(left - right)
+    const importance = Math.max(left, right)
+    if (distance <= 1 || importance <= 2) {
+      continue
+    }
+    if (importance >= 5 && distance >= 3) {
+      penalty += 18
+    } else if (importance >= 5) {
+      penalty += 8
+    } else if (distance >= 3) {
+      penalty += 10
+    } else {
+      penalty += 4
+    }
+  }
+
+  return Math.min(penalty, 25)
+}
+
+function scoreAlignmentImportance(
+  viewer: CompatibilityQuestionnaireComplete,
+  candidate: CompatibilityQuestionnaireComplete,
+  breakdown: Record<string, number | string>
+): number {
+  if (hasAllAlignmentAnswers(viewer) && hasAllAlignmentAnswers(candidate)) {
+    let points = 0
+    const cautions: string[] = []
+
+    for (const key of ALIGNMENT_IMPORTANCE_QUESTION_IDS) {
+      const left = readOrdinal(viewer, key)!
+      const right = readOrdinal(candidate, key)!
+      const questionPoints = alignmentImportancePoints(left, right)
+      breakdown[key] = questionPoints
+      points += questionPoints
+
+      const distance = Math.abs(left - right)
+      if (distance >= 3 && Math.max(left, right) >= 3) {
+        cautions.push(ALIGNMENT_CAUTION_LABELS[key])
+      }
+    }
+
+    if (cautions.length > 0) {
+      breakdown.alignment_caution = cautions.join('; ')
+    }
+    return points
+  }
+
+  const viewerFaith = readOrdinal(viewer, 'faithValues')
+  const candidateFaith = readOrdinal(candidate, 'faithValues')
+  if (viewerFaith != null && candidateFaith != null) {
+    const questionPoints = ordinalSimilarityPoints(viewerFaith, candidateFaith, 10)
+    breakdown.faithValues = questionPoints
+    return questionPoints
+  }
+
+  breakdown.alignment_unscored = 1
+  return 0
+}
+
 function scoreOrdinalDimensions(
-  viewer: CompatibilityQuestionnaireV2,
-  candidate: CompatibilityQuestionnaireV2,
+  viewer: CompatibilityQuestionnaireComplete,
+  candidate: CompatibilityQuestionnaireComplete,
   breakdown: Record<string, number | string>
 ): number {
   let points = 0
@@ -125,15 +246,18 @@ function scoreOrdinalDimensions(
       continue
     }
 
-    const questionPoints = ordinalSimilarityPoints(
-      viewer[key],
-      candidate[key],
-      weight
-    )
+    const left = readOrdinal(viewer, key)
+    const right = readOrdinal(candidate, key)
+    if (left == null || right == null) {
+      continue
+    }
+
+    const questionPoints = ordinalSimilarityPoints(left, right, weight)
     breakdown[key] = questionPoints
     points += questionPoints
   }
 
+  points += scoreAlignmentImportance(viewer, candidate, breakdown)
   return points
 }
 
@@ -194,8 +318,17 @@ export function scoreCompatibilityPair(
   breakdown.age_proximity = agePoints
   score += agePoints
 
+  const capped = Math.min(100, Math.round(score))
+  const alignmentPenalty = alignmentScorePenalty(
+    viewerQuestionnaire,
+    candidateQuestionnaire
+  )
+  if (alignmentPenalty > 0) {
+    breakdown.alignment_penalty = alignmentPenalty
+  }
+
   return {
-    score: Math.min(100, Math.round(score)),
+    score: Math.max(0, capped - alignmentPenalty),
     breakdown,
   }
 }
