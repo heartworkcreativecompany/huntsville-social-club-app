@@ -103,6 +103,7 @@ describe('marketing apex route gate', () => {
       '/privacy',
       '/terms',
       '/code-of-conduct',
+      '/data-deletion',
     ]) {
       expect(isMarketingPassthroughPath(path)).toBe(true)
       expect(proxyHostAction('marketing', path)).toEqual({ type: 'next' })

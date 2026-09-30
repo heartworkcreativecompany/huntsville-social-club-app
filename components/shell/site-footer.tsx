@@ -58,6 +58,14 @@ export default function SiteFooter({
                   Terms
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/data-deletion"
+                  className="link-brand hover:text-foreground"
+                >
+                  Data Deletion
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -113,6 +121,12 @@ export default function SiteFooter({
               className="link-brand underline hover:text-foreground"
             >
               Code of Conduct
+            </Link>
+            <Link
+              href="/data-deletion"
+              className="link-brand underline hover:text-foreground"
+            >
+              Data Deletion
             </Link>
           </nav>
         </div>
