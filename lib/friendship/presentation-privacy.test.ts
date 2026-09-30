@@ -131,7 +131,7 @@ describe('friendship privacy conventions', () => {
   })
 
   it('does not change Dating questionnaire prompts', () => {
-    expect(COMPATIBILITY_QUESTIONNAIRE_QUESTIONS).toHaveLength(34)
+    expect(COMPATIBILITY_QUESTIONNAIRE_QUESTIONS).toHaveLength(37)
     expect(
       COMPATIBILITY_QUESTIONNAIRE_QUESTIONS.some(
         (question) => question.id === 'friendshipGoals'

@@ -1,4 +1,5 @@
-export const COMPATIBILITY_QUESTIONNAIRE_VERSION = 2 as const
+export const COMPATIBILITY_QUESTIONNAIRE_V2_VERSION = 2 as const
+export const COMPATIBILITY_QUESTIONNAIRE_VERSION = 3 as const
 
 export type CompatibilityQuestionnaireSectionId =
   | 'eligibility'
@@ -33,6 +34,8 @@ export type CompatibilityQuestionDefinition = {
   visibleWhen?: { field: string; value: string }
   /** Multi-select option that cannot be combined with others. */
   exclusiveOption?: string
+  /** Kept for stored answers. Hidden from new and edited questionnaires. */
+  retired?: boolean
 }
 
 export type CompatibilityQuestionnaireSection = {
@@ -79,6 +82,25 @@ const AGREE_DISAGREE_5 = ORDINAL_5([
   'Agree',
   'Strongly agree',
 ])
+
+export const RELATIONSHIP_ALIGNMENT_IMPORTANCE_OPTIONS = ORDINAL_5([
+  'Not important to me',
+  'Somewhat important',
+  'Important',
+  'Very important',
+  'Essential for a long-term relationship',
+])
+
+export const ALIGNMENT_IMPORTANCE_QUESTION_IDS = [
+  'shared_faith_importance',
+  'core_values_alignment_importance',
+  'shared_worldview_importance',
+] as const
+
+export type AlignmentImportanceQuestionId =
+  (typeof ALIGNMENT_IMPORTANCE_QUESTION_IDS)[number]
+
+export const RETIRED_FAITH_VALUES_QUESTION_ID = 'faithValues' as const
 
 export const COMPATIBILITY_QUESTIONNAIRE_QUESTIONS: CompatibilityQuestionDefinition[] =
   [
@@ -155,12 +177,40 @@ export const COMPATIBILITY_QUESTIONNAIRE_QUESTIONS: CompatibilityQuestionDefinit
       ]),
     },
     {
+      id: 'shared_faith_importance',
+      section: 'values',
+      prompt:
+        'How important is sharing the same faith or spiritual beliefs in a romantic relationship?',
+      type: 'single',
+      required: true,
+      options: RELATIONSHIP_ALIGNMENT_IMPORTANCE_OPTIONS,
+    },
+    {
+      id: 'core_values_alignment_importance',
+      section: 'values',
+      prompt:
+        'How important is alignment on core values (family, lifestyle, communication, finances, priorities) in a relationship?',
+      type: 'single',
+      required: true,
+      options: RELATIONSHIP_ALIGNMENT_IMPORTANCE_OPTIONS,
+    },
+    {
+      id: 'shared_worldview_importance',
+      section: 'values',
+      prompt:
+        'How important is having a similar worldview or outlook on life in a romantic relationship?',
+      type: 'single',
+      required: true,
+      options: RELATIONSHIP_ALIGNMENT_IMPORTANCE_OPTIONS,
+    },
+    {
       id: 'faithValues',
       section: 'values',
       prompt:
         'How central is shared faith, values, or worldview in a relationship for you?',
       type: 'single',
-      required: true,
+      required: false,
+      retired: true,
       options: ORDINAL_5([
         'Essential',
         'Very important',
@@ -467,7 +517,9 @@ export const COMPATIBILITY_QUESTIONNAIRE_QUESTIONS: CompatibilityQuestionDefinit
 
 export const COMPATIBILITY_CORE_ORDINAL_QUESTION_IDS = [
   'relationshipIntention',
-  'faithValues',
+  'shared_faith_importance',
+  'core_values_alignment_importance',
+  'shared_worldview_importance',
   'valuesVsChemistry',
   'partnershipDailyLife',
   'socialRhythm',
@@ -504,6 +556,24 @@ export const COMPATIBILITY_ORDINAL_QUESTION_IDS = [
   ...COMPATIBILITY_LIFESTYLE_ORDINAL_QUESTION_IDS,
 ] as const
 
+/** Ordinal answers required for a completed version-2 questionnaire. */
+export const COMPATIBILITY_V2_ORDINAL_QUESTION_IDS = [
+  'relationshipIntention',
+  'faithValues',
+  'valuesVsChemistry',
+  'partnershipDailyLife',
+  'socialRhythm',
+  'saturdayStyle',
+  'planningSpontaneity',
+  'ambition',
+  'maritalHistory',
+  'openToPartnerWithChildren',
+  'futureChildren',
+  'openToDivorced',
+  'partnerHistoryPreference',
+  ...COMPATIBILITY_LIFESTYLE_ORDINAL_QUESTION_IDS,
+] as const
+
 export type CompatibilityOrdinalQuestionId =
   (typeof COMPATIBILITY_ORDINAL_QUESTION_IDS)[number]
 
@@ -514,6 +584,6 @@ export function questionsForSection(
   sectionId: CompatibilityQuestionnaireSectionId
 ): CompatibilityQuestionDefinition[] {
   return COMPATIBILITY_QUESTIONNAIRE_QUESTIONS.filter(
-    (question) => question.section === sectionId
+    (question) => question.section === sectionId && !question.retired
   )
 }

@@ -1,7 +1,10 @@
 import {
+  ALIGNMENT_IMPORTANCE_QUESTION_IDS,
   COMPATIBILITY_ORDINAL_QUESTION_IDS,
   COMPATIBILITY_QUESTIONNAIRE_QUESTIONS,
+  COMPATIBILITY_QUESTIONNAIRE_V2_VERSION,
   COMPATIBILITY_QUESTIONNAIRE_VERSION,
+  COMPATIBILITY_V2_ORDINAL_QUESTION_IDS,
   type CompatibilityQuestionDefinition,
 } from '@/lib/compatibility/questionnaire-config'
 import type {
@@ -10,9 +13,11 @@ import type {
   CompatibilityMatchInterest,
   CompatibilityOrdinalAnswer,
   CompatibilityQuestionnaire,
+  CompatibilityQuestionnaireComplete,
   CompatibilityQuestionnaireStored,
   CompatibilityQuestionnaireV1,
   CompatibilityQuestionnaireV2,
+  CompatibilityQuestionnaireV3,
 } from '@/lib/compatibility/types'
 import {
   hasCompleteDatingAgePreferences,
@@ -29,6 +34,9 @@ export type CompatibilityQuestionnaireAnswers = {
   matchInterests: string[]
   relationshipIntention: number | null
   faithValues: number | null
+  shared_faith_importance: number | null
+  core_values_alignment_importance: number | null
+  shared_worldview_importance: number | null
   valuesVsChemistry: number | null
   partnershipDailyLife: number | null
   socialRhythm: number | null
@@ -57,6 +65,21 @@ export type CompatibilityQuestionnaireAnswers = {
   smokeRegularly: number | null
   animalCompanyImportant: number | null
 }
+
+type ReadableCompatibilityQuestionnaire = Partial<
+  Omit<CompatibilityQuestionnaireV2, 'version' | 'faithValues'>
+> &
+  Partial<
+    Pick<
+      CompatibilityQuestionnaireV3,
+      | 'shared_faith_importance'
+      | 'core_values_alignment_importance'
+      | 'shared_worldview_importance'
+    >
+  > & {
+    version: 2 | 3
+    faithValues?: CompatibilityOrdinalAnswer
+  }
 
 const GENDER_VALUES = new Set<CompatibilityGender>([
   'woman',
@@ -92,6 +115,9 @@ function emptyAnswers(): CompatibilityQuestionnaireAnswers {
     matchInterests: [],
     relationshipIntention: null,
     faithValues: null,
+    shared_faith_importance: null,
+    core_values_alignment_importance: null,
+    shared_worldview_importance: null,
     valuesVsChemistry: null,
     partnershipDailyLife: null,
     socialRhythm: null,
@@ -162,8 +188,11 @@ export function parseCompatibilityQuestionnaire(
   }
 
   const record = value as Record<string, unknown>
-  if (record.version === COMPATIBILITY_QUESTIONNAIRE_VERSION) {
-    return record as CompatibilityQuestionnaireV2
+  if (
+    record.version === COMPATIBILITY_QUESTIONNAIRE_VERSION ||
+    record.version === COMPATIBILITY_QUESTIONNAIRE_V2_VERSION
+  ) {
+    return record as CompatibilityQuestionnaire
   }
 
   if (record.version === 1) {
@@ -183,8 +212,11 @@ export function questionnaireAnswersFromStored(
     return answers
   }
 
-  if (parsed.version === COMPATIBILITY_QUESTIONNAIRE_VERSION) {
-    const record = parsed as CompatibilityQuestionnaireStored
+  if (
+    parsed.version === COMPATIBILITY_QUESTIONNAIRE_VERSION ||
+    parsed.version === COMPATIBILITY_QUESTIONNAIRE_V2_VERSION
+  ) {
+    const record = parsed as ReadableCompatibilityQuestionnaire
     if (record.gender) {
       answers.gender = record.gender
     }
@@ -202,8 +234,10 @@ export function questionnaireAnswersFromStored(
         : null)
     answers.matchInterests = [...(record.matchInterests ?? [])]
     answers.familySituation = [...(record.familySituation ?? [])]
+    answers.faithValues = isOrdinalAnswer(record.faithValues) ? record.faithValues : null
     for (const key of COMPATIBILITY_ORDINAL_QUESTION_IDS) {
-      answers[key] = record[key] ?? null
+      const storedValue = record[key]
+      answers[key] = isOrdinalAnswer(storedValue) ? storedValue : null
     }
     return answers
   }
@@ -223,12 +257,16 @@ export function isLegacyTestQuestionnaire(
 
 export function isQuestionnaireComplete(
   questionnaire: CompatibilityQuestionnaire | null
-): questionnaire is CompatibilityQuestionnaireV2 {
-  if (!questionnaire || questionnaire.version !== COMPATIBILITY_QUESTIONNAIRE_VERSION) {
+): questionnaire is CompatibilityQuestionnaireComplete {
+  if (
+    !questionnaire ||
+    (questionnaire.version !== COMPATIBILITY_QUESTIONNAIRE_VERSION &&
+      questionnaire.version !== COMPATIBILITY_QUESTIONNAIRE_V2_VERSION)
+  ) {
     return false
   }
 
-  const record = questionnaire as CompatibilityQuestionnaireStored
+  const record = questionnaire as ReadableCompatibilityQuestionnaire
 
   if (!record.gender || !GENDER_VALUES.has(record.gender)) {
     return false
@@ -252,7 +290,12 @@ export function isQuestionnaireComplete(
     return false
   }
 
-  for (const key of COMPATIBILITY_ORDINAL_QUESTION_IDS) {
+  const ordinalIds =
+    questionnaire.version === COMPATIBILITY_QUESTIONNAIRE_V2_VERSION
+      ? COMPATIBILITY_V2_ORDINAL_QUESTION_IDS
+      : COMPATIBILITY_ORDINAL_QUESTION_IDS
+
+  for (const key of ordinalIds) {
     if (!isOrdinalAnswer(record[key])) {
       return false
     }
@@ -338,7 +381,8 @@ export function buildCompatibilityQuestionnaire(
   existing?: CompatibilityQuestionnaire | null
 ): CompatibilityQuestionnaireStored {
   const stored: CompatibilityQuestionnaireStored =
-    existing?.version === COMPATIBILITY_QUESTIONNAIRE_VERSION
+    existing?.version === COMPATIBILITY_QUESTIONNAIRE_VERSION ||
+    existing?.version === COMPATIBILITY_QUESTIONNAIRE_V2_VERSION
       ? { ...existing, version: COMPATIBILITY_QUESTIONNAIRE_VERSION }
       : { version: COMPATIBILITY_QUESTIONNAIRE_VERSION }
 
@@ -382,6 +426,16 @@ export function buildCompatibilityQuestionnaire(
     }
   }
 
+  if (isOrdinalAnswer(input.faithValues)) {
+    stored.faithValues = input.faithValues
+  } else if (
+    existing &&
+    existing.version !== 1 &&
+    isOrdinalAnswer(existing.faithValues)
+  ) {
+    stored.faithValues = existing.faithValues
+  }
+
   if (existing?.version === 1) {
     if (existing.relationshipGoals?.trim()) {
       stored.legacyRelationshipGoals = existing.relationshipGoals.trim()
@@ -389,7 +443,10 @@ export function buildCompatibilityQuestionnaire(
     if (existing.communicationStyle?.trim()) {
       stored.legacyCommunicationStyle = existing.communicationStyle.trim()
     }
-  } else if (existing?.version === COMPATIBILITY_QUESTIONNAIRE_VERSION) {
+  } else if (
+    existing?.version === COMPATIBILITY_QUESTIONNAIRE_VERSION ||
+    existing?.version === COMPATIBILITY_QUESTIONNAIRE_V2_VERSION
+  ) {
     if (existing.legacyRelationshipGoals) {
       stored.legacyRelationshipGoals = existing.legacyRelationshipGoals
     }
@@ -406,6 +463,15 @@ export function validateQuestionnaireAnswersForSave(
   complete: boolean,
   existing?: CompatibilityQuestionnaire | null
 ): { questionnaire: CompatibilityQuestionnaireStored } | { error: string } {
+  for (const key of ALIGNMENT_IMPORTANCE_QUESTION_IDS) {
+    const value = input[key]
+    if (value != null && !isOrdinalAnswer(value)) {
+      return {
+        error: 'Choose one of the five answers for each alignment question.',
+      }
+    }
+  }
+
   const questionnaire = buildCompatibilityQuestionnaire(input, existing)
 
   if (!complete) {
@@ -430,7 +496,7 @@ export function missingRequiredQuestionPrompts(
   const missing: string[] = []
 
   for (const question of COMPATIBILITY_QUESTIONNAIRE_QUESTIONS) {
-    if (!question.required) {
+    if (!question.required || question.retired) {
       continue
     }
 
@@ -600,7 +666,10 @@ export function questionnaireRelationshipGoals(
     return ''
   }
 
-  if (questionnaire.version === COMPATIBILITY_QUESTIONNAIRE_VERSION) {
+  if (
+    questionnaire.version === COMPATIBILITY_QUESTIONNAIRE_VERSION ||
+    questionnaire.version === COMPATIBILITY_QUESTIONNAIRE_V2_VERSION
+  ) {
     return questionnaire.legacyRelationshipGoals?.trim() ?? ''
   }
 
@@ -615,7 +684,10 @@ export function questionnaireCommunicationStyle(
     return ''
   }
 
-  if (questionnaire.version === COMPATIBILITY_QUESTIONNAIRE_VERSION) {
+  if (
+    questionnaire.version === COMPATIBILITY_QUESTIONNAIRE_VERSION ||
+    questionnaire.version === COMPATIBILITY_QUESTIONNAIRE_V2_VERSION
+  ) {
     return questionnaire.legacyCommunicationStyle?.trim() ?? ''
   }
 
@@ -624,6 +696,6 @@ export function questionnaireCommunicationStyle(
 
 export function questionnaireV2(
   questionnaire: CompatibilityQuestionnaire | null
-): CompatibilityQuestionnaireV2 | null {
+): CompatibilityQuestionnaireComplete | null {
   return isQuestionnaireComplete(questionnaire) ? questionnaire : null
 }

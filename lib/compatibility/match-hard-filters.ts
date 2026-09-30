@@ -1,7 +1,7 @@
 import type {
   CompatibilityFamilySituation,
   CompatibilityGender,
-  CompatibilityQuestionnaireV2,
+  CompatibilityQuestionnaireComplete,
 } from '@/lib/compatibility/types'
 import {
   isQuestionnaireComplete,
@@ -30,8 +30,8 @@ function genderMatchCategory(
 }
 
 export function hasMutualGenderInterest(
-  left: CompatibilityQuestionnaireV2,
-  right: CompatibilityQuestionnaireV2
+  left: CompatibilityQuestionnaireComplete,
+  right: CompatibilityQuestionnaireComplete
 ): boolean {
   const leftCategory = genderMatchCategory(left.gender)
   const rightCategory = genderMatchCategory(right.gender)
@@ -74,8 +74,8 @@ function opennessAllows(
 }
 
 export function passesCompatibilityHardFilters(
-  viewer: CompatibilityQuestionnaireV2,
-  candidate: CompatibilityQuestionnaireV2
+  viewer: CompatibilityQuestionnaireComplete,
+  candidate: CompatibilityQuestionnaireComplete
 ): boolean {
   if (!isMutualDatingAgeMatch(viewer, candidate)) {
     return false

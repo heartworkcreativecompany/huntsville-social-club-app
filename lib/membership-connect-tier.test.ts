@@ -47,12 +47,12 @@ import {
 } from '@/lib/public-member-badges'
 import { STRIPE_LIVE_PRICE_IDS, isPaidMembershipTier } from '@/lib/stripe/config'
 import { CONNECT_MATCHES_TEASER } from '@/components/dashboard/connect-matches-teaser'
-import { COMPATIBILITY_QUESTIONNAIRE_VERSION } from '@/lib/compatibility/questionnaire-config'
+import { COMPATIBILITY_QUESTIONNAIRE_V2_VERSION } from '@/lib/compatibility/questionnaire-config'
 
 const repoRoot = join(__dirname, '..')
 
 const completeQuestionnaire = {
-  version: COMPATIBILITY_QUESTIONNAIRE_VERSION,
+  version: COMPATIBILITY_QUESTIONNAIRE_V2_VERSION,
   gender: 'woman' as const,
   genderSelfDescribe: null,
   age: 32,

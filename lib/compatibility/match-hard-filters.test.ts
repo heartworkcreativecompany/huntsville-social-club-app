@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { hasMutualGenderInterest } from '@/lib/compatibility/match-hard-filters'
-import { COMPATIBILITY_QUESTIONNAIRE_VERSION } from '@/lib/compatibility/questionnaire-config'
+import { COMPATIBILITY_QUESTIONNAIRE_V2_VERSION } from '@/lib/compatibility/questionnaire-config'
 import type { CompatibilityQuestionnaireV2 } from '@/lib/compatibility/types'
 
 function questionnaire(
   overrides: Partial<CompatibilityQuestionnaireV2> = {}
 ): CompatibilityQuestionnaireV2 {
   return {
-    version: COMPATIBILITY_QUESTIONNAIRE_VERSION,
+    version: COMPATIBILITY_QUESTIONNAIRE_V2_VERSION,
     gender: 'woman',
     genderSelfDescribe: null,
     age: 32,

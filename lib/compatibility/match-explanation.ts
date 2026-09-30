@@ -14,6 +14,17 @@ const EXPLANATION_SIGNALS = [
     lowLabel: 'Compatible values priorities',
   },
   {
+    keys: [
+      'shared_faith_importance',
+      'core_values_alignment_importance',
+      'shared_worldview_importance',
+    ],
+    max: 12,
+    min: 6,
+    highLabel: 'Similar priority on relationship alignment',
+    lowLabel: 'Compatible priority on relationship alignment',
+  },
+  {
     keys: ['valuesVsChemistry'],
     max: 8,
     min: 6,

@@ -1,4 +1,7 @@
-import type { COMPATIBILITY_QUESTIONNAIRE_VERSION } from '@/lib/compatibility/questionnaire-config'
+import type {
+  COMPATIBILITY_QUESTIONNAIRE_V2_VERSION,
+  COMPATIBILITY_QUESTIONNAIRE_VERSION,
+} from '@/lib/compatibility/questionnaire-config'
 
 export const DATING_CONNECTION_OPTION = 'Dating' as const
 
@@ -48,7 +51,7 @@ export type CompatibilityOrdinalAnswer = 1 | 2 | 3 | 4 | 5
 
 /** Private questionnaire payload stored on profiles.compatibility_questionnaire. */
 export type CompatibilityQuestionnaireV2 = {
-  version: typeof COMPATIBILITY_QUESTIONNAIRE_VERSION
+  version: typeof COMPATIBILITY_QUESTIONNAIRE_V2_VERSION
   gender: CompatibilityGender
   genderSelfDescribe: string | null
   age: number
@@ -89,10 +92,26 @@ export type CompatibilityQuestionnaireV2 = {
   legacyCommunicationStyle?: string
 }
 
+export type CompatibilityQuestionnaireV3 = Omit<
+  CompatibilityQuestionnaireV2,
+  'version' | 'faithValues'
+> & {
+  version: typeof COMPATIBILITY_QUESTIONNAIRE_VERSION
+  /** Historical combined answer. Preserved when present. Not required for version 3. */
+  faithValues?: CompatibilityOrdinalAnswer
+  shared_faith_importance: CompatibilityOrdinalAnswer
+  core_values_alignment_importance: CompatibilityOrdinalAnswer
+  shared_worldview_importance: CompatibilityOrdinalAnswer
+}
+
+export type CompatibilityQuestionnaireComplete =
+  | CompatibilityQuestionnaireV2
+  | CompatibilityQuestionnaireV3
+
 /** In-progress saves may omit unanswered fields until completion. */
 export type CompatibilityQuestionnaireStored = {
   version: typeof COMPATIBILITY_QUESTIONNAIRE_VERSION
-} & Partial<Omit<CompatibilityQuestionnaireV2, 'version'>>
+} & Partial<Omit<CompatibilityQuestionnaireV3, 'version'>>
 
 /** Phase 1 scaffold — not sufficient for completion. */
 export type CompatibilityQuestionnaireV1 = {
@@ -102,6 +121,7 @@ export type CompatibilityQuestionnaireV1 = {
 }
 
 export type CompatibilityQuestionnaire =
+  | CompatibilityQuestionnaireV3
   | CompatibilityQuestionnaireV2
   | CompatibilityQuestionnaireStored
   | CompatibilityQuestionnaireV1
