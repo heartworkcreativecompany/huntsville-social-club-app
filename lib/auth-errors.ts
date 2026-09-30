@@ -1,5 +1,20 @@
 /** Map Supabase auth errors to friendly copy without leaking account existence. */
 
+export const INVALID_LOGIN_CREDENTIALS_MESSAGE =
+  'Email or password is incorrect. Try again or use Forgot password.'
+
+export const RECOVERY_LINK_INVALID_MESSAGE =
+  'This reset link is invalid or has expired. Request a new password reset email and open the latest link.'
+
+export const RECOVERY_BROWSER_MESSAGE =
+  'Open the reset link in the same browser where you requested it, or request a new password reset email.'
+
+export const PASSWORD_UPDATE_FAILED_MESSAGE =
+  'Password could not be updated. Request a new reset link and try again.'
+
+export const TEMPORARY_AUTH_PROBLEM_MESSAGE =
+  'A temporary authentication problem occurred. Please try again.'
+
 export function friendlyAuthError(message: string): string {
   const lower = message.toLowerCase()
 
@@ -7,7 +22,7 @@ export function friendlyAuthError(message: string): string {
     lower.includes('invalid login credentials') ||
     lower.includes('invalid email or password')
   ) {
-    return 'Email or password is incorrect. Try again or use Forgot password.'
+    return INVALID_LOGIN_CREDENTIALS_MESSAGE
   }
 
   if (lower.includes('email not confirmed')) {
@@ -31,18 +46,44 @@ export function friendlyAuthError(message: string): string {
   }
 
   if (
-    lower.includes('session') &&
-    (lower.includes('expired') || lower.includes('invalid'))
+    lower.includes('code verifier') ||
+    lower.includes('pkce') ||
+    lower.includes('flow_state') ||
+    lower.includes('invalid grant')
   ) {
-    return 'This link has expired. Request a new password reset email.'
+    return RECOVERY_BROWSER_MESSAGE
   }
 
-  if (lower.includes('same password')) {
+  if (
+    lower.includes('otp_expired') ||
+    lower.includes('email link is invalid') ||
+    (lower.includes('session') &&
+      (lower.includes('expired') || lower.includes('invalid'))) ||
+    (lower.includes('expired') &&
+      (lower.includes('otp') || lower.includes('link') || lower.includes('token')))
+  ) {
+    return RECOVERY_LINK_INVALID_MESSAGE
+  }
+
+  if (lower.includes('same password') || lower.includes('different from the old')) {
     return 'Choose a different password than your current one.'
   }
 
-  if (lower.includes('network') || lower.includes('fetch')) {
-    return 'Connection problem. Check your network and try again.'
+  if (
+    lower.includes('network') ||
+    lower.includes('fetch') ||
+    lower.includes('timeout') ||
+    lower.includes('internal server') ||
+    lower.includes('service unavailable')
+  ) {
+    return TEMPORARY_AUTH_PROBLEM_MESSAGE
+  }
+
+  if (
+    lower.includes('password') &&
+    (lower.includes('update') || lower.includes('unable') || lower.includes('could not'))
+  ) {
+    return PASSWORD_UPDATE_FAILED_MESSAGE
   }
 
   return 'Something went wrong. Please try again.'
