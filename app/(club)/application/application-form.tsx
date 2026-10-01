@@ -46,6 +46,7 @@ import {
 import {
   INDUSTRY_OPTIONS,
   formatIndustryLabel,
+  isHistoricalIndustryValue,
   parseIndustryValue,
 } from '@/lib/industries'
 import {
@@ -752,6 +753,11 @@ export default function ApplicationForm({
                 onChange={(e) => updateWork({ industry: e.target.value })}
               >
                 <option value="">Select an industry</option>
+                {isHistoricalIndustryValue(draft.workAndInterests.industry) ? (
+                  <option value={draft.workAndInterests.industry}>
+                    {formatIndustryLabel(draft.workAndInterests.industry)}
+                  </option>
+                ) : null}
                 {!parseIndustryValue(draft.workAndInterests.industry) &&
                 draft.workAndInterests.industry.trim() ? (
                   <option value={draft.workAndInterests.industry}>

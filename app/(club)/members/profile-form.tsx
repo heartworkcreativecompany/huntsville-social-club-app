@@ -38,6 +38,12 @@ import {
   mobileFullButtonClassName,
   textareaClassName,
 } from '@/lib/event-labels'
+import {
+  INDUSTRY_OPTIONS,
+  formatIndustryLabel,
+  isHistoricalIndustryValue,
+  parseIndustryValue,
+} from '@/lib/industries'
 import { updateMemberProfile } from './actions'
 
 type ProfileFormProps = {
@@ -271,14 +277,30 @@ export default function ProfileForm({
           </label>
           <label className="grid gap-1.5 text-sm">
             <span className="font-medium text-foreground">Industry</span>
-            <input
-              type="text"
+            <select
               value={workIndustry}
               onChange={(e) => setWorkIndustry(e.target.value)}
-              placeholder="e.g. Technology"
               className={inputClassName}
               disabled={isPending}
-            />
+              aria-label="Industry"
+            >
+              <option value="">Select an industry</option>
+              {isHistoricalIndustryValue(workIndustry) ? (
+                <option value={workIndustry}>
+                  {formatIndustryLabel(workIndustry)}
+                </option>
+              ) : null}
+              {!parseIndustryValue(workIndustry) && workIndustry.trim() ? (
+                <option value={workIndustry}>
+                  {formatIndustryLabel(workIndustry)}
+                </option>
+              ) : null}
+              {INDUSTRY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 

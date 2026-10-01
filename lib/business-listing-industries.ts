@@ -8,9 +8,11 @@ import {
   compareIndustries,
   formatIndustryLabel,
   industrySortIndex,
+  isHistoricalIndustryValue,
   isIndustryValue,
   parseIndustryValue,
   type IndustryValue,
+  type StoredIndustryValue,
 } from '@/lib/industries'
 
 export const BUSINESS_LISTING_INDUSTRIES = INDUSTRY_OPTIONS
@@ -19,13 +21,13 @@ export type BusinessListingIndustry = IndustryValue
 
 export function isBusinessListingIndustry(
   value: string
-): value is BusinessListingIndustry {
-  return isIndustryValue(value)
+): value is StoredIndustryValue {
+  return isIndustryValue(value) || isHistoricalIndustryValue(value)
 }
 
 export function parseBusinessListingIndustry(
   value: string | null | undefined
-): BusinessListingIndustry | null {
+): StoredIndustryValue | null {
   return parseIndustryValue(value)
 }
 

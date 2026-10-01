@@ -22,4 +22,4 @@ export const privacyMobileSectionParagraphs = [
   `Privacy questions about mobile numbers or text messages: ${SUPPORT_EMAIL}.`,
 ] as const
 
-export const PRIVACY_POLICY_LAST_UPDATED = 'August 2026'
+export const PRIVACY_POLICY_LAST_UPDATED = 'September 2026'

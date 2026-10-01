@@ -15,6 +15,11 @@ import {
 } from '@/lib/membership-systems'
 import { buttonPrimaryClassName, buttonSecondaryClassName, mobileFullButtonClassName } from '@/lib/event-labels'
 import { useRouter } from 'next/navigation'
+import {
+  IdentityVerificationFaq,
+  IdentityVerificationIntro,
+  IdentityVerificationPrepare,
+} from '@/components/application/identity-verification-guidance'
 
 function identityCtaLabel(cta: 'start' | 'continue' | 'retry'): string {
   switch (cta) {
@@ -185,7 +190,9 @@ export default function ApplicantVerificationProgress({
               ) : null}
 
               {isIdentity && !approved && identityRow.cta ? (
-                <div className="mt-3 grid gap-2">
+                <div className="mt-3 grid gap-3">
+                  <IdentityVerificationIntro />
+                  <IdentityVerificationPrepare />
                   {identityVerificationStatus === 'requires_input' &&
                   identityVerificationLastError ? (
                     <p className="min-w-0 text-sm break-words text-danger">
@@ -215,6 +222,7 @@ export default function ApplicantVerificationProgress({
                       Refresh status
                     </button>
                   </div>
+                  <IdentityVerificationFaq />
                 </div>
               ) : null}
 
