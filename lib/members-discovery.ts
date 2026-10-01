@@ -6,7 +6,7 @@ import {
 import { enrichProfileFromDraft } from '@/lib/enrich-profile-discovery'
 import {
   compareIndustries,
-  isIndustryValue,
+  isStoredIndustryValue,
   memberIndustryMatchesFilter,
 } from '@/lib/industries'
 import {
@@ -500,7 +500,7 @@ export function parseDirectoryIndustryFilter(value: unknown): string {
   if (typeof value !== 'string') return 'all'
   const trimmed = value.trim()
   if (!trimmed || trimmed === 'all') return 'all'
-  if (isIndustryValue(trimmed)) return trimmed
+  if (isStoredIndustryValue(trimmed)) return trimmed
   return 'all'
 }
 

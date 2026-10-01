@@ -1,5 +1,12 @@
 import Link from 'next/link'
 import LegalPageShell from '@/components/legal/legal-page-shell'
+import {
+  PRIVACY_IDENTITY_HEADING,
+  PRIVACY_IDENTITY_PARAGRAPHS,
+  STRIPE_IDENTITY_URL,
+  STRIPE_PRIVACY_EMAIL,
+  STRIPE_PRIVACY_URL,
+} from '@/lib/identity-verification-copy'
 import { SUPPORT_EMAIL } from '@/lib/site'
 import {
   PRIVACY_MOBILE_SECTION_TITLE,
@@ -57,6 +64,52 @@ export default function PrivacyPage() {
       {privacyMobileSectionParagraphs.map((paragraph) => (
         <p key={paragraph.slice(0, 48)}>{paragraph}</p>
       ))}
+
+      <h2 className="text-display text-lg font-semibold">
+        {PRIVACY_IDENTITY_HEADING}
+      </h2>
+      {PRIVACY_IDENTITY_PARAGRAPHS.map((paragraph) => (
+        <p key={paragraph.slice(0, 48)}>{paragraph}</p>
+      ))}
+      <p>
+        For more information, review{' '}
+        <a
+          href={STRIPE_IDENTITY_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent underline"
+        >
+          Stripe Identity
+        </a>{' '}
+        and{' '}
+        <a
+          href={STRIPE_PRIVACY_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent underline"
+        >
+          Stripe’s Privacy Policy
+        </a>
+        .
+      </p>
+      <p>
+        You may submit a privacy or deletion request by emailing{' '}
+        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-accent underline">
+          {SUPPORT_EMAIL}
+        </a>{' '}
+        or following our{' '}
+        <Link href="/data-deletion" className="text-accent underline">
+          Data Deletion Instructions
+        </Link>
+        . You may also contact Stripe at{' '}
+        <a
+          href={`mailto:${STRIPE_PRIVACY_EMAIL}`}
+          className="text-accent underline"
+        >
+          {STRIPE_PRIVACY_EMAIL}
+        </a>{' '}
+        regarding information Stripe holds and applicable consent choices.
+      </p>
 
       <h2 className="text-display text-lg font-semibold">
         Contact

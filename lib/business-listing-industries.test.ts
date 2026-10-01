@@ -10,27 +10,30 @@ import {
 describe('business listing industries', () => {
   it('exposes the approved option labels', () => {
     expect(BUSINESS_LISTING_INDUSTRIES.map((o) => o.label)).toEqual([
-      'Arts & Entertainment',
-      'Automotive',
-      'Beauty & Wellness',
-      'Business Services',
-      'Community & Nonprofit',
-      'Construction & Contractors',
-      'Education & Training',
-      'Events & Weddings',
-      'Fashion & Retail',
-      'Finance & Insurance',
-      'Food & Beverage',
-      'Health & Medical',
-      'Home Services',
-      'Hospitality & Travel',
+      'Aerospace, Aviation & Space',
+      'Artificial Intelligence, Data & Machine Learning',
+      'Automotive, Manufacturing & Skilled Trades',
+      'Biotechnology, Life Sciences & Healthcare Innovation',
+      'Business Services & Consulting',
+      'Construction, Architecture & Real Estate',
+      'Cybersecurity, IT & Software',
+      'Defense, National Security & Government Contracting',
+      'Education, Research & Academia',
+      'Engineering',
+      'Entrepreneurship & Startups',
+      'Finance, Accounting & Insurance',
+      'Government & Public Service',
+      'Healthcare & Wellness',
+      'Hospitality, Food, Beverage & Tourism',
+      'Human Resources, Recruiting & Staffing',
       'Legal Services',
-      'Marketing & Media',
-      'Personal Services',
-      'Pet Services',
-      'Real Estate',
-      'Technology',
-      'Wellness & Fitness',
+      'Marketing, Media, Design & Communications',
+      'Nonprofit, Community & Social Impact',
+      'Operations, Logistics & Supply Chain',
+      'Retail, Consumer Services & Personal Care',
+      'Sales & Business Development',
+      'Science, Research & Laboratory Services',
+      'Telecommunications & Technology Infrastructure',
       'Other',
     ])
   })
@@ -52,7 +55,7 @@ describe('business listing industries', () => {
   })
 
   it('sorts canonical industries before legacy values', () => {
-    expect(compareBusinessListingIndustries('technology', 'other')).toBeLessThan(
+    expect(compareBusinessListingIndustries('other', 'technology')).toBeLessThan(
       0
     )
     expect(
