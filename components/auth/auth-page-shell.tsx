@@ -2,6 +2,9 @@ import Link from 'next/link'
 import BrandLogo from '@/components/brand/brand-logo'
 import SiteFooter from '@/components/shell/site-footer'
 
+/** Public marketing homepage. Absolute so members.huntsvillesocialclub.com does not stay on `/`. */
+export const PUBLIC_HOME_URL = 'https://huntsvillesocialclub.com'
+
 export default function AuthPageShell({
   eyebrow,
   title,
@@ -19,7 +22,7 @@ export default function AuthPageShell({
     <div className="flex min-h-full flex-col bg-background">
       <header className="border-b border-border bg-surface shadow-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))] pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:px-8 sm:py-5">
-          <BrandLogo href="/" variant="wordmark" size="lg" />
+          <BrandLogo href={PUBLIC_HOME_URL} variant="wordmark" size="lg" />
         </div>
       </header>
 
@@ -37,7 +40,7 @@ export default function AuthPageShell({
         {footer ? <div className="mt-8">{footer}</div> : null}
 
         <p className="mt-8 text-sm text-muted-foreground">
-          <Link href="/" className="link-brand font-medium underline">
+          <Link href={PUBLIC_HOME_URL} className="link-brand font-medium underline">
             ← Back to public home
           </Link>
         </p>
