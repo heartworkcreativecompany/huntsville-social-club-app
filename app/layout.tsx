@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from 'next'
+import { Suspense } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import { Montserrat, Raleway } from 'next/font/google'
+import { MetaPixel } from '@/components/analytics/MetaPixel'
+import { MetaPixelPageView } from '@/components/analytics/MetaPixelPageView'
 import './globals.css'
 
 const montserrat = Montserrat({
@@ -77,6 +80,10 @@ export default function RootLayout({
           </noscript>
         ) : null}
         {children}
+        <MetaPixel />
+        <Suspense fallback={null}>
+          <MetaPixelPageView />
+        </Suspense>
         <Analytics />
       </body>
     </html>
