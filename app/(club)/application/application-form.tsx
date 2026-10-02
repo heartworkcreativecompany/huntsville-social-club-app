@@ -69,6 +69,7 @@ import {
   MOBILE_FULL_CONTROL_CLASS,
 } from '@/lib/application-mobile-ui'
 import { trackEvent } from '@/lib/analytics'
+import { trackApplicationCompleteRegistration } from '@/lib/meta-pixel'
 import { saveApplicationDraft, submitApplication } from './actions'
 
 const DATE_OF_BIRTH_ISSUE_CODES = [
@@ -330,6 +331,7 @@ export default function ApplicationForm({
       }
 
       trackEvent('application_submitted')
+      trackApplicationCompleteRegistration()
       router.push('/application/status?submitted=1')
       router.refresh()
     })
