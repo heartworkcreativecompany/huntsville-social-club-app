@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import ApplyMembershipCta from '@/components/marketing/apply-membership-cta'
+import HomepageInstagramCommunity from '@/components/marketing/homepage-instagram-community'
 import PublicHomeHeader from '@/components/marketing/public-home-header'
 import {
   APPLY_FOR_MEMBERSHIP_CTA,
@@ -333,6 +334,8 @@ export default function PublicHomeContent({
           <p className="mt-4 text-sm text-muted-foreground">{FINAL_CTA_REASSURANCE}</p>
         </div>
       </section>
+
+      <HomepageInstagramCommunity />
     </>
   )
 }
