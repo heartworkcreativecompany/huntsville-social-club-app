@@ -34,10 +34,13 @@ type EventEditFormProps = {
   initialCoverImageUrl?: string | null
   initialRsvpQuestion?: string | null
   initialRsvpQuestionRequired?: boolean | null
+  initialListedPublicly?: boolean | null
   initialSponsorIds?: string[]
   availableSponsors?: SponsorOption[]
   /** Admins can edit type, status, fee, RSVP windows, and sponsors. */
   isAdminEditor?: boolean
+  /** Hosts and admins can show a published event on the public calendar. */
+  canListPublicly?: boolean
 }
 
 export default function EventEditForm({
@@ -56,9 +59,11 @@ export default function EventEditForm({
   initialCoverImageUrl = null,
   initialRsvpQuestion = null,
   initialRsvpQuestionRequired = false,
+  initialListedPublicly = false,
   initialSponsorIds = [],
   availableSponsors: initialAvailableSponsors = [],
   isAdminEditor = false,
+  canListPublicly = false,
 }: EventEditFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -88,6 +93,9 @@ export default function EventEditForm({
   const [rsvpQuestion, setRsvpQuestion] = useState(initialRsvpQuestion ?? '')
   const [rsvpQuestionRequired, setRsvpQuestionRequired] = useState(
     Boolean(initialRsvpQuestion?.trim()) && Boolean(initialRsvpQuestionRequired)
+  )
+  const [listedPublicly, setListedPublicly] = useState(
+    canListPublicly && initialListedPublicly === true
   )
   const [availableSponsors, setAvailableSponsors] = useState<SponsorOption[]>(
     initialAvailableSponsors
@@ -134,6 +142,7 @@ export default function EventEditForm({
         coverImageUrl,
         rsvpQuestion,
         rsvpQuestionRequired,
+        listedPublicly,
         ...(isAdminEditor
           ? {
               eventType,
@@ -279,6 +288,27 @@ export default function EventEditForm({
           onQuestionChange={setRsvpQuestion}
           onRequiredChange={setRsvpQuestionRequired}
         />
+
+        {canListPublicly ? (
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 shrink-0"
+              checked={listedPublicly}
+              disabled={isPending || isUploadingImage}
+              onChange={(event) => setListedPublicly(event.target.checked)}
+            />
+            <span className="min-w-0 leading-relaxed">
+              <span className="font-medium text-foreground">
+                Show on public calendar
+              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Published events with this checked can appear on the public
+                calendar. It stays off unless a host or admin turns it on.
+              </span>
+            </span>
+          </label>
+        ) : null}
 
         {isAdminEditor ? (
           <>

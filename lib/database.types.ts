@@ -834,6 +834,7 @@ export interface Database {
           cover_image_url: string | null
           rsvp_question: string | null
           rsvp_question_required: boolean
+          listed_publicly: boolean
           created_at: string
           updated_at: string
         }
@@ -856,6 +857,7 @@ export interface Database {
           cover_image_url?: string | null
           rsvp_question?: string | null
           rsvp_question_required?: boolean
+          listed_publicly?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -878,6 +880,7 @@ export interface Database {
           cover_image_url?: string | null
           rsvp_question?: string | null
           rsvp_question_required?: boolean
+          listed_publicly?: boolean
           created_at?: string
           updated_at?: string
         }

@@ -52,6 +52,7 @@ export default function EventForm({
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [rsvpQuestion, setRsvpQuestion] = useState('')
   const [rsvpQuestionRequired, setRsvpQuestionRequired] = useState(false)
+  const [listedPublicly, setListedPublicly] = useState(false)
   const [availableSponsors, setAvailableSponsors] =
     useState<SponsorOption[]>(initialSponsors)
   const [selectedSponsorIds, setSelectedSponsorIds] = useState<string[]>([])
@@ -94,6 +95,7 @@ export default function EventForm({
         coverImageUrl,
         rsvpQuestion,
         rsvpQuestionRequired,
+        listedPublicly,
         ...(isAdminCreator
           ? {
               eventType,
@@ -122,6 +124,7 @@ export default function EventForm({
       setAttendanceMax('')
       setRsvpQuestion('')
       setRsvpQuestionRequired(false)
+      setListedPublicly(false)
       clearCoverImage()
       setSelectedSponsorIds([])
       setEventType('standard_event')
@@ -266,6 +269,27 @@ export default function EventForm({
           onQuestionChange={setRsvpQuestion}
           onRequiredChange={setRsvpQuestionRequired}
         />
+
+        {isAdminCreator ? (
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 shrink-0"
+              checked={listedPublicly}
+              disabled={isPending || isUploadingImage}
+              onChange={(event) => setListedPublicly(event.target.checked)}
+            />
+            <span className="min-w-0 leading-relaxed">
+              <span className="font-medium text-foreground">
+                Show on public calendar
+              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Published events with this checked can appear on the public
+                calendar. It stays off unless a host or admin turns it on.
+              </span>
+            </span>
+          </label>
+        ) : null}
 
         {isAdminCreator ? (
           <select
