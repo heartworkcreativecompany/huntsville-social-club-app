@@ -25,7 +25,7 @@ Fires once per browser session only after `supabase.auth.signUp` succeeds in `ap
 
 ## CompleteRegistration
 
-Fires once per browser session only after `submitApplication` in `app/(club)/application/actions.ts` persists the application and returns success. The call is made from the application form after that success, before the redirect to `/application/status?submitted=1`. A click, loading state, validation failure, or failed save does not send it. Revisiting or refreshing the status page does not send it.
+Fires once per browser session only after `submitApplication` returns `{ success: true }`. The form calls `fbq` and then waits one timer turn before redirecting to `/application/status?submitted=1`, so the pixel can queue the event before navigation. The session flag is stored only after that `fbq` call. A click, loading state, validation failure, or failed save does not send it. Refreshing or revisiting the status page does not send it again.
 
 Parameters:
 
