@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AuthPageShell from '@/components/auth/auth-page-shell'
 import AuthStatusBanner from '@/components/auth/auth-status-banner'
@@ -18,6 +18,10 @@ import {
 import { authCallbackUrl } from '@/lib/site'
 import { safeUpgradeReturnPath, loginHrefForReturnPath } from '@/lib/membership-plan-links'
 import { trackEvent } from '@/lib/analytics'
+import {
+  trackApplicationLead,
+  trackApplicationViewContent,
+} from '@/lib/meta-pixel'
 import {
   buttonPrimaryClassName,
   inputClassName,
@@ -42,6 +46,10 @@ function SignUpForm() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [isPending, setIsPending] = useState(false)
+
+  useEffect(() => {
+    trackApplicationViewContent()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -85,6 +93,7 @@ function SignUpForm() {
     }
 
     trackEvent('auth_account_created')
+    trackApplicationLead()
     setSuccess(true)
     setIsPending(false)
   }

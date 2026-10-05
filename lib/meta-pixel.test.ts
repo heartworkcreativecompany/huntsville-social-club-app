@@ -2,10 +2,22 @@ import { createElement } from 'react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MetaPixel } from '@/components/analytics/MetaPixel'
 import { shouldTrackRoutePageView } from '@/components/analytics/MetaPixelPageView'
-import { event, metaPixelId, metaPixelScript, pageview, type MetaPixelEventName } from '@/lib/meta-pixel'
+import {
+  HSC_APPLICATION_CONTENT,
+  META_APPLICATION_DEDUPE_KEYS,
+  clearMetaPixelDedupeForTests,
+  event,
+  metaPixelId,
+  metaPixelScript,
+  pageview,
+  trackApplicationCompleteRegistration,
+  trackApplicationLead,
+  trackApplicationViewContent,
+  type MetaPixelEventName,
+} from '@/lib/meta-pixel'
 
 const PIXEL_ID = '123456789012345'
 const repoRoot = join(__dirname, '..')
@@ -20,9 +32,33 @@ function installFbq() {
 }
 
 afterEach(() => {
+  clearMetaPixelDedupeForTests()
   delete process.env.NEXT_PUBLIC_META_PIXEL_ID
   delete (globalThis as { window?: unknown }).window
+  vi.useRealTimers()
 })
+
+function installBrowser() {
+  const calls: unknown[][] = []
+  const storage = new Map<string, string>()
+  const fbq = (...args: unknown[]) => {
+    calls.push(args)
+  }
+  Object.assign(globalThis, {
+    window: {
+      fbq,
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value)
+        },
+      },
+      setInterval: (fn: () => void, delay?: number) => globalThis.setInterval(fn, delay),
+      clearInterval: (id: ReturnType<typeof setInterval>) => globalThis.clearInterval(id),
+    },
+  })
+  return { calls, storage }
+}
 
 describe('meta pixel', () => {
   it('reads a numeric pixel id and ignores any other value', () => {
@@ -96,6 +132,116 @@ describe('meta pixel', () => {
     expect(shouldTrackRoutePageView('/', '/')).toBe(false)
     expect(shouldTrackRoutePageView('/', '/pricing')).toBe(true)
     expect(shouldTrackRoutePageView('/pricing', '/pricing?plan=connect')).toBe(true)
+  })
+
+  it('sends each application event once with fixed non-identifying parameters', () => {
+    process.env.NEXT_PUBLIC_META_PIXEL_ID = PIXEL_ID
+    const { calls, storage } = installBrowser()
+
+    trackApplicationViewContent()
+    trackApplicationViewContent()
+    trackApplicationLead()
+    trackApplicationLead()
+    trackApplicationCompleteRegistration()
+    trackApplicationCompleteRegistration()
+
+    expect(calls).toEqual([
+      ['track', 'ViewContent', HSC_APPLICATION_CONTENT],
+      ['track', 'Lead'],
+      ['track', 'CompleteRegistration', HSC_APPLICATION_CONTENT],
+    ])
+    expect([...storage.values()]).toEqual(['1', '1', '1'])
+    expect(JSON.stringify([...storage.entries()])).not.toMatch(/@|phone|email|user/i)
+  })
+
+  it('does not send an application event again after refresh in the same session', () => {
+    process.env.NEXT_PUBLIC_META_PIXEL_ID = PIXEL_ID
+    const { calls, storage } = installBrowser()
+    storage.set(META_APPLICATION_DEDUPE_KEYS.lead, '1')
+    storage.set(META_APPLICATION_DEDUPE_KEYS.completeRegistration, '1')
+    storage.set(META_APPLICATION_DEDUPE_KEYS.viewContent, '1')
+
+    trackApplicationLead()
+    trackApplicationCompleteRegistration()
+    trackApplicationViewContent()
+
+    expect(calls).toEqual([])
+  })
+
+  it('waits for fbq and still sends ViewContent only once', () => {
+    vi.useFakeTimers()
+    process.env.NEXT_PUBLIC_META_PIXEL_ID = PIXEL_ID
+    const calls: unknown[][] = []
+    const storage = new Map<string, string>()
+    const browser: {
+      fbq?: (...args: unknown[]) => void
+      sessionStorage: {
+        getItem: (key: string) => string | null
+        setItem: (key: string, value: string) => void
+      }
+      setInterval: (fn: () => void, delay?: number) => ReturnType<typeof setInterval>
+      clearInterval: (id: ReturnType<typeof setInterval>) => void
+    } = {
+      sessionStorage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, value) => {
+          storage.set(key, value)
+        },
+      },
+      setInterval: (fn, delay) => globalThis.setInterval(fn, delay),
+      clearInterval: (id) => globalThis.clearInterval(id),
+    }
+    Object.assign(globalThis, { window: browser })
+
+    trackApplicationViewContent()
+    expect(calls).toEqual([])
+    browser.fbq = (...args: unknown[]) => {
+      calls.push(args)
+    }
+    vi.advanceTimersByTime(200)
+
+    expect(calls).toEqual([['track', 'ViewContent', HSC_APPLICATION_CONTENT]])
+    vi.advanceTimersByTime(2000)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('drops a content name that is not the fixed application label', () => {
+    process.env.NEXT_PUBLIC_META_PIXEL_ID = PIXEL_ID
+    const calls = installFbq()
+    event('ViewContent', {
+      parameters: {
+        content_name: 'Ada Lovelace' as 'HSC Application',
+        content_category: 'Membership Application',
+      },
+    })
+    expect(calls).toEqual([
+      ['track', 'ViewContent', { content_category: 'Membership Application' }],
+    ])
+  })
+
+  it('places conversion calls only after confirmed success', () => {
+    const signup = readFileSync(join(repoRoot, 'app/signup/page.tsx'), 'utf8')
+    const form = readFileSync(
+      join(repoRoot, 'app/(club)/application/application-form.tsx'),
+      'utf8',
+    )
+    const status = readFileSync(
+      join(repoRoot, 'app/(club)/application/status/page.tsx'),
+      'utf8',
+    )
+    const login = readFileSync(join(repoRoot, 'app/login/page.tsx'), 'utf8')
+
+    expect(signup.indexOf('trackApplicationViewContent()')).toBeGreaterThan(-1)
+    expect(signup.indexOf('trackApplicationLead()')).toBeGreaterThan(
+      signup.indexOf('if (signUpError)'),
+    )
+    expect(form.indexOf('trackApplicationCompleteRegistration()')).toBeGreaterThan(
+      form.indexOf('if (result.error)'),
+    )
+    expect(status).not.toContain('trackApplication')
+    expect(login).not.toContain('trackApplication')
+    expect(form).not.toContain('trackApplicationViewContent')
+    expect(form).not.toContain('trackApplicationLead')
   })
 
   it('keeps the pixel id in the env example only', () => {

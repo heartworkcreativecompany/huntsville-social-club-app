@@ -11,8 +11,14 @@ const META_PIXEL_EVENTS = [
 
 export type MetaPixelEventName = (typeof META_PIXEL_EVENTS)[number]
 
+/** Fixed label for the membership application. Not a member or applicant name. */
+export const HSC_APPLICATION_CONTENT_NAME = 'HSC Application'
+
+export const HSC_APPLICATION_CONTENT_CATEGORY = 'Membership Application'
+
 /** Non-identifying parameters only. Member and application fields are rejected. */
 export type MetaPixelEventParameters = {
+  content_name?: typeof HSC_APPLICATION_CONTENT_NAME
   content_category?: string
   content_type?: string
   currency?: string
@@ -20,6 +26,18 @@ export type MetaPixelEventParameters = {
   value?: number
   num_items?: number
 }
+
+export const HSC_APPLICATION_CONTENT = {
+  content_name: HSC_APPLICATION_CONTENT_NAME,
+  content_category: HSC_APPLICATION_CONTENT_CATEGORY,
+} as const satisfies MetaPixelEventParameters
+
+/** Harmless dedupe flags. Values are only "1" and contain no member data. */
+export const META_APPLICATION_DEDUPE_KEYS = {
+  viewContent: 'hsc.meta.application.view-content',
+  lead: 'hsc.meta.application.lead',
+  completeRegistration: 'hsc.meta.application.complete-registration',
+} as const
 
 export type MetaPixelEventOptions = {
   /** Opaque deduplication id. Not an email, phone, or member id. */
@@ -52,6 +70,7 @@ declare global {
 const ALLOWED_EVENTS = new Set<string>(META_PIXEL_EVENTS)
 
 const ALLOWED_PARAMETER_KEYS = new Set<keyof MetaPixelEventParameters>([
+  'content_name',
   'content_category',
   'content_type',
   'currency',
@@ -59,6 +78,8 @@ const ALLOWED_PARAMETER_KEYS = new Set<keyof MetaPixelEventParameters>([
   'value',
   'num_items',
 ])
+
+const claimedDedupeKeys = new Set<string>()
 
 const EVENT_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 
@@ -101,6 +122,7 @@ function sanitizeParameters(
     if (typeof value !== 'string') continue
     const trimmed = value.trim()
     if (!trimmed || looksSensitive(trimmed)) continue
+    if (key === 'content_name' && trimmed !== HSC_APPLICATION_CONTENT_NAME) continue
     safe[key] = trimmed
   }
   return Object.keys(safe).length > 0 ? safe : undefined
@@ -139,4 +161,74 @@ export function event(name: MetaPixelEventName, options?: MetaPixelEventOptions)
 
 export function pageview() {
   event('PageView')
+}
+
+function readDedupeFlag(key: string) {
+  try {
+    return window.sessionStorage.getItem(key) === '1'
+  } catch {
+    return claimedDedupeKeys.has(key)
+  }
+}
+
+function writeDedupeFlag(key: string) {
+  claimedDedupeKeys.add(key)
+  try {
+    window.sessionStorage.setItem(key, '1')
+  } catch {
+    // The in-memory claim still blocks a remount in this page session.
+  }
+}
+
+/** Clears in-memory dedupe claims. Browser tests call this between cases. */
+export function clearMetaPixelDedupeForTests() {
+  claimedDedupeKeys.clear()
+}
+
+function sendWhenPixelReady(send: () => void) {
+  if (fbqReady()) {
+    send()
+    return
+  }
+  let tries = 0
+  const timer = window.setInterval(() => {
+    tries += 1
+    if (fbqReady()) {
+      window.clearInterval(timer)
+      send()
+      return
+    }
+    if (tries >= 25) window.clearInterval(timer)
+  }, 200)
+}
+
+function trackApplicationEvent(key: string, send: () => void) {
+  if (typeof window === 'undefined' || !metaPixelId()) return
+  if (claimedDedupeKeys.has(key) || readDedupeFlag(key)) {
+    claimedDedupeKeys.add(key)
+    return
+  }
+  writeDedupeFlag(key)
+  sendWhenPixelReady(send)
+}
+
+/** Once per browser session when /signup, the public application start page, is viewed. */
+export function trackApplicationViewContent() {
+  trackApplicationEvent(META_APPLICATION_DEDUPE_KEYS.viewContent, () => {
+    event('ViewContent', { parameters: HSC_APPLICATION_CONTENT })
+  })
+}
+
+/** Once per browser session after account creation succeeds. No event parameters. */
+export function trackApplicationLead() {
+  trackApplicationEvent(META_APPLICATION_DEDUPE_KEYS.lead, () => {
+    event('Lead')
+  })
+}
+
+/** Once per browser session after the backend persists a submitted application. */
+export function trackApplicationCompleteRegistration() {
+  trackApplicationEvent(META_APPLICATION_DEDUPE_KEYS.completeRegistration, () => {
+    event('CompleteRegistration', { parameters: HSC_APPLICATION_CONTENT })
+  })
 }
