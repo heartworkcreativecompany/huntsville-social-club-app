@@ -226,9 +226,58 @@ export function trackApplicationLead() {
   })
 }
 
-/** Once per browser session after the backend persists a submitted application. */
-export function trackApplicationCompleteRegistration() {
-  trackApplicationEvent(META_APPLICATION_DEDUPE_KEYS.completeRegistration, () => {
-    event('CompleteRegistration', { parameters: HSC_APPLICATION_CONTENT })
+/** True only for the persisted-success result from submitApplication. */
+export function applicationSubmitSucceeded(result: {
+  success?: boolean
+  error?: string
+}): result is { success: true } {
+  return result.success === true && typeof result.error !== 'string'
+}
+
+const COMPLETE_REGISTRATION_WAIT_MS = 300
+
+function sendCompleteRegistration() {
+  const key = META_APPLICATION_DEDUPE_KEYS.completeRegistration
+  if (claimedDedupeKeys.has(key) || readDedupeFlag(key)) {
+    claimedDedupeKeys.add(key)
+    return 'skipped' as const
+  }
+  if (!fbqReady()) return 'waiting' as const
+  event('CompleteRegistration', { parameters: HSC_APPLICATION_CONTENT })
+  writeDedupeFlag(key)
+  return 'sent' as const
+}
+
+/**
+ * Queues CompleteRegistration after the application is persisted.
+ * The session flag is written only after fbq is called.
+ * Resolves on the next timer turn after a successful call so navigation
+ * does not start in the same turn as the pixel queue.
+ */
+export function trackApplicationCompleteRegistration(): Promise<boolean> {
+  if (typeof window === 'undefined' || !metaPixelId()) return Promise.resolve(false)
+
+  const immediate = sendCompleteRegistration()
+  if (immediate === 'skipped') return Promise.resolve(false)
+  if (immediate === 'sent') {
+    return new Promise((resolve) => {
+      window.setTimeout(() => resolve(true), 0)
+    })
+  }
+
+  return new Promise((resolve) => {
+    const started = Date.now()
+    const timer = window.setInterval(() => {
+      const attempt = sendCompleteRegistration()
+      if (attempt === 'sent') {
+        window.clearInterval(timer)
+        window.setTimeout(() => resolve(true), 0)
+        return
+      }
+      if (attempt === 'skipped' || Date.now() - started >= COMPLETE_REGISTRATION_WAIT_MS) {
+        window.clearInterval(timer)
+        resolve(false)
+      }
+    }, 50)
   })
 }

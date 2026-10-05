@@ -8,6 +8,7 @@ import { shouldTrackRoutePageView } from '@/components/analytics/MetaPixelPageVi
 import {
   HSC_APPLICATION_CONTENT,
   META_APPLICATION_DEDUPE_KEYS,
+  applicationSubmitSucceeded,
   clearMetaPixelDedupeForTests,
   event,
   metaPixelId,
@@ -55,6 +56,7 @@ function installBrowser() {
       },
       setInterval: (fn: () => void, delay?: number) => globalThis.setInterval(fn, delay),
       clearInterval: (id: ReturnType<typeof setInterval>) => globalThis.clearInterval(id),
+      setTimeout: (fn: () => void, delay?: number) => globalThis.setTimeout(fn, delay),
     },
   })
   return { calls, storage }
@@ -219,6 +221,74 @@ describe('meta pixel', () => {
     ])
   })
 
+  it('accepts only the persisted application success result', () => {
+    expect(applicationSubmitSucceeded({ success: true })).toBe(true)
+    expect(applicationSubmitSucceeded({ error: 'This application cannot be submitted right now.' })).toBe(
+      false,
+    )
+    expect(applicationSubmitSucceeded({ success: true, error: 'failed' })).toBe(false)
+  })
+
+  it('queues CompleteRegistration before navigation and stores the flag after fbq', async () => {
+    vi.useFakeTimers()
+    process.env.NEXT_PUBLIC_META_PIXEL_ID = PIXEL_ID
+    const calls: unknown[][] = []
+    const storage = new Map<string, string>()
+    const order: string[] = []
+    Object.assign(globalThis, {
+      window: {
+        fbq: (...args: unknown[]) => {
+          order.push('fbq')
+          calls.push(args)
+        },
+        sessionStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value)
+          },
+        },
+        setInterval: (fn: () => void, delay?: number) => globalThis.setInterval(fn, delay),
+        clearInterval: (id: ReturnType<typeof setInterval>) => globalThis.clearInterval(id),
+        setTimeout: (fn: () => void, delay?: number) => globalThis.setTimeout(fn, delay),
+      },
+    })
+
+    const pending = trackApplicationCompleteRegistration().then((sent) => {
+      order.push('navigate')
+      return sent
+    })
+    expect(storage.get(META_APPLICATION_DEDUPE_KEYS.completeRegistration)).toBe('1')
+    expect(calls).toEqual([['track', 'CompleteRegistration', HSC_APPLICATION_CONTENT]])
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(pending).resolves.toBe(true)
+    expect(order).toEqual(['fbq', 'navigate'])
+  })
+
+  it('does not store CompleteRegistration when fbq never becomes available', async () => {
+    vi.useFakeTimers()
+    process.env.NEXT_PUBLIC_META_PIXEL_ID = PIXEL_ID
+    const storage = new Map<string, string>()
+    Object.assign(globalThis, {
+      window: {
+        sessionStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value)
+          },
+        },
+        setInterval: (fn: () => void, delay?: number) => globalThis.setInterval(fn, delay),
+        clearInterval: (id: ReturnType<typeof setInterval>) => globalThis.clearInterval(id),
+        setTimeout: (fn: () => void, delay?: number) => globalThis.setTimeout(fn, delay),
+      },
+    })
+
+    const pending = trackApplicationCompleteRegistration()
+    expect(storage.has(META_APPLICATION_DEDUPE_KEYS.completeRegistration)).toBe(false)
+    await vi.advanceTimersByTimeAsync(300)
+    await expect(pending).resolves.toBe(false)
+    expect(storage.has(META_APPLICATION_DEDUPE_KEYS.completeRegistration)).toBe(false)
+  })
+
   it('places conversion calls only after confirmed success', () => {
     const signup = readFileSync(join(repoRoot, 'app/signup/page.tsx'), 'utf8')
     const form = readFileSync(
@@ -235,8 +305,11 @@ describe('meta pixel', () => {
     expect(signup.indexOf('trackApplicationLead()')).toBeGreaterThan(
       signup.indexOf('if (signUpError)'),
     )
-    expect(form.indexOf('trackApplicationCompleteRegistration()')).toBeGreaterThan(
-      form.indexOf('if (result.error)'),
+    expect(form.indexOf('await trackApplicationCompleteRegistration()')).toBeGreaterThan(
+      form.indexOf('applicationSubmitSucceeded(result)'),
+    )
+    expect(form.indexOf("router.push('/application/status?submitted=1')")).toBeGreaterThan(
+      form.indexOf('await trackApplicationCompleteRegistration()'),
     )
     expect(status).not.toContain('trackApplication')
     expect(login).not.toContain('trackApplication')

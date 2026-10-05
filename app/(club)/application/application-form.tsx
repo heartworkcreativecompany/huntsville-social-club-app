@@ -69,7 +69,10 @@ import {
   MOBILE_FULL_CONTROL_CLASS,
 } from '@/lib/application-mobile-ui'
 import { trackEvent } from '@/lib/analytics'
-import { trackApplicationCompleteRegistration } from '@/lib/meta-pixel'
+import {
+  applicationSubmitSucceeded,
+  trackApplicationCompleteRegistration,
+} from '@/lib/meta-pixel'
 import { saveApplicationDraft, submitApplication } from './actions'
 
 const DATE_OF_BIRTH_ISSUE_CODES = [
@@ -325,13 +328,15 @@ export default function ApplicationForm({
       }
 
       const result = await submitApplication()
-      if (result.error) {
-        setMessage(result.error)
+      if (!applicationSubmitSucceeded(result)) {
+        setMessage(
+          'error' in result ? result.error : 'This application could not be submitted.'
+        )
         return
       }
 
       trackEvent('application_submitted')
-      trackApplicationCompleteRegistration()
+      await trackApplicationCompleteRegistration()
       router.push('/application/status?submitted=1')
       router.refresh()
     })
