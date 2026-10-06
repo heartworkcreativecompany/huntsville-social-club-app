@@ -3,6 +3,7 @@ import type { Database } from '@/lib/database.types'
 import { loadFriendshipMatchPool } from '@/lib/friendship/candidate-pool'
 import { isFriendshipMatchingEnabled } from '@/lib/friendship/eligibility'
 import { refreshFriendshipRecommendationsForAllEligible } from '@/lib/friendship/generate-recommendations'
+import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 
 export const FRIENDSHIP_ADMIN_HEADING = 'Friendship Match Recommendations'
 
@@ -17,13 +18,58 @@ export const FRIENDSHIP_REFRESH_DISABLED_COPY =
 export const FRIENDSHIP_NO_EMAIL_COPY =
   'Friendship recommendations refresh in-app and do not send email.'
 
+export const FRIENDSHIP_BATCH_HISTORY_NOTE =
+  'Later refreshes can move recommendations to newer batches. This list shows recommendations currently linked to this batch, not a complete historical roster.'
+
+export const FRIENDSHIP_MEMBER_NAME_FALLBACK = 'Member name unavailable'
+
+export const FRIENDSHIP_EMPTY_BATCH_MESSAGE =
+  'No recommendations were generated for this batch.'
+
+export const FRIENDSHIP_UNLINKED_BATCH_MESSAGE =
+  'Recommendations were written for this batch, but none are currently linked to it.'
+
+export const FRIENDSHIP_DETAILS_UNAVAILABLE_MESSAGE =
+  'Recommendation details are unavailable.'
+
+export const FRIENDSHIP_CREATION_COUNT_LABEL = 'Recommendations at creation'
+
+export const FRIENDSHIP_LINKED_LABEL = 'Currently linked recommendations'
+
+const RECENT_FRIENDSHIP_BATCH_LIMIT = 25
+const FRIENDSHIP_ADMIN_ID_CHUNK = 100
+
+const NAME_FIELD_RESTRICTED =
+  /user_id|recommended_user_id|compatibility_score|score_breakdown|@[^\s"]+\.[^\s"]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+const NON_NAME_RESTRICTED =
+  /compatibility_score|score_breakdown|alcohol|priority|billing|user_id|recommended_user_id|skipReason|@[^\s"]+\.[^\s"]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+
+const ADMIN_DISPLAY_NAME_KEYS = new Set([
+  'recipientname',
+  'linkedrecommendationnames',
+])
+
 export type MatchOperationsProduct = 'dating' | 'friendship'
 export type DatingDeliveryTab = 'delivery' | 'history'
 
+export type AdminFriendshipLinkedDetail =
+  | { status: 'ready'; linkedRecommendationNames: string[] }
+  | { status: 'unavailable' }
+
 export type AdminFriendshipBatchRow = {
-  created_at: string
+  createdAt: string
   status: string
-  match_count: number
+  recommendationsAtCreation: number
+  recipientName: string | null
+  linked: AdminFriendshipLinkedDetail
+}
+
+export type FriendshipBatchDetailPresentation = {
+  directionLabel: string | null
+  creationCountLabel: string
+  linkedLabel: string
+  message: string | null
+  linkedNames: string[]
 }
 
 export type AdminFriendshipMatchOperations = {
@@ -135,6 +181,23 @@ function collectKeys(value: unknown, keys: Set<string>): void {
   }
 }
 
+function valueLeaksSensitiveData(value: unknown, parentKey?: string): boolean {
+  if (Array.isArray(value)) {
+    return value.some((item) => valueLeaksSensitiveData(item, parentKey))
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value).some(([key, nested]) => {
+      if (FORBIDDEN_ADMIN_KEYS.includes(key.toLowerCase())) return true
+      return valueLeaksSensitiveData(nested, key)
+    })
+  }
+  if (typeof value !== 'string') return false
+  if (parentKey && ADMIN_DISPLAY_NAME_KEYS.has(parentKey.toLowerCase())) {
+    return NAME_FIELD_RESTRICTED.test(value)
+  }
+  return NON_NAME_RESTRICTED.test(value)
+}
+
 export function adminFriendshipOperationsLeaksSensitiveData(payload: unknown): boolean {
   const keys = new Set<string>()
   collectKeys(payload, keys)
@@ -143,11 +206,63 @@ export function adminFriendshipOperationsLeaksSensitiveData(payload: unknown): b
       return true
     }
   }
+  return valueLeaksSensitiveData(payload)
+}
 
-  const serialized = JSON.stringify(payload)
-  return /compatibility_score|score_breakdown|alcohol|priority|billing|user_id|recommended_user_id|skipReason|@[^\s"]+\.[^\s"]+/i.test(
-    serialized
-  )
+export function friendshipAdminDisplayName(fullName: string | null | undefined): string {
+  const trimmed = fullName?.trim() ?? ''
+  if (!trimmed || NAME_FIELD_RESTRICTED.test(trimmed)) {
+    return FRIENDSHIP_MEMBER_NAME_FALLBACK
+  }
+  return trimmed
+}
+
+export function presentFriendshipBatchDetail(
+  batch: AdminFriendshipBatchRow
+): FriendshipBatchDetailPresentation {
+  const creationCountLabel = `${FRIENDSHIP_CREATION_COUNT_LABEL}: ${batch.recommendationsAtCreation}`
+  const directionLabel = batch.recipientName
+    ? `Recommended to ${batch.recipientName}`
+    : null
+  const linkedLabel = FRIENDSHIP_LINKED_LABEL
+
+  if (batch.recipientName == null || batch.linked.status === 'unavailable') {
+    return {
+      directionLabel,
+      creationCountLabel,
+      linkedLabel,
+      message: FRIENDSHIP_DETAILS_UNAVAILABLE_MESSAGE,
+      linkedNames: [],
+    }
+  }
+
+  if (batch.linked.linkedRecommendationNames.length > 0) {
+    return {
+      directionLabel,
+      creationCountLabel,
+      linkedLabel,
+      message: null,
+      linkedNames: batch.linked.linkedRecommendationNames,
+    }
+  }
+
+  if (batch.recommendationsAtCreation === 0) {
+    return {
+      directionLabel,
+      creationCountLabel,
+      linkedLabel,
+      message: FRIENDSHIP_EMPTY_BATCH_MESSAGE,
+      linkedNames: [],
+    }
+  }
+
+  return {
+    directionLabel,
+    creationCountLabel,
+    linkedLabel,
+    message: FRIENDSHIP_UNLINKED_BATCH_MESSAGE,
+    linkedNames: [],
+  }
 }
 
 export function emptyAdminFriendshipMatchOperations(
@@ -157,6 +272,148 @@ export function emptyAdminFriendshipMatchOperations(
     ...EMPTY_OPERATIONS,
     matchingEnabled,
   }
+}
+
+type FriendshipBatchSource = {
+  id: string
+  user_id: string
+  created_at: string
+  status: string
+  match_count: number
+}
+
+type FriendshipRecommendationLink = {
+  batch_id: string
+  user_id: string
+  recommended_user_id: string
+}
+
+function uniqueIds(ids: string[]): string[] {
+  return [...new Set(ids.filter((id) => id.length > 0))]
+}
+
+function chunkIds(ids: string[]): string[][] {
+  const unique = uniqueIds(ids)
+  const chunks: string[][] = []
+  for (let index = 0; index < unique.length; index += FRIENDSHIP_ADMIN_ID_CHUNK) {
+    chunks.push(unique.slice(index, index + FRIENDSHIP_ADMIN_ID_CHUNK))
+  }
+  return chunks
+}
+
+async function loadRecommendationLinks(
+  supabase: SupabaseClient<Database>,
+  batchIds: string[]
+): Promise<{ ok: true; rows: FriendshipRecommendationLink[] } | { ok: false }> {
+  const rows: FriendshipRecommendationLink[] = []
+  for (const ids of chunkIds(batchIds)) {
+    const result = await supabase
+      .from('friendship_match_recommendations')
+      .select('batch_id, user_id, recommended_user_id')
+      .in('batch_id', ids)
+
+    if (result.error) return { ok: false }
+    for (const row of result.data ?? []) {
+      rows.push({
+        batch_id: row.batch_id,
+        user_id: row.user_id,
+        recommended_user_id: row.recommended_user_id,
+      })
+    }
+  }
+  return { ok: true, rows }
+}
+
+async function loadMemberDisplayNames(
+  supabase: SupabaseClient<Database>,
+  memberIds: string[]
+): Promise<{ ok: true; names: Map<string, string> } | { ok: false }> {
+  const names = new Map<string, string>()
+  for (const ids of chunkIds(memberIds)) {
+    const result = await supabase
+      .from(MEMBER_PROFILES_VIEW)
+      .select('id, full_name')
+      .in('id', ids)
+
+    if (result.error) return { ok: false }
+    for (const row of result.data ?? []) {
+      names.set(row.id, friendshipAdminDisplayName(row.full_name))
+    }
+  }
+  return { ok: true, names }
+}
+
+function linkedNamesForBatch(
+  batch: FriendshipBatchSource,
+  rows: FriendshipRecommendationLink[],
+  names: Map<string, string>
+): string[] {
+  const seen = new Set<string>()
+  const linked: string[] = []
+  for (const row of rows) {
+    if (row.batch_id !== batch.id) continue
+    if (row.user_id !== batch.user_id) continue
+    if (!row.recommended_user_id || row.recommended_user_id === batch.user_id) continue
+    if (seen.has(row.recommended_user_id)) continue
+    seen.add(row.recommended_user_id)
+    linked.push(names.get(row.recommended_user_id) ?? FRIENDSHIP_MEMBER_NAME_FALLBACK)
+  }
+  return linked
+}
+
+function toAdminBatchRow(
+  batch: FriendshipBatchSource,
+  links: { ok: true; rows: FriendshipRecommendationLink[] } | { ok: false },
+  names: { ok: true; names: Map<string, string> } | { ok: false }
+): AdminFriendshipBatchRow {
+  const recipientName = names.ok
+    ? (names.names.get(batch.user_id) ?? FRIENDSHIP_MEMBER_NAME_FALLBACK)
+    : null
+
+  if (!links.ok || !names.ok) {
+    return {
+      createdAt: batch.created_at,
+      status: batch.status,
+      recommendationsAtCreation: batch.match_count,
+      recipientName,
+      linked: { status: 'unavailable' },
+    }
+  }
+
+  return {
+    createdAt: batch.created_at,
+    status: batch.status,
+    recommendationsAtCreation: batch.match_count,
+    recipientName,
+    linked: {
+      status: 'ready',
+      linkedRecommendationNames: linkedNamesForBatch(batch, links.rows, names.names),
+    },
+  }
+}
+
+async function loadRecentFriendshipBatches(
+  supabase: SupabaseClient<Database>,
+  batches: FriendshipBatchSource[]
+): Promise<AdminFriendshipBatchRow[]> {
+  if (batches.length === 0) return []
+
+  const links = await loadRecommendationLinks(
+    supabase,
+    batches.map((batch) => batch.id)
+  )
+  const recipientByBatch = new Map(batches.map((batch) => [batch.id, batch.user_id]))
+  const memberIds = batches.map((batch) => batch.user_id)
+  if (links.ok) {
+    for (const row of links.rows) {
+      if (recipientByBatch.get(row.batch_id) !== row.user_id) continue
+      if (!row.recommended_user_id || row.recommended_user_id === row.user_id) continue
+      memberIds.push(row.recommended_user_id)
+    }
+  }
+
+  const names = await loadMemberDisplayNames(supabase, memberIds)
+  return batches.map((batch) => toAdminBatchRow(batch, links, names))
 }
 
 export async function loadAdminFriendshipMatchOperations(
@@ -187,9 +444,9 @@ export async function loadAdminFriendshipMatchOperations(
 
   const recentResult = await supabase
     .from('friendship_match_batches')
-    .select('created_at, status, match_count')
+    .select('id, user_id, created_at, status, match_count')
     .order('created_at', { ascending: false })
-    .limit(25)
+    .limit(RECENT_FRIENDSHIP_BATCH_LIMIT)
 
   if (recentResult.error && !isMissingRelationError(recentResult.error)) {
     return { ok: false, error: 'Unable to load Friendship batch history.' }
@@ -209,12 +466,9 @@ export async function loadAdminFriendshipMatchOperations(
     return { ok: false, error: 'Unable to load the Friendship match pool.' }
   }
 
-  const recentBatches = (recentResult.data ?? []).map((row) => ({
-    created_at: row.created_at,
-    status: row.status,
-    match_count: row.match_count,
-  }))
-  const latest = recentBatches[0] ?? null
+  const recentSource = recentResult.data ?? []
+  const recentBatches = await loadRecentFriendshipBatches(supabase, recentSource)
+  const latest = recentSource[0] ?? null
   const last30Rows = last30Result.data ?? []
 
   const data: AdminFriendshipMatchOperations = {
