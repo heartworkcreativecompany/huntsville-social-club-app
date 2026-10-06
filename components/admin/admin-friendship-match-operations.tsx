@@ -7,11 +7,13 @@ import Card from '@/components/ui/card'
 import { buttonPrimaryClassName } from '@/lib/event-labels'
 import {
   FRIENDSHIP_ADMIN_HEADING,
+  FRIENDSHIP_BATCH_HISTORY_NOTE,
   FRIENDSHIP_NO_EMAIL_COPY,
   FRIENDSHIP_REFRESH_BUTTON_LABEL,
   FRIENDSHIP_REFRESH_CONFIRMATION,
   FRIENDSHIP_REFRESH_DISABLED_COPY,
   confirmedFriendshipRefresh,
+  presentFriendshipBatchDetail,
   type AdminFriendshipMatchOperations,
   type AdminFriendshipRefreshResult,
 } from '@/lib/friendship/load-admin-match-operations'
@@ -156,20 +158,44 @@ export default function AdminFriendshipMatchOperationsPanel({
 
       <Card>
         <h2 className="text-display text-lg font-semibold">Recent Friendship batches</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{FRIENDSHIP_BATCH_HISTORY_NOTE}</p>
         {operations.recentBatches.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No Friendship batches yet.</p>
         ) : (
           <ul className="mt-3 divide-y divide-border text-sm">
-            {operations.recentBatches.map((batch) => (
-              <li
-                key={`${batch.created_at}-${batch.status}-${batch.match_count}`}
-                className="flex flex-wrap justify-between gap-2 py-2 text-foreground"
-              >
-                <span>{formatTimestamp(batch.created_at)}</span>
-                <span>{batch.status}</span>
-                <span>{batch.match_count} recommendations</span>
-              </li>
-            ))}
+            {operations.recentBatches.map((batch, index) => {
+              const detail = presentFriendshipBatchDetail(batch)
+              return (
+                <li key={`${batch.createdAt}-${batch.status}-${index}`}>
+                  <details className="py-2">
+                    <summary className="cursor-pointer text-foreground">
+                      <span>{formatTimestamp(batch.createdAt)}</span>
+                      <span className="mx-2 text-muted-foreground">·</span>
+                      <span>{batch.status}</span>
+                      <span className="mx-2 text-muted-foreground">·</span>
+                      <span>{detail.creationCountLabel}</span>
+                    </summary>
+                    <div className="mt-2 space-y-2 pl-1">
+                      {detail.directionLabel ? (
+                        <p className="font-medium text-foreground">{detail.directionLabel}</p>
+                      ) : null}
+                      <div>
+                        <p className="text-foreground">{detail.linkedLabel}</p>
+                        {detail.message ? (
+                          <p className="mt-1 text-muted-foreground">{detail.message}</p>
+                        ) : (
+                          <ul className="mt-1 list-disc pl-5 text-foreground">
+                            {detail.linkedNames.map((name, nameIndex) => (
+                              <li key={`${nameIndex}-${name}`}>{name}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </details>
+                </li>
+              )
+            })}
           </ul>
         )}
       </Card>

@@ -9,6 +9,7 @@ import { generationIntervalDays } from '@/lib/compatibility/generation-config'
 import { countScheduledDeliveryRecipients } from '@/lib/compatibility/run-scheduled-match-delivery'
 import { isCompatibilityFeatureEnabled } from '@/lib/compatibility/eligibility'
 import {
+  isAdminViewer,
   loadAdminFriendshipMatchOperations,
   resolveDatingDeliveryTab,
   resolveMatchOperationsProduct,
@@ -39,7 +40,7 @@ export default async function AdminCuratedMatchesPage({
     redirect('/login')
   }
 
-  if (viewer.role !== 'admin') {
+  if (!isAdminViewer(viewer)) {
     redirect('/home')
   }
 
@@ -49,7 +50,9 @@ export default async function AdminCuratedMatchesPage({
   const supabase = requireAdminClient()
 
   if (product === 'friendship') {
-    const loaded = await loadAdminFriendshipMatchOperations(supabase, { isAdmin: true })
+    const loaded = await loadAdminFriendshipMatchOperations(supabase, {
+      isAdmin: isAdminViewer(viewer),
+    })
 
     return (
       <>
