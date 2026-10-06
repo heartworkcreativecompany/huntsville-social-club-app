@@ -886,6 +886,57 @@ export interface Database {
         }
         Relationships: []
       }
+      guest_event_registrations: {
+        Row: {
+          id: string
+          event_id: string
+          full_name: string
+          email: string
+          status: string
+          amount_cents: number
+          currency: string
+          rsvp_answer: string | null
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          expires_at: string | null
+          paid_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          full_name: string
+          email: string
+          status?: string
+          amount_cents: number
+          currency?: string
+          rsvp_answer?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          expires_at?: string | null
+          paid_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          full_name?: string
+          email?: string
+          status?: string
+          amount_cents?: number
+          currency?: string
+          rsvp_answer?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          expires_at?: string | null
+          paid_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_sponsorships: {
         Row: {
           id: string
