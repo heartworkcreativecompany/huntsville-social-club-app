@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import {
-  createIdentityVerificationSession,
-  markIdentitySessionPending,
-} from '@/lib/stripe/identity'
+import { startMemberIdentityVerification } from '@/lib/stripe/identity'
 import { isStripeIdentityConfigured } from '@/lib/stripe/config'
 
 export const runtime = 'nodejs'
@@ -38,7 +35,9 @@ export async function POST() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('application_status, identity_verification_status')
+    .select(
+      'application_status, identity_verification_status, identity_verification_session_id'
+    )
     .eq('id', user.id)
     .maybeSingle()
 
@@ -46,43 +45,30 @@ export async function POST() {
     return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
   }
 
-  if (profile.identity_verification_status === 'verified') {
-    return NextResponse.json(
-      { error: 'Identity is already verified.' },
-      { status: 400 }
-    )
-  }
-
-  const applicationStatus = profile.application_status ?? 'draft'
-  if (applicationStatus === 'draft' || applicationStatus === 'rejected') {
-    return NextResponse.json(
-      {
-        error:
-          'Submit your membership application before starting identity verification.',
-      },
-      { status: 400 }
-    )
-  }
-
   try {
-    const session = await createIdentityVerificationSession({
+    const result = await startMemberIdentityVerification({
+      supabase,
       userId: user.id,
       email: user.email,
+      applicationStatus: profile.application_status,
+      identityStatus: profile.identity_verification_status,
+      storedSessionId: profile.identity_verification_session_id,
     })
 
-    await markIdentitySessionPending(supabase, user.id, session.sessionId)
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.httpStatus })
+    }
 
     return NextResponse.json({
-      sessionId: session.sessionId,
-      url: session.url,
-      status: session.status,
+      sessionId: result.sessionId,
+      url: result.url,
+      status: result.status,
     })
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to create Stripe Identity session.'
-    console.error('Stripe Identity session creation failed:', error)
-    return NextResponse.json({ error: message }, { status: 500 })
+  } catch {
+    console.error('[identity] verification status refresh failed')
+    return NextResponse.json(
+      { error: 'Could not start identity verification. Please try again.' },
+      { status: 500 }
+    )
   }
 }

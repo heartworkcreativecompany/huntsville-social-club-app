@@ -29,26 +29,6 @@ export {
 type Supabase = SupabaseClient<Database>
 
 /**
- * Map VerificationSession → applicant id via trusted Stripe metadata, then
- * durable session_id on profiles. Never by name/email/browser input alone.
- */
-export async function resolveIdentityApplicantId(
-  supabase: Supabase,
-  session: Stripe.Identity.VerificationSession
-): Promise<string | null> {
-  const fromMeta = resolveUserIdFromIdentityMetadata(session.metadata)
-  if (fromMeta) return fromMeta
-
-  const { data } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('identity_verification_session_id', session.id)
-    .maybeSingle()
-
-  return data?.id ?? null
-}
-
-/**
  * Creates a Stripe Identity VerificationSession for member-facing
  * "Identity & location verification".
  * Requires:
@@ -100,61 +80,357 @@ export async function createIdentityVerificationSession(input: {
   }
 }
 
+const IDENTITY_RECONCILE_STATUSES = new Set([
+  'pending',
+  'processing',
+  'requires_input',
+])
+
+const IDENTITY_WRITE_ATTEMPTS = 3
+
+const IDENTITY_PROFILE_SNAPSHOT_SELECT =
+  'identity_verification_status, identity_verification_session_id, approval_gates, verification_state'
+
+type IdentityProfileSnapshot = {
+  identity_verification_status: string
+  identity_verification_session_id: string | null
+  approval_gates: unknown
+  verification_state: unknown
+}
+
+type CasQuery = {
+  eq(column: string, value: unknown): CasQuery
+  is(column: string, value: null): CasQuery
+  select(columns: string): Promise<{
+    data: { id: string }[] | null
+    error: { message: string } | null
+  }>
+}
+
+export type IdentitySessionRegistration =
+  | { ok: true }
+  | { ok: false; reason: 'already_verified' | 'conflict' | 'not_found' }
+
+export type IdentityReconcileResult =
+  | { ok: true; outcome: 'refreshed' | 'unchanged' }
+  | { ok: false; outcome: 'failed' | 'rejected' }
+
+function sameSessionId(left: string | null | undefined, right: string | null | undefined) {
+  return (left ?? null) === (right ?? null)
+}
+
+function shouldSkipIdentityWrite(
+  profile: IdentityProfileSnapshot,
+  fresh: Stripe.Identity.VerificationSession
+): boolean {
+  const freshStatus = mapStripeIdentityStatus(fresh.status)
+  if (profile.identity_verification_status === 'verified' && freshStatus !== 'verified') {
+    return true
+  }
+  if (
+    fresh.id !== profile.identity_verification_session_id &&
+    freshStatus !== 'verified'
+  ) {
+    return true
+  }
+  return false
+}
+
+const JSON_SNAPSHOT_COLUMNS = new Set(['approval_gates', 'verification_state'])
+
+function expectColumn(
+  query: CasQuery,
+  column: string,
+  value: unknown
+): CasQuery {
+  if (value == null) return query.is(column, null)
+  // postgrest-js appends `eq.${value}`. Objects become "[object Object]".
+  // JSON text stays intact, and URLSearchParams encodes the query string.
+  if (JSON_SNAPSHOT_COLUMNS.has(column)) {
+    return query.eq(column, JSON.stringify(value))
+  }
+  return query.eq(column, value)
+}
+
 /**
- * Apply a Stripe Identity VerificationSession to the mapped applicant.
+ * Compare-and-swap on the snapshot that was read.
+ * NULL session id, gates, and verification state use IS NULL.
+ * Success requires a returned row, not merely an empty Supabase error.
+ */
+async function compareAndSwapIdentityProfile(
+  supabase: Supabase,
+  userId: string,
+  expected: IdentityProfileSnapshot,
+  patch: Database['public']['Tables']['profiles']['Update']
+): Promise<boolean> {
+  let query = supabase.from('profiles').update(patch) as unknown as CasQuery
+  query = query.eq('id', userId)
+  query = query.eq(
+    'identity_verification_status',
+    expected.identity_verification_status
+  )
+  query = expectColumn(
+    query,
+    'identity_verification_session_id',
+    expected.identity_verification_session_id
+  )
+  query = expectColumn(query, 'approval_gates', expected.approval_gates)
+  query = expectColumn(query, 'verification_state', expected.verification_state)
+
+  const { data, error } = await query.select('id')
+  if (error) throw new Error('Identity status update failed')
+  return Array.isArray(data) && data.length > 0
+}
+
+async function loadIdentityProfileSnapshot(
+  supabase: Supabase,
+  userId: string
+): Promise<IdentityProfileSnapshot | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(IDENTITY_PROFILE_SNAPSHOT_SELECT)
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (error) throw new Error('Identity status update failed')
+  return data
+}
+
+/**
+ * Apply a Stripe Identity VerificationSession to one applicant.
+ * Re-reads the session from Stripe and commits with a compare-and-swap.
  * Does not set application_status to approved, change role, or grant paid access.
  */
 export async function applyIdentityVerificationSession(
   supabase: Supabase,
-  session: Stripe.Identity.VerificationSession
+  session: Stripe.Identity.VerificationSession,
+  options?: { applicantId?: string }
 ): Promise<string | null> {
-  const userId = await resolveIdentityApplicantId(supabase, session)
-  if (!userId) return null
+  const fresh = await getStripe().identity.verificationSessions.retrieve(
+    session.id
+  )
+  const freshOwner = resolveUserIdFromIdentityMetadata(fresh.metadata)
+  const eventOwner = resolveUserIdFromIdentityMetadata(session.metadata)
 
-  const { data: profile } = await supabase
+  let userId: string
+  if (options?.applicantId) {
+    if (!freshOwner || freshOwner !== options.applicantId) return null
+    userId = options.applicantId
+  } else {
+    if (!eventOwner || !freshOwner || eventOwner !== freshOwner) return null
+    userId = freshOwner
+  }
+
+  for (let attempt = 0; attempt < IDENTITY_WRITE_ATTEMPTS; attempt += 1) {
+    const profile = await loadIdentityProfileSnapshot(supabase, userId)
+    if (!profile) return null
+    if (shouldSkipIdentityWrite(profile, fresh)) return userId
+
+    const patch = buildIdentityProfilePatch({
+      session: fresh,
+      existingGates: profile.approval_gates,
+      existingVerification: profile.verification_state,
+    })
+    const matched = await compareAndSwapIdentityProfile(
+      supabase,
+      userId,
+      profile,
+      patch
+    )
+    if (matched) return userId
+  }
+
+  throw new Error('Identity status update conflicted')
+}
+
+/**
+ * Refresh one applicant from their stored Stripe Identity session.
+ * No-ops unless status is pending, processing, or requires_input and a session id is stored.
+ */
+export async function reconcileIdentityVerification(
+  userId: string,
+  supabase: Supabase
+): Promise<IdentityReconcileResult> {
+  const { data: profile, error } = await supabase
     .from('profiles')
-    .select('approval_gates, verification_state')
+    .select('identity_verification_status, identity_verification_session_id')
     .eq('id', userId)
     .maybeSingle()
 
-  if (!profile) return null
+  if (error) {
+    console.error('[identity] verification status refresh failed')
+    return { ok: false, outcome: 'failed' }
+  }
+  if (!profile) return { ok: false, outcome: 'rejected' }
 
-  const patch = buildIdentityProfilePatch({
-    session,
-    existingGates: profile.approval_gates,
-    existingVerification: profile.verification_state,
+  const status = profile.identity_verification_status
+  const sessionId = profile.identity_verification_session_id
+  if (!status || !IDENTITY_RECONCILE_STATUSES.has(status)) {
+    return { ok: true, outcome: 'unchanged' }
+  }
+  if (!sessionId) return { ok: false, outcome: 'rejected' }
+
+  let fresh: Stripe.Identity.VerificationSession
+  try {
+    fresh = await getStripe().identity.verificationSessions.retrieve(sessionId)
+  } catch {
+    console.error('[identity] verification status refresh failed')
+    return { ok: false, outcome: 'failed' }
+  }
+
+  if (resolveUserIdFromIdentityMetadata(fresh.metadata) !== userId) {
+    return { ok: false, outcome: 'rejected' }
+  }
+
+  try {
+    const applied = await applyIdentityVerificationSession(supabase, fresh, {
+      applicantId: userId,
+    })
+    if (applied !== userId) return { ok: false, outcome: 'rejected' }
+    return { ok: true, outcome: 'refreshed' }
+  } catch {
+    console.error('[identity] verification status refresh failed')
+    return { ok: false, outcome: 'failed' }
+  }
+}
+
+export async function startMemberIdentityVerification(input: {
+  supabase: Supabase
+  userId: string
+  email?: string | null
+  applicationStatus: string | null
+  identityStatus: string | null
+  storedSessionId: string | null
+}): Promise<
+  | {
+      ok: true
+      sessionId: string
+      url: string
+      status: IdentityVerificationStatus
+    }
+  | { ok: false; error: string; httpStatus: number }
+> {
+  if (input.identityStatus === 'verified') {
+    return {
+      ok: false,
+      error: 'Identity is already verified.',
+      httpStatus: 400,
+    }
+  }
+
+  if (input.storedSessionId) {
+    let existing: Stripe.Identity.VerificationSession
+    try {
+      existing = await getStripe().identity.verificationSessions.retrieve(
+        input.storedSessionId
+      )
+    } catch {
+      console.error('[identity] verification status refresh failed')
+      return {
+        ok: false,
+        error: 'Could not start identity verification. Please try again.',
+        httpStatus: 500,
+      }
+    }
+
+    if (resolveUserIdFromIdentityMetadata(existing.metadata) !== input.userId) {
+      return {
+        ok: false,
+        error: 'Could not start identity verification. Please try again.',
+        httpStatus: 409,
+      }
+    }
+
+    if (mapStripeIdentityStatus(existing.status) === 'verified') {
+      const applied = await applyIdentityVerificationSession(
+        input.supabase,
+        existing,
+        { applicantId: input.userId }
+      )
+      if (applied !== input.userId) {
+        return {
+          ok: false,
+          error: 'Could not start identity verification. Please try again.',
+          httpStatus: 409,
+        }
+      }
+      return {
+        ok: false,
+        error: 'Identity is already verified.',
+        httpStatus: 400,
+      }
+    }
+  }
+
+  const applicationStatus = input.applicationStatus ?? 'draft'
+  if (applicationStatus === 'draft' || applicationStatus === 'rejected') {
+    return {
+      ok: false,
+      error:
+        'Submit your membership application before starting identity verification.',
+      httpStatus: 400,
+    }
+  }
+
+  const session = await createIdentityVerificationSession({
+    userId: input.userId,
+    email: input.email,
   })
+  const registration = await markIdentitySessionPending(
+    input.supabase,
+    input.userId,
+    session.sessionId,
+    input.storedSessionId
+  )
 
-  await supabase.from('profiles').update(patch).eq('id', userId)
+  if (!registration.ok) {
+    if (registration.reason === 'already_verified') {
+      return {
+        ok: false,
+        error: 'Identity is already verified.',
+        httpStatus: 400,
+      }
+    }
+    return {
+      ok: false,
+      error: 'Could not start identity verification. Please try again.',
+      httpStatus: 409,
+    }
+  }
 
-  return userId
+  return {
+    ok: true,
+    sessionId: session.sessionId,
+    url: session.url,
+    status: session.status,
+  }
 }
 
 export async function markIdentitySessionPending(
   supabase: Supabase,
   userId: string,
-  sessionId: string
-): Promise<void> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('approval_gates, verification_state')
-    .eq('id', userId)
-    .maybeSingle()
+  sessionId: string,
+  expectedSessionId: string | null
+): Promise<IdentitySessionRegistration> {
+  for (let attempt = 0; attempt < IDENTITY_WRITE_ATTEMPTS; attempt += 1) {
+    const profile = await loadIdentityProfileSnapshot(supabase, userId)
+    if (!profile) return { ok: false, reason: 'not_found' }
+    if (profile.identity_verification_status === 'verified') {
+      return { ok: false, reason: 'already_verified' }
+    }
+    if (!sameSessionId(profile.identity_verification_session_id, expectedSessionId)) {
+      return { ok: false, reason: 'conflict' }
+    }
 
-  if (!profile) return
+    const gates = parseApprovalGates(profile.approval_gates)
+    gates.identity_verified = 'pending_review'
+    const verification_state = verificationStateFromGates(
+      gates,
+      parseVerificationState(profile.verification_state)
+    )
+    verification_state.id_verified = 'pending_review'
 
-  const gates = parseApprovalGates(profile.approval_gates)
-  gates.identity_verified = 'pending_review'
-
-  const verification_state = verificationStateFromGates(
-    gates,
-    parseVerificationState(profile.verification_state)
-  )
-  verification_state.id_verified = 'pending_review'
-
-  await supabase
-    .from('profiles')
-    .update({
+    const matched = await compareAndSwapIdentityProfile(supabase, userId, profile, {
       identity_verification_status: 'pending',
       identity_verification_session_id: sessionId,
       identity_verification_last_error: null,
@@ -162,5 +438,8 @@ export async function markIdentitySessionPending(
       verification_state,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', userId)
+    if (matched) return { ok: true }
+  }
+
+  return { ok: false, reason: 'conflict' }
 }
