@@ -150,7 +150,7 @@ describe('public homepage copy', () => {
     expect(UPCOMING_EVENTS_INTRO).toBe(
       "See what's coming up around Huntsville. Members RSVP with their benefits, and guests can grab a spot at select events."
     )
-    expect(VIEW_ALL_EVENTS_LABEL).toBe('View all events')
+    expect(VIEW_ALL_EVENTS_LABEL).toBe('View all Events')
     expect(VIEW_ALL_EVENTS_HREF).toBe('/events')
     expect(PUBLIC_EVENTS_PAGE_INTRO).toBe(
       "See what's coming up around Huntsville. Members can sign in to RSVP, and guests can grab a spot at select events."

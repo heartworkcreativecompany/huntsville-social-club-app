@@ -13,6 +13,7 @@ import {
 } from '@/lib/load-public-events'
 import {
   APPLY_FOR_FREE_MEMBERSHIP_CTA,
+  APPLY_FOR_MEMBERSHIP_CTA,
   IMPLIED_EXPERIENCES,
   IMPLIED_EXPERIENCES_HEADLINE,
   UPCOMING_EVENTS_HEADLINE,
@@ -40,13 +41,12 @@ function renderExperiences(events: PublicEvent[]) {
   return renderToStaticMarkup(
     createElement(PublicHomeExperiences, {
       events,
-      signupHref: '/signup',
     })
   )
 }
 
 describe('homepage upcoming events', () => {
-  it('renders up to three listed events with image, type, schedule, location, price, and link', () => {
+  it('renders up to three listed events with image, name, schedule, and cost only', () => {
     const listed = [
       event(),
       event({
@@ -75,20 +75,20 @@ describe('homepage upcoming events', () => {
     expect(html.match(/href="\/events\//g)?.length).toBe(3)
 
     expect(html).toContain('href="/events/event-1"')
-    expect(html).toContain('Circle Social')
+    expect(html).not.toContain('Circle Social')
+    expect(html).not.toContain('Standard Event')
+    expect(html).not.toContain('Lipz Lounge')
+    expect(html).not.toContain('Cafe')
     expect(html).toContain('Table Hop Game Night')
     expect(html).toContain(
       formatEventScheduleInChicago(listed[0].starts_at, listed[0].ends_at)
     )
-    expect(html).toContain('Lipz Lounge')
     expect(html).toContain(publicEventPriceLabel(1500) ?? '')
     expect(html).toContain('alt="Table Hop Game Night"')
     expect(html).toContain(eventCoverImage(listed[0].id, listed[0].cover_image_url))
 
     expect(html).toContain('href="/events/event-2"')
-    expect(html).toContain('Standard Event')
     expect(html).toContain('Morning coffee')
-    expect(html).toContain('Cafe')
     expect(html).not.toContain('>$0<')
     expect(html).toContain(encodeURIComponent(eventCoverImage('event-2', null)))
 
@@ -115,15 +115,36 @@ describe('homepage upcoming events', () => {
     expect(html).not.toContain('href="/events/event-1"')
   })
 
-  it('links to the events page and keeps the membership application button', () => {
+  it('shows one View all Events button and no apply button in this section', () => {
     for (const events of [[], [event()]]) {
       const html = renderExperiences(events)
       expect(html).toContain(`href="${VIEW_ALL_EVENTS_HREF}"`)
       expect(html).toContain(VIEW_ALL_EVENTS_LABEL)
-      expect(html).toContain('href="/signup"')
-      expect(html).toContain(APPLY_FOR_FREE_MEMBERSHIP_CTA)
+      expect(html.match(/View all Events/g)?.length).toBe(1)
+      expect(html).not.toContain('href="/signup"')
+      expect(html).not.toContain(APPLY_FOR_FREE_MEMBERSHIP_CTA)
+      expect(html).not.toContain(APPLY_FOR_MEMBERSHIP_CTA)
+      expect(html).toContain('justify-center')
       expect(html).not.toMatch(/—/)
     }
+  })
+})
+
+describe('homepage apply buttons outside the events section', () => {
+  const content = readFileSync(
+    join(process.cwd(), 'components/marketing/public-home-content.tsx'),
+    'utf8'
+  )
+  const sectionStart = content.indexOf('export function PublicHomeExperiences')
+  const sectionEnd = content.indexOf('export default async function PublicHomeContent')
+  const experiences = content.slice(sectionStart, sectionEnd)
+  const rest = content.slice(sectionEnd)
+
+  it('keeps the other homepage apply buttons', () => {
+    expect(experiences).not.toContain('ApplyMembershipCta')
+    expect(rest.match(/ApplyMembershipCta/g)?.length).toBe(4)
+    expect(rest).toContain('APPLY_FOR_MEMBERSHIP_CTA')
+    expect(rest).toContain('href={signupHref}')
   })
 })
 

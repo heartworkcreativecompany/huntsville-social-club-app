@@ -2,7 +2,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 import ApplyMembershipCta from '@/components/marketing/apply-membership-cta'
 import PublicHomeHeader from '@/components/marketing/public-home-header'
-import EventTypeBadge from '@/components/events/event-type-badge'
 import { marketingButtonPrimaryClassName } from '@/lib/event-labels'
 import {
   eventCoverImage,
@@ -49,30 +48,23 @@ import {
   WHY_EXISTS_INTRO,
 } from '@/lib/marketing-home-copy'
 
-function HomeEventsActions({ signupHref }: { signupHref: string }) {
+function HomeEventsActions() {
   return (
-    <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
+    <div className="mt-10 flex justify-center">
       <Link
         href={VIEW_ALL_EVENTS_HREF}
         className={`${marketingButtonPrimaryClassName} w-full sm:w-auto`}
       >
         {VIEW_ALL_EVENTS_LABEL}
       </Link>
-      <ApplyMembershipCta
-        href={signupHref}
-        variant="secondary"
-        className="w-full sm:w-auto"
-      />
     </div>
   )
 }
 
 export function PublicHomeExperiences({
   events,
-  signupHref,
 }: {
   events: PublicEvent[]
-  signupHref: string
 }) {
   const featured = events.slice(0, HOMEPAGE_UPCOMING_EVENT_LIMIT)
 
@@ -117,18 +109,12 @@ export function PublicHomeExperiences({
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
                       <div className="relative flex h-full min-h-[16rem] flex-col justify-end p-5">
-                        <EventTypeBadge eventType={event.event_type} />
-                        <h3 className="font-brand mt-3 text-lg font-semibold text-white">
+                        <h3 className="font-brand text-lg font-semibold text-white">
                           {event.title}
                         </h3>
                         <p className="mt-2 text-sm leading-relaxed text-white/80">
                           {when}
                         </p>
-                        {event.location ? (
-                          <p className="mt-1 text-sm leading-relaxed text-white/80">
-                            {event.location}
-                          </p>
-                        ) : null}
                         {price ? (
                           <p className="mt-1 text-sm leading-relaxed text-white/80">
                             {price}
@@ -179,7 +165,7 @@ export function PublicHomeExperiences({
             </ul>
           </>
         )}
-        <HomeEventsActions signupHref={signupHref} />
+        <HomeEventsActions />
       </div>
     </section>
   )
@@ -287,7 +273,7 @@ export default async function PublicHomeContent({
         </ul>
       </section>
 
-      <PublicHomeExperiences events={events} signupHref={signupHref} />
+      <PublicHomeExperiences events={events} />
 
       <section
         aria-labelledby="who-it-is-for-heading"

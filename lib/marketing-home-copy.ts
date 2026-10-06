@@ -55,7 +55,7 @@ export const HOMEPAGE_UPCOMING_EVENT_LIMIT = 3
 export const UPCOMING_EVENTS_HEADLINE = 'Upcoming events'
 export const UPCOMING_EVENTS_INTRO =
   "See what's coming up around Huntsville. Members RSVP with their benefits, and guests can grab a spot at select events."
-export const VIEW_ALL_EVENTS_LABEL = 'View all events'
+export const VIEW_ALL_EVENTS_LABEL = 'View all Events'
 export const VIEW_ALL_EVENTS_HREF = '/events' as const
 export const PUBLIC_EVENTS_PAGE_INTRO =
   "See what's coming up around Huntsville. Members can sign in to RSVP, and guests can grab a spot at select events."
