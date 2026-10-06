@@ -16,6 +16,7 @@ import {
 import { trackServerEvent } from '@/lib/analytics'
 import { queueAutoGenerateCuratedMatches } from '@/lib/compatibility/auto-generate-matches'
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
+import { reconcileIdentityVerification } from '@/lib/stripe/identity'
 import { syncAuthDisplayNameBestEffort } from '@/lib/sync-auth-display-name'
 
 async function requireAdmin() {
@@ -144,4 +145,22 @@ export async function requestMoreInfo(applicantId: string, notes: string) {
 
 export async function markInReview(applicantId: string) {
   return updateApplicationStatus(applicantId, 'in_review', undefined)
+}
+
+export async function refreshApplicantIdentityStatus(applicantId: string) {
+  const auth = await requireAdmin()
+  if (auth.error || !auth.userId) {
+    return { error: auth.error ?? 'Unauthorized' }
+  }
+
+  const admin = requireAdminClient()
+  try {
+    await reconcileIdentityVerification(applicantId, admin)
+  } catch {
+    console.error('[identity] verification status refresh failed')
+    return { error: 'Could not refresh identity status.' }
+  }
+
+  revalidatePath(`/admin/applications/${applicantId}`)
+  return { error: null }
 }

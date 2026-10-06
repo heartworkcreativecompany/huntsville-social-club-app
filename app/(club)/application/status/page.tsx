@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation'
 import ApplicationStatusPanel from '@/components/application/application-status-panel'
 import PageHeader from '@/components/ui/page-header'
 import { syncEmailApprovalGateForUser } from '@/lib/approval-gate-sync'
+import { loadProfileForUser } from '@/lib/load-profile'
 import { parseApprovalGates } from '@/lib/membership-systems'
+import { reconcileIdentityVerification } from '@/lib/stripe/identity'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -31,7 +33,22 @@ export default async function ApplicationStatusPage({
     await syncEmailApprovalGateForUser(supabase, viewer.userId, true)
   }
 
-  const profile = viewer.profile
+  let profile = viewer.profile
+  const identityStatus = profile?.identity_verification_status
+  const shouldReconcileIdentity =
+    params.identity === 'return' ||
+    identityStatus === 'pending' ||
+    identityStatus === 'processing'
+  if (shouldReconcileIdentity) {
+    try {
+      await reconcileIdentityVerification(viewer.userId, supabase)
+      const reloaded = await loadProfileForUser(supabase, viewer.userId)
+      if (reloaded.profile) profile = reloaded.profile
+    } catch {
+      console.error('[identity] verification status refresh failed')
+    }
+  }
+
   const status = viewer.applicationStatus
   const gates = parseApprovalGates(profile?.approval_gates)
   if (emailConfirmed) {

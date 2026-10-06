@@ -18,6 +18,7 @@ import { getViewer } from '@/lib/viewer'
 import { formatIndustryLabel } from '@/lib/industries'
 import AdminApplicationPhotoGallery from '@/components/admin/admin-application-photo-gallery'
 import AdminApprovalGates from '@/components/admin/admin-approval-gates'
+import RefreshIdentityStatusButton from '@/components/admin/refresh-identity-status-button'
 import AdminBillingStatus from '@/components/admin/admin-billing-status'
 import AdminLocalityReview from '@/components/admin/admin-locality-review'
 import AdminMemberVouches from '@/components/admin/admin-member-vouches'
@@ -369,6 +370,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
               selfies, and extracted ID values are not stored or shown here.
               Membership approval remains a separate manual action below.
             </p>
+            <RefreshIdentityStatusButton applicantId={applicant.id} />
             <div className="mt-4">
               <AdminApprovalGates
                 applicantId={applicant.id}
