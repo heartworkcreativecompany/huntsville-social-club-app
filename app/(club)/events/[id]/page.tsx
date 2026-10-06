@@ -31,6 +31,7 @@ import {
   isMissingRsvpQuestionColumnError,
   withNullRsvpQuestion,
 } from '@/lib/event-rsvp-question'
+import { isMissingListedPubliclyColumnError } from '@/lib/event-public-listing'
 import { loadPendingRsvpAnswer } from '@/lib/event-rsvp-pending-answer'
 import { isEventPast, memberGoingLabel, availabilityLabel } from '@/lib/event-display'
 import {
@@ -103,13 +104,26 @@ export default async function EventDetailPage({ params }: PageProps) {
   const supabase = await createClient()
   const user = { id: viewer.userId }
 
+  const detailSelectWithQuestion =
+    `${EVENT_DETAIL_SELECT_FIELDS_WITH_COVER}, ${EVENT_RSVP_QUESTION_SELECT_FIELDS}` as const
+
   let { data: event, error: eventError } = await supabase
     .from('events')
-    .select(
-      `${EVENT_DETAIL_SELECT_FIELDS_WITH_COVER}, ${EVENT_RSVP_QUESTION_SELECT_FIELDS}`
-    )
+    .select(`${detailSelectWithQuestion}, listed_publicly`)
     .eq('id', id)
     .single()
+
+  if (eventError && isMissingListedPubliclyColumnError(eventError)) {
+    const withoutListing = await supabase
+      .from('events')
+      .select(detailSelectWithQuestion)
+      .eq('id', id)
+      .single()
+    event = withoutListing.data
+      ? { ...withoutListing.data, listed_publicly: false }
+      : null
+    eventError = withoutListing.error
+  }
 
   if (eventError && isMissingRsvpQuestionColumnError(eventError)) {
     const withoutQuestion = await supabase
@@ -118,7 +132,10 @@ export default async function EventDetailPage({ params }: PageProps) {
       .eq('id', id)
       .single()
     event = withoutQuestion.data
-      ? withNullRsvpQuestion(withNullCoverImage(withoutQuestion.data))
+      ? {
+          ...withNullRsvpQuestion(withNullCoverImage(withoutQuestion.data)),
+          listed_publicly: false,
+        }
       : withoutQuestion.data
     eventError = withoutQuestion.error
   }
@@ -130,7 +147,10 @@ export default async function EventDetailPage({ params }: PageProps) {
       .eq('id', id)
       .single()
     event = fallback.data
-      ? withNullRsvpQuestion(withNullCoverImage(fallback.data))
+      ? {
+          ...withNullRsvpQuestion(withNullCoverImage(fallback.data)),
+          listed_publicly: false,
+        }
       : null
     eventError = fallback.error
   } else if (event) {
@@ -639,9 +659,11 @@ export default async function EventDetailPage({ params }: PageProps) {
               initialCoverImageUrl={event.cover_image_url}
               initialRsvpQuestion={event.rsvp_question}
               initialRsvpQuestionRequired={event.rsvp_question_required}
+              initialListedPublicly={event.listed_publicly === true}
               initialSponsorIds={eventSponsors.map((sponsor) => sponsor.id)}
               availableSponsors={availableSponsors}
               isAdminEditor={userRole === 'admin'}
+              canListPublicly={userRole === 'host' || userRole === 'admin'}
             />
             <div className="mt-4 border-t border-border pt-4">
               <DeleteEventButton eventId={event.id} />

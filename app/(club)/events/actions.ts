@@ -7,6 +7,10 @@ import { parseAttendanceMax } from '@/lib/event-attendance'
 import { persistEventDescription } from '@/lib/event-description'
 import { isMissingCoverImageColumnError } from '@/lib/event-cover-image-column'
 import {
+  isMissingListedPubliclyColumnError,
+  resolveListedPublicly,
+} from '@/lib/event-public-listing'
+import {
   isMissingRsvpQuestionColumnError,
   normalizeEventRsvpQuestionConfig,
   omitRsvpQuestionFields,
@@ -92,6 +96,14 @@ function stripUnknownEventWriteColumns<T extends Record<string, unknown>>(
     return rest
   }
   if (
+    isMissingListedPubliclyColumnError(error) &&
+    'listed_publicly' in payload
+  ) {
+    const rest = { ...payload }
+    delete rest.listed_publicly
+    return rest
+  }
+  if (
     isMissingRsvpQuestionColumnError(error) &&
     ('rsvp_question' in payload || 'rsvp_question_required' in payload)
   ) {
@@ -116,6 +128,7 @@ export async function createEvent(input: {
   sponsorIds?: string[]
   rsvpQuestion?: string
   rsvpQuestionRequired?: boolean
+  listedPublicly?: boolean
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -215,6 +228,10 @@ export async function createEvent(input: {
     cover_image_url: coverImageUrl,
     rsvp_question: rsvpQuestionConfig.rsvp_question,
     rsvp_question_required: rsvpQuestionConfig.rsvp_question_required,
+    listed_publicly: resolveListedPublicly({
+      role: viewer.role,
+      requested: input.listedPublicly,
+    }),
     ...(privileged
       ? {
           fee_cents: feeCents,
@@ -231,7 +248,7 @@ export async function createEvent(input: {
     .select('id')
     .single()
 
-  for (let i = 0; i < 2 && eventError; i += 1) {
+  for (let i = 0; i < 3 && eventError; i += 1) {
     const stripped = stripUnknownEventWriteColumns(insertAttempt, eventError)
     if (!stripped) break
     insertAttempt = stripped
@@ -313,6 +330,7 @@ export async function updateEvent(input: {
   sponsorIds?: string[]
   rsvpQuestion?: string
   rsvpQuestionRequired?: boolean
+  listedPublicly?: boolean
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -425,6 +443,10 @@ export async function updateEvent(input: {
     updated_at: new Date().toISOString(),
     rsvp_question: rsvpQuestionConfig.rsvp_question,
     rsvp_question_required: rsvpQuestionConfig.rsvp_question_required,
+    listed_publicly: resolveListedPublicly({
+      role: viewer.role,
+      requested: input.listedPublicly,
+    }),
     ...(coverImageUrl !== undefined ? { cover_image_url: coverImageUrl } : {}),
     ...(canManageTypeAndFee
       ? {
@@ -442,7 +464,7 @@ export async function updateEvent(input: {
     .update(updatePayload)
     .eq('id', input.eventId)
 
-  for (let i = 0; i < 2 && error; i += 1) {
+  for (let i = 0; i < 3 && error; i += 1) {
     const stripped = stripUnknownEventWriteColumns(updateAttempt, error)
     if (!stripped) break
     updateAttempt = stripped
