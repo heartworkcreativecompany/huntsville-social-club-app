@@ -68,16 +68,18 @@ function createAdmin(rows: Row[]) {
                   if (row && statuses.includes(row.status)) {
                     Object.assign(row, payload)
                     updates.push(payload)
+                    return { error: null, count: 1 }
                   }
-                  return { error: null }
+                  return { error: null, count: 0 }
                 },
                 async eq(_statusColumn: string, status: string) {
                   const row = rows.find((item) => item.id === id)
                   if (row && row.status === status) {
                     Object.assign(row, payload)
                     updates.push(payload)
+                    return { error: null, count: 1 }
                   }
-                  return { error: null }
+                  return { error: null, count: 0 }
                 },
               }
             },
@@ -172,15 +174,18 @@ describe('guest event fee webhook', () => {
         },
       ])
 
-      await applyGuestCheckoutSessionCompleted(
-        db.admin as unknown as SupabaseClient<Database>,
-        paidSession()
-      )
+      await expect(
+        applyGuestCheckoutSessionCompleted(
+          db.admin as unknown as SupabaseClient<Database>,
+          paidSession()
+        )
+      ).rejects.toThrow(REGISTRATION_ID)
 
       expect(db.rows[0]?.status).toBe(status)
       expect(db.updates).toHaveLength(0)
       const logged = warnSpy.mock.calls.flat().join(' ')
       expect(logged).toContain(REGISTRATION_ID)
+      expect(logged).toContain(status)
       expect(logged).not.toContain(EMAIL)
       expect(logged).not.toContain(NAME)
       expect(logged).not.toContain(SESSION_ID)
@@ -226,17 +231,50 @@ describe('guest event fee webhook', () => {
       },
     ])
 
-    await applyGuestCheckoutSessionCompleted(
-      db.admin as unknown as SupabaseClient<Database>,
-      paidSession()
-    )
-    await applyGuestCheckoutSessionExpired(
-      db.admin as unknown as SupabaseClient<Database>,
-      paidSession()
-    )
+    await expect(
+      applyGuestCheckoutSessionCompleted(
+        db.admin as unknown as SupabaseClient<Database>,
+        paidSession()
+      )
+    ).rejects.toThrow('registration_not_found')
+    await expect(
+      applyGuestCheckoutSessionExpired(
+        db.admin as unknown as SupabaseClient<Database>,
+        paidSession()
+      )
+    ).rejects.toThrow('registration_not_found')
 
     expect(db.rows[0]?.status).toBe('pending_payment')
     expect(db.updates).toHaveLength(0)
+    const logged = warnSpy.mock.calls.flat().join(' ')
+    expect(logged).toContain(REGISTRATION_ID)
+    expect(logged).not.toContain(SESSION_ID)
+    expect(logged).not.toContain(PAYMENT_INTENT_ID)
+    expect(logged).not.toContain(EMAIL)
+  })
+
+  it('does not record an unpaid guest checkout as applied', async () => {
+    const db = createAdmin([
+      {
+        id: REGISTRATION_ID,
+        status: 'pending_payment',
+        stripe_checkout_session_id: SESSION_ID,
+      },
+    ])
+
+    await expect(
+      applyGuestCheckoutSessionCompleted(
+        db.admin as unknown as SupabaseClient<Database>,
+        paidSession({ payment_status: 'unpaid' })
+      )
+    ).rejects.toThrow('payment_not_paid')
+
+    expect(db.rows[0]?.status).toBe('pending_payment')
+    expect(db.updates).toHaveLength(0)
+    const logged = warnSpy.mock.calls.flat().join(' ')
+    expect(logged).toContain(REGISTRATION_ID)
+    expect(logged).not.toContain(SESSION_ID)
+    expect(logged).not.toContain(EMAIL)
   })
 
   it('can still mark an expired hold paid when the matching payment completes', async () => {
@@ -277,22 +315,34 @@ describe('stripe webhook route branches', () => {
       route.indexOf('handleStripeEvent')
     )
 
-    const webhook = readFileSync(
-      resolve(process.cwd(), 'lib/guest-event-webhook.ts'),
-      'utf8'
+    const guestStart = route.indexOf("checkout_type === 'guest_event_fee'")
+    const memberFeeStart = route.indexOf("checkout_type === 'event_fee'")
+    const guestBlock = route.slice(guestStart, memberFeeStart)
+    expect(guestBlock).not.toContain("payment_status !== 'paid'")
+    expect(guestBlock).toContain('applyGuestCheckoutSessionCompleted')
+    expect(route.indexOf('await handleStripeEvent(event)')).toBeLessThan(
+      route.indexOf('markStripeEventProcessed(event.id, event.type)')
     )
-    for (const name of [
-      'requireEntitledViewer',
-      'evaluateEventRegistration',
-      'consumeEventCredit',
-      'consumeCircleSocialCredit',
-      'createEventFeeCheckoutSession',
-      'markEventFeePaidFromCheckout',
-      'event_attendees',
-      'event_registration_ledger',
-      'membership_entitlement_cycles',
+
+    for (const file of [
+      'lib/guest-event-webhook.ts',
+      'lib/reconcile-guest-payment.ts',
+      'scripts/reconcile-guest-payment.ts',
     ]) {
-      expect(webhook).not.toContain(name)
+      const source = readFileSync(resolve(process.cwd(), file), 'utf8')
+      for (const name of [
+        'requireEntitledViewer',
+        'evaluateEventRegistration',
+        'consumeEventCredit',
+        'consumeCircleSocialCredit',
+        'createEventFeeCheckoutSession',
+        'markEventFeePaidFromCheckout',
+        'event_attendees',
+        'event_registration_ledger',
+        'membership_entitlement_cycles',
+      ]) {
+        expect(source).not.toContain(name)
+      }
     }
   })
 })

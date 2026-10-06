@@ -21,6 +21,12 @@ function paymentIntentId(session: Stripe.Checkout.Session): string | null {
   return null
 }
 
+function refuseGuestPayment(registrationId: string | null, reason: string): never {
+  const detail = registrationId ? `${registrationId} ${reason}` : reason
+  console.warn(`[guest_event_fee] ${detail}`)
+  throw new Error(detail)
+}
+
 async function loadMatchingRegistration(
   admin: AdminClient,
   registrationId: string,
@@ -34,7 +40,7 @@ async function loadMatchingRegistration(
     .maybeSingle()
 
   if (error) {
-    throw new Error('Could not record guest payment.')
+    refuseGuestPayment(registrationId, 'update_failed')
   }
   return data
 }
@@ -43,35 +49,43 @@ export async function applyGuestCheckoutSessionCompleted(
   admin: AdminClient,
   session: Stripe.Checkout.Session
 ): Promise<void> {
-  if (session.payment_status !== 'paid') return
+  if (session.metadata?.checkout_type !== GUEST_EVENT_FEE_CHECKOUT_TYPE) return
 
   const registrationId = registrationIdFromSession(session)
-  if (!registrationId) return
+  if (!registrationId) refuseGuestPayment(null, 'missing_registration')
+
+  if (session.payment_status !== 'paid') {
+    refuseGuestPayment(registrationId, 'payment_not_paid')
+  }
 
   const row = await loadMatchingRegistration(admin, registrationId, session.id)
-  if (!row) return
+  if (!row) refuseGuestPayment(registrationId, 'registration_not_found')
 
   if (row.status === 'paid') return
 
   if (row.status === 'cancelled' || row.status === 'refunded') {
-    console.warn(`[guest_event_fee] ${row.id}`)
-    return
+    refuseGuestPayment(row.id, row.status)
   }
 
-  if (row.status !== 'pending_payment' && row.status !== 'expired') return
+  if (row.status !== 'pending_payment' && row.status !== 'expired') {
+    refuseGuestPayment(row.id, 'unexpected_status')
+  }
 
-  const { error } = await admin
+  const { error, count } = await admin
     .from('guest_event_registrations')
-    .update({
-      status: 'paid',
-      paid_at: new Date().toISOString(),
-      stripe_payment_intent_id: paymentIntentId(session),
-    })
+    .update(
+      {
+        status: 'paid',
+        paid_at: new Date().toISOString(),
+        stripe_payment_intent_id: paymentIntentId(session),
+      },
+      { count: 'exact' }
+    )
     .eq('id', row.id)
     .in('status', ['pending_payment', 'expired'])
 
-  if (error) {
-    throw new Error('Could not record guest payment.')
+  if (error || count !== 1) {
+    refuseGuestPayment(row.id, 'update_failed')
   }
 }
 
@@ -79,19 +93,22 @@ export async function applyGuestCheckoutSessionExpired(
   admin: AdminClient,
   session: Stripe.Checkout.Session
 ): Promise<void> {
+  if (session.metadata?.checkout_type !== GUEST_EVENT_FEE_CHECKOUT_TYPE) return
+
   const registrationId = registrationIdFromSession(session)
-  if (!registrationId) return
+  if (!registrationId) refuseGuestPayment(null, 'missing_registration')
 
   const row = await loadMatchingRegistration(admin, registrationId, session.id)
-  if (!row || row.status !== 'pending_payment') return
+  if (!row) refuseGuestPayment(registrationId, 'registration_not_found')
+  if (row.status !== 'pending_payment') return
 
-  const { error } = await admin
+  const { error, count } = await admin
     .from('guest_event_registrations')
-    .update({ status: 'expired' })
+    .update({ status: 'expired' }, { count: 'exact' })
     .eq('id', row.id)
     .eq('status', 'pending_payment')
 
-  if (error) {
-    throw new Error('Could not record guest payment.')
+  if (error || count !== 1) {
+    refuseGuestPayment(row.id, 'update_failed')
   }
 }
