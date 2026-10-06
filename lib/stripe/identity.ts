@@ -111,6 +111,10 @@ export type IdentitySessionRegistration =
   | { ok: true }
   | { ok: false; reason: 'already_verified' | 'conflict' | 'not_found' }
 
+export type IdentityReconcileResult =
+  | { ok: true; outcome: 'refreshed' | 'unchanged' }
+  | { ok: false; outcome: 'failed' | 'rejected' }
+
 function sameSessionId(left: string | null | undefined, right: string | null | undefined) {
   return (left ?? null) === (right ?? null)
 }
@@ -132,12 +136,19 @@ function shouldSkipIdentityWrite(
   return false
 }
 
+const JSON_SNAPSHOT_COLUMNS = new Set(['approval_gates', 'verification_state'])
+
 function expectColumn(
   query: CasQuery,
   column: string,
   value: unknown
 ): CasQuery {
   if (value == null) return query.is(column, null)
+  // postgrest-js appends `eq.${value}`. Objects become "[object Object]".
+  // JSON text stays intact, and URLSearchParams encodes the query string.
+  if (JSON_SNAPSHOT_COLUMNS.has(column)) {
+    return query.eq(column, JSON.stringify(value))
+  }
   return query.eq(column, value)
 }
 
@@ -239,33 +250,47 @@ export async function applyIdentityVerificationSession(
 export async function reconcileIdentityVerification(
   userId: string,
   supabase: Supabase
-): Promise<void> {
-  const { data: profile } = await supabase
+): Promise<IdentityReconcileResult> {
+  const { data: profile, error } = await supabase
     .from('profiles')
     .select('identity_verification_status, identity_verification_session_id')
     .eq('id', userId)
     .maybeSingle()
 
-  const status = profile?.identity_verification_status
-  const sessionId = profile?.identity_verification_session_id
-  if (!status || !sessionId || !IDENTITY_RECONCILE_STATUSES.has(status)) {
-    return
+  if (error) {
+    console.error('[identity] verification status refresh failed')
+    return { ok: false, outcome: 'failed' }
   }
+  if (!profile) return { ok: false, outcome: 'rejected' }
+
+  const status = profile.identity_verification_status
+  const sessionId = profile.identity_verification_session_id
+  if (!status || !IDENTITY_RECONCILE_STATUSES.has(status)) {
+    return { ok: true, outcome: 'unchanged' }
+  }
+  if (!sessionId) return { ok: false, outcome: 'rejected' }
 
   let fresh: Stripe.Identity.VerificationSession
   try {
     fresh = await getStripe().identity.verificationSessions.retrieve(sessionId)
   } catch {
     console.error('[identity] verification status refresh failed')
-    return
+    return { ok: false, outcome: 'failed' }
   }
 
-  if (resolveUserIdFromIdentityMetadata(fresh.metadata) !== userId) return
+  if (resolveUserIdFromIdentityMetadata(fresh.metadata) !== userId) {
+    return { ok: false, outcome: 'rejected' }
+  }
 
   try {
-    await applyIdentityVerificationSession(supabase, fresh, { applicantId: userId })
+    const applied = await applyIdentityVerificationSession(supabase, fresh, {
+      applicantId: userId,
+    })
+    if (applied !== userId) return { ok: false, outcome: 'rejected' }
+    return { ok: true, outcome: 'refreshed' }
   } catch {
     console.error('[identity] verification status refresh failed')
+    return { ok: false, outcome: 'failed' }
   }
 }
 

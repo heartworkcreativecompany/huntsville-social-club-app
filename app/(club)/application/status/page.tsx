@@ -41,7 +41,10 @@ export default async function ApplicationStatusPage({
     identityStatus === 'processing'
   if (shouldReconcileIdentity) {
     try {
-      await reconcileIdentityVerification(viewer.userId, supabase)
+      const reconciled = await reconcileIdentityVerification(viewer.userId, supabase)
+      if (!reconciled.ok) {
+        console.error('[identity] verification status refresh failed')
+      }
       const reloaded = await loadProfileForUser(supabase, viewer.userId)
       if (reloaded.profile) profile = reloaded.profile
     } catch {

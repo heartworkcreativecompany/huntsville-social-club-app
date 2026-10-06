@@ -154,10 +154,8 @@ export async function refreshApplicantIdentityStatus(applicantId: string) {
   }
 
   const admin = requireAdminClient()
-  try {
-    await reconcileIdentityVerification(applicantId, admin)
-  } catch {
-    console.error('[identity] verification status refresh failed')
+  const refreshed = await reconcileIdentityVerification(applicantId, admin)
+  if (!refreshed.ok) {
     return { error: 'Could not refresh identity status.' }
   }
 

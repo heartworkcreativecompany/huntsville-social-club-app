@@ -73,12 +73,33 @@ type Filter =
   | { op: 'eq'; column: string; value: unknown }
   | { op: 'is'; column: string; value: null }
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
+function jsonbFilterMatches(current: unknown, filterValue: unknown): boolean {
+  if (typeof filterValue !== 'string') return false
+  try {
+    return stableJson(current) === stableJson(JSON.parse(filterValue))
+  } catch {
+    return false
+  }
+}
+
 function matchesSnapshot(row: ProfileRow, filters: Filter[]): boolean {
   return filters.every((filter) => {
     const current = row[filter.column as keyof ProfileRow]
     if (filter.op === 'is') return current == null
     if (filter.column === 'approval_gates' || filter.column === 'verification_state') {
-      return JSON.stringify(current ?? null) === JSON.stringify(filter.value ?? null)
+      return jsonbFilterMatches(current, filter.value)
     }
     return current === filter.value
   })
@@ -88,6 +109,7 @@ function profileDb(initial: ProfileRow) {
   const row = structuredClone(initial)
   const updates: Record<string, unknown>[] = []
   const predicates: Filter[][] = []
+  const matchAttempts: boolean[] = []
   let updateQueue = Promise.resolve()
   let beforeCommit: (() => void) | null = null
 
@@ -117,7 +139,9 @@ function profileDb(initial: ProfileRow) {
             beforeCommit = null
             hook()
           }
-          if (!matchesSnapshot(row, filters)) return { data: [], error: null as null }
+          const matched = matchesSnapshot(row, filters)
+          matchAttempts.push(matched)
+          if (!matched) return { data: [], error: null as null }
           predicates.push(filters.map((filter) => ({ ...filter })))
           Object.assign(row, structuredClone(patch))
           updates.push(structuredClone(patch))
@@ -151,6 +175,7 @@ function profileDb(initial: ProfileRow) {
     supabase: supabase as never,
     updates,
     predicates,
+    matchAttempts,
     get profile() {
       return row
     },
@@ -514,6 +539,41 @@ describe('concurrent identity writes', () => {
     expect(db.profile.verification_state).toMatchObject({ email: 'approved' })
     expect(db.updates.at(-1)?.approval_gates).toMatchObject({
       email_verified: 'approved',
+    })
+  })
+
+  it('treats reordered jsonb keys as the same snapshot', async () => {
+    stripeState.sessions[SESSION_B] = session({
+      id: SESSION_B,
+      status: 'verified',
+    })
+    const db = profileDb(processingProfile())
+    db.setBeforeCommit(() => {
+      db.profile.approval_gates = {
+        email_verified: 'pending_review',
+        identity_verified: 'pending_review',
+      }
+      db.profile.verification_state = {
+        email: 'pending_review',
+        id_verified: 'pending_review',
+      }
+    })
+
+    await applyIdentityVerificationSession(
+      db.supabase,
+      session({ id: SESSION_B, status: 'verified' })
+    )
+
+    expect(db.matchAttempts).toEqual([true])
+    expect(db.profile.identity_verification_status).toBe('verified')
+    const gateFilter = db.predicates[0]?.find(
+      (filter) => filter.column === 'approval_gates'
+    )
+    expect(typeof gateFilter?.value).toBe('string')
+    expect(String(gateFilter?.value)).not.toContain('[object Object]')
+    expect(JSON.parse(String(gateFilter?.value))).toEqual({
+      email_verified: 'pending_review',
+      identity_verified: 'pending_review',
     })
   })
 
