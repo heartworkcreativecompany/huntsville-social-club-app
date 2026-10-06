@@ -78,9 +78,11 @@ describe('public calendar pages', () => {
     expect(page).toContain('Apply for membership')
     expect(page).toContain('formatEventScheduleInChicago')
     expect(page).toContain('publicEventPriceLabel')
+    expect(page).toContain('PublicGuestRsvpForm')
+    expect(page).toContain('Sold out')
     expect(page).not.toContain('dangerouslySetInnerHTML')
-    expect(page).not.toContain('attendance_max')
-    expect(page).not.toContain('spots left')
+    expect(page).not.toContain('owner_id')
+    expect(page).not.toContain('general_rsvp_opens_at')
     expect(page).not.toContain('rsvp_question')
     expect(page).not.toContain('event_attendees')
     expect(memberEventRsvpHref('abc-123')).toBe(
