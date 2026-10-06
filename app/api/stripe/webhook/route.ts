@@ -45,7 +45,6 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         session.mode === 'payment' &&
         session.metadata?.checkout_type === 'guest_event_fee'
       ) {
-        if (session.payment_status !== 'paid') return
         const { applyGuestCheckoutSessionCompleted } = await import(
           '@/lib/guest-event-webhook'
         )
