@@ -4,6 +4,7 @@ import {
   chicagoDateAndTimeFromIso,
   chicagoWallTimeToUtcDate,
   formatEventDateInChicago,
+  formatEventScheduleInChicago,
   parseChicagoDatetimeLocalToIso,
   toChicagoDatetimeLocalValue,
 } from '@/lib/event-time'
@@ -111,6 +112,36 @@ describe('America/Chicago event time contract', () => {
     expect(honoluluEnv).toBe('Sun, Oct 4, 5:00 PM')
     expect(eastEnv).toBe('Sun, Oct 4, 5:00 PM')
     expect(EVENT_TIME_ZONE).toBe('America/Chicago')
+  })
+
+  it('formats a public schedule without repeating a same-day date', () => {
+    expect(
+      formatEventScheduleInChicago(
+        '2026-10-15T23:00:00.000Z',
+        '2026-10-16T01:00:00.000Z'
+      )
+    ).toBe('Thu, Oct 15, 6:00 to 8:00 PM')
+    expect(
+      formatEventScheduleInChicago(
+        '2026-10-15T15:00:00.000Z',
+        '2026-10-15T19:00:00.000Z'
+      )
+    ).toBe('Thu, Oct 15, 10:00 AM to 2:00 PM')
+    expect(
+      formatEventScheduleInChicago(
+        '2026-10-15T23:00:00.000Z',
+        '2026-10-17T01:00:00.000Z'
+      )
+    ).toBe('Thu, Oct 15, 6:00 PM to Fri, Oct 16, 8:00 PM')
+    expect(formatEventScheduleInChicago('2026-10-15T23:00:00.000Z', null)).toBe(
+      'Thu, Oct 15, 6:00 PM'
+    )
+    expect(formatEventScheduleInChicago('2026-10-15T23:00:00.000Z')).toBe(
+      'Thu, Oct 15, 6:00 PM'
+    )
+    expect(formatEventDateInChicago('2026-10-04T22:00:00.000Z')).toBe(
+      'Sun, Oct 4, 5:00 PM'
+    )
   })
 
   it('does not render a 5:00 PM Chicago event as 7:00 AM or 12:00 PM', () => {

@@ -191,15 +191,34 @@ describe('readPublicEvent', () => {
 })
 
 describe('public event display helpers', () => {
-  it('formats Chicago schedule text and shows a price only when the fee is positive', () => {
+  it('formats same-day, multi-day, and start-only schedules in Chicago', () => {
     expect(
       publicEventScheduleLabel(
         event({
-          starts_at: '2026-10-04T22:00:00.000Z',
+          starts_at: '2026-10-15T23:00:00.000Z',
+          ends_at: '2026-10-16T01:00:00.000Z',
+        })
+      )
+    ).toBe('Thu, Oct 15, 6:00 to 8:00 PM')
+    expect(
+      publicEventScheduleLabel(
+        event({
+          starts_at: '2026-10-15T23:00:00.000Z',
+          ends_at: '2026-10-17T01:00:00.000Z',
+        })
+      )
+    ).toBe('Thu, Oct 15, 6:00 PM to Fri, Oct 16, 8:00 PM')
+    expect(
+      publicEventScheduleLabel(
+        event({
+          starts_at: '2026-10-15T23:00:00.000Z',
           ends_at: null,
         })
       )
-    ).toBe('Sun, Oct 4, 5:00 PM')
+    ).toBe('Thu, Oct 15, 6:00 PM')
+  })
+
+  it('shows a price only when the fee is positive', () => {
     expect(publicEventPriceLabel(2500)).toBe('$25')
     expect(publicEventPriceLabel(0)).toBeNull()
     expect(publicEventPriceLabel(null)).toBeNull()
