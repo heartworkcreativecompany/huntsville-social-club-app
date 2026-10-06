@@ -136,6 +136,14 @@ export function isMarketingPassthroughPath(pathname: string): boolean {
     return true
   }
 
+  if (isMarketingPublicEventsPath(path)) {
+    return true
+  }
+
+  if (isMarketingInternalPublicEventsPath(path)) {
+    return true
+  }
+
   if (
     path === '/_next' ||
     path.startsWith('/_next/') ||
@@ -153,6 +161,86 @@ export function isMarketingPassthroughPath(pathname: string): boolean {
   }
 
   return false
+}
+
+/**
+ * Public calendar paths on the marketing host.
+ * `/events` and `/events/:id` stay on huntsvillesocialclub.com.
+ * One extra segment only, so member paths such as `/events/new/edit` are not included.
+ */
+export function isMarketingPublicEventsPath(pathname: string): boolean {
+  return marketingPublicEventsInternalPath(pathname) !== null
+}
+
+/** Internal path the marketing `/events` rewrite targets. It must stay on the marketing host. */
+export function isMarketingInternalPublicEventsPath(pathname: string): boolean {
+  const path = normalizePathname(pathname)
+  if (path === '/public-events') return true
+
+  const match = /^\/public-events\/([^/]+)$/.exec(path)
+  if (!match) return false
+  const id = match[1]
+  return Boolean(id && id !== '.' && id !== '..')
+}
+
+/** Internal App Router path for the public calendar. Route group names are not part of the URL. */
+export function marketingPublicEventsInternalPath(pathname: string): string | null {
+  const path = normalizePathname(pathname)
+  if (path === '/events') return '/public-events'
+
+  const match = /^\/events\/([^/]+)$/.exec(path)
+  if (!match) return null
+
+  const id = match[1]
+  if (!id || id === '.' || id === '..') return null
+  return `/public-events/${id}`
+}
+
+/**
+ * Rewrite target for the proxy. Only the marketing host is rewritten.
+ * The members host and preview hosts (localhost, *.vercel.app) keep `/events`
+ * as the existing member calendar.
+ */
+export function proxyPublicEventsRewrite(
+  kind: HostKind,
+  pathname: string
+): string | null {
+  if (kind !== 'marketing') return null
+  return marketingPublicEventsInternalPath(pathname)
+}
+
+/**
+ * The public calendar is implemented at `/public-events` so it can be previewed
+ * on localhost and *.vercel.app. On the members host that path is not a member
+ * route, so send it to the existing member calendar instead of serving the
+ * public page there.
+ */
+export function proxyMembersInternalPublicEventsRedirect(
+  kind: HostKind,
+  pathname: string,
+  search = ''
+): Extract<ProxyHostAction, { type: 'redirect' }> | null {
+  if (kind !== 'members') return null
+
+  const path = normalizePathname(pathname)
+  if (path === '/public-events') {
+    return {
+      type: 'redirect',
+      location: withQuery('/events', search),
+      status: 307,
+    }
+  }
+
+  const match = /^\/public-events\/([^/]+)$/.exec(path)
+  if (!match) return null
+  const id = match[1]
+  if (!id || id === '.' || id === '..') return null
+
+  return {
+    type: 'redirect',
+    location: withQuery(`/events/${id}`, search),
+    status: 307,
+  }
 }
 
 /** Members-host URL for a path that was requested on the marketing apex. */

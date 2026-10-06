@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import {
   classifyHost,
   proxyHostAction,
+  proxyMembersInternalPublicEventsRedirect,
+  proxyPublicEventsRewrite,
   resolveRequestHost,
 } from '@/lib/hostnames'
 import { applyPendingMembershipPlanCookie } from '@/lib/pending-membership-plan'
@@ -19,7 +21,28 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(action.location, action.status)
   }
 
-  const response = await updateSession(request)
+  const internalFallback = proxyMembersInternalPublicEventsRedirect(
+    hostKind,
+    request.nextUrl.pathname,
+    request.nextUrl.search
+  )
+  if (internalFallback) {
+    const location = new URL(internalFallback.location, request.url)
+    return NextResponse.redirect(location, internalFallback.status)
+  }
+
+  const rewritePath = proxyPublicEventsRewrite(
+    hostKind,
+    request.nextUrl.pathname
+  )
+  let rewriteResponse: NextResponse | undefined
+  if (rewritePath) {
+    const url = request.nextUrl.clone()
+    url.pathname = rewritePath
+    rewriteResponse = NextResponse.rewrite(url)
+  }
+
+  const response = await updateSession(request, rewriteResponse)
   return applyPendingMembershipPlanCookie(request, response)
 }
 
