@@ -11,6 +11,8 @@ import {
   normalizeHost,
   portalCtaHref,
   proxyHostAction,
+  proxyMembersInternalPublicEventsRedirect,
+  proxyPublicEventsRewrite,
   resolveRequestHost,
   rootRouteAction,
   wwwToApexRedirectUrl,
@@ -122,12 +124,10 @@ describe('marketing apex route gate', () => {
       ['/signup', '?ref=cta'],
       ['/dashboard', '?from=login'],
       ['/members', '?tab=directory'],
-      ['/events', '?when=upcoming'],
       ['/messages', '?box=inbox'],
       ['/profile', '?edit=1'],
       ['/application', '?step=2'],
       ['/admin', '?view=queue'],
-      ['/events/abc-123', '?rsvp=1'],
       ['/admin/users', ''],
     ] as const
 
@@ -142,6 +142,28 @@ describe('marketing apex route gate', () => {
         `https://members.huntsvillesocialclub.com${path}${search}`
       )
     }
+  })
+
+  it('keeps the public calendar on the marketing host and rewrites it internally', () => {
+    for (const [path, search, internal] of [
+      ['/events', '?when=upcoming', '/public-events'],
+      ['/events/', '', '/public-events'],
+      ['/events/abc-123', '?rsvp=1', '/public-events/abc-123'],
+    ] as const) {
+      expect(isMarketingPassthroughPath(path)).toBe(true)
+      expect(proxyHostAction('marketing', path, search)).toEqual({ type: 'next' })
+      expect(proxyPublicEventsRewrite('marketing', path)).toBe(internal)
+    }
+
+    expect(proxyPublicEventsRewrite('marketing', '/events/abc-123/edit')).toBeNull()
+    expect(proxyPublicEventsRewrite('members', '/events')).toBeNull()
+    expect(proxyPublicEventsRewrite('preview', '/events/abc-123')).toBeNull()
+    expect(isMarketingPassthroughPath('/public-events')).toBe(true)
+    expect(isMarketingPassthroughPath('/public-events/abc-123')).toBe(true)
+    expect(proxyHostAction('marketing', '/public-events')).toEqual({ type: 'next' })
+    expect(proxyHostAction('marketing', '/public-events/abc-123', '?rsvp=1')).toEqual({
+      type: 'next',
+    })
   })
 
   it('does not redirect API, auth, webhook, cron, or static asset paths', () => {
@@ -182,7 +204,35 @@ describe('members host keeps full application behavior', () => {
       '/api/cron/curated-matches',
     ]) {
       expect(proxyHostAction('members', path, '?x=1')).toEqual({ type: 'next' })
+      expect(proxyPublicEventsRewrite('members', path)).toBeNull()
     }
+  })
+
+  it('sends the internal public calendar path back to the member calendar', () => {
+    expect(
+      proxyMembersInternalPublicEventsRedirect('members', '/public-events', '?x=1')
+    ).toEqual({
+      type: 'redirect',
+      location: '/events?x=1',
+      status: 307,
+    })
+    expect(
+      proxyMembersInternalPublicEventsRedirect(
+        'members',
+        '/public-events/abc-123',
+        ''
+      )
+    ).toEqual({
+      type: 'redirect',
+      location: '/events/abc-123',
+      status: 307,
+    })
+    expect(
+      proxyMembersInternalPublicEventsRedirect('preview', '/public-events')
+    ).toBeNull()
+    expect(
+      proxyMembersInternalPublicEventsRedirect('marketing', '/public-events/abc-123')
+    ).toBeNull()
   })
 })
 
@@ -201,7 +251,13 @@ describe('vercel.app preview keeps full member app behavior', () => {
       '/admin',
     ]) {
       expect(proxyHostAction('preview', path, '?q=1')).toEqual({ type: 'next' })
+      expect(proxyPublicEventsRewrite('preview', path)).toBeNull()
     }
+
+    expect(
+      proxyMembersInternalPublicEventsRedirect('preview', '/public-events')
+    ).toBeNull()
+    expect(proxyHostAction('preview', '/public-events')).toEqual({ type: 'next' })
   })
 })
 
