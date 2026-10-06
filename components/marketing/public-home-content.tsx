@@ -2,6 +2,17 @@ import Image from 'next/image'
 import Link from 'next/link'
 import ApplyMembershipCta from '@/components/marketing/apply-membership-cta'
 import PublicHomeHeader from '@/components/marketing/public-home-header'
+import { marketingButtonPrimaryClassName } from '@/lib/event-labels'
+import {
+  eventCoverImage,
+  isRemoteEventCoverImage,
+} from '@/lib/event-images'
+import { formatEventScheduleInChicago } from '@/lib/event-time'
+import {
+  loadUpcomingPublicEvents,
+  publicEventPriceLabel,
+  type PublicEvent,
+} from '@/lib/load-public-events'
 import {
   APPLY_FOR_MEMBERSHIP_CTA,
   FINAL_CTA_BODY,
@@ -15,16 +26,20 @@ import {
   HOME_HERO_SUPPORT_LINE_PRIMARY,
   HOME_HERO_SUPPORT_LINE_SECONDARY,
   HOME_MEMBERSHIP_TIERS,
+  HOMEPAGE_UPCOMING_EVENT_LIMIT,
   HOW_MEMBERSHIP_WORKS_EYEBROW,
   HOW_MEMBERSHIP_WORKS_HEADLINE,
   HOW_MEMBERSHIP_WORKS_STEPS,
   IMPLIED_EXPERIENCES,
   IMPLIED_EXPERIENCES_HEADLINE,
-  IMPLIED_EXPERIENCES_INTRO,
   MEMBERSHIP_VALUE_BODY,
   MEMBERSHIP_VALUE_DETAILS_LABEL,
   MEMBERSHIP_VALUE_HEADLINE,
   PUBLIC_PRICING_PATH,
+  UPCOMING_EVENTS_HEADLINE,
+  UPCOMING_EVENTS_INTRO,
+  VIEW_ALL_EVENTS_HREF,
+  VIEW_ALL_EVENTS_LABEL,
   WHO_IT_IS_FOR_EYEBROW,
   WHO_IT_IS_FOR_HEADLINE,
   WHO_IT_IS_FOR_ITEMS,
@@ -33,13 +48,138 @@ import {
   WHY_EXISTS_INTRO,
 } from '@/lib/marketing-home-copy'
 
-export default function PublicHomeContent({
+function HomeEventsActions() {
+  return (
+    <div className="mt-10 flex justify-center">
+      <Link
+        href={VIEW_ALL_EVENTS_HREF}
+        className={`${marketingButtonPrimaryClassName} w-full sm:w-auto`}
+      >
+        {VIEW_ALL_EVENTS_LABEL}
+      </Link>
+    </div>
+  )
+}
+
+export function PublicHomeExperiences({
+  events,
+}: {
+  events: PublicEvent[]
+}) {
+  const featured = events.slice(0, HOMEPAGE_UPCOMING_EVENT_LIMIT)
+
+  return (
+    <section
+      aria-labelledby="implied-experiences-heading"
+      className="border-y border-white/10 bg-surface"
+    >
+      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 md:px-10">
+        {featured.length > 0 ? (
+          <>
+            <h2
+              id="implied-experiences-heading"
+              className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl"
+            >
+              {UPCOMING_EVENTS_HEADLINE}
+            </h2>
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+              {UPCOMING_EVENTS_INTRO}
+            </p>
+            <ul className="mt-10 grid gap-5 lg:grid-cols-3">
+              {featured.map((event) => {
+                const coverSrc = eventCoverImage(event.id, event.cover_image_url)
+                const when = formatEventScheduleInChicago(
+                  event.starts_at,
+                  event.ends_at
+                )
+                const price = publicEventPriceLabel(event.fee_cents)
+                return (
+                  <li key={event.id}>
+                    <Link
+                      href={`${VIEW_ALL_EVENTS_HREF}/${event.id}`}
+                      className="group relative block min-h-[16rem] overflow-hidden rounded-xl border border-border no-underline"
+                    >
+                      <Image
+                        src={coverSrc}
+                        alt={event.title}
+                        fill
+                        sizes="(max-width: 1024px) 100vw, 33vw"
+                        className="object-cover transition duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                        unoptimized={isRemoteEventCoverImage(coverSrc)}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
+                      <div className="relative flex h-full min-h-[16rem] flex-col justify-end p-5">
+                        <h3 className="font-brand text-lg font-semibold text-white">
+                          {event.title}
+                        </h3>
+                        <p className="mt-2 text-sm leading-relaxed text-white/80">
+                          {when}
+                        </p>
+                        {price ? (
+                          <p className="mt-1 text-sm leading-relaxed text-white/80">
+                            {price}
+                          </p>
+                        ) : null}
+                      </div>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
+        ) : (
+          <>
+            <h2
+              id="implied-experiences-heading"
+              className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl"
+            >
+              {IMPLIED_EXPERIENCES_HEADLINE}
+            </h2>
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+              {UPCOMING_EVENTS_INTRO}
+            </p>
+            <ul className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {IMPLIED_EXPERIENCES.map((item) => (
+                <li
+                  key={item.title}
+                  className="group relative min-h-[16rem] overflow-hidden rounded-xl border border-border"
+                >
+                  <Image
+                    src={item.imageSrc}
+                    alt={item.imageAlt}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                    className="object-cover transition duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
+                  <div className="relative flex h-full min-h-[16rem] flex-col justify-end p-5">
+                    <h3 className="font-brand text-lg font-semibold text-white">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-white/80">
+                      {item.description}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <HomeEventsActions />
+      </div>
+    </section>
+  )
+}
+
+export default async function PublicHomeContent({
   loginHref,
   signupHref,
 }: {
   loginHref: string
   signupHref: string
 }) {
+  const upcoming = await loadUpcomingPublicEvents()
+  const events = upcoming.error ? [] : upcoming.events
   return (
     <>
       <section
@@ -133,50 +273,7 @@ export default function PublicHomeContent({
         </ul>
       </section>
 
-      <section
-        aria-labelledby="implied-experiences-heading"
-        className="border-y border-white/10 bg-surface"
-      >
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 md:px-10">
-          <h2
-            id="implied-experiences-heading"
-            className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl"
-          >
-            {IMPLIED_EXPERIENCES_HEADLINE}
-          </h2>
-          <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-            {IMPLIED_EXPERIENCES_INTRO}
-          </p>
-          <ul className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {IMPLIED_EXPERIENCES.map((item) => (
-              <li
-                key={item.title}
-                className="group relative min-h-[16rem] overflow-hidden rounded-xl border border-border"
-              >
-                <Image
-                  src={item.imageSrc}
-                  alt={item.imageAlt}
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                  className="object-cover transition duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
-                <div className="relative flex h-full min-h-[16rem] flex-col justify-end p-5">
-                  <h3 className="font-brand text-lg font-semibold text-white">
-                    {item.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-white/80">
-                    {item.description}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-10">
-            <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto" />
-          </div>
-        </div>
-      </section>
+      <PublicHomeExperiences events={events} />
 
       <section
         aria-labelledby="who-it-is-for-heading"
