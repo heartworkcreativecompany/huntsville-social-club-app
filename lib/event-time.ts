@@ -206,38 +206,85 @@ export function parseChicagoDatetimeLocalToIso(raw: string): string | null {
   return chicagoWallTimeToUtcDate(wall).toISOString()
 }
 
-function formatChicagoDateTime(
-  iso: string,
-  options: Intl.DateTimeFormatOptions
-): string {
+type ChicagoDisplayParts = {
+  year: string
+  weekday: string
+  month: string
+  day: string
+  hour: string
+  minute: string
+  dayPeriod: string
+}
+
+/** Same clock parts member cards use. Example pieces: Thu, Oct 15, 6:00, PM */
+function chicagoDisplayParts(iso: string): ChicagoDisplayParts | null {
   const instant = parseStoredEventInstant(iso)
-  if (!instant) return ''
+  if (!instant) return null
 
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: EVENT_TIME_ZONE,
-    ...options,
-  }).formatToParts(instant)
-
-  const weekday = readPart(parts, 'weekday')
-  const month = readPart(parts, 'month')
-  const day = readPart(parts, 'day')
-  const hour = readPart(parts, 'hour')
-  const minute = readPart(parts, 'minute')
-  const dayPeriod = readPart(parts, 'dayPeriod')
-
-  return `${weekday}, ${month} ${day}, ${hour}:${minute} ${dayPeriod}`
-}
-
-/** Member-facing event cards, lists, and details. Example: Sun, Oct 4, 5:00 PM */
-export function formatEventDateInChicago(iso: string): string {
-  return formatChicagoDateTime(iso, {
+    year: 'numeric',
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
-  })
+  }).formatToParts(instant)
+
+  return {
+    year: readPart(parts, 'year'),
+    weekday: readPart(parts, 'weekday'),
+    month: readPart(parts, 'month'),
+    day: readPart(parts, 'day'),
+    hour: readPart(parts, 'hour'),
+    minute: readPart(parts, 'minute'),
+    dayPeriod: readPart(parts, 'dayPeriod'),
+  }
+}
+
+function formatChicagoDisplay(parts: ChicagoDisplayParts): string {
+  return `${parts.weekday}, ${parts.month} ${parts.day}, ${parts.hour}:${parts.minute} ${parts.dayPeriod}`
+}
+
+function sameChicagoCalendarDay(
+  start: ChicagoDisplayParts,
+  end: ChicagoDisplayParts
+): boolean {
+  return start.year === end.year && start.month === end.month && start.day === end.day
+}
+
+/** Member-facing event cards, lists, and details. Example: Sun, Oct 4, 5:00 PM */
+export function formatEventDateInChicago(iso: string): string {
+  const parts = chicagoDisplayParts(iso)
+  if (!parts) return ''
+  return formatChicagoDisplay(parts)
+}
+
+/**
+ * Start and optional end on the member Chicago clock.
+ * Same calendar day keeps the date once: Thu, Oct 15, 6:00 to 8:00 PM.
+ * A later day repeats the full member date. No end shows the start only.
+ */
+export function formatEventScheduleInChicago(
+  startsAt: string,
+  endsAt?: string | null
+): string {
+  const startParts = chicagoDisplayParts(startsAt)
+  const start = startParts ? formatChicagoDisplay(startParts) : ''
+  if (!endsAt?.trim()) return start
+
+  const endParts = chicagoDisplayParts(endsAt)
+  const end = endParts ? formatChicagoDisplay(endParts) : ''
+  if (!start) return end
+  if (!end || end === start || !startParts || !endParts) return start
+  if (!sameChicagoCalendarDay(startParts, endParts)) return `${start} to ${end}`
+
+  const startTime =
+    startParts.dayPeriod === endParts.dayPeriod
+      ? `${startParts.hour}:${startParts.minute}`
+      : `${startParts.hour}:${startParts.minute} ${startParts.dayPeriod}`
+  return `${startParts.weekday}, ${startParts.month} ${startParts.day}, ${startTime} to ${endParts.hour}:${endParts.minute} ${endParts.dayPeriod}`
 }
 
 /** Same Chicago clock as cards; used for RSVP-window copy. */

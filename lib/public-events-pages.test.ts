@@ -56,7 +56,7 @@ describe('public calendar pages', () => {
     expect(page).toContain('loadUpcomingPublicEvents')
     expect(page).toContain('eventCoverImage')
     expect(page).toContain('EventTypeBadge')
-    expect(page).toContain('publicEventScheduleLabel')
+    expect(page).toContain('formatEventScheduleInChicago')
     expect(page).toContain('publicEventDetailHref')
     expect(page).toContain('ApplyMembershipCta')
     expect(page).toContain('No upcoming events')
@@ -76,6 +76,7 @@ describe('public calendar pages', () => {
     expect(page).toContain('EventDescription')
     expect(page).toContain('Members: sign in to RSVP')
     expect(page).toContain('Apply for membership')
+    expect(page).toContain('formatEventScheduleInChicago')
     expect(page).toContain('publicEventPriceLabel')
     expect(page).not.toContain('dangerouslySetInnerHTML')
     expect(page).not.toContain('attendance_max')
@@ -101,6 +102,18 @@ describe('member calendar stays behind login', () => {
     expect(list).toContain('EventsBrowser')
     expect(detail).toContain("redirect('/login')")
     expect(detail).toContain("redirect('/application')")
+  })
+
+  it('keeps member event dates on the start-only Chicago formatter', () => {
+    const listCard = readRepoFile('components/events/event-list-card.tsx')
+    const richCard = readRepoFile('components/events/event-rich-card.tsx')
+    const detail = readRepoFile('app/(club)/events/[id]/page.tsx')
+
+    for (const source of [listCard, richCard, detail]) {
+      expect(source).toContain('formatEventDate(event.starts_at)')
+      expect(source).not.toContain('formatEventScheduleInChicago')
+      expect(source).not.toContain('publicEventScheduleLabel')
+    }
   })
 })
 

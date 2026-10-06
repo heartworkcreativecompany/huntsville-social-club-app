@@ -1,6 +1,6 @@
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
-import { formatEventDateInChicago } from '@/lib/event-time'
+import { formatEventScheduleInChicago } from '@/lib/event-time'
 import { formatFeeCents } from '@/lib/membership-tier-config'
 import { createAnonymousClient } from '@/lib/supabase/anonymous'
 
@@ -84,11 +84,7 @@ export function selectUpcomingPublicEvents(
 export function publicEventScheduleLabel(
   event: Pick<PublicEvent, 'starts_at' | 'ends_at'>
 ): string {
-  const start = formatEventDateInChicago(event.starts_at)
-  if (!event.ends_at) return start
-  const end = formatEventDateInChicago(event.ends_at)
-  if (!end || end === start) return start
-  return `${start} to ${end}`
+  return formatEventScheduleInChicago(event.starts_at, event.ends_at)
 }
 
 export function publicEventPriceLabel(

@@ -11,10 +11,8 @@ import {
   eventCoverImage,
   isRemoteEventCoverImage,
 } from '@/lib/event-images'
-import {
-  loadUpcomingPublicEvents,
-  publicEventScheduleLabel,
-} from '@/lib/load-public-events'
+import { formatEventScheduleInChicago } from '@/lib/event-time'
+import { loadUpcomingPublicEvents } from '@/lib/load-public-events'
 
 export const revalidate = 60
 
@@ -65,7 +63,10 @@ export default async function PublicEventsPage() {
             <ul className="grid gap-6 sm:grid-cols-2">
               {result.events.map((event) => {
                 const coverSrc = eventCoverImage(event.id, event.cover_image_url)
-                const when = publicEventScheduleLabel(event)
+                const when = formatEventScheduleInChicago(
+                  event.starts_at,
+                  event.ends_at
+                )
                 return (
                   <li key={event.id}>
                     <Link

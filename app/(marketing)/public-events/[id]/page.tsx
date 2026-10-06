@@ -14,10 +14,10 @@ import {
   isRemoteEventCoverImage,
 } from '@/lib/event-images'
 import { eventDescriptionExcerpt } from '@/lib/event-description'
+import { formatEventScheduleInChicago } from '@/lib/event-time'
 import {
   loadPublicEvent,
   publicEventPriceLabel,
-  publicEventScheduleLabel,
 } from '@/lib/load-public-events'
 
 export const revalidate = 60
@@ -51,7 +51,7 @@ export default async function PublicEventDetailPage({ params }: PageProps) {
   if (!event) notFound()
 
   const coverSrc = eventCoverImage(event.id, event.cover_image_url)
-  const when = publicEventScheduleLabel(event)
+  const when = formatEventScheduleInChicago(event.starts_at, event.ends_at)
   const price = publicEventPriceLabel(event.fee_cents)
   const signupHref = publicMarketingSignupHref()
 
