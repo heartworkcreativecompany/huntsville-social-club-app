@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import EventDescription from '@/components/events/event-description'
 import EventTypeBadge from '@/components/events/event-type-badge'
+import PublicGuestRsvpForm from '@/components/marketing/public-guest-rsvp-form'
 import PublicMarketingFrame, {
   memberEventRsvpHref,
   publicMarketingSignupHref,
@@ -15,15 +16,23 @@ import {
 } from '@/lib/event-images'
 import { eventDescriptionExcerpt } from '@/lib/event-description'
 import { formatEventScheduleInChicago } from '@/lib/event-time'
+import { loadEventTakenSeatCount } from '@/lib/event-seat-count'
+import { loadPublicGuestListingFields } from '@/lib/load-public-guest-listing'
 import {
   loadPublicEvent,
   publicEventPriceLabel,
 } from '@/lib/load-public-events'
+import {
+  guestCheckoutReturnMessage,
+  guestRsvpNeedsSeatCount,
+  guestRsvpOffer,
+} from '@/lib/public-guest-rsvp'
 
 export const revalidate = 60
 
 type PageProps = {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ guest_checkout?: string | string[] }>
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -45,10 +54,39 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 }
 
-export default async function PublicEventDetailPage({ params }: PageProps) {
+export default async function PublicEventDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params
+  const query = await searchParams
   const event = await loadPublicEvent(id)
   if (!event) notFound()
+
+  const now = new Date()
+  const listing = await loadPublicGuestListingFields(event.id, now)
+  const takenSeats =
+    listing &&
+    guestRsvpNeedsSeatCount({
+      feeCents: event.fee_cents,
+      startsAt: event.starts_at,
+      generalRsvpOpen: listing.generalRsvpOpen,
+      attendanceMax: event.attendance_max,
+      now,
+    })
+      ? await loadEventTakenSeatCount(event.id)
+      : null
+  const guestOffer = listing
+    ? guestRsvpOffer({
+        feeCents: event.fee_cents,
+        startsAt: event.starts_at,
+        generalRsvpOpen: listing.generalRsvpOpen,
+        attendanceMax: event.attendance_max,
+        takenSeats,
+        now,
+      })
+    : { kind: 'hidden' as const }
+  const checkoutNotice = guestCheckoutReturnMessage(query.guest_checkout)
 
   const coverSrc = eventCoverImage(event.id, event.cover_image_url)
   const when = formatEventScheduleInChicago(event.starts_at, event.ends_at)
@@ -89,6 +127,15 @@ export default async function PublicEventDetailPage({ params }: PageProps) {
         </div>
 
         <div className="mt-8 max-w-2xl">
+          {checkoutNotice ? (
+            <p
+              className="mb-6 rounded-xl border border-white/10 bg-surface px-4 py-3 text-sm text-foreground"
+              role="status"
+            >
+              {checkoutNotice}
+            </p>
+          ) : null}
+
           {price ? (
             <p className="mb-6 text-sm text-foreground">
               <span className="text-muted-foreground">Price </span>
@@ -112,6 +159,19 @@ export default async function PublicEventDetailPage({ params }: PageProps) {
               Apply for membership
             </Link>
           </div>
+
+          {guestOffer.kind === 'sold_out' ? (
+            <p className="mt-6 text-sm font-medium text-foreground">Sold out</p>
+          ) : null}
+          {listing && guestOffer.kind === 'open' ? (
+            <PublicGuestRsvpForm
+              eventId={event.id}
+              priceLabel={guestOffer.priceLabel}
+              rsvpQuestion={listing.rsvpQuestion}
+              rsvpQuestionRequired={listing.rsvpQuestionRequired}
+              spotsLeft={guestOffer.spotsLeft}
+            />
+          ) : null}
         </div>
       </div>
     </PublicMarketingFrame>

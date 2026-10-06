@@ -351,10 +351,15 @@ describe('startGuestEventCheckout', () => {
     expect(adminState.tables).not.toContain('membership_entitlement_cycles')
   })
 
-  it('is not imported by a client component or a page', () => {
+  it('is imported only by the public guest RSVP form', () => {
+    const form = resolve(
+      process.cwd(),
+      'components/marketing/public-guest-rsvp-form.tsx'
+    )
     const allowed = new Set([
       resolve(process.cwd(), 'lib/guest-event-checkout.ts'),
       resolve(process.cwd(), 'lib/guest-event-checkout.test.ts'),
+      form,
     ])
     const offenders: string[] = []
     for (const root of ['app', 'components', 'lib']) {
@@ -365,6 +370,7 @@ describe('startGuestEventCheckout', () => {
       }
     }
     expect(offenders).toEqual([])
+    expect(readFileSync(form, 'utf8')).toContain("'use client'")
   })
 })
 
