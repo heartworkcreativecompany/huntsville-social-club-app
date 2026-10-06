@@ -78,8 +78,7 @@ export async function updateApplicationStatus(
       : parseVerificationState(applicant?.verification_state)
 
   const billing = parseMembershipBilling(applicant?.membership_billing)
-  const billingUpdate =
-    status === 'approved' ? membershipBillingForApproval(billing) : billing
+  const billingUpdate = membershipBillingForApproval(billing)
 
   const { error } = await auth.supabase
     .from('profiles')
@@ -94,7 +93,9 @@ export async function updateApplicationStatus(
         ? {
             verified_at: new Date().toISOString(),
             verification_state: verification,
-            membership_billing: billingUpdate,
+            ...(billingUpdate === billing
+              ? {}
+              : { membership_billing: billingUpdate }),
           }
         : {}),
     })

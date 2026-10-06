@@ -1052,52 +1052,34 @@ export function stripeSubscriptionBlocksNewCheckout(
   )
 }
 
-function isStripeSubscriptionId(value: string | null): boolean {
-  return typeof value === 'string' && /^sub_[A-Za-z0-9]+$/.test(value)
+function hasStripeBillingIdentity(billing: MembershipBilling): boolean {
+  return Boolean(billing.stripe_subscription_id || billing.stripe_customer_id)
 }
 
-/**
- * Paid-tier evidence other than a subscription id: a recognized paid tier, or
- * an active subscription whose stored price maps to Connect, Inner, or Elite.
- * Grace/past_due price fallback is intentionally not evidence — that helper
- * only trusts `active`.
- */
-function hasRecognizedPaidTierEvidence(billing: MembershipBilling): boolean {
+function hasPaidMembershipTier(billing: MembershipBilling): boolean {
   return (
     billing.tier === 'connect' ||
     billing.tier === 'inner_circle' ||
     billing.tier === 'elite_circle' ||
-    billing.tier === 'premium_member' ||
-    paidTierFromActiveStoredPriceId(billing) != null
+    billing.tier === 'premium_member'
   )
 }
 
 /**
- * Re-approval may keep billing only for a still-open paid subscription.
- * Requires active, grace, or past_due, plus a Stripe subscription id or other
- * paid-tier evidence. Leftover Stripe ids with status `none` are the clobbered
- * shape and are not valid paid state.
+ * Approval must leave billing untouched once Stripe or a paid tier is stored.
+ * Status does not matter: active, grace, past_due, cancelled, and none are
+ * all left for the Stripe webhook sync.
  */
 export function hasPreservablePaidMembershipBilling(
   billing: MembershipBilling
 ): boolean {
-  const payable =
-    billing.subscription_status === 'active' ||
-    billing.subscription_status === 'grace' ||
-    billing.subscription_status === 'past_due'
-  if (!payable) return false
-
-  if (
-    stripeSubscriptionBlocksNewCheckout(billing) &&
-    isStripeSubscriptionId(billing.stripe_subscription_id)
-  ) {
-    return true
-  }
-
-  return hasRecognizedPaidTierEvidence(billing)
+  return hasStripeBillingIdentity(billing) || hasPaidMembershipTier(billing)
 }
 
-/** Approval billing write. Preserves valid paid state; otherwise free member. */
+/**
+ * Approval billing write. Initializes a free member only when billing is empty
+ * or has no Stripe identity and no paid tier. Otherwise returns the same object.
+ */
 export function membershipBillingForApproval(
   existing: MembershipBilling
 ): MembershipBilling {

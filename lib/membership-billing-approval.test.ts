@@ -116,24 +116,77 @@ describe('membership billing on application approval', () => {
     expect(next.stripe_subscription_id).toBeNull()
   })
 
-  it('does not treat a clobbered status-none Elite price as valid paid billing', () => {
-    const damaged = paidBilling({
-      tier: 'member',
-      subscription_status: 'none',
-      stripe_subscription_id: 'sub_1ULCCyBei7W40myBN0AMZbDW',
-      stripe_price_id: STRIPE_LIVE_PRICE_IDS.elite_circle,
-    })
-    expect(hasPreservablePaidMembershipBilling(damaged)).toBe(false)
-    const next = membershipBillingForApproval(damaged)
-    expect(next.tier).toBe('member')
-    expect(next.subscription_status).toBe('none')
-    expect(next.tier).not.toBe('elite_circle')
+  it('sets member and none when approving a brand-new applicant with no billing', () => {
+    for (const empty of [null, undefined, {}]) {
+      const billing = parseMembershipBilling(empty)
+      const next = membershipBillingForApproval(billing)
+      expect(next).not.toBe(billing)
+      expect(next.tier).toBe('member')
+      expect(next.subscription_status).toBe('none')
+      expect(next.stripe_customer_id).toBeNull()
+      expect(next.stripe_subscription_id).toBeNull()
+      expect(next.stripe_price_id).toBeNull()
+      expect(next.billing_period_start).toBeNull()
+      expect(next.billing_period_end).toBeNull()
+    }
   })
 
-  it('does not preserve an active status that has no subscription id and no paid tier', () => {
+  it('leaves a canceled subscription unchanged on re-approval', () => {
+    const canceled = paidBilling({
+      subscription_status: 'cancelled',
+      cancelled_at: '2026-10-01T00:00:00.000Z',
+      stripe_subscription_id: 'sub_cancelled',
+    })
+    expectPaidFieldsPreserved(canceled)
+    expect(membershipBillingForApproval(canceled).subscription_status).toBe(
+      'cancelled'
+    )
+    expect(membershipBillingForApproval(canceled).stripe_price_id).toBe(
+      STRIPE_LIVE_PRICE_IDS.elite_circle
+    )
+    expect(membershipBillingForApproval(canceled).billing_period_start).toBe(
+      PERIOD_START
+    )
+    expect(membershipBillingForApproval(canceled).billing_period_end).toBe(
+      PERIOD_END
+    )
+  })
+
+  it('leaves billing unchanged when a Stripe subscription is stored with status none', () => {
+    const stored = paidBilling({
+      tier: 'member',
+      subscription_status: 'none',
+      stripe_subscription_id: 'sub_stored',
+      stripe_price_id: STRIPE_LIVE_PRICE_IDS.elite_circle,
+    })
+    expect(hasPreservablePaidMembershipBilling(stored)).toBe(true)
+    const next = membershipBillingForApproval(stored)
+    expect(next).toBe(stored)
+    expect(next.tier).toBe('member')
+    expect(next.subscription_status).toBe('none')
+    expect(next.stripe_price_id).toBe(STRIPE_LIVE_PRICE_IDS.elite_circle)
+    expect(next.billing_period_start).toBe(PERIOD_START)
+    expect(next.billing_period_end).toBe(PERIOD_END)
+  })
+
+  it('leaves billing unchanged when only a Stripe customer id is stored', () => {
+    const customerOnly = paidBilling({
+      tier: 'member',
+      subscription_status: 'none',
+      stripe_subscription_id: null,
+      stripe_price_id: null,
+      plan: null,
+      stripe_customer_id: 'cus_only',
+    })
+    expect(hasPreservablePaidMembershipBilling(customerOnly)).toBe(true)
+    expect(membershipBillingForApproval(customerOnly)).toBe(customerOnly)
+  })
+
+  it('does not preserve an active status that has no Stripe identity and no paid tier', () => {
     const incomplete = paidBilling({
       tier: 'member',
       subscription_status: 'active',
+      stripe_customer_id: null,
       stripe_subscription_id: null,
       stripe_price_id: null,
       plan: null,
@@ -225,7 +278,12 @@ describe('membership billing on application approval', () => {
       resolve(process.cwd(), 'app/(club)/admin/applications/actions.ts'),
       'utf8'
     )
+    expect(source).toContain('application_status: status')
+    expect(source).toContain('application_reviewed_at: new Date().toISOString()')
+    expect(source).toContain('verified_at: new Date().toISOString()')
+    expect(source).toContain('verification_state: verification')
     expect(source).toContain('membershipBillingForApproval(billing)')
+    expect(source).toContain('billingUpdate === billing')
     expect(source).not.toContain("tier: 'member' as const")
     expect(source).not.toContain("subscription_status: 'none' as const")
   })
