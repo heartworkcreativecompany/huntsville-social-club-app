@@ -53,7 +53,11 @@ describe('public calendar data access', () => {
 describe('public calendar pages', () => {
   it('lists upcoming events without host names, attendee counts, or spots left', () => {
     const page = readRepoFile('app/(marketing)/public-events/page.tsx')
+    expect(page).toContain('PUBLIC_EVENTS_PAGE_INTRO')
     expect(page).toContain('loadUpcomingPublicEvents')
+    expect(page).not.toContain(
+      'A look at gatherings the club has shared publicly'
+    )
     expect(page).toContain('eventCoverImage')
     expect(page).toContain('EventTypeBadge')
     expect(page).toContain('formatEventScheduleInChicago')

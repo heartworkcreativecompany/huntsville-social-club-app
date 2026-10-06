@@ -16,9 +16,15 @@ import {
   HOME_MEMBERSHIP_TIERS,
   HOW_MEMBERSHIP_WORKS_HEADLINE,
   HOW_MEMBERSHIP_WORKS_STEPS,
+  HOMEPAGE_UPCOMING_EVENT_LIMIT,
   IMPLIED_EXPERIENCES,
   IMPLIED_EXPERIENCES_HEADLINE,
   IMPLIED_EXPERIENCES_INTRO,
+  PUBLIC_EVENTS_PAGE_INTRO,
+  UPCOMING_EVENTS_HEADLINE,
+  UPCOMING_EVENTS_INTRO,
+  VIEW_ALL_EVENTS_HREF,
+  VIEW_ALL_EVENTS_LABEL,
   MEMBERSHIP_VALUE_HEADLINE,
   PUBLIC_SIGNUP_PATH,
   WHO_IT_IS_FOR_HEADLINE,
@@ -138,6 +144,29 @@ describe('public homepage copy', () => {
     )
   })
 
+  it('describes upcoming public events without an em dash', () => {
+    expect(HOMEPAGE_UPCOMING_EVENT_LIMIT).toBe(3)
+    expect(UPCOMING_EVENTS_HEADLINE).toBe('Upcoming events')
+    expect(UPCOMING_EVENTS_INTRO).toBe(
+      "See what's coming up around Huntsville. Members RSVP with their benefits, and guests can grab a spot at select events."
+    )
+    expect(VIEW_ALL_EVENTS_LABEL).toBe('View all events')
+    expect(VIEW_ALL_EVENTS_HREF).toBe('/events')
+    expect(PUBLIC_EVENTS_PAGE_INTRO).toBe(
+      "See what's coming up around Huntsville. Members can sign in to RSVP, and guests can grab a spot at select events."
+    )
+    for (const copy of [
+      UPCOMING_EVENTS_HEADLINE,
+      UPCOMING_EVENTS_INTRO,
+      VIEW_ALL_EVENTS_LABEL,
+      PUBLIC_EVENTS_PAGE_INTRO,
+    ]) {
+      expect(copy).not.toContain('—')
+    }
+    expect(UPCOMING_EVENTS_INTRO).not.toContain('approved members')
+    expect(PUBLIC_EVENTS_PAGE_INTRO).not.toContain('approved members')
+  })
+
   it('keeps the belonging statements exact', () => {
     expect(WHO_IT_IS_FOR_HEADLINE).toBe('You’ll probably feel at home here if you…')
     expect(WHO_IT_IS_FOR_ITEMS).toEqual([
@@ -163,12 +192,27 @@ describe('public homepage source protections', () => {
   const copy = readFileSync(join(repoRoot, 'lib/marketing-home-copy.ts'), 'utf8')
   const combined = `${page}\n${content}\n${header}\n${copy}`
 
-  it('does not fetch or link member-only events', () => {
-    expect(combined).not.toMatch(/from '@\/app\/\(club\)\/events/)
-    expect(combined).not.toMatch(/href=["']\/events/)
-    expect(combined).not.toContain('See upcoming events')
-    expect(combined).not.toContain('starts_at')
+  it('loads upcoming public events without member tables or the session client', () => {
+    expect(content).toContain('loadUpcomingPublicEvents')
+    expect(content).toContain('formatEventScheduleInChicago')
+    expect(content).toContain('HOMEPAGE_UPCOMING_EVENT_LIMIT')
+    expect(content).toContain('VIEW_ALL_EVENTS_HREF')
+    expect(content).not.toContain("from '@/lib/supabase/server'")
+    expect(content).not.toContain("from '@/lib/supabase/admin'")
     expect(content).not.toContain('createClient')
+    expect(content).not.toContain('.from(')
+    expect(combined).not.toMatch(/from '@\/app\/\(club\)\/events/)
+    expect(combined).not.toContain('See upcoming events')
+    for (const table of [
+      'event_attendees',
+      'member_profiles',
+      'event_registration_ledger',
+      'membership_entitlement_cycles',
+      'event_sponsorships',
+      'profiles',
+    ]) {
+      expect(content).not.toContain(table)
+    }
   })
 
   it('keeps landing CTAs on the signup path through portalCtaHref', () => {

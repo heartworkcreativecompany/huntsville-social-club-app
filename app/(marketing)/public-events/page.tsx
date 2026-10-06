@@ -13,6 +13,7 @@ import {
 } from '@/lib/event-images'
 import { formatEventScheduleInChicago } from '@/lib/event-time'
 import { loadUpcomingPublicEvents } from '@/lib/load-public-events'
+import { PUBLIC_EVENTS_PAGE_INTRO } from '@/lib/marketing-home-copy'
 
 export const revalidate = 60
 
@@ -37,8 +38,7 @@ export default async function PublicEventsPage() {
           Upcoming events
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-          A look at gatherings the club has shared publicly. Browse the list
-          without signing in.
+          {PUBLIC_EVENTS_PAGE_INTRO}
         </p>
 
         <div className="mt-10">
