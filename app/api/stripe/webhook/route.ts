@@ -43,6 +43,18 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
 
       if (
         session.mode === 'payment' &&
+        session.metadata?.checkout_type === 'guest_event_fee'
+      ) {
+        if (session.payment_status !== 'paid') return
+        const { applyGuestCheckoutSessionCompleted } = await import(
+          '@/lib/guest-event-webhook'
+        )
+        await applyGuestCheckoutSessionCompleted(admin, session)
+        return
+      }
+
+      if (
+        session.mode === 'payment' &&
         (session.metadata?.type === 'event_fee' ||
           session.metadata?.checkout_type === 'event_fee')
       ) {
@@ -153,6 +165,16 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         userId,
         subscription,
       })
+      return
+    }
+
+    case 'checkout.session.expired': {
+      const session = event.data.object as Stripe.Checkout.Session
+      if (session.metadata?.checkout_type !== 'guest_event_fee') return
+      const { applyGuestCheckoutSessionExpired } = await import(
+        '@/lib/guest-event-webhook'
+      )
+      await applyGuestCheckoutSessionExpired(admin, session)
       return
     }
 

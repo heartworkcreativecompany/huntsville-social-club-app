@@ -5,6 +5,7 @@ import {
   EVENT_AT_CAPACITY_MESSAGE,
   isEventAtCapacity,
 } from '@/lib/event-attendance'
+import { loadEventTakenSeatCount } from '@/lib/event-seat-count'
 import { appendRegistrationLedger } from '@/lib/membership-billing-cycles'
 import { appBaseUrl, getStripe, isStripeConfigured } from '@/lib/stripe/config'
 import { getOrCreateStripeCustomer } from '@/lib/stripe/customer'
@@ -315,14 +316,9 @@ export async function markEventFeePaidFromCheckout(session: {
   }
 
   if (existing?.status !== 'going') {
-    const { count: goingCount, error: countError } = await admin
-      .from('event_attendees')
-      .select('user_id', { count: 'exact', head: true })
-      .eq('event_id', eventId)
-      .eq('status', 'going')
-
-    if (countError) {
-      return { error: countError.message }
+    const takenSeats = await loadEventTakenSeatCount(eventId)
+    if (takenSeats == null) {
+      return { error: 'Could not check event capacity.' }
     }
 
     const { data: event } = await admin
@@ -331,7 +327,7 @@ export async function markEventFeePaidFromCheckout(session: {
       .eq('id', eventId)
       .maybeSingle()
 
-    if (isEventAtCapacity(goingCount ?? 0, event?.attendance_max)) {
+    if (isEventAtCapacity(takenSeats, event?.attendance_max)) {
       return { error: EVENT_AT_CAPACITY_MESSAGE }
     }
   }
