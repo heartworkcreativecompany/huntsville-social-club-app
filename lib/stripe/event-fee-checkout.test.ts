@@ -20,6 +20,7 @@ const upsertState = {
   },
   goingCount: 0,
   attendanceMax: null as number | null,
+  rpcCalls: [] as { fn: string; args: { p_event_id?: string } }[],
   pendingAnswer: null as string | null,
   pendingDeletes: 0,
   writeError: null as { message: string } | null,
@@ -175,6 +176,13 @@ vi.mock('@/lib/supabase/admin', () => ({
       }
       return {}
     },
+    rpc: async (fn: string, args: { p_event_id?: string }) => {
+      upsertState.rpcCalls.push({ fn, args })
+      if (fn === 'event_taken_seat_count') {
+        return { data: upsertState.goingCount, error: null }
+      }
+      return { data: null, error: { message: 'unexpected rpc' } }
+    },
   }),
 }))
 
@@ -280,6 +288,7 @@ describe('markEventFeePaidFromCheckout', () => {
     upsertState.existing = null
     upsertState.goingCount = 0
     upsertState.attendanceMax = null
+    upsertState.rpcCalls = []
     upsertState.pendingAnswer = null
     upsertState.pendingDeletes = 0
     upsertState.writeError = null
@@ -292,6 +301,31 @@ describe('markEventFeePaidFromCheckout', () => {
     upsertState.updates = []
     upsertState.inserts = []
     upsertState.ledger = []
+  })
+
+  it('blocks confirmation when taken seats, including guests, fill the event', async () => {
+    upsertState.goingCount = 2
+    upsertState.attendanceMax = 2
+
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        checkout_type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+        fee_cents: '2500',
+      },
+      payment_intent: 'pi_test',
+      payment_status: 'paid',
+    })
+
+    expect(result).toEqual({ error: 'This event is at capacity.' })
+    expect(upsertState.rpcCalls).toEqual([
+      { fn: 'event_taken_seat_count', args: { p_event_id: 'evt_1' } },
+    ])
+    expect(upsertState.inserts).toHaveLength(0)
+    expect(upsertState.ledger).toHaveLength(0)
   })
 
   it('marks RSVP Going only after a paid event_fee checkout session', async () => {

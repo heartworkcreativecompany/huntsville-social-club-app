@@ -1332,7 +1332,20 @@ export interface Database {
       }
     }
     Functions: {
-      [_ in never]: never
+      event_taken_seat_count: {
+        Args: { p_event_id: string }
+        Returns: number
+      }
+      reserve_guest_event_seat: {
+        Args: {
+          p_event_id: string
+          p_full_name: string
+          p_email: string
+          p_rsvp_answer: string | null
+          p_hold_minutes: number
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

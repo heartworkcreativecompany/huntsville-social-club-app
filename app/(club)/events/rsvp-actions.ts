@@ -19,6 +19,7 @@ import {
   EVENT_AT_CAPACITY_MESSAGE,
   isEventAtCapacity,
 } from '@/lib/event-attendance'
+import { loadEventTakenSeatCount } from '@/lib/event-seat-count'
 import type { EventAccessType } from '@/lib/membership-tier-config'
 import {
   isConfirmedGoingAttendee,
@@ -284,21 +285,12 @@ export async function updateEventRsvp(input: {
   }
 
   if (isGoing && !wasGoing) {
-    const { data: goingRows, error: countError } = await supabase
-      .from('event_attendees')
-      .select('user_id, payment_status')
-      .eq('event_id', input.eventId)
-      .eq('status', 'going')
-
-    if (countError) {
-      return { error: countError.message }
+    const takenSeats = await loadEventTakenSeatCount(input.eventId)
+    if (takenSeats == null) {
+      return { error: 'Could not check event capacity.' }
     }
 
-    const goingCount = (goingRows ?? []).filter((row) =>
-      isConfirmedGoingAttendee(row)
-    ).length
-
-    if (isEventAtCapacity(goingCount, eventRow.attendance_max)) {
+    if (isEventAtCapacity(takenSeats, eventRow.attendance_max)) {
       return { error: EVENT_AT_CAPACITY_MESSAGE }
     }
 
