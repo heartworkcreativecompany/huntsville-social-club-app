@@ -12,6 +12,10 @@ import EventPriorityRsvpBubble from '@/components/events/event-priority-rsvp-bub
 import EventRsvpCounts from '@/components/events/event-rsvp-counts'
 import EventDescription from '@/components/events/event-description'
 import EventTypeBadge from '@/components/events/event-type-badge'
+import {
+  AttendeeRosterSummary,
+  PaidGuestAttendeeItems,
+} from '@/components/events/paid-guest-attendees'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import { formatEventDate } from '@/lib/event-labels'
@@ -73,6 +77,11 @@ import {
 import ExportAttendeesCsv, {
   type AttendeeExportRow,
 } from './export-attendees-csv'
+import {
+  canViewEventAttendeeRoster,
+  loadPaidGuestRegistrations,
+  paidGuestExportRows,
+} from '@/lib/event-paid-guest-roster'
 
 type ProfileRow = {
   id: string
@@ -178,9 +187,15 @@ export default async function EventDetailPage({ params }: PageProps) {
     .single()
 
   const userRole = viewer.role
-  const canExportAttendees =
-    user.id === event.owner_id || userRole === 'admin'
+  const canExportAttendees = canViewEventAttendeeRoster({
+    viewerId: user.id,
+    eventOwnerId: event.owner_id,
+    role: userRole,
+  })
   const canManageEvent = user.id === event.owner_id || userRole === 'admin'
+  const paidGuests = canExportAttendees
+    ? await loadPaidGuestRegistrations(supabase, event.id)
+    : []
 
   const attendeeSelectWithAnswer =
     'event_id, user_id, status, payment_status, created_at, guest_name, guest_invite_consumed, rsvp_answer'
@@ -355,11 +370,12 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   const configuredRsvpQuestion = event.rsvp_question?.trim() ?? ''
 
-  const exportRows: AttendeeExportRow[] = (attendeeRows ?? []).map((row) => {
+  const exportRows: AttendeeExportRow[] = (attendeeRows ?? []).map((row): AttendeeExportRow => {
     const profile = attendeeProfilesById[row.user_id]
     return {
       eventTitle: event.title,
       eventDate: eventDateLabel,
+      attendeeType: 'Member',
       attendeeName: profile?.full_name ?? '',
       attendeeEmail: attendeeAccountEmails.get(row.user_id) ?? '',
       rsvpStatus: row.status.replace('_', ' '),
@@ -370,13 +386,24 @@ export default async function EventDetailPage({ params }: PageProps) {
         ? new Date(row.created_at).toLocaleString()
         : '',
     }
-  })
+  }).concat(
+    paidGuestExportRows({
+      guests: paidGuests,
+      eventTitle: event.title,
+      eventDate: eventDateLabel,
+    })
+  )
 
-  function renderAttendeeList(title: string, rows: typeof goingRows) {
+  function renderAttendeeList(
+    title: string,
+    rows: typeof goingRows,
+    guests: typeof paidGuests = []
+  ) {
+    const isEmpty = rows.length === 0 && guests.length === 0
     return (
       <div>
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
-        {rows.length === 0 ? (
+        {isEmpty ? (
           <p className="mt-2 text-sm text-muted-foreground">None</p>
         ) : (
           <ul className="mt-2 space-y-1.5">
@@ -401,6 +428,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                 ) : null}
               </li>
             ))}
+            <PaidGuestAttendeeItems guests={guests} />
           </ul>
         )}
       </div>
@@ -622,14 +650,18 @@ export default async function EventDetailPage({ params }: PageProps) {
             ) : null}
           </div>
 
-          {!attendeeRows?.length ? (
+          <AttendeeRosterSummary
+            membersGoing={rsvpCounts.going}
+            paidGuests={paidGuests.length}
+          />
+          {!attendeeRows?.length && paidGuests.length === 0 ? (
             <EmptyState
               title="No responses yet"
               description="Member names will appear here as RSVPs come in."
             />
           ) : (
             <Card className="grid gap-6 sm:grid-cols-3">
-              {renderAttendeeList('Going', goingRows)}
+              {renderAttendeeList('Going', goingRows, paidGuests)}
               {renderAttendeeList('Maybe', maybeRows)}
               {renderAttendeeList('Not going', notGoingRows)}
             </Card>

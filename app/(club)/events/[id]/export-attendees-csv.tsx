@@ -1,15 +1,40 @@
 'use client'
 
 import { buttonSecondaryClassName } from '@/lib/event-labels'
+import type { AttendeeExportRow } from '@/lib/event-paid-guest-roster'
 
-export type AttendeeExportRow = {
-  eventTitle: string
-  eventDate: string
-  attendeeName: string
-  attendeeEmail: string
-  rsvpStatus: string
-  rsvpAnswer: string
-  respondedAt: string
+export type { AttendeeExportRow }
+
+export const ATTENDEE_EXPORT_HEADERS = [
+  'Event title',
+  'Event date',
+  'Type',
+  'Attendee name',
+  'Attendee email',
+  'RSVP status',
+  'RSVP answer',
+  'Responded at',
+] as const
+
+export function buildAttendeeCsv(rows: AttendeeExportRow[]): string {
+  const lines = [
+    ATTENDEE_EXPORT_HEADERS.map(escapeCsvValue).join(','),
+    ...rows.map((row) =>
+      [
+        row.eventTitle,
+        row.eventDate,
+        row.attendeeType,
+        row.attendeeName,
+        row.attendeeEmail,
+        row.rsvpStatus,
+        row.rsvpAnswer,
+        row.respondedAt,
+      ]
+        .map(escapeCsvValue)
+        .join(',')
+    ),
+  ]
+  return lines.join('\n')
 }
 
 type ExportAttendeesCsvProps = {
@@ -29,34 +54,7 @@ export default function ExportAttendeesCsv({
   rows,
 }: ExportAttendeesCsvProps) {
   const handleExport = () => {
-    const headers = [
-      'Event title',
-      'Event date',
-      'Attendee name',
-      'Attendee email',
-      'RSVP status',
-      'RSVP answer',
-      'Responded at',
-    ]
-
-    const lines = [
-      headers.map(escapeCsvValue).join(','),
-      ...rows.map((row) =>
-        [
-          row.eventTitle,
-          row.eventDate,
-          row.attendeeName,
-          row.attendeeEmail,
-          row.rsvpStatus,
-          row.rsvpAnswer,
-          row.respondedAt,
-        ]
-          .map(escapeCsvValue)
-          .join(',')
-      ),
-    ]
-
-    const csv = lines.join('\n')
+    const csv = buildAttendeeCsv(rows)
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
