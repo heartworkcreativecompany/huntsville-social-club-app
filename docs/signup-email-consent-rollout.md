@@ -131,8 +131,42 @@ until those are chosen separately.
 
 Enrollment writes only the contact `unsubscribed` flag. It does not add
 segments or topics. Each attempt rechecks email confirmation, current local
-consent, and the provider unsubscribe state. Local withdrawal wins over a
-queued enrollment.
+consent, and the provider unsubscribe state before an enrollment write.
+Local withdrawal wins over a queued enrollment.
+
+The worker acquires one job at a time and holds a 20-second lease. Attempts
+are counted when the lease is acquired. A failed attempt waits 60 seconds,
+then 300, 900, and 3600. The fifth attempt is terminal and is not scheduled.
+An expired processing lease can be acquired again only while the attempt
+count is below five. An expired fifth attempt is marked `failed` with
+`attempt_cap` and is not acquired again. Completion and failure updates
+require the lease token from that acquisition. A worker whose token no
+longer matches cannot overwrite a reclaimed job. Provider requests,
+including response-body reads, are aborted before the lease expires.
+
+That lease does not make the Resend write atomic with local consent. An
+enrollment request that has already passed its last local recheck can still
+arrive at Resend after a withdrawal, and a slow response can be overtaken by
+a later withdrawal PATCH. The withdrawal row stays `pending` until that
+withdrawal's own lookup or PATCH finishes. A definitive missing contact
+completes the withdrawal without creating a contact. A lookup error is
+retried. A contact that exists is patched with only `unsubscribed: true`.
+The local opt-out remains, so a later enrollment recheck does not send
+`unsubscribed: false`.
+
+Aborting the worker's fetch does not cancel a provider write Resend has
+already accepted. Response order does not prove which write landed last.
+If the enrollment `unsubscribed: false` arrives after the withdrawal job
+has finished, the contact can be subscribed again. Reconciliation of that
+case depends on Resend delivering a verified `contact.updated` event with
+boolean `unsubscribed: false`. That event does not opt the profile back in.
+When the profile is locally withdrawn, the same database transaction records
+the event id and queues one corrective withdrawal if none is already
+pending or processing. A repeated event does not add another active job.
+There is no separate polling fallback. If that webhook is never delivered,
+the provider can stay subscribed until a later verified event. A corrective
+withdrawal uses the same five-attempt lease. Exhausted work stays `failed`
+and is not marked synced. None of this is atomic with Resend.
 
 ## Internal limitation
 

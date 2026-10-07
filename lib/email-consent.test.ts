@@ -13,11 +13,13 @@ import {
 import {
   decideEmailMarketingSync,
   marketingSubscriptionBody,
+  nextMarketingSyncDelaySeconds,
   runEmailMarketingSyncAttempt,
 } from '@/lib/email-marketing-sync'
 import {
   handleResendContactWebhook,
   resendContactUnsubscribeEmail,
+  type ResubscribeReconciliation,
 } from '@/lib/resend-contact-webhook'
 import { verifyResendWebhookSignature } from '@/lib/resend-webhook-signature'
 import { isMemberPubliclyVerified } from '@/lib/membership-systems'
@@ -25,6 +27,10 @@ import { PRIVACY_POLICY_LAST_UPDATED } from '@/lib/privacy-mobile-copy'
 
 const repoRoot = process.cwd()
 const testSecret = `whsec_${Buffer.from('signup-consent-test-secret').toString('base64')}`
+
+function reconcileIgnored(): Promise<ResubscribeReconciliation> {
+  return Promise.resolve('ignored')
+}
 
 function sign(payload: string, timestamp: string, id = 'msg_test') {
   const key = Buffer.from(testSecret.slice('whsec_'.length), 'base64')
@@ -161,6 +167,10 @@ describe('resend webhook signatures', () => {
         writes += 1
         return 'applied'
       },
+      reconcileResubscribe: async () => {
+        writes += 1
+        return 'correction_queued'
+      },
       recordDelivery: async () => {
         writes += 1
         return 'new'
@@ -185,6 +195,7 @@ describe('resend webhook signatures', () => {
         applies += 1
         return applies === 1 ? 'applied' : 'duplicate'
       },
+      reconcileResubscribe: reconcileIgnored,
       recordDelivery: async () => 'new',
     })
     const second = await handleResendContactWebhook({
@@ -195,6 +206,7 @@ describe('resend webhook signatures', () => {
       secret: testSecret,
       nowSeconds: now,
       applyUnsubscribe: async () => 'duplicate',
+      reconcileResubscribe: reconcileIgnored,
       recordDelivery: async () => 'new',
     })
     expect(first.body.duplicate).toBe(false)
@@ -204,7 +216,9 @@ describe('resend webhook signatures', () => {
     expect(resendContactUnsubscribeEmail(JSON.parse(optedBackIn))).toBeNull()
     const falseSigned = sign(optedBackIn, String(now), 'msg_false')
     let applyCalled = false
-    const ignored = await handleResendContactWebhook({
+    let recorded = 0
+    let reconciled = 0
+    const correction = await handleResendContactWebhook({
       rawBody: optedBackIn,
       svixId: falseSigned.id,
       svixTimestamp: falseSigned.timestamp,
@@ -215,9 +229,43 @@ describe('resend webhook signatures', () => {
         applyCalled = true
         return 'applied'
       },
-      recordDelivery: async () => 'new',
+      reconcileResubscribe: async () => {
+        reconciled += 1
+        return 'correction_queued'
+      },
+      recordDelivery: async () => {
+        recorded += 1
+        return 'new'
+      },
     })
-    expect(ignored.body.ignored).toBe(true)
+    expect(correction.body.correction).toBe('correction_queued')
+    expect(reconciled).toBe(1)
+    expect(recorded).toBe(0)
+    expect(applyCalled).toBe(false)
+
+    const invalid = await handleResendContactWebhook({
+      rawBody: optedBackIn,
+      svixId: 'msg_bad_false',
+      svixTimestamp: String(now),
+      svixSignature: 'v1,not-a-real-signature',
+      secret: testSecret,
+      nowSeconds: now,
+      applyUnsubscribe: async () => {
+        applyCalled = true
+        return 'applied'
+      },
+      reconcileResubscribe: async () => {
+        reconciled += 1
+        return 'correction_queued'
+      },
+      recordDelivery: async () => {
+        recorded += 1
+        return 'new'
+      },
+    })
+    expect(invalid.status).toBe(400)
+    expect(reconciled).toBe(1)
+    expect(recorded).toBe(0)
     expect(applyCalled).toBe(false)
   })
 })
@@ -277,6 +325,81 @@ describe('marketing sync decisions', () => {
     })
     expect(decision).toBe('skip_withdrawn')
     expect(sends).toEqual([])
+  })
+
+  it('schedules 60, 300, 900, and 3600 seconds, then stops at attempt 5', () => {
+    expect(nextMarketingSyncDelaySeconds(1)).toBe(60)
+    expect(nextMarketingSyncDelaySeconds(2)).toBe(300)
+    expect(nextMarketingSyncDelaySeconds(3)).toBe(900)
+    expect(nextMarketingSyncDelaySeconds(4)).toBe(3600)
+    expect(nextMarketingSyncDelaySeconds(5)).toBeNull()
+  })
+
+  it('completes a missing-contact withdrawal without creating or patching a contact', async () => {
+    const calls: string[] = []
+    const decision = await runEmailMarketingSyncAttempt({
+      action: 'withdraw',
+      readLocal: async () => ({
+        ...confirmedOptIn,
+        optIn: false,
+        optedOutAt: '2026-10-07T00:00:00.000Z',
+      }),
+      lookupProvider: async () => {
+        calls.push('GET')
+        return 'missing'
+      },
+      send: async (input) => {
+        calls.push(input.method)
+      },
+      recordProviderUnsubscribe: async () => {
+        throw new Error('should not record provider unsubscribe')
+      },
+    })
+    expect(decision).toBe('withdraw_contact_absent')
+    expect(calls).toEqual(['GET'])
+  })
+
+  it('treats a failed contact lookup as retryable and does not write', async () => {
+    const calls: string[] = []
+    await expect(
+      runEmailMarketingSyncAttempt({
+        action: 'withdraw',
+        readLocal: async () => ({
+          ...confirmedOptIn,
+          optIn: false,
+          optedOutAt: '2026-10-07T00:00:00.000Z',
+        }),
+        lookupProvider: async () => {
+          throw new Error('provider_lookup_failed')
+        },
+        send: async (input) => {
+          calls.push(input.method)
+        },
+        recordProviderUnsubscribe: async () => undefined,
+      })
+    ).rejects.toThrow('provider_lookup_failed')
+    expect(calls).toEqual([])
+  })
+
+  it('patches only unsubscribed true when the contact exists', async () => {
+    const sends: Array<{ method: string; body: { unsubscribed: boolean } }> = []
+    const decision = await runEmailMarketingSyncAttempt({
+      action: 'withdraw',
+      readLocal: async () => ({
+        ...confirmedOptIn,
+        optIn: false,
+        optedOutAt: '2026-10-07T00:00:00.000Z',
+      }),
+      lookupProvider: async () => 'subscribed',
+      send: async (input) => {
+        sends.push({ method: input.method, body: input.body })
+      },
+      recordProviderUnsubscribe: async () => {
+        throw new Error('should not record provider unsubscribe')
+      },
+    })
+    expect(decision).toBe('send_unsubscribed_true')
+    expect(sends).toEqual([{ method: 'PATCH', body: { unsubscribed: true } }])
   })
 })
 

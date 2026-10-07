@@ -1348,6 +1348,8 @@ export interface Database {
           attempt_count: number
           next_attempt_at: string | null
           last_error: string | null
+          lease_owner: string | null
+          lease_expires_at: string | null
           created_at: string
           updated_at: string
         }
@@ -1359,6 +1361,8 @@ export interface Database {
           attempt_count?: number
           next_attempt_at?: string | null
           last_error?: string | null
+          lease_owner?: string | null
+          lease_expires_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1370,6 +1374,8 @@ export interface Database {
           attempt_count?: number
           next_attempt_at?: string | null
           last_error?: string | null
+          lease_owner?: string | null
+          lease_expires_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1416,6 +1422,10 @@ export interface Database {
         Args: { provider_event_id: string; provider_event_type: string }
         Returns: string
       }
+      reconcile_provider_marketing_resubscribe: {
+        Args: { target_email: string; provider_event_id: string }
+        Returns: string
+      }
       recheck_email_marketing_sync: {
         Args: { target_job_id: string }
         Returns: {
@@ -1427,12 +1437,25 @@ export interface Database {
         }[]
       }
       claim_email_marketing_sync_jobs: {
-        Args: { limit_count: number }
+        Args: { limit_count: number; target_profile_id?: string | null }
         Returns: {
           id: string
           profile_id: string
           action: string
+          attempt_count: number
+          lease_owner: string
+          lease_expires_at: string
         }[]
+      }
+      finish_email_marketing_sync_job: {
+        Args: {
+          target_job_id: string
+          owner_token: string
+          next_status: string
+          error_code: string | null
+          retry_at: string | null
+        }
+        Returns: boolean
       }
       event_taken_seat_count: {
         Args: { p_event_id: string }

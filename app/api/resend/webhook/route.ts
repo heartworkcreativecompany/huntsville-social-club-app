@@ -27,6 +27,28 @@ export async function POST(request: Request) {
       if (error) throw new Error('unsubscribe_failed')
       return data === 'duplicate' ? 'duplicate' : 'applied'
     },
+    reconcileResubscribe: async (email, svixId) => {
+      if (!admin) {
+        throw new Error('Admin client unavailable.')
+      }
+      const { data, error } = await admin.rpc(
+        'reconcile_provider_marketing_resubscribe',
+        {
+          target_email: email,
+          provider_event_id: svixId,
+        }
+      )
+      if (error) throw new Error('resubscribe_reconcile_failed')
+      if (
+        data === 'correction_queued' ||
+        data === 'correction_pending' ||
+        data === 'duplicate' ||
+        data === 'ignored'
+      ) {
+        return data
+      }
+      throw new Error('resubscribe_reconcile_failed')
+    },
     recordDelivery: async (svixId, eventType) => {
       if (!admin) {
         throw new Error('Admin client unavailable.')

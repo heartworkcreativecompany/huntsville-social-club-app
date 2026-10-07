@@ -6,11 +6,21 @@
 
 export const EMAIL_MARKETING_SYNC_ATTEMPT_CAP = 5
 
+/**
+ * Matches claim_email_marketing_sync_jobs. The lease is a database claim,
+ * not an atomic Resend write. An enrollment request that already passed its
+ * last local recheck can still reach Resend after a withdrawal. The
+ * withdrawal job stays pending until that job's own lookup or PATCH
+ * reconciles the contact.
+ */
+export const EMAIL_MARKETING_SYNC_LEASE_MS = 20_000
+
 export type EmailMarketingSyncAction = 'enroll' | 'withdraw'
 
 export type EmailMarketingSyncDecision =
   | 'send_unsubscribed_false'
   | 'send_unsubscribed_true'
+  | 'withdraw_contact_absent'
   | 'skip_withdrawn'
   | 'skip_not_opted_in'
   | 'defer_unconfirmed'
@@ -33,8 +43,8 @@ export function marketingSubscriptionBody(unsubscribed: boolean): {
 
 /**
  * Local withdrawal wins over a queued enrollment. Confirmation and current
- * opt-in are rechecked on every attempt. Provider unsubscribe blocks sending
- * `unsubscribed: false`.
+ * opt-in are rechecked before an enrollment provider write. Provider
+ * unsubscribe blocks sending `unsubscribed: false`.
  */
 export function decideEmailMarketingSync(input: {
   action: EmailMarketingSyncAction
@@ -54,10 +64,14 @@ export function decideEmailMarketingSync(input: {
   return 'send_unsubscribed_false'
 }
 
+/**
+ * `attemptCount` is the value stored at acquisition, already incremented.
+ * Attempt 1 waits 60 seconds, then 300, 900, and 3600. Attempt 5 is terminal.
+ */
 export function nextMarketingSyncDelaySeconds(attemptCount: number): number | null {
   if (attemptCount >= EMAIL_MARKETING_SYNC_ATTEMPT_CAP) return null
   const steps = [60, 300, 900, 3600]
-  return steps[Math.min(attemptCount, steps.length - 1)] ?? 3600
+  return steps[attemptCount - 1] ?? null
 }
 
 export type MarketingSyncSender = (input: {
@@ -72,7 +86,8 @@ export type MarketingSyncProviderLookup = (
 
 /**
  * Recheck local consent before any provider write. A withdrawal that lands
- * after the first read and before the write cancels enrollment.
+ * after the first read and before the write cancels enrollment. The database
+ * lease does not cancel an HTTP request that has already been sent.
  */
 export async function runEmailMarketingSyncAttempt(input: {
   action: EmailMarketingSyncAction
@@ -100,8 +115,21 @@ export async function runEmailMarketingSyncAttempt(input: {
     if (confirmed !== 'send_unsubscribed_true' || !again.email) {
       return confirmed
     }
+    // A lookup error throws and is retryable. Only a definitive 404 is absence.
+    const provider = await input.lookupProvider(again.email)
+    const afterLookup = await input.readLocal()
+    const stillWithdrawing = decideEmailMarketingSync({
+      action: 'withdraw',
+      local: afterLookup,
+    })
+    if (stillWithdrawing !== 'send_unsubscribed_true' || !afterLookup.email) {
+      return stillWithdrawing
+    }
+    if (provider === 'missing') {
+      return 'withdraw_contact_absent'
+    }
     await input.send({
-      email: again.email,
+      email: afterLookup.email,
       body: marketingSubscriptionBody(true),
       method: 'PATCH',
     })

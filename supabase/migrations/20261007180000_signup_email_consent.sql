@@ -120,6 +120,10 @@ create table if not exists public.email_marketing_sync (
   attempt_count integer not null default 0,
   next_attempt_at timestamptz,
   last_error text,
+  -- Lease ownership is the database claim. It does not make a Resend write
+  -- atomic with local consent. See docs/signup-email-consent-rollout.md.
+  lease_owner uuid,
+  lease_expires_at timestamptz,
   created_at timestamptz not null default pg_catalog.now(),
   updated_at timestamptz not null default pg_catalog.now(),
   constraint email_marketing_sync_action_check
@@ -154,7 +158,12 @@ alter table public.resend_webhook_events enable row level security;
 revoke all on table public.email_marketing_sync from public, anon, authenticated;
 revoke all on table public.resend_webhook_events from public, anon, authenticated;
 
-grant select, insert, update, delete on table public.email_marketing_sync to service_role;
+-- service_role cannot update job rows directly. Completion goes through
+-- finish_email_marketing_sync_job, which requires the lease token.
+-- Revoke as well as omit the grant: hosted images may grant all privileges
+-- on new tables to service_role.
+grant select, insert, delete on table public.email_marketing_sync to service_role;
+revoke update on table public.email_marketing_sync from service_role;
 grant select, insert, update, delete on table public.resend_webhook_events to service_role;
 grant select, insert, update on table public.email_marketing_sync to consent_writer;
 grant select, insert on table public.resend_webhook_events to consent_writer;
@@ -298,11 +307,15 @@ begin
   set
     status = 'skipped',
     last_error = 'local_withdrawal',
+    lease_owner = null,
+    lease_expires_at = null,
     updated_at = pg_catalog.now()
   where profile_id = actor
     and action = 'enroll'
     and status in ('pending', 'processing');
 
+  -- The withdrawal job stays pending until its own provider lookup or PATCH
+  -- finishes. Skipping the enrollment row does not reconcile Resend.
   insert into public.email_marketing_sync (profile_id, action, status)
   values (actor, 'withdraw', 'pending');
 end;
@@ -411,6 +424,81 @@ exception
 end;
 $function$;
 
+-- A late enrollment write can set the provider contact back to subscribed
+-- after the withdrawal job has already finished. A verified contact.updated
+-- with unsubscribed false must not opt the profile back in. If the profile
+-- is locally withdrawn, queue one corrective withdrawal in this same
+-- transaction as the event id. Duplicate event ids and an already active
+-- withdrawal do not create another job. This does not make the provider
+-- write atomic, and it runs only when that webhook is delivered.
+create or replace function public.reconcile_provider_marketing_resubscribe(
+  target_email text,
+  provider_event_id text
+)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  queued integer;
+  opted_out boolean;
+begin
+  if coalesce(auth.role(), '') is distinct from 'service_role' then
+    raise exception 'forbidden'
+      using errcode = '42501';
+  end if;
+
+  if target_email is null
+    or position('@' in target_email) = 0
+    or provider_event_id is null
+    or length(btrim(provider_event_id)) = 0 then
+    raise exception 'invalid resubscribe reconciliation'
+      using errcode = '22023';
+  end if;
+
+  begin
+    insert into public.resend_webhook_events (svix_id, event_type)
+    values (provider_event_id, 'contact.updated');
+  exception
+    when unique_violation then
+      return 'duplicate';
+  end;
+
+  select exists (
+    select 1
+    from public.profiles as profile
+    where lower(profile.email) = lower(target_email)
+      and profile.email_marketing_opted_out_at is not null
+  )
+  into opted_out;
+
+  if not opted_out then
+    return 'ignored';
+  end if;
+
+  insert into public.email_marketing_sync (profile_id, action, status)
+  select profile.id, 'withdraw', 'pending'
+  from public.profiles as profile
+  where lower(profile.email) = lower(target_email)
+    and profile.email_marketing_opted_out_at is not null
+    and not exists (
+      select 1
+      from public.email_marketing_sync as existing
+      where existing.profile_id = profile.id
+        and existing.action = 'withdraw'
+        and existing.status in ('pending', 'processing')
+    );
+
+  get diagnostics queued = row_count;
+  if queued > 0 then
+    return 'correction_queued';
+  end if;
+
+  return 'correction_pending';
+end;
+$function$;
+
 create or replace function public.enqueue_email_marketing_enrollment()
 returns trigger
 language plpgsql
@@ -507,11 +595,19 @@ begin
 end;
 $function$;
 
-create or replace function public.claim_email_marketing_sync_jobs(limit_count integer)
+-- One job per call. The 20-second lease covers that job's provider calls
+-- only, so a batch must not be claimed ahead of processing.
+create or replace function public.claim_email_marketing_sync_jobs(
+  limit_count integer,
+  target_profile_id uuid default null
+)
 returns table (
   id uuid,
   profile_id uuid,
-  action text
+  action text,
+  attempt_count integer,
+  lease_owner uuid,
+  lease_expires_at timestamptz
 )
 language plpgsql
 security definer
@@ -523,25 +619,134 @@ begin
       using errcode = '42501';
   end if;
 
+  if coalesce(limit_count, 1) <> 1 then
+    raise exception 'marketing sync acquires one job at a time'
+      using errcode = '22023';
+  end if;
+
+  -- An abandoned fifth attempt is terminal. Do not increment it again.
+  update public.email_marketing_sync as expired
+  set
+    status = 'failed',
+    last_error = 'attempt_cap',
+    next_attempt_at = null,
+    lease_owner = null,
+    lease_expires_at = null,
+    updated_at = pg_catalog.now()
+  where (target_profile_id is null or expired.profile_id = target_profile_id)
+    and expired.status = 'processing'
+    and expired.lease_expires_at is not null
+    and expired.lease_expires_at <= pg_catalog.now()
+    and expired.attempt_count >= 5;
+
   return query
   update public.email_marketing_sync as sync
   set
     status = 'processing',
     attempt_count = sync.attempt_count + 1,
+    lease_owner = pg_catalog.gen_random_uuid(),
+    lease_expires_at = pg_catalog.now() + interval '20 seconds',
     updated_at = pg_catalog.now()
   where sync.id in (
     select pending.id
     from public.email_marketing_sync as pending
-    where pending.status = 'pending'
+    where (target_profile_id is null or pending.profile_id = target_profile_id)
+      and pending.attempt_count < 5
       and (
-        pending.next_attempt_at is null
-        or pending.next_attempt_at <= pg_catalog.now()
+        (
+          pending.status = 'pending'
+          and (
+            pending.next_attempt_at is null
+            or pending.next_attempt_at <= pg_catalog.now()
+          )
+        )
+        or (
+          pending.status = 'processing'
+          and pending.lease_expires_at is not null
+          and pending.lease_expires_at <= pg_catalog.now()
+        )
       )
     order by pending.created_at
     for update skip locked
-    limit greatest(coalesce(limit_count, 1), 1)
+    limit 1
   )
-  returning sync.id, sync.profile_id, sync.action;
+  returning
+    sync.id,
+    sync.profile_id,
+    sync.action,
+    sync.attempt_count,
+    sync.lease_owner,
+    sync.lease_expires_at;
+end;
+$function$;
+
+create or replace function public.finish_email_marketing_sync_job(
+  target_job_id uuid,
+  owner_token uuid,
+  next_status text,
+  error_code text,
+  retry_at timestamptz
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  current_attempts integer;
+  updated_id uuid;
+begin
+  if coalesce(auth.role(), '') is distinct from 'service_role' then
+    raise exception 'forbidden'
+      using errcode = '42501';
+  end if;
+
+  if owner_token is null or target_job_id is null then
+    return false;
+  end if;
+
+  if next_status is null
+    or next_status not in ('pending', 'synced', 'skipped', 'failed') then
+    raise exception 'invalid sync status'
+      using errcode = '22023';
+  end if;
+
+  select sync.attempt_count
+  into current_attempts
+  from public.email_marketing_sync as sync
+  where sync.id = target_job_id
+    and sync.status = 'processing'
+    and sync.lease_owner = owner_token
+  for update;
+
+  if not found then
+    return false;
+  end if;
+
+  if next_status = 'pending' and (retry_at is null or current_attempts >= 5) then
+    raise exception 'attempt is terminal and cannot be rescheduled'
+      using errcode = '22023';
+  end if;
+
+  if next_status <> 'pending' and retry_at is not null then
+    raise exception 'terminal jobs are not scheduled'
+      using errcode = '22023';
+  end if;
+
+  update public.email_marketing_sync
+  set
+    status = next_status,
+    last_error = error_code,
+    next_attempt_at = retry_at,
+    lease_owner = null,
+    lease_expires_at = null,
+    updated_at = pg_catalog.now()
+  where id = target_job_id
+    and status = 'processing'
+    and lease_owner = owner_token
+  returning id into updated_id;
+
+  return updated_id is not null;
 end;
 $function$;
 
@@ -685,11 +890,15 @@ revoke all on function public.apply_resend_contact_unsubscribe(text, text)
   from public, anon, authenticated;
 revoke all on function public.record_resend_webhook_delivery(text, text)
   from public, anon, authenticated;
+revoke all on function public.reconcile_provider_marketing_resubscribe(text, text)
+  from public, anon, authenticated;
 revoke all on function public.enqueue_email_marketing_enrollment()
   from public, anon, authenticated, service_role;
 revoke all on function public.recheck_email_marketing_sync(uuid)
   from public, anon, authenticated;
-revoke all on function public.claim_email_marketing_sync_jobs(integer)
+revoke all on function public.claim_email_marketing_sync_jobs(integer, uuid)
+  from public, anon, authenticated;
+revoke all on function public.finish_email_marketing_sync_job(uuid, uuid, text, text, timestamptz)
   from public, anon, authenticated;
 revoke all on function public.hook_before_user_created(jsonb)
   from public, anon, authenticated, service_role;
@@ -699,8 +908,10 @@ revoke all on function public.handle_new_user()
 grant execute on function public.withdraw_email_marketing() to authenticated;
 grant execute on function public.apply_resend_contact_unsubscribe(text, text) to service_role;
 grant execute on function public.record_resend_webhook_delivery(text, text) to service_role;
+grant execute on function public.reconcile_provider_marketing_resubscribe(text, text) to service_role;
 grant execute on function public.recheck_email_marketing_sync(uuid) to service_role;
-grant execute on function public.claim_email_marketing_sync_jobs(integer) to service_role;
+grant execute on function public.claim_email_marketing_sync_jobs(integer, uuid) to service_role;
+grant execute on function public.finish_email_marketing_sync_job(uuid, uuid, text, text, timestamptz) to service_role;
 
 do $hook_grant$
 begin

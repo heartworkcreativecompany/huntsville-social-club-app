@@ -45,6 +45,28 @@ export function resendContactUnsubscribeEmail(event: unknown): string | null {
   return email
 }
 
+/**
+ * A boolean false means the provider contact is subscribed. It is not consent
+ * to opt back in. The database decides whether a locally withdrawn profile
+ * needs another withdrawal.
+ */
+export function resendContactResubscribeEmail(event: unknown): string | null {
+  const record = asRecord(event)
+  if (record?.type !== 'contact.updated') return null
+  const data = asRecord(record.data)
+  if (!data || data.unsubscribed !== false) return null
+  if (typeof data.email !== 'string') return null
+  const email = data.email.trim()
+  if (!email.includes('@')) return null
+  return email
+}
+
+export type ResubscribeReconciliation =
+  | 'correction_queued'
+  | 'correction_pending'
+  | 'duplicate'
+  | 'ignored'
+
 export async function handleResendContactWebhook(input: {
   rawBody: string
   svixId: string | null
@@ -56,6 +78,10 @@ export async function handleResendContactWebhook(input: {
     email: string,
     svixId: string
   ) => Promise<'applied' | 'duplicate'>
+  reconcileResubscribe: (
+    email: string,
+    svixId: string
+  ) => Promise<ResubscribeReconciliation>
   recordDelivery: (
     svixId: string,
     eventType: string
@@ -96,6 +122,19 @@ export async function handleResendContactWebhook(input: {
     return {
       status: 200,
       body: { ok: true, duplicate: result === 'duplicate' },
+    }
+  }
+
+  const resubscribeEmail = resendContactResubscribeEmail(event)
+  if (resubscribeEmail) {
+    const result = await input.reconcileResubscribe(resubscribeEmail, svixId)
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        correction: result,
+        duplicate: result === 'duplicate',
+      },
     }
   }
 
