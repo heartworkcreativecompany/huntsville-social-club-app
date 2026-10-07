@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PRE_SEND_PERSIST_MARGIN_MS,
   createMemoryAuditLease,
   retryNextAttemptAt,
   seedEmailAttempt,
@@ -123,9 +124,22 @@ type RecordedRequest = {
   body: unknown
 }
 
+function abortRejection(signal: AbortSignal | undefined): Promise<never> {
+  return new Promise((_resolve, reject) => {
+    if (!signal) return
+    const fail = () =>
+      reject(new DOMException('The operation was aborted.', 'AbortError'))
+    if (signal.aborted) {
+      fail()
+      return
+    }
+    signal.addEventListener('abort', fail, { once: true })
+  })
+}
+
 function createDeps(options?: {
-  profile?: LoadedProfile | null
-  profiles?: LoadedProfile[]
+  profile?: LoadedProfile | null | 'error'
+  profiles?: Array<LoadedProfile | null | 'error'>
   claim?: 'claimed' | 'duplicate' | 'error'
   fetchImpl?: HandlerDeps['fetch']
   contactFetch?: (
@@ -245,20 +259,28 @@ function createDeps(options?: {
       }
       options?.calls?.push({ url, method, body })
       if (url.startsWith(RESEND_CONTACTS_URL)) {
-        return options?.contactFetch
+        const response = options?.contactFetch
           ? options.contactFetch(url, method, body)
           : defaultContactFetch(method)
+        return await Promise.race([
+          Promise.resolve(response),
+          abortRejection(init?.signal ?? undefined),
+        ])
       }
       return (options?.fetchImpl ?? defaultFetch)(input, init)
     },
     loadProfile: async () => {
       order.push('loadProfile')
       profileReads += 1
-      if (options?.profiles) {
-        return options.profiles[Math.min(profileReads - 1, options.profiles.length - 1)] ?? null
-      }
-      if (options?.profile === null) return null
-      return options?.profile ?? loadedProfile()
+      const fixture = options?.profiles
+        ? (options.profiles[Math.min(profileReads - 1, options.profiles.length - 1)] ??
+          null)
+        : options?.profile === undefined
+          ? loadedProfile()
+          : options.profile
+      if (fixture === 'error') return { status: 'error' }
+      if (!fixture) return { status: 'absent' }
+      return { status: 'found', profile: fixture }
     },
     log: (message) => {
       logs.push(message)
@@ -500,8 +522,9 @@ describe('application-status-email handler', () => {
       createDeps({ claim: 'duplicate', order })
     )
     expect(await response.json()).toEqual({ ok: true, result: 'duplicate' })
-    expect(order).toEqual(['loadProfile', 'insertAudit'])
+    expect(order).toEqual(['insertAudit'])
     expect(order).not.toContain('fetch')
+    expect(order).not.toContain('loadProfile')
   })
 
   it('claims the audit row before the mocked Resend request', async () => {
@@ -510,10 +533,10 @@ describe('application-status-email handler', () => {
       jsonRequest(webhookPayload({})),
       createDeps({ order })
     )
-    expect(order.indexOf('insertAudit')).toBeGreaterThan(
-      order.indexOf('loadProfile')
+    expect(order.indexOf('loadProfile')).toBeGreaterThan(
+      order.indexOf('insertAudit')
     )
-    expect(order.indexOf('fetch')).toBeGreaterThan(order.indexOf('insertAudit'))
+    expect(order.indexOf('fetch')).toBeGreaterThan(order.indexOf('loadProfile'))
     expect(eventKeyFor('application_submitted', 1)).toBe(
       'application_submitted:1'
     )
@@ -691,24 +714,53 @@ describe('application-status-email handler', () => {
         })
       )
       expect(await response.json()).toEqual({ ok: true, result: 'duplicate' })
-      expect(order).toEqual(['loadProfile', 'insertAudit'])
+      expect(order).toEqual(['insertAudit'])
       expect(order).not.toContain('fetch')
+      expect(order).not.toContain('loadProfile')
     }
   })
 
-  it('skips when the webhook version does not match the re-fetched profile version', async () => {
-    const order: string[] = []
-    const response = await handleApplicationStatusEmailRequest(
+  it('keeps the webhook event key when the reloaded profile version differs', async () => {
+    const olderProfile = createMemoryAuditLease()
+    const olderCalls: RecordedRequest[] = []
+    const older = await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({ application_submission_version: 2 })),
       createDeps({
-        order,
+        audit: olderProfile,
+        calls: olderCalls,
         profile: loadedProfile(),
       })
     )
-    expect(await response.json()).toEqual({ ok: true, result: 'skipped' })
-    expect(order).toEqual(['loadProfile'])
-    expect(order).not.toContain('fetch')
-    expect(order).not.toContain('insertAudit')
+    expect(await older.json()).toEqual({ ok: true, result: 'obsolete' })
+    expect(olderCalls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(false)
+    const olderRows = (olderProfile as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(olderRows).toHaveLength(1)
+    expect(olderRows[0]).toMatchObject({
+      eventKey: 'application_resubmitted:2',
+      submissionVersion: 2,
+      processingState: 'obsolete',
+    })
+
+    const newerProfile = createMemoryAuditLease()
+    const newerCalls: RecordedRequest[] = []
+    const newer = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({ application_submission_version: 1 })),
+      createDeps({
+        audit: newerProfile,
+        calls: newerCalls,
+        profile: loadedProfile({ application_submission_version: 2 }),
+      })
+    )
+    expect(await newer.json()).toEqual({ ok: true, result: 'obsolete' })
+    expect(newerCalls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(false)
+    const newerRows = (newerProfile as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(newerRows).toHaveLength(1)
+    expect(newerRows[0]).toMatchObject({
+      eventKey: 'application_submitted:1',
+      submissionVersion: 1,
+      processingState: 'obsolete',
+    })
+    expect(newerRows.some((row) => row.eventKey.includes(':2'))).toBe(false)
   })
 
   it('skips rejected → submitted without an intervening draft', async () => {
@@ -1281,9 +1333,10 @@ describe('application status email recovery', () => {
     expect(
       transitions.some(
         (row) =>
-          row.processingState === 'contact_sync_pending' && row.attemptCount === 1
+          row.processingState === 'contact_sync_pending' && row.attemptCount === 2
       )
     ).toBe(true)
+    expect(transitions.at(-1)?.attemptCount).toBe(2)
     expect(transitions.at(-1)?.processingState).toBe('event_accepted')
   })
 
@@ -1364,7 +1417,7 @@ describe('application status email recovery', () => {
     expect(events).toHaveLength(1)
     expect(events[0]?.body).toEqual({
       event: 'application_submitted',
-      email: 'second@example.com',
+      email: FETCHED_EMAIL,
     })
     const rows = (audit as AuditLease & { rows: EmailAttempt[] }).rows
     expect(rows.find((row) => row.id === ROW_A)?.processingState).toBe(
@@ -1384,7 +1437,7 @@ describe('application status email recovery', () => {
         profile: loadedProfile({ application_submission_version: 2 }),
       })
     )
-    expect(await versionMismatch.json()).toEqual({ ok: true, result: 'skipped' })
+    expect(await versionMismatch.json()).toEqual({ ok: true, result: 'obsolete' })
     expect(versionCalls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(
       false
     )
@@ -1406,7 +1459,6 @@ describe('application status email recovery', () => {
       createDeps({
         calls: changedBeforeSend,
         profiles: [
-          loadedProfile(),
           loadedProfile(),
           loadedProfile({ application_submission_version: 2 }),
         ],
@@ -1443,9 +1495,15 @@ describe('application status email recovery', () => {
     worker.loadProfile = async () => {
       loads += 1
       if (loads === 1) {
-        return loadedProfile({ application_submission_version: 2 })
+        return {
+          status: 'found',
+          profile: loadedProfile({ application_submission_version: 2 }),
+        }
       }
-      return loadedProfile({ application_status: 'rejected' })
+      return {
+        status: 'found',
+        profile: loadedProfile({ application_status: 'rejected' }),
+      }
     }
     const batch = await handleApplicationStatusEmailRequest(retryRequest(), worker)
     expect(await batch.json()).toEqual({ ok: true, result: 'retry_batch' })
@@ -1531,7 +1589,7 @@ describe('application status email recovery', () => {
       processingState: 'event_accepted',
       deliveryStatus: 'unconfirmed',
       resendEmailId: null,
-      attemptCount: 1,
+      attemptCount: 2,
     })
 
     const again = await handleApplicationStatusEmailRequest(
@@ -1568,10 +1626,6 @@ describe('application status email recovery', () => {
         request: jsonRequest(
           webhookPayload({ previousStatus: 'submitted', nextStatus: 'submitted' })
         ),
-        status: 200,
-      },
-      {
-        request: jsonRequest(webhookPayload({ application_submission_version: 2 })),
         status: 200,
       },
     ]
@@ -1632,6 +1686,354 @@ describe('application status email recovery', () => {
     expect(await audit.acquireById(ROW_A, 30)).toBeNull()
     expect(await audit.acquireNext(30)).toBeNull()
   })
+
+  it('schedules a retry when a profile reload fails and does not call Resend', async () => {
+    const calls: RecordedRequest[] = []
+    const logs: string[] = []
+    const audit = createMemoryAuditLease(() => new Date(START))
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        audit,
+        calls,
+        logs,
+        profiles: ['error'],
+      })
+    )
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: 'failed',
+      result: CONTACT_SYNC_FAILED,
+    })
+    expect(logs).toContain('profile_load_failed')
+    expect(logs).not.toContain('obsolete')
+    const rows = (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      processingState: CONTACT_SYNC_FAILED,
+      errorMessage: 'profile_load_failed',
+      attemptCount: 1,
+      nextAttemptAt: new Date(START + 60_000).toISOString(),
+    })
+    expect(calls.some((call) => call.url.startsWith('https://api.resend.com'))).toBe(
+      false
+    )
+
+    const workerCalls: RecordedRequest[] = []
+    const workerAudit = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      workerAudit,
+      dueRow({ id: ROW_A, eventKey: 'application_submitted:1' })
+    )
+    const worker = await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({
+        audit: workerAudit,
+        calls: workerCalls,
+        profile: 'error',
+      })
+    )
+    expect(await worker.json()).toEqual({ ok: true, result: 'retry_batch' })
+    const workerRows = (workerAudit as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(workerRows[0]).toMatchObject({
+      processingState: CONTACT_SYNC_FAILED,
+      errorMessage: 'profile_load_failed',
+      attemptCount: 1,
+      nextAttemptAt: new Date(START + 60_000).toISOString(),
+    })
+    expect(
+      workerCalls.some((call) => call.url.startsWith('https://api.resend.com'))
+    ).toBe(false)
+  })
+
+  it('recovers one event after the initial profile load fails', async () => {
+    let nowMs = START
+    const audit = createMemoryAuditLease(() => new Date(nowMs))
+    const calls: RecordedRequest[] = []
+    const failed = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        audit,
+        calls,
+        profiles: ['error', loadedProfile(), loadedProfile()],
+      })
+    )
+    expect(failed.status).toBe(200)
+    expect(await failed.json()).toEqual({
+      ok: false,
+      error: 'failed',
+      result: CONTACT_SYNC_FAILED,
+    })
+    const rows = () => (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]).toMatchObject({
+      applicationId: PROFILE_ID,
+      eventKey: 'application_submitted:1',
+      submissionVersion: 1,
+      resendEventName: 'application_submitted',
+      recipientEmail: null,
+      processingState: CONTACT_SYNC_FAILED,
+      errorMessage: 'profile_load_failed',
+      attemptCount: 1,
+      nextAttemptAt: new Date(START + 60_000).toISOString(),
+    })
+    expect(rows()[0]?.recipientEmail).not.toBe(WEBHOOK_EMAIL)
+    expect(calls.some((call) => call.url.startsWith('https://api.resend.com'))).toBe(
+      false
+    )
+
+    nowMs = START + 60_000
+    const recovered = await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({ audit, calls })
+    )
+    expect(await recovered.json()).toEqual({ ok: true, result: 'retry_batch' })
+    const events = calls.filter((call) => call.url === RESEND_EVENTS_URL)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.body).toEqual({
+      event: 'application_submitted',
+      email: FETCHED_EMAIL,
+    })
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]).toMatchObject({
+      eventKey: 'application_submitted:1',
+      submissionVersion: 1,
+      recipientEmail: FETCHED_EMAIL,
+      processingState: 'event_accepted',
+      attemptCount: 2,
+    })
+
+    await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({ audit, calls })
+    )
+    expect(calls.filter((call) => call.url === RESEND_EVENTS_URL)).toHaveLength(1)
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('marks a definitively absent or superseded profile obsolete', async () => {
+    const absentCalls: RecordedRequest[] = []
+    const absentAudit = createMemoryAuditLease(() => new Date(START))
+    const absentWebhook = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({ audit: absentAudit, calls: absentCalls, profile: null })
+    )
+    expect(await absentWebhook.json()).toEqual({ ok: true, result: 'obsolete' })
+    expect((absentAudit as AuditLease & { rows: EmailAttempt[] }).rows).toMatchObject([
+      {
+        eventKey: 'application_submitted:1',
+        submissionVersion: 1,
+        processingState: 'obsolete',
+        recipientEmail: null,
+      },
+    ])
+    expect(absentCalls).toHaveLength(0)
+
+    const ownedAbsent = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      ownedAbsent,
+      dueRow({ id: ROW_A, eventKey: 'application_submitted:1' })
+    )
+    const ownedCalls: RecordedRequest[] = []
+    await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({ audit: ownedAbsent, calls: ownedCalls, profile: null })
+    )
+    expect(
+      (ownedAbsent as AuditLease & { rows: EmailAttempt[] }).rows[0]
+    ).toMatchObject({
+      processingState: 'obsolete',
+      nextAttemptAt: null,
+      attemptCount: 1,
+    })
+    expect(ownedCalls).toHaveLength(0)
+
+    const superseded = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      superseded,
+      dueRow({ id: ROW_B, eventKey: 'application_submitted:1' })
+    )
+    await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({
+        audit: superseded,
+        profile: loadedProfile({ application_status: 'rejected' }),
+      })
+    )
+    expect(
+      (superseded as AuditLease & { rows: EmailAttempt[] }).rows[0]
+    ).toMatchObject({
+      processingState: 'obsolete',
+      nextAttemptAt: null,
+    })
+  })
+
+  function tightenPreSendLease(audit: AuditLease, budgetMs: number) {
+    const until = new Date(
+      Date.now() + PRE_SEND_PERSIST_MARGIN_MS + budgetMs
+    ).toISOString()
+    const apply = (row: EmailAttempt | null) => {
+      if (!row) return row
+      row.claimedUntil = until
+      const stored = (audit as AuditLease & { rows: EmailAttempt[] }).rows.find(
+        (item) => item.id === row.id
+      )
+      if (stored) stored.claimedUntil = until
+      return row
+    }
+    const acquireById = audit.acquireById.bind(audit)
+    const acquireNext = audit.acquireNext.bind(audit)
+    audit.acquireById = async (id, seconds) => apply(await acquireById(id, seconds))
+    audit.acquireNext = async (seconds) => apply(await acquireNext(seconds))
+  }
+
+  it('stops a hanging contact body inside the pre-send budget', async () => {
+    const audit = createMemoryAuditLease()
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_A,
+        eventKey: 'application_submitted:1',
+        nextAttemptAt: new Date(Date.now() - 1000).toISOString(),
+      })
+    )
+    tightenPreSendLease(audit, 300)
+    let rejectPull: (error: unknown) => void = () => undefined
+    const calls: RecordedRequest[] = []
+    const started = Date.now()
+    const response = await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({
+        audit,
+        calls,
+        contactFetch: () => {
+          const stream = new ReadableStream({
+            pull() {
+              return new Promise((_resolve, reject) => {
+                rejectPull = reject
+              })
+            },
+            cancel() {
+              rejectPull(new DOMException('The operation was aborted.', 'AbortError'))
+            },
+          })
+          return new Response(stream, {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        },
+      })
+    )
+    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(await response.json()).toEqual({ ok: true, result: 'retry_batch' })
+    const rows = (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(rows[0]).toMatchObject({
+      processingState: CONTACT_SYNC_FAILED,
+      attemptCount: 1,
+    })
+    expect(rows[0]?.nextAttemptAt).not.toBeNull()
+    expect(calls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(false)
+  })
+
+  it('stops a contact call that never returns headers inside the pre-send budget', async () => {
+    const audit = createMemoryAuditLease()
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_A,
+        eventKey: 'application_submitted:1',
+        nextAttemptAt: new Date(Date.now() - 1000).toISOString(),
+      })
+    )
+    tightenPreSendLease(audit, 300)
+    const started = Date.now()
+    const calls: RecordedRequest[] = []
+    const response = await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({
+        audit,
+        calls,
+        contactFetch: () => new Promise(() => undefined),
+      })
+    )
+    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(await response.json()).toEqual({ ok: true, result: 'retry_batch' })
+    expect(
+      (audit as AuditLease & { rows: EmailAttempt[] }).rows[0]
+    ).toMatchObject({
+      processingState: CONTACT_SYNC_FAILED,
+      attemptCount: 1,
+    })
+    expect(calls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(false)
+  })
+
+  it('counts lease expiry toward the five-attempt cap and fences stale owners', async () => {
+    const audit = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      audit,
+      dueRow({ id: ROW_A, eventKey: 'application_submitted:1' })
+    )
+    const rows = () => (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    let previousToken: string | null = null
+    for (let expected = 1; expected <= 5; expected += 1) {
+      const leased = await audit.acquireById(ROW_A, 30)
+      expect(leased?.attemptCount).toBe(expected)
+      if (expected < 5) expect(leased?.nextAttemptAt).not.toBeNull()
+      else expect(leased?.nextAttemptAt).toBeNull()
+      previousToken = leased?.claimToken ?? null
+      audit.expireLeases()
+    }
+    expect(await audit.acquireById(ROW_A, 30)).toBeNull()
+    expect(await audit.acquireNext(30)).toBeNull()
+    expect(rows()[0]).toMatchObject({
+      attemptCount: 5,
+      nextAttemptAt: null,
+      processingState: 'contact_sync_pending',
+    })
+
+    const stale = await audit.transition({
+      id: ROW_A,
+      claimToken: previousToken ?? '',
+      expectedState: 'contact_sync_pending',
+      nextState: 'contact_sync_failed',
+      attemptCount: 1,
+      nextAttemptAt: new Date(START).toISOString(),
+      errorMessage: CONTACT_SYNC_FAILED,
+      deliveryStatus: 'queued',
+      resendEmailId: null,
+      providerEvent: { category: CONTACT_SYNC_FAILED },
+      leaseSeconds: null,
+      clearLease: true,
+    })
+    expect(stale).toBeNull()
+    expect(rows()[0]?.attemptCount).toBe(5)
+
+    const fresh = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      fresh,
+      dueRow({ id: ROW_B, eventKey: 'application_submitted:1', attemptCount: 0 })
+    )
+    const owner = await fresh.acquireById(ROW_B, 30)
+    expect(owner?.attemptCount).toBe(1)
+    const rewritten = await fresh.transition({
+      id: ROW_B,
+      claimToken: owner?.claimToken ?? '',
+      expectedState: 'contact_sync_pending',
+      nextState: 'contact_sync_failed',
+      attemptCount: 2,
+      nextAttemptAt: null,
+      errorMessage: CONTACT_SYNC_FAILED,
+      deliveryStatus: 'queued',
+      resendEmailId: null,
+      providerEvent: { category: CONTACT_SYNC_FAILED },
+      leaseSeconds: null,
+      clearLease: true,
+    })
+    expect(rewritten).toBeNull()
+    expect((fresh as AuditLease & { rows: EmailAttempt[] }).rows[0]?.attemptCount).toBe(
+      1
+    )
+  })
 })
 
 const FORBIDDEN_AUDIT_COLUMNS = [
@@ -1656,7 +2058,7 @@ describe('production application email lease RPC payloads', () => {
       submission_version: 1,
       processing_state: state,
       claim_token: token,
-      claimed_until: '2026-10-07T17:00:30.000Z',
+      claimed_until: new Date(Date.now() + 30_000).toISOString(),
       attempt_count: 0,
       next_attempt_at:
         state === 'contact_sync_pending' ? '2026-10-07T17:00:00.000Z' : null,
@@ -1676,8 +2078,10 @@ describe('production application email lease RPC payloads', () => {
     resendBody?: unknown
     resendThrow?: boolean
     restBodies?: Record<string, unknown>[]
+    profileResponses?: Response[]
   }) {
     const restBodies = options?.restBodies ?? []
+    const profileResponses = options?.profileResponses
     return createProductionDeps(
       (name) =>
         ({
@@ -1691,6 +2095,8 @@ describe('production application email lease RPC payloads', () => {
         const method = (init?.method ?? 'GET').toUpperCase()
         if (url.includes('/rest/v1/profiles')) {
           restBodies.push({ method, url, body: null })
+          const scripted = profileResponses?.shift()
+          if (scripted) return scripted
           return new Response(
             JSON.stringify([
               {
@@ -1720,7 +2126,23 @@ describe('production application email lease RPC payloads', () => {
           }
           if (url.endsWith('/acquire_application_email_lease')) {
             return new Response(
-              JSON.stringify({ row: auditRow('contact_sync_pending', claimToken) }),
+              JSON.stringify({
+                row: {
+                  ...auditRow('contact_sync_pending', claimToken),
+                  recipient_email: null,
+                },
+              }),
+              { status: 200 }
+            )
+          }
+          if (url.endsWith('/assign_application_email_recipient')) {
+            return new Response(
+              JSON.stringify({
+                row: {
+                  ...auditRow('contact_sync_pending', claimToken),
+                  recipient_email: body.p_recipient_email,
+                },
+              }),
               { status: 200 }
             )
           }
@@ -1784,7 +2206,7 @@ describe('production application email lease RPC payloads', () => {
     )?.body as Record<string, unknown>
     expect(insert).toEqual({
       p_application_id: PROFILE_ID,
-      p_recipient_email: FETCHED_EMAIL,
+      p_recipient_email: null,
       p_event_key: 'application_submitted:1',
       p_application_status: 'submitted',
       p_resend_event_name: 'application_submitted',
@@ -1861,5 +2283,98 @@ describe('production application email lease RPC payloads', () => {
     for (const column of FORBIDDEN_AUDIT_COLUMNS) {
       expect(JSON.stringify(unknown)).not.toContain(column)
     }
+  })
+
+  it('retries a failed profile response and obsoletes only an empty lookup', async () => {
+    const failedBodies: Record<string, unknown>[] = []
+    const failedCalls: string[] = []
+    const failed = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createProductionDeps(
+        (name) =>
+          ({
+            APPLICATION_STATUS_WEBHOOK_SECRET: WEBHOOK_SECRET,
+            RESEND_API_KEY: RESEND_KEY,
+            SUPABASE_URL: supabaseUrl,
+            SUPABASE_SERVICE_ROLE_KEY: serviceKey,
+          })[name],
+        async (input, init) => {
+          const url = String(input)
+          failedCalls.push(url)
+          if (url.includes('/rest/v1/profiles')) {
+            return new Response('unavailable', { status: 500 })
+          }
+          return productionDeps({ restBodies: failedBodies }).fetch(input, init)
+        }
+      )
+    )
+    expect(await failed.json()).toMatchObject({ result: CONTACT_SYNC_FAILED })
+    const failure = failedBodies.find(
+      (row) =>
+        String(row.url).includes('transition_application_email_attempt') &&
+        (row.body as { p_error_message?: string }).p_error_message ===
+          'profile_load_failed'
+    )
+    expect(failure).toBeTruthy()
+    expect(failedCalls.some((url) => url === RESEND_EVENTS_URL)).toBe(false)
+
+    const absentBodies: Record<string, unknown>[] = []
+    const absentCalls: string[] = []
+    const absent = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createProductionDeps(
+        (name) =>
+          ({
+            APPLICATION_STATUS_WEBHOOK_SECRET: WEBHOOK_SECRET,
+            RESEND_API_KEY: RESEND_KEY,
+            SUPABASE_URL: supabaseUrl,
+            SUPABASE_SERVICE_ROLE_KEY: serviceKey,
+          })[name],
+        async (input, init) => {
+          const url = String(input)
+          absentCalls.push(url)
+          if (url.includes('/rest/v1/profiles')) {
+            return new Response(JSON.stringify([]), { status: 200 })
+          }
+          return productionDeps({ restBodies: absentBodies }).fetch(input, init)
+        }
+      )
+    )
+    expect(await absent.json()).toMatchObject({ result: 'obsolete' })
+    expect(absentCalls.some((url) => url === RESEND_EVENTS_URL)).toBe(false)
+
+    const invalidBodies: Record<string, unknown>[] = []
+    const invalidCalls: string[] = []
+    const invalid = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createProductionDeps(
+        (name) =>
+          ({
+            APPLICATION_STATUS_WEBHOOK_SECRET: WEBHOOK_SECRET,
+            RESEND_API_KEY: RESEND_KEY,
+            SUPABASE_URL: supabaseUrl,
+            SUPABASE_SERVICE_ROLE_KEY: serviceKey,
+          })[name],
+        async (input, init) => {
+          const url = String(input)
+          invalidCalls.push(url)
+          if (url.includes('/rest/v1/profiles')) {
+            return new Response(JSON.stringify({ error: 'not-an-array' }), {
+              status: 200,
+            })
+          }
+          return productionDeps({ restBodies: invalidBodies }).fetch(input, init)
+        }
+      )
+    )
+    expect(await invalid.json()).toMatchObject({ result: CONTACT_SYNC_FAILED })
+    expect(
+      invalidBodies.some(
+        (row) =>
+          (row.body as { p_error_message?: string } | undefined)?.p_error_message ===
+          'profile_load_failed'
+      )
+    ).toBe(true)
+    expect(invalidCalls.some((url) => url === RESEND_EVENTS_URL)).toBe(false)
   })
 })

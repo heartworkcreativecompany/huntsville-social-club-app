@@ -3,13 +3,20 @@
  *
  * next_attempt_at null means the row is not scheduled. It is never "due now".
  * Initial pending work sets next_attempt_at to the current time.
- * Exhausted work (attempt_count >= 5) sets next_attempt_at null and cannot
- * be acquired. Historic, obsolete, in-flight, accepted, and unknown rows
- * also use null and are not acquisition candidates.
+ * Acquisition increments attempt_count. The acquisition that reaches 5 also
+ * clears next_attempt_at, so a crash at the cap is already unscheduled.
+ * Owner transitions keep that count and cannot raise it. Historic, obsolete,
+ * in-flight, accepted, and unknown rows are not acquisition candidates.
+ *
+ * Pre-send HTTP must finish before PRE_SEND_PERSIST_MARGIN_MS of the lease
+ * remains, so the owner can still write the result.
  */
 
 export const MAX_STATUS_EMAIL_ATTEMPTS = 5
 export const PRE_SEND_LEASE_SECONDS = 30
+export const PRE_SEND_PERSIST_MARGIN_MS = 5_000
+export const PROFILE_HTTP_TIMEOUT_MS = 4_000
+export const CONTACT_HTTP_TIMEOUT_MS = 4_000
 export const SUBMIT_LEASE_SECONDS = 20
 export const RETRY_BATCH_LIMIT = 25
 export const CONTACT_LOCK_DELAY_MS = 250
@@ -45,7 +52,7 @@ const TERMINAL_STATES: readonly ProcessingState[] = [
 export type EmailAttempt = {
   id: string
   applicationId: string
-  recipientEmail: string
+  recipientEmail: string | null
   eventKey: string
   applicationStatus: string
   resendEventName: string
@@ -63,11 +70,17 @@ export type EmailAttempt = {
 
 export type InsertPendingInput = {
   applicationId: string
-  recipientEmail: string
+  recipientEmail: string | null
   eventKey: string
   applicationStatus: string
   resendEventName: string
   submissionVersion: number
+}
+
+export type AssignRecipientInput = {
+  id: string
+  claimToken: string
+  recipientEmail: string
 }
 
 export type TransitionInput = {
@@ -93,6 +106,7 @@ export type AuditLease = {
   acquireById: (id: string, leaseSeconds: number) => Promise<EmailAttempt | null>
   acquireNext: (leaseSeconds: number) => Promise<EmailAttempt | null>
   transition: (input: TransitionInput) => Promise<EmailAttempt | null>
+  assignRecipient: (input: AssignRecipientInput) => Promise<EmailAttempt | null>
   sweepExpired: (limit: number) => Promise<number>
   expireLeases: () => void
 }
@@ -202,6 +216,10 @@ export function createMemoryAuditLease(now: () => Date = () => new Date()): Audi
     row.claimedUntil = new Date(
       now().getTime() + leaseSeconds * 1000
     ).toISOString()
+    row.attemptCount += 1
+    if (row.attemptCount >= MAX_STATUS_EMAIL_ATTEMPTS) {
+      row.nextAttemptAt = null
+    }
     return { ...row, providerEvent: { ...row.providerEvent } }
   }
 
@@ -254,6 +272,7 @@ export function createMemoryAuditLease(now: () => Date = () => new Date()): Audi
       if (!row) return null
       if (row.claimToken !== input.claimToken) return null
       if (row.processingState !== input.expectedState) return null
+      if (row.attemptCount !== input.attemptCount) return null
       if (!leaseStillHeld(row, now().getTime())) return null
       row.processingState = input.nextState
       row.attemptCount = input.attemptCount
@@ -270,6 +289,16 @@ export function createMemoryAuditLease(now: () => Date = () => new Date()): Audi
           now().getTime() + input.leaseSeconds * 1000
         ).toISOString()
       }
+      return { ...row, providerEvent: { ...row.providerEvent } }
+    },
+    async assignRecipient(input) {
+      const row = rows.find((item) => item.id === input.id)
+      if (!row) return null
+      if (row.claimToken !== input.claimToken) return null
+      if (row.processingState !== 'contact_sync_pending') return null
+      if (!leaseStillHeld(row, now().getTime())) return null
+      if (!input.recipientEmail.includes('@')) return null
+      row.recipientEmail = input.recipientEmail
       return { ...row, providerEvent: { ...row.providerEvent } }
     },
     async sweepExpired(limit) {

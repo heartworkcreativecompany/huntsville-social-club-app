@@ -25,6 +25,12 @@ alter table public.application_email_log
 alter table public.application_email_log
   add column if not exists resend_event_name text;
 
+-- The webhook persists the event before the profile reload. The confirmed
+-- recipient is written later, under the lease, and is never taken from the
+-- webhook body. Existing rows already have an address.
+alter table public.application_email_log
+  alter column recipient_email drop not null;
+
 update public.application_email_log
 set
   processing_state = 'historic',
@@ -79,7 +85,7 @@ alter table public.application_email_log
 
 alter table public.application_email_log
   add constraint application_email_log_attempt_count_check
-  check (attempt_count >= 0);
+  check (attempt_count >= 0 and attempt_count <= 5);
 
 alter table public.application_email_log
   drop constraint if exists application_email_log_schedule_check;
@@ -237,10 +243,17 @@ begin
     raise exception 'invalid lease';
   end if;
 
+  -- Count this attempt in the same update that installs the new owner.
+  -- Reaching 5 clears the schedule so expiry cannot start a sixth attempt.
   update public.application_email_log
   set
     claim_token = gen_random_uuid(),
-    claimed_until = now() + make_interval(secs => p_lease_seconds)
+    claimed_until = now() + make_interval(secs => p_lease_seconds),
+    attempt_count = attempt_count + 1,
+    next_attempt_at = case
+      when attempt_count + 1 >= 5 then null
+      else next_attempt_at
+    end
   where id = p_id
     and processing_state = any (
       array[
@@ -304,7 +317,12 @@ begin
   update public.application_email_log
   set
     claim_token = gen_random_uuid(),
-    claimed_until = now() + make_interval(secs => p_lease_seconds)
+    claimed_until = now() + make_interval(secs => p_lease_seconds),
+    attempt_count = attempt_count + 1,
+    next_attempt_at = case
+      when attempt_count + 1 >= 5 then null
+      else next_attempt_at
+    end
   where id = chosen
     and processing_state = any (
       array[
@@ -401,6 +419,7 @@ begin
   where id = p_id
     and claim_token = p_claim_token
     and processing_state = p_expected_state
+    and attempt_count = p_attempt_count
     and claimed_until > now()
   returning * into updated;
 
@@ -452,14 +471,49 @@ begin
 end;
 $$;
 
+create or replace function public.assign_application_email_recipient(
+  p_id uuid,
+  p_claim_token uuid,
+  p_recipient_email text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated public.application_email_log;
+begin
+  if p_recipient_email is null or position('@' in p_recipient_email) = 0 then
+    return jsonb_build_object('row', null);
+  end if;
+
+  update public.application_email_log
+  set recipient_email = p_recipient_email
+  where id = p_id
+    and claim_token = p_claim_token
+    and processing_state = 'contact_sync_pending'
+    and claimed_until > now()
+  returning * into updated;
+
+  if updated.id is null then
+    return jsonb_build_object('row', null);
+  end if;
+
+  return jsonb_build_object('row', to_jsonb(updated));
+end;
+$$;
+
 revoke all on function public.insert_application_email_pending(uuid, text, text, text, text, integer) from public, anon, authenticated;
 revoke all on function public.acquire_application_email_lease(uuid, integer) from public, anon, authenticated;
 revoke all on function public.acquire_next_application_email_lease(integer) from public, anon, authenticated;
 revoke all on function public.transition_application_email_attempt(uuid, uuid, text, text, integer, timestamptz, text, text, text, jsonb, integer, boolean) from public, anon, authenticated;
 revoke all on function public.sweep_expired_event_submissions(integer) from public, anon, authenticated;
+revoke all on function public.assign_application_email_recipient(uuid, uuid, text) from public, anon, authenticated;
 
 grant execute on function public.insert_application_email_pending(uuid, text, text, text, text, integer) to service_role;
 grant execute on function public.acquire_application_email_lease(uuid, integer) to service_role;
 grant execute on function public.acquire_next_application_email_lease(integer) to service_role;
 grant execute on function public.transition_application_email_attempt(uuid, uuid, text, text, integer, timestamptz, text, text, text, jsonb, integer, boolean) to service_role;
 grant execute on function public.sweep_expired_event_submissions(integer) to service_role;
+grant execute on function public.assign_application_email_recipient(uuid, uuid, text) to service_role;

@@ -7,15 +7,21 @@
  *
  * Idempotency: event_key is `${resendEventName}:${applicationSubmissionVersion}`.
  * Version is incremented in Postgres only on draft|needs_info → submitted.
- * The audit row is inserted before any Resend call. Pre-send failures stay
- * on that row and can be retried until attempt 5. Event submission is not
- * retried after it has been attempted. next_attempt_at null is not due work.
+ * The audit row is inserted before any Resend call. Acquiring that row counts
+ * one attempt. Pre-send failures keep the acquired count and can be retried
+ * until attempt 5. A profile reload that fails does not make the event
+ * obsolete. Event submission is not retried after it has been attempted.
+ * next_attempt_at null is not due work.
  */
 
 import {
+  CONTACT_HTTP_TIMEOUT_MS,
   CONTACT_LOCK_DELAY_MS,
   EVENT_HTTP_TIMEOUT_MS,
+  MAX_STATUS_EMAIL_ATTEMPTS,
   PRE_SEND_LEASE_SECONDS,
+  PRE_SEND_PERSIST_MARGIN_MS,
+  PROFILE_HTTP_TIMEOUT_MS,
   RETRY_BATCH_LIMIT,
   RETRY_SECRET_HEADER,
   SUBMIT_LEASE_SECONDS,
@@ -68,9 +74,15 @@ export type LoadedProfile = {
   application_submission_version: number | null
 }
 
+/** `absent` is a successful empty lookup. `error` is not proof the profile is gone. */
+export type ProfileLoadResult =
+  | { status: 'found'; profile: LoadedProfile }
+  | { status: 'absent' }
+  | { status: 'error' }
+
 export type AuditClaim = {
   applicationId: string
-  recipientEmail: string
+  recipientEmail: string | null
   eventKey: string
   applicationStatus: ApplicationStatus
   eventName: ResendEventName | 'application_resubmitted'
@@ -92,7 +104,7 @@ export type AuditPatch = {
 export type HandlerDeps = {
   getEnv: (name: string) => string | undefined
   fetch: typeof fetch
-  loadProfile: (id: string) => Promise<LoadedProfile | null>
+  loadProfile: (id: string, signal?: AbortSignal) => Promise<ProfileLoadResult>
   audit: AuditLease
   log: (message: string) => void
   delay?: (ms: number) => Promise<void>
@@ -157,7 +169,25 @@ function resendHeaders(apiKey: string, jsonBody: boolean): HeadersInit {
   }
 }
 
-async function drain(response: Response): Promise<void> {
+function budgetTimeoutMs(
+  nowMs: number,
+  deadlineMs: number,
+  capMs: number
+): number | null {
+  const remaining = deadlineMs - nowMs
+  if (remaining <= 0) return null
+  return Math.min(capMs, remaining)
+}
+
+/** Work must end this long before the lease so the result can be written. */
+export function preSendWorkDeadlineMs(row: EmailAttempt, nowMs: number): number {
+  const leaseEnd =
+    row.claimedUntil == null ? Number.NaN : Date.parse(row.claimedUntil)
+  if (!Number.isFinite(leaseEnd)) return nowMs
+  return leaseEnd - PRE_SEND_PERSIST_MARGIN_MS
+}
+
+async function cancelBody(response: Response): Promise<void> {
   try {
     await response.body?.cancel()
   } catch {
@@ -165,16 +195,81 @@ async function drain(response: Response): Promise<void> {
   }
 }
 
-async function readJson(response: Response): Promise<unknown> {
+async function readBoundedText(
+  response: Response,
+  signal: AbortSignal
+): Promise<string> {
+  if (!response.body) return ''
+  const reader = response.body.getReader()
+  const abortRead = () => {
+    reader.cancel().catch(() => undefined)
+  }
+  if (signal.aborted) {
+    abortRead()
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
+  signal.addEventListener('abort', abortRead, { once: true })
+  const chunks: Uint8Array[] = []
   try {
-    return await response.json()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) chunks.push(value)
+    }
+  } finally {
+    signal.removeEventListener('abort', abortRead)
+  }
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
+  const merged = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(merged)
+}
+
+async function readBoundedJson(
+  response: Response,
+  signal: AbortSignal
+): Promise<unknown> {
+  const text = await readBoundedText(response, signal)
+  if (!text) return null
+  try {
+    return JSON.parse(text)
   } catch {
     return null
   }
 }
 
-async function providerErrorName(response: Response): Promise<string | null> {
-  const parsed = await readJson(response)
+type HttpBudget = {
+  now: () => number
+  deadlineMs: number
+}
+
+async function fetchBounded(
+  fetchImpl: typeof fetch,
+  url: string,
+  init: RequestInit,
+  budget: HttpBudget,
+  capMs: number
+): Promise<{ response: Response; signal: AbortSignal } | null> {
+  const timeoutMs = budgetTimeoutMs(budget.now(), budget.deadlineMs, capMs)
+  if (timeoutMs == null) return null
+  const signal = AbortSignal.timeout(timeoutMs)
+  try {
+    const response = await fetchImpl(url, { ...init, signal })
+    return { response, signal }
+  } catch {
+    return null
+  }
+}
+
+async function providerErrorName(
+  response: Response,
+  signal: AbortSignal
+): Promise<string | null> {
+  const parsed = await readBoundedJson(response, signal)
   if (!parsed || typeof parsed !== 'object') return null
   const name = (parsed as { name?: unknown }).name
   return typeof name === 'string' ? name : null
@@ -188,26 +283,32 @@ type ContactLookup =
 async function lookupContact(
   fetchImpl: typeof fetch,
   apiKey: string,
-  email: string
+  email: string,
+  budget: HttpBudget
 ): Promise<ContactLookup> {
-  let response: Response
-  try {
-    response = await fetchImpl(contactUrl(email), {
-      method: 'GET',
-      headers: resendHeaders(apiKey, false),
-    })
-  } catch {
-    return { status: 'error' }
-  }
+  const fetched = await fetchBounded(
+    fetchImpl,
+    contactUrl(email),
+    { method: 'GET', headers: resendHeaders(apiKey, false) },
+    budget,
+    CONTACT_HTTP_TIMEOUT_MS
+  )
+  if (!fetched) return { status: 'error' }
+  const { response, signal } = fetched
   if (response.status === 404) {
-    await drain(response)
+    await cancelBody(response)
     return { status: 'missing' }
   }
   if (!response.ok) {
-    await drain(response)
+    await cancelBody(response)
     return { status: 'error' }
   }
-  const parsed = await readJson(response)
+  let parsed: unknown
+  try {
+    parsed = await readBoundedJson(response, signal)
+  } catch {
+    return { status: 'error' }
+  }
   const firstName =
     parsed && typeof parsed === 'object'
       ? usableStoredFirstName((parsed as { first_name?: unknown }).first_name)
@@ -221,25 +322,44 @@ async function patchContactOnce(
   fetchImpl: typeof fetch,
   apiKey: string,
   email: string,
-  firstName: string
+  firstName: string,
+  budget: HttpBudget
 ): Promise<PatchResult> {
-  let response: Response
-  try {
-    response = await fetchImpl(contactUrl(email), {
+  const fetched = await fetchBounded(
+    fetchImpl,
+    contactUrl(email),
+    {
       method: 'PATCH',
       headers: resendHeaders(apiKey, true),
       body: JSON.stringify({ first_name: firstName }),
-    })
+    },
+    budget,
+    CONTACT_HTTP_TIMEOUT_MS
+  )
+  if (!fetched) return 'failed'
+  const { response, signal } = fetched
+  if (response.ok) {
+    await cancelBody(response)
+    return 'ok'
+  }
+  let name: string | null
+  try {
+    name = await providerErrorName(response, signal)
   } catch {
     return 'failed'
   }
-  if (response.ok) {
-    await drain(response)
-    return 'ok'
-  }
-  const name = await providerErrorName(response)
   if (response.status === 409 && name === 'resource_locked') return 'locked'
   return 'failed'
+}
+
+async function delayWithinBudget(
+  delay: (ms: number) => Promise<void>,
+  budget: HttpBudget
+): Promise<boolean> {
+  const remaining = budget.deadlineMs - budget.now()
+  if (remaining <= 0) return false
+  await delay(Math.min(CONTACT_LOCK_DELAY_MS, remaining))
+  return budget.now() < budget.deadlineMs
 }
 
 async function patchContactFirstName(
@@ -247,16 +367,19 @@ async function patchContactFirstName(
   apiKey: string,
   email: string,
   firstName: string,
-  delay: (ms: number) => Promise<void>
+  delay: (ms: number) => Promise<void>,
+  budget: HttpBudget
 ): Promise<boolean> {
-  const first = await patchContactOnce(fetchImpl, apiKey, email, firstName)
+  const first = await patchContactOnce(fetchImpl, apiKey, email, firstName, budget)
   if (first === 'ok') return true
   if (first !== 'locked') return false
-  await delay(CONTACT_LOCK_DELAY_MS)
-  const lookup = await lookupContact(fetchImpl, apiKey, email)
+  if (!(await delayWithinBudget(delay, budget))) return false
+  const lookup = await lookupContact(fetchImpl, apiKey, email, budget)
   if (lookup.status === 'found' && lookup.firstName === firstName) return true
   if (lookup.status !== 'found') return false
-  return (await patchContactOnce(fetchImpl, apiKey, email, firstName)) === 'ok'
+  return (
+    (await patchContactOnce(fetchImpl, apiKey, email, firstName, budget)) === 'ok'
+  )
 }
 
 type CreateContactResult = 'created' | 'locked' | 'failed'
@@ -274,26 +397,35 @@ async function createContact(
   fetchImpl: typeof fetch,
   apiKey: string,
   email: string,
-  firstName: string
+  firstName: string,
+  budget: HttpBudget
 ): Promise<CreateContactResult> {
-  let response: Response
-  try {
-    response = await fetchImpl(RESEND_CONTACTS_URL, {
+  const fetched = await fetchBounded(
+    fetchImpl,
+    RESEND_CONTACTS_URL,
+    {
       method: 'POST',
       headers: resendHeaders(apiKey, true),
       body: JSON.stringify({
         email,
         first_name: firstName,
       }),
-    })
+    },
+    budget,
+    CONTACT_HTTP_TIMEOUT_MS
+  )
+  if (!fetched) return 'failed'
+  const { response, signal } = fetched
+  if (response.ok) {
+    await cancelBody(response)
+    return 'created'
+  }
+  let name: string | null
+  try {
+    name = await providerErrorName(response, signal)
   } catch {
     return 'failed'
   }
-  if (response.ok) {
-    await drain(response)
-    return 'created'
-  }
-  const name = await providerErrorName(response)
   if (response.status === 409 && name === 'resource_locked') return 'locked'
   return 'failed'
 }
@@ -307,10 +439,11 @@ async function ensureContactFirstName(
   apiKey: string,
   email: string,
   draft: unknown,
-  delay: (ms: number) => Promise<void>
+  delay: (ms: number) => Promise<void>,
+  budget: HttpBudget
 ): Promise<ContactSyncResult> {
   const explicitName = explicitFirstNameFromDraft(draft)
-  let lookup = await lookupContact(fetchImpl, apiKey, email)
+  let lookup = await lookupContact(fetchImpl, apiKey, email, budget)
   if (lookup.status === 'error') return { ok: false, reason: CONTACT_SYNC_FAILED }
 
   if (lookup.status === 'found') {
@@ -324,7 +457,8 @@ async function ensureContactFirstName(
       apiKey,
       email,
       explicitName,
-      delay
+      delay,
+      budget
     )
     return patched
       ? { ok: true }
@@ -333,13 +467,22 @@ async function ensureContactFirstName(
 
   if (!explicitName) return { ok: false, reason: MISSING_FIRST_NAME }
 
-  const created = await createContact(fetchImpl, apiKey, email, explicitName)
+  const created = await createContact(
+    fetchImpl,
+    apiKey,
+    email,
+    explicitName,
+    budget
+  )
   if (created === 'created') return { ok: true }
 
   // resource_locked is the documented retry-after-delay signal for contact writes.
   // One delayed re-read, then at most one more create or first_name patch.
-  if (created === 'locked') await delay(CONTACT_LOCK_DELAY_MS)
-  lookup = await lookupContact(fetchImpl, apiKey, email)
+  // The delay is inside the pre-send deadline, not a fresh 30s lease.
+  if (created === 'locked' && !(await delayWithinBudget(delay, budget))) {
+    return { ok: false, reason: CONTACT_SYNC_FAILED }
+  }
+  lookup = await lookupContact(fetchImpl, apiKey, email, budget)
   if (lookup.status === 'found') {
     if (lookup.firstName === explicitName) return { ok: true }
     const patched = await patchContactFirstName(
@@ -347,7 +490,8 @@ async function ensureContactFirstName(
       apiKey,
       email,
       explicitName,
-      delay
+      delay,
+      budget
     )
     return patched
       ? { ok: true }
@@ -356,9 +500,15 @@ async function ensureContactFirstName(
   if (lookup.status === 'error') return { ok: false, reason: CONTACT_SYNC_FAILED }
   if (created !== 'locked') return { ok: false, reason: CONTACT_SYNC_FAILED }
 
-  const retried = await createContact(fetchImpl, apiKey, email, explicitName)
+  const retried = await createContact(
+    fetchImpl,
+    apiKey,
+    email,
+    explicitName,
+    budget
+  )
   if (retried === 'created') return { ok: true }
-  lookup = await lookupContact(fetchImpl, apiKey, email)
+  lookup = await lookupContact(fetchImpl, apiKey, email, budget)
   if (lookup.status === 'found') {
     if (lookup.firstName === explicitName) return { ok: true }
     const patched = await patchContactFirstName(
@@ -366,7 +516,8 @@ async function ensureContactFirstName(
       apiKey,
       email,
       explicitName,
-      delay
+      delay,
+      budget
     )
     return patched
       ? { ok: true }
@@ -510,7 +661,10 @@ async function ensurePending(
     expectedState: row.processingState,
     nextState: 'contact_sync_pending',
     attemptCount: row.attemptCount,
-    nextAttemptAt: deps.audit.now().toISOString(),
+    nextAttemptAt:
+      row.attemptCount >= MAX_STATUS_EMAIL_ATTEMPTS
+        ? null
+        : deps.audit.now().toISOString(),
     errorMessage: null,
     deliveryStatus: 'queued',
     resendEmailId: null,
@@ -544,11 +698,15 @@ async function markObsolete(
 async function schedulePreSendFailure(
   deps: HandlerDeps,
   row: EmailAttempt,
-  reason: typeof CONTACT_SYNC_FAILED | typeof MISSING_FIRST_NAME
+  reason: typeof CONTACT_SYNC_FAILED | typeof MISSING_FIRST_NAME,
+  errorMessage: string = reason
 ): Promise<void> {
   if (!row.claimToken) return
-  const attemptCount = row.attemptCount + 1
-  const nextAttemptAt = retryNextAttemptAt(deps.audit.now().getTime(), attemptCount)
+  const attemptCount = row.attemptCount
+  const nextAttemptAt = retryNextAttemptAt(
+    deps.audit.now().getTime(),
+    attemptCount
+  )
   await deps.audit.transition({
     id: row.id,
     claimToken: row.claimToken,
@@ -556,10 +714,10 @@ async function schedulePreSendFailure(
     nextState: reason,
     attemptCount,
     nextAttemptAt,
-    errorMessage: reason,
+    errorMessage,
     deliveryStatus: 'queued',
     resendEmailId: null,
-    providerEvent: { category: reason },
+    providerEvent: { category: errorMessage },
     leaseSeconds: null,
     clearLease: true,
   })
@@ -592,6 +750,93 @@ async function recordEventOutcome(
   })
 }
 
+/**
+ * Maps the audit-clock remainder onto the wall clock. Tests can freeze the
+ * audit clock; the abort signal still ends when that remainder elapses.
+ */
+function httpBudgetFor(row: EmailAttempt, auditNowMs: number): HttpBudget | null {
+  const deadlineMs = preSendWorkDeadlineMs(row, auditNowMs)
+  const budgetMs = deadlineMs - auditNowMs
+  if (budgetMs <= 0) return null
+  const wallDeadline = Date.now() + budgetMs
+  return { now: () => Date.now(), deadlineMs: wallDeadline }
+}
+
+async function loadOwnedProfile(
+  deps: HandlerDeps,
+  applicationId: string,
+  budget: HttpBudget
+): Promise<ProfileLoadResult> {
+  const timeoutMs = budgetTimeoutMs(
+    budget.now(),
+    budget.deadlineMs,
+    PROFILE_HTTP_TIMEOUT_MS
+  )
+  if (timeoutMs == null) return { status: 'error' }
+  try {
+    return await deps.loadProfile(applicationId, AbortSignal.timeout(timeoutMs))
+  } catch {
+    return { status: 'error' }
+  }
+}
+
+async function settleOwnedProfile(
+  deps: HandlerDeps,
+  pending: EmailAttempt,
+  loaded: ProfileLoadResult
+): Promise<
+  | { ready: true; profile: LoadedProfile }
+  | { ready: false; response: JsonResponse }
+> {
+  if (loaded.status === 'error') {
+    await schedulePreSendFailure(
+      deps,
+      pending,
+      CONTACT_SYNC_FAILED,
+      'profile_load_failed'
+    )
+    deps.log('profile_load_failed')
+    return {
+      ready: false,
+      response: { ok: false, error: 'failed', result: CONTACT_SYNC_FAILED },
+    }
+  }
+  if (
+    loaded.status === 'absent' ||
+    !profileMatchesAttempt(loaded.profile, pending)
+  ) {
+    await markObsolete(deps, pending)
+    deps.log('obsolete')
+    return { ready: false, response: { ok: true, result: 'obsolete' } }
+  }
+  return { ready: true, profile: loaded.profile }
+}
+
+function usableRecipient(profile: LoadedProfile): string | null {
+  const email = profile.email?.trim() ?? ''
+  return email.includes('@') ? email : null
+}
+
+/** Writes the profile address onto the owned row. Does not change attempt_count. */
+async function rememberRecipient(
+  deps: HandlerDeps,
+  row: EmailAttempt,
+  profile: LoadedProfile
+): Promise<EmailAttempt | 'invalid' | 'lost'> {
+  const email = usableRecipient(profile)
+  if (!email) return 'invalid'
+  if (!row.claimToken) return 'lost'
+  if (row.recipientEmail === email) return row
+  const updated = await deps.audit.assignRecipient({
+    id: row.id,
+    claimToken: row.claimToken,
+    recipientEmail: email,
+  })
+  if (!updated?.claimToken || updated.recipientEmail !== email) return 'lost'
+  if (updated.attemptCount !== row.attemptCount) return 'lost'
+  return updated
+}
+
 async function processOwnedAttempt(
   deps: HandlerDeps,
   owned: EmailAttempt
@@ -601,16 +846,43 @@ async function processOwnedAttempt(
     return { ok: true, result: 'not_acquired' }
   }
 
-  const beforeSync = await deps.loadProfile(pending.applicationId)
-  if (!beforeSync || !profileMatchesAttempt(beforeSync, pending)) {
-    await markObsolete(deps, pending)
-    deps.log('obsolete')
-    return { ok: true, result: 'obsolete' }
+  const budget = httpBudgetFor(pending, deps.audit.now().getTime())
+  if (!budget) {
+    await schedulePreSendFailure(
+      deps,
+      pending,
+      CONTACT_SYNC_FAILED,
+      'profile_load_failed'
+    )
+    deps.log('profile_load_failed')
+    return { ok: false, error: 'failed', result: CONTACT_SYNC_FAILED }
+  }
+
+  const beforeSync = await settleOwnedProfile(
+    deps,
+    pending,
+    await loadOwnedProfile(deps, pending.applicationId, budget)
+  )
+  if (!beforeSync.ready) return beforeSync.response
+
+  const addressed = await rememberRecipient(deps, pending, beforeSync.profile)
+  if (addressed === 'invalid') {
+    await schedulePreSendFailure(
+      deps,
+      pending,
+      CONTACT_SYNC_FAILED,
+      'invalid_recipient'
+    )
+    deps.log('invalid_recipient')
+    return { ok: false, error: 'failed', result: CONTACT_SYNC_FAILED }
+  }
+  if (addressed === 'lost' || !addressed.recipientEmail || !addressed.claimToken) {
+    return { ok: true, result: 'not_acquired' }
   }
 
   const resendKey = deps.getEnv('RESEND_API_KEY')?.trim() ?? ''
   if (!resendKey) {
-    await schedulePreSendFailure(deps, pending, CONTACT_SYNC_FAILED)
+    await schedulePreSendFailure(deps, addressed, CONTACT_SYNC_FAILED)
     deps.log(CONTACT_SYNC_FAILED)
     return { ok: false, error: 'failed', result: CONTACT_SYNC_FAILED }
   }
@@ -618,34 +890,57 @@ async function processOwnedAttempt(
   const contactSync = await ensureContactFirstName(
     deps.fetch,
     resendKey,
-    pending.recipientEmail,
-    beforeSync.application_draft,
-    delayFor(deps)
+    addressed.recipientEmail,
+    beforeSync.profile.application_draft,
+    delayFor(deps),
+    budget
   )
   if (!contactSync.ok) {
-    await schedulePreSendFailure(deps, pending, contactSync.reason)
+    await schedulePreSendFailure(deps, addressed, contactSync.reason)
     deps.log(contactSync.reason)
     return { ok: false, error: 'failed', result: contactSync.reason }
   }
 
-  const beforeSend = await deps.loadProfile(pending.applicationId)
-  if (!beforeSend || !profileMatchesAttempt(beforeSend, pending)) {
-    await markObsolete(deps, pending)
-    deps.log('obsolete')
-    return { ok: true, result: 'obsolete' }
+  const beforeSend = await settleOwnedProfile(
+    deps,
+    addressed,
+    await loadOwnedProfile(deps, addressed.applicationId, budget)
+  )
+  if (!beforeSend.ready) return beforeSend.response
+
+  const readyToSend = await rememberRecipient(deps, addressed, beforeSend.profile)
+  if (readyToSend === 'invalid') {
+    await schedulePreSendFailure(
+      deps,
+      addressed,
+      CONTACT_SYNC_FAILED,
+      'invalid_recipient'
+    )
+    deps.log('invalid_recipient')
+    return { ok: false, error: 'failed', result: CONTACT_SYNC_FAILED }
+  }
+  if (
+    readyToSend === 'lost' ||
+    !readyToSend.recipientEmail ||
+    !readyToSend.claimToken
+  ) {
+    return { ok: true, result: 'not_acquired' }
   }
 
   const submitting = await deps.audit.transition({
-    id: pending.id,
-    claimToken: pending.claimToken,
+    id: readyToSend.id,
+    claimToken: readyToSend.claimToken,
     expectedState: 'contact_sync_pending',
     nextState: 'event_submitting',
-    attemptCount: pending.attemptCount,
+    attemptCount: readyToSend.attemptCount,
     nextAttemptAt: null,
     errorMessage: null,
     deliveryStatus: 'queued',
     resendEmailId: null,
-    providerEvent: { event: pending.resendEventName, category: 'event_submitting' },
+    providerEvent: {
+      event: readyToSend.resendEventName,
+      category: 'event_submitting',
+    },
     leaseSeconds: SUBMIT_LEASE_SECONDS,
     clearLease: false,
   })
@@ -673,6 +968,12 @@ async function processOwnedAttempt(
     deps.log('event_submission_unknown')
     return { ok: false, error: 'failed', result: 'event_submission_unknown' }
   }
+  const recipientEmail = confirmed.recipientEmail
+  if (!recipientEmail?.includes('@')) {
+    await recordEventOutcome(deps, confirmed, 'event_submission_unknown')
+    deps.log('event_submission_unknown')
+    return { ok: false, error: 'failed', result: 'event_submission_unknown' }
+  }
 
   // Documented Send Event success is 202 { object: "event", event }.
   // The general error catalog is not an acceptance guarantee for this endpoint.
@@ -687,7 +988,7 @@ async function processOwnedAttempt(
       },
       body: JSON.stringify({
         event: confirmed.resendEventName,
-        email: confirmed.recipientEmail,
+        email: recipientEmail,
       }),
       signal: AbortSignal.timeout(EVENT_HTTP_TIMEOUT_MS),
     })
@@ -812,45 +1113,11 @@ export async function handleApplicationStatusEmailRequest(
     return json(200, { ok: true, result: 'skipped' })
   }
 
-  const profile = await deps.loadProfile(profileId)
-  if (!profile) {
-    deps.log('profile_not_found')
-    return json(200, { ok: false, error: 'failed' })
-  }
-
-  if (
-    isApplicationStatus(profile.application_status) &&
-    profile.application_status !== record.application_status
-  ) {
-    deps.log('skipped_stale_status')
-    return json(200, { ok: true, result: 'skipped' })
-  }
-
-  const authoritativeVersion = parsePositiveSubmissionVersion(
-    profile.application_submission_version
-  )
-  if (authoritativeVersion == null || authoritativeVersion !== recordVersion) {
-    deps.log('skipped_invalid_version')
-    return json(200, { ok: true, result: 'skipped' })
-  }
-
   const resendEventName =
-    mapped.eventName === 'application_submitted' && authoritativeVersion > 1
+    mapped.eventName === 'application_submitted' && recordVersion > 1
       ? 'application_resubmitted'
       : mapped.eventName
-
-  const recipientEmail = profile.email?.trim() ?? ''
-  if (!recipientEmail || !recipientEmail.includes('@')) {
-    deps.log('invalid_recipient')
-    return json(200, { ok: false, error: 'failed' })
-  }
-
-  if (!statusMatchesStatusEvent(profile.application_status, resendEventName)) {
-    deps.log('obsolete')
-    return json(200, { ok: true, result: 'obsolete' })
-  }
-
-  const eventKey = eventKeyFor(resendEventName, authoritativeVersion)
+  const eventKey = eventKeyFor(resendEventName, recordVersion)
   const applicationStatus =
     resendEventName === 'application_needs_info'
       ? 'needs_info'
@@ -861,11 +1128,11 @@ export async function handleApplicationStatusEmailRequest(
           : 'submitted'
   const inserted = await deps.audit.insertPending({
     applicationId: profileId,
-    recipientEmail,
+    recipientEmail: null,
     eventKey,
     applicationStatus,
     resendEventName,
-    submissionVersion: authoritativeVersion,
+    submissionVersion: recordVersion,
   })
   if ('error' in inserted) {
     deps.log('claim_failed')
@@ -908,7 +1175,8 @@ function attemptFromRpc(value: unknown): EmailAttempt | null {
   return {
     id: data.id,
     applicationId: String(data.application_id ?? ''),
-    recipientEmail: String(data.recipient_email ?? ''),
+    recipientEmail:
+      data.recipient_email == null ? null : String(data.recipient_email),
     eventKey: String(data.event_key ?? ''),
     applicationStatus: String(data.application_status ?? ''),
     resendEventName: String(data.resend_event_name ?? ''),
@@ -947,24 +1215,31 @@ export function createProductionDeps(
   async function rpc(name: string, body: Record<string, unknown>): Promise<unknown> {
     const { url, key } = restHeaders()
     if (!url || !key) return null
-    const response = await fetchImpl(`${url}/rest/v1/rpc/${name}`, {
-      method: 'POST',
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
-    if (!response.ok) {
-      try {
-        await response.body?.cancel()
-      } catch {
-        /* ignore unread body */
-      }
+    const signal = AbortSignal.timeout(PRE_SEND_PERSIST_MARGIN_MS)
+    let response: Response
+    try {
+      response = await fetchImpl(`${url}/rest/v1/rpc/${name}`, {
+        method: 'POST',
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal,
+      })
+    } catch {
       return null
     }
-    return response.json()
+    if (!response.ok) {
+      await cancelBody(response)
+      return null
+    }
+    try {
+      return await readBoundedJson(response, signal)
+    } catch {
+      return null
+    }
   }
 
   const audit: AuditLease = {
@@ -1023,6 +1298,15 @@ export function createProductionDeps(
         })
       )
     },
+    async assignRecipient(input) {
+      return attemptFromRpc(
+        await rpc('assign_application_email_recipient', {
+          p_id: input.id,
+          p_claim_token: input.claimToken,
+          p_recipient_email: input.recipientEmail,
+        })
+      )
+    },
     async sweepExpired(limit) {
       const parsed = await rpc('sweep_expired_event_submissions', {
         p_limit: limit,
@@ -1039,22 +1323,41 @@ export function createProductionDeps(
     fetch: fetchImpl,
     log,
     audit,
-    async loadProfile(id) {
+    async loadProfile(id, signal) {
       const { url, key } = restHeaders()
-      if (!url || !key) return null
-      const response = await fetchImpl(
-        `${url}/rest/v1/profiles?id=eq.${id}&select=email,application_draft,application_status,application_submission_version`,
-        {
-          headers: {
-            apikey: key,
-            Authorization: `Bearer ${key}`,
-            Accept: 'application/json',
-          },
-        }
-      )
-      if (!response.ok) return null
-      const rows = (await response.json()) as LoadedProfile[]
-      return rows[0] ?? null
+      if (!url || !key) return { status: 'error' }
+      const active = signal ?? AbortSignal.timeout(PROFILE_HTTP_TIMEOUT_MS)
+      let response: Response
+      try {
+        response = await fetchImpl(
+          `${url}/rest/v1/profiles?id=eq.${id}&select=email,application_draft,application_status,application_submission_version`,
+          {
+            headers: {
+              apikey: key,
+              Authorization: `Bearer ${key}`,
+              Accept: 'application/json',
+            },
+            signal: active,
+          }
+        )
+      } catch {
+        return { status: 'error' }
+      }
+      if (!response.ok) {
+        await cancelBody(response)
+        return { status: 'error' }
+      }
+      let parsed: unknown
+      try {
+        parsed = await readBoundedJson(response, active)
+      } catch {
+        return { status: 'error' }
+      }
+      if (!Array.isArray(parsed)) return { status: 'error' }
+      const row = parsed[0]
+      if (row == null) return { status: 'absent' }
+      if (typeof row !== 'object') return { status: 'error' }
+      return { status: 'found', profile: row as LoadedProfile }
     },
   }
 }

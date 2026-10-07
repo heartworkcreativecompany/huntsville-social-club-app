@@ -50,6 +50,7 @@ type LeaseRow = {
   delivery_status: string
   error_message: string | null
   resend_email_id: string | null
+  recipient_email?: string | null
 }
 
 async function query(sql: string, values: unknown[] = []): Promise<QueryResult> {
@@ -503,10 +504,10 @@ it('lets a late owner token lose to the sweeper without another send state', asy
         await client.query(
           `select public.transition_application_email_attempt(
             $1, $2, 'contact_sync_pending', 'event_submitting',
-            0, null, null, 'queued', null, '{"category":"event_submitting"}'::jsonb,
+            $3, null, null, 'queued', null, '{"category":"event_submitting"}'::jsonb,
             20, false
           ) as result`,
-          [id, leased?.claim_token]
+          [id, leased?.claim_token, leased?.attempt_count]
         )
       ).rows[0].result
     )
@@ -527,10 +528,10 @@ it('lets a late owner token lose to the sweeper without another send state', asy
         await client.query(
           `select public.transition_application_email_attempt(
             $1, $2, 'event_submitting', 'event_accepted',
-            0, null, null, 'unconfirmed', null, '{"category":"event_accepted"}'::jsonb,
+            $3, null, null, 'unconfirmed', null, '{"category":"event_accepted"}'::jsonb,
             null, true
           ) as result`,
-          [id, leased?.claim_token]
+          [id, leased?.claim_token, leased?.attempt_count]
         )
       ).rows[0].result
     )
@@ -571,10 +572,10 @@ it('does not sweep an event submission whose lease is still held', async () => {
     await client.query(
       `select public.transition_application_email_attempt(
         $1, $2, 'contact_sync_pending', 'event_submitting',
-        0, null, null, 'queued', null, '{"category":"event_submitting"}'::jsonb,
+        $3, null, null, 'queued', null, '{"category":"event_submitting"}'::jsonb,
         20, false
       )`,
-      [id, leased?.claim_token]
+      [id, leased?.claim_token, leased?.attempt_count]
     )
     const swept = await client.query(
       'select public.sweep_expired_event_submissions(25) as swept'
@@ -584,10 +585,10 @@ it('does not sweep an event submission whose lease is still held', async () => {
         await client.query(
           `select public.transition_application_email_attempt(
             $1, $2, 'event_submitting', 'event_accepted',
-            0, null, null, 'unconfirmed', null, '{"category":"event_accepted"}'::jsonb,
+            $3, null, null, 'unconfirmed', null, '{"category":"event_accepted"}'::jsonb,
             null, true
           ) as result`,
-          [id, leased?.claim_token]
+          [id, leased?.claim_token, leased?.attempt_count]
         )
       ).rows[0].result
     )
@@ -705,4 +706,224 @@ it('rejects historic and obsolete outbound transitions and anon or authenticated
       await restricted.end()
     }
   }
+})
+
+it('stores a null recipient until the owner assigns one without changing the attempt count', async () => {
+  await insertProfile(APP_A)
+  const inserted = await asService(async (client) =>
+    rowFrom(
+      (
+        await client.query(
+          `select public.insert_application_email_pending(
+            $1, null, 'application_submitted:1', 'submitted', 'application_submitted', 1
+          ) as result`,
+          [APP_A]
+        )
+      ).rows[0].result
+    )
+  )
+  expect(inserted?.recipient_email ?? null).toBeNull()
+  expect(inserted?.attempt_count).toBe(0)
+  const id = inserted?.id
+  if (!id) throw new Error('expected the pending row')
+
+  const leased = await asService(async (client) =>
+    rowFrom(
+      (
+        await client.query(
+          'select public.acquire_application_email_lease($1, 30) as result',
+          [id]
+        )
+      ).rows[0].result
+    )
+  )
+  expect(leased?.attempt_count).toBe(1)
+  expect(leased?.recipient_email ?? null).toBeNull()
+
+  const assigned = await asService(async (client) =>
+    rowFrom(
+      (
+        await client.query(
+          `select public.assign_application_email_recipient($1, $2, 'applicant@example.com') as result`,
+          [id, leased?.claim_token]
+        )
+      ).rows[0].result
+    )
+  )
+  expect(assigned?.recipient_email).toBe('applicant@example.com')
+  expect(assigned?.attempt_count).toBe(1)
+  expect(assigned?.claim_token).toBe(leased?.claim_token)
+
+  const stale = await asService(async (client) =>
+    rowFrom(
+      (
+        await client.query(
+          `select public.assign_application_email_recipient(
+            $1, '99999999-9999-4999-8999-999999999999', 'other@example.com'
+          ) as result`,
+          [id]
+        )
+      ).rows[0].result
+    )
+  )
+  expect(stale).toBeNull()
+  const stored = await query(
+    'select recipient_email, attempt_count from public.application_email_log where id = $1',
+    [id]
+  )
+  expect(stored.rows[0].recipient_email).toBe('applicant@example.com')
+  expect(stored.rows[0].attempt_count).toBe(1)
+})
+
+it('counts an expired pre-send lease and stops at five without a sixth acquire', async () => {
+  const id = await insertAttempt({
+    applicationId: APP_A,
+    eventKey: 'expiry-cap:1',
+    state: 'contact_sync_pending',
+    attemptCount: 0,
+    nextAttemptAt: new Date(Date.now() - 1000).toISOString(),
+  })
+  let lastToken: string | null = null
+  for (let expected = 1; expected <= 5; expected += 1) {
+    const leased = await asService(async (client) =>
+      rowFrom(
+        (
+          await client.query(
+            'select public.acquire_application_email_lease($1, 30) as result',
+            [id]
+          )
+        ).rows[0].result
+      )
+    )
+    expect(leased?.attempt_count).toBe(expected)
+    if (expected < 5) expect(leased?.next_attempt_at).not.toBeNull()
+    else expect(leased?.next_attempt_at).toBeNull()
+    lastToken = leased?.claim_token ?? null
+    await query(
+      `update public.application_email_log
+       set claimed_until = now() - interval '1 second'
+       where id = $1`,
+      [id]
+    )
+  }
+
+  const sixth = await asService(async (client) =>
+    rowFrom(
+      (
+        await client.query(
+          'select public.acquire_application_email_lease($1, 30) as result',
+          [id]
+        )
+      ).rows[0].result
+    )
+  )
+  expect(sixth).toBeNull()
+  const stored = await query(
+    `select attempt_count, next_attempt_at, processing_state
+     from public.application_email_log where id = $1`,
+    [id]
+  )
+  expect(stored.rows[0].attempt_count).toBe(5)
+  expect(stored.rows[0].next_attempt_at).toBeNull()
+  expect(stored.rows[0].processing_state).toBe('contact_sync_pending')
+
+  const stale = await asService(async (client) =>
+    rowFrom(
+      (
+        await client.query(
+          `select public.transition_application_email_attempt(
+            $1, $2, 'contact_sync_pending', 'contact_sync_failed',
+            1, now(), 'contact_sync_failed', 'queued', null, '{"category":"contact_sync_failed"}'::jsonb,
+            null, true
+          ) as result`,
+          [id, lastToken]
+        )
+      ).rows[0].result
+    )
+  )
+  expect(stale).toBeNull()
+  const afterStale = await query(
+    'select attempt_count from public.application_email_log where id = $1',
+    [id]
+  )
+  expect(afterStale.rows[0].attempt_count).toBe(5)
+})
+
+it('does not let a concurrent or live owner rewrite the acquired attempt count', async () => {
+  const id = await insertAttempt({
+    applicationId: APP_A,
+    eventKey: 'fence:1',
+    state: 'contact_sync_failed',
+    attemptCount: 2,
+    nextAttemptAt: new Date(Date.now() - 1000).toISOString(),
+  })
+  const left = new Client({ connectionString: testDatabaseUrl })
+  const right = new Client({ connectionString: testDatabaseUrl })
+  await left.connect()
+  await right.connect()
+  let winnerToken = ''
+  try {
+    await left.query('set role service_role')
+    await right.query('set role service_role')
+    const winner = rowFrom(
+      (
+        await left.query(
+          'select public.acquire_application_email_lease($1, 30) as result',
+          [id]
+        )
+      ).rows[0].result
+    )
+    const loser = rowFrom(
+      (
+        await right.query(
+          'select public.acquire_application_email_lease($1, 30) as result',
+          [id]
+        )
+      ).rows[0].result
+    )
+    expect(winner?.attempt_count).toBe(3)
+    expect(winner?.claim_token).toBeTruthy()
+    expect(loser).toBeNull()
+    winnerToken = winner?.claim_token ?? ''
+  } finally {
+    await left.end()
+    await right.end()
+  }
+
+  const rewritten = await asService(async (client) =>
+    rowFrom(
+      (
+        await client.query(
+          `select public.transition_application_email_attempt(
+            $1, $2, 'contact_sync_failed', 'contact_sync_pending',
+            4, now(), null, 'queued', null, '{"stage":"pending"}'::jsonb, 30, false
+          ) as result`,
+          [id, winnerToken]
+        )
+      ).rows[0].result
+    )
+  )
+  expect(rewritten).toBeNull()
+  const stored = await query(
+    'select attempt_count, claim_token from public.application_email_log where id = $1',
+    [id]
+  )
+  expect(stored.rows[0].attempt_count).toBe(3)
+  expect(stored.rows[0].claim_token).toBe(winnerToken)
+
+  const kept = await asService(async (client) =>
+    rowFrom(
+      (
+        await client.query(
+          `select public.transition_application_email_attempt(
+            $1, $2, 'contact_sync_failed', 'contact_sync_pending',
+            3, now(), null, 'queued', null, '{"stage":"pending"}'::jsonb, 30, false
+          ) as result`,
+          [id, winnerToken]
+        )
+      ).rows[0].result
+    )
+  )
+  expect(kept?.attempt_count).toBe(3)
+  expect(kept?.processing_state).toBe('contact_sync_pending')
 })
