@@ -31,7 +31,7 @@ export default function MemberProfileDetailLayout({
         </div>
       ) : null}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-8">
+      <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-8">
         <MemberProfileGalleryBlock
           memberId={memberId}
           photos={photos}

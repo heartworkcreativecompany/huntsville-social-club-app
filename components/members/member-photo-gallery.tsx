@@ -2,12 +2,17 @@
 
 import { useState } from 'react'
 import type { ApplicationPhoto } from '@/lib/application'
-import { primaryMemberPhoto } from '@/lib/member-photos'
+import {
+  MEMBER_DIRECTORY_CARD_PHOTO_ASPECT_CLASS,
+  primaryMemberPhoto,
+} from '@/lib/member-photos'
 import MemberPhotoDisplay from './member-photo-display'
 
-/** Shared primary image width — square, modest bump from 14rem. */
+/** Shared primary image width. Height follows the directory card's 4/5 frame. */
 export const PROFILE_PRIMARY_IMAGE_CLASS =
   'mx-auto w-full max-w-[18rem] sm:max-w-[19rem] lg:mx-0 lg:max-w-[17rem]'
+
+const PROFILE_EMPTY_FRAME_CLASS = `flex items-center justify-center ${MEMBER_DIRECTORY_CARD_PHOTO_ASPECT_CLASS} w-full rounded-lg border border-dashed border-border bg-surface-elevated px-4 py-6 text-center text-sm text-muted-foreground ${PROFILE_PRIMARY_IMAGE_CLASS}`
 
 export function useMemberPhotoSelection(photos: ApplicationPhoto[]) {
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -38,7 +43,7 @@ export function ProfileThumbnailStrip({
 
   const listClass =
     variant === 'scroll'
-      ? 'flex flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+      ? 'flex w-full min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
       : 'flex flex-wrap gap-2'
 
   return (
@@ -80,7 +85,7 @@ export function MemberProfilePrimaryPhoto({
   if (!photo) {
     return (
       <div
-        className={`aspect-square w-full rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground ${PROFILE_PRIMARY_IMAGE_CLASS} ${className}`}
+        className={`${PROFILE_EMPTY_FRAME_CLASS} ${className}`}
       >
         No photo
       </div>
@@ -117,7 +122,7 @@ export function MemberProfileGalleryBlock({
   if (photos.length === 0) {
     return (
       <div
-        className={`aspect-square rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground ${PROFILE_PRIMARY_IMAGE_CLASS}`}
+        className={PROFILE_EMPTY_FRAME_CLASS}
       >
         No profile photos yet.
       </div>
@@ -125,7 +130,7 @@ export function MemberProfileGalleryBlock({
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-[19rem] gap-3 lg:mx-0 lg:max-w-none">
+    <div className="mx-auto grid w-full min-w-0 max-w-[19rem] gap-3 lg:mx-0 lg:max-w-none">
       <MemberProfilePrimaryPhoto memberId={memberId} photo={selected} />
       <ProfileThumbnailStrip
         memberId={memberId}
