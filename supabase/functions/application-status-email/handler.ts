@@ -10,7 +10,9 @@
  * The audit row is inserted before any Resend call. Acquiring that row counts
  * one attempt. Pre-send failures keep the acquired count and can be retried
  * until attempt 5. A profile reload that fails does not make the event
- * obsolete. Event submission is not retried after it has been attempted.
+ * obsolete. The event is sent only to the address whose contact name was
+ * synced on that attempt. A later address change retries the same row.
+ * Event submission is not retried after it has been attempted.
  * next_attempt_at null is not due work.
  */
 
@@ -908,8 +910,9 @@ async function processOwnedAttempt(
   )
   if (!beforeSend.ready) return beforeSend.response
 
-  const readyToSend = await rememberRecipient(deps, addressed, beforeSend.profile)
-  if (readyToSend === 'invalid') {
+  const syncedRecipient = addressed.recipientEmail
+  const reloadedRecipient = usableRecipient(beforeSend.profile)
+  if (!reloadedRecipient) {
     await schedulePreSendFailure(
       deps,
       addressed,
@@ -919,11 +922,19 @@ async function processOwnedAttempt(
     deps.log('invalid_recipient')
     return { ok: false, error: 'failed', result: CONTACT_SYNC_FAILED }
   }
-  if (
-    readyToSend === 'lost' ||
-    !readyToSend.recipientEmail ||
-    !readyToSend.claimToken
-  ) {
+  if (reloadedRecipient !== syncedRecipient) {
+    await schedulePreSendFailure(
+      deps,
+      addressed,
+      CONTACT_SYNC_FAILED,
+      'recipient_changed'
+    )
+    deps.log('recipient_changed')
+    return { ok: false, error: 'failed', result: CONTACT_SYNC_FAILED }
+  }
+
+  const readyToSend = addressed
+  if (!readyToSend.claimToken || readyToSend.recipientEmail !== syncedRecipient) {
     return { ok: true, result: 'not_acquired' }
   }
 
@@ -968,8 +979,7 @@ async function processOwnedAttempt(
     deps.log('event_submission_unknown')
     return { ok: false, error: 'failed', result: 'event_submission_unknown' }
   }
-  const recipientEmail = confirmed.recipientEmail
-  if (!recipientEmail?.includes('@')) {
+  if (confirmed.recipientEmail !== syncedRecipient) {
     await recordEventOutcome(deps, confirmed, 'event_submission_unknown')
     deps.log('event_submission_unknown')
     return { ok: false, error: 'failed', result: 'event_submission_unknown' }
@@ -988,7 +998,7 @@ async function processOwnedAttempt(
       },
       body: JSON.stringify({
         event: confirmed.resendEventName,
-        email: recipientEmail,
+        email: syncedRecipient,
       }),
       signal: AbortSignal.timeout(EVENT_HTTP_TIMEOUT_MS),
     })

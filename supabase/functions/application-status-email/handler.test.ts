@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PRE_SEND_LEASE_SECONDS,
   PRE_SEND_PERSIST_MARGIN_MS,
   createMemoryAuditLease,
   retryNextAttemptAt,
@@ -2033,6 +2034,296 @@ describe('application status email recovery', () => {
     expect((fresh as AuditLease & { rows: EmailAttempt[] }).rows[0]?.attemptCount).toBe(
       1
     )
+  })
+
+  const CHANGED_EMAIL = 'later@example.com'
+
+  function eventPosts(calls: RecordedRequest[]) {
+    return calls.filter((call) => call.url === RESEND_EVENTS_URL)
+  }
+
+  function contactCallsFor(calls: RecordedRequest[], email: string) {
+    const encoded = encodeURIComponent(email)
+    return calls.filter(
+      (call) =>
+        call.url.startsWith(RESEND_CONTACTS_URL) && call.url.includes(encoded)
+    )
+  }
+
+  it('sends the event to the same recipient whose contact name was synced', async () => {
+    const calls: RecordedRequest[] = []
+    const audit = createMemoryAuditLease(() => new Date(START))
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        audit,
+        calls,
+        profiles: [loadedProfile(), loadedProfile()],
+      })
+    )
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
+    const synced = contactCallsFor(calls, FETCHED_EMAIL)
+    expect(synced.length).toBeGreaterThan(0)
+    expect(contactCallsFor(calls, WEBHOOK_EMAIL)).toHaveLength(0)
+    const events = eventPosts(calls)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.body).toEqual({
+      event: 'application_submitted',
+      email: FETCHED_EMAIL,
+    })
+    for (const call of calls) {
+      const serialized = JSON.stringify(call.body)
+      expect(serialized).not.toContain('unsubscribed')
+      expect(serialized).not.toContain('segments')
+      expect(serialized).not.toContain('topics')
+      expect(serialized).not.toContain('suppression')
+    }
+    expect(
+      (audit as AuditLease & { rows: EmailAttempt[] }).rows[0]?.recipientEmail
+    ).toBe(FETCHED_EMAIL)
+  })
+
+  it('retries the same row when the recipient changes and then syncs the new address once', async () => {
+    let nowMs = START
+    const audit = createMemoryAuditLease(() => new Date(nowMs))
+    const calls: RecordedRequest[] = []
+    const logs: string[] = []
+    const changed = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        audit,
+        calls,
+        logs,
+        profiles: [loadedProfile(), loadedProfile({ email: CHANGED_EMAIL })],
+      })
+    )
+    expect(await changed.json()).toEqual({
+      ok: false,
+      error: 'failed',
+      result: CONTACT_SYNC_FAILED,
+    })
+    const rows = () => (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(rows()).toHaveLength(1)
+    const scheduled = rows()[0]
+    expect(scheduled).toMatchObject({
+      processingState: CONTACT_SYNC_FAILED,
+      errorMessage: 'recipient_changed',
+      recipientEmail: FETCHED_EMAIL,
+      attemptCount: 1,
+      nextAttemptAt: new Date(START + 60_000).toISOString(),
+      claimToken: null,
+    })
+    expect(scheduled?.processingState).not.toBe('obsolete')
+    expect(scheduled?.processingState).not.toBe('event_submitting')
+    expect(eventPosts(calls)).toHaveLength(0)
+    expect(contactCallsFor(calls, FETCHED_EMAIL).length).toBeGreaterThan(0)
+    expect(contactCallsFor(calls, CHANGED_EMAIL)).toHaveLength(0)
+    expect(logs).toContain('recipient_changed')
+    const publicText = `${logs.join('\n')}\n${scheduled?.errorMessage}`
+    expect(publicText).not.toContain(FETCHED_EMAIL)
+    expect(publicText).not.toContain(CHANGED_EMAIL)
+
+    nowMs = START + 60_000
+    const recoveredCalls: RecordedRequest[] = []
+    const recovered = await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({
+        audit,
+        calls: recoveredCalls,
+        profiles: [
+          loadedProfile({ email: CHANGED_EMAIL }),
+          loadedProfile({ email: CHANGED_EMAIL }),
+        ],
+      })
+    )
+    expect(await recovered.json()).toEqual({ ok: true, result: 'retry_batch' })
+    expect(contactCallsFor(recoveredCalls, CHANGED_EMAIL).length).toBeGreaterThan(0)
+    expect(contactCallsFor(recoveredCalls, FETCHED_EMAIL)).toHaveLength(0)
+    const events = eventPosts(recoveredCalls)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.body).toEqual({
+      event: 'application_submitted',
+      email: CHANGED_EMAIL,
+    })
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]).toMatchObject({
+      id: scheduled?.id,
+      recipientEmail: CHANGED_EMAIL,
+      processingState: 'event_accepted',
+      attemptCount: 2,
+    })
+
+    const againCalls: RecordedRequest[] = []
+    await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({ audit, calls: againCalls })
+    )
+    expect(eventPosts(againCalls)).toHaveLength(0)
+    expect(eventPosts(recoveredCalls)).toHaveLength(1)
+  })
+
+  it('stops retrying recipient changes at the five-attempt cap', async () => {
+    let nowMs = START
+    const audit = createMemoryAuditLease(() => new Date(nowMs))
+    const calls: RecordedRequest[] = []
+    const deps = createDeps({ audit, calls })
+    let loads = 0
+    deps.loadProfile = async () => {
+      loads += 1
+      const email = loads % 2 === 1 ? FETCHED_EMAIL : CHANGED_EMAIL
+      return { status: 'found', profile: loadedProfile({ email }) }
+    }
+    const rows = () => (audit as AuditLease & { rows: EmailAttempt[] }).rows
+
+    const first = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      deps
+    )
+    expect(await first.json()).toMatchObject({ result: CONTACT_SYNC_FAILED })
+    expect(rows()[0]?.attemptCount).toBe(1)
+
+    for (let attempt = 2; attempt <= 5; attempt += 1) {
+      const dueAt = rows()[0]?.nextAttemptAt
+      expect(dueAt).not.toBeNull()
+      nowMs = Date.parse(dueAt ?? '')
+      const response = await handleApplicationStatusEmailRequest(retryRequest(), deps)
+      expect(await response.json()).toEqual({ ok: true, result: 'retry_batch' })
+      expect(rows()[0]).toMatchObject({
+        attemptCount: attempt,
+        processingState: CONTACT_SYNC_FAILED,
+        errorMessage: 'recipient_changed',
+        recipientEmail: FETCHED_EMAIL,
+      })
+    }
+
+    expect(rows()[0]?.nextAttemptAt).toBeNull()
+    expect(eventPosts(calls)).toHaveLength(0)
+    expect(contactCallsFor(calls, CHANGED_EMAIL)).toHaveLength(0)
+    nowMs += 60_000
+    const exhausted = await handleApplicationStatusEmailRequest(retryRequest(), deps)
+    expect(await exhausted.json()).toEqual({ ok: true, result: 'retry_batch' })
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]).toMatchObject({
+      attemptCount: 5,
+      nextAttemptAt: null,
+      processingState: CONTACT_SYNC_FAILED,
+    })
+    expect(eventPosts(calls)).toHaveLength(0)
+    expect(await audit.acquireById(rows()[0]?.id ?? '', 30)).toBeNull()
+    expect(await audit.acquireNext(30)).toBeNull()
+  })
+
+  it('still obsoletes a version or status change without sending', async () => {
+    const versionCalls: RecordedRequest[] = []
+    const versionAudit = createMemoryAuditLease(() => new Date(START))
+    const versionChange = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        audit: versionAudit,
+        calls: versionCalls,
+        profiles: [
+          loadedProfile(),
+          loadedProfile({
+            email: CHANGED_EMAIL,
+            application_submission_version: 2,
+          }),
+        ],
+      })
+    )
+    expect(await versionChange.json()).toEqual({ ok: true, result: 'obsolete' })
+    expect(eventPosts(versionCalls)).toHaveLength(0)
+    expect(
+      (versionAudit as AuditLease & { rows: EmailAttempt[] }).rows[0]
+    ).toMatchObject({
+      processingState: 'obsolete',
+      nextAttemptAt: null,
+      recipientEmail: FETCHED_EMAIL,
+      eventKey: 'application_submitted:1',
+    })
+
+    const statusCalls: RecordedRequest[] = []
+    const statusAudit = createMemoryAuditLease(() => new Date(START))
+    const statusChange = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        audit: statusAudit,
+        calls: statusCalls,
+        profiles: [
+          loadedProfile(),
+          loadedProfile({
+            email: CHANGED_EMAIL,
+            application_status: 'rejected',
+          }),
+        ],
+      })
+    )
+    expect(await statusChange.json()).toEqual({ ok: true, result: 'obsolete' })
+    expect(eventPosts(statusCalls)).toHaveLength(0)
+    expect(
+      (statusAudit as AuditLease & { rows: EmailAttempt[] }).rows[0]
+    ).toMatchObject({
+      processingState: 'obsolete',
+      nextAttemptAt: null,
+      errorMessage: 'obsolete',
+    })
+  })
+
+  it('does not let a stale owner rewrite the recipient or the retry schedule', async () => {
+    const audit = createMemoryAuditLease(() => new Date(START))
+    const assignRecipient = audit.assignRecipient.bind(audit)
+    let ownerToken: string | null = null
+    audit.assignRecipient = async (input) => {
+      ownerToken = input.claimToken
+      return assignRecipient(input)
+    }
+    const calls: RecordedRequest[] = []
+    await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        audit,
+        calls,
+        profiles: [loadedProfile(), loadedProfile({ email: CHANGED_EMAIL })],
+      })
+    )
+    const rows = () => (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    const scheduled = rows()[0]
+    expect(scheduled).toMatchObject({
+      recipientEmail: FETCHED_EMAIL,
+      nextAttemptAt: new Date(START + 60_000).toISOString(),
+      attemptCount: 1,
+      processingState: CONTACT_SYNC_FAILED,
+    })
+    expect(ownerToken).toBeTruthy()
+
+    const overwritten = await audit.assignRecipient({
+      id: scheduled?.id ?? '',
+      claimToken: ownerToken ?? '',
+      recipientEmail: CHANGED_EMAIL,
+    })
+    const rescheduled = await audit.transition({
+      id: scheduled?.id ?? '',
+      claimToken: ownerToken ?? '',
+      expectedState: 'contact_sync_failed',
+      nextState: 'contact_sync_pending',
+      attemptCount: 1,
+      nextAttemptAt: null,
+      errorMessage: null,
+      deliveryStatus: 'queued',
+      resendEmailId: null,
+      providerEvent: { category: 'recipient_changed' },
+      leaseSeconds: PRE_SEND_LEASE_SECONDS,
+      clearLease: false,
+    })
+    expect(overwritten).toBeNull()
+    expect(rescheduled).toBeNull()
+    expect(rows()[0]).toMatchObject({
+      recipientEmail: FETCHED_EMAIL,
+      nextAttemptAt: scheduled?.nextAttemptAt,
+      attemptCount: 1,
+      processingState: CONTACT_SYNC_FAILED,
+      errorMessage: 'recipient_changed',
+    })
+    expect(eventPosts(calls)).toHaveLength(0)
   })
 })
 
