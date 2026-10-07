@@ -1,12 +1,11 @@
-import { configDefaults, defineConfig } from 'vitest/config'
 import path from 'node:path'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
     environment: 'node',
-    exclude: [
-      ...configDefaults.exclude,
-      '**/*.integration.test.ts',
+    include: [
+      'supabase/functions/application-status-email/lease.integration.test.ts',
     ],
   },
   resolve: {

@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createMemoryAuditLease,
+  retryNextAttemptAt,
+  seedEmailAttempt,
+  type AuditLease,
+  type EmailAttempt,
+} from './audit-lease.ts'
+import {
   ACTION_URLS,
   CONTACT_SYNC_FAILED,
   MISSING_FIRST_NAME,
   RESEND_CONTACTS_URL,
   RESEND_EVENTS_URL,
+  RETRY_SECRET_HEADER,
   WEBHOOK_SECRET_HEADER,
   createProductionDeps,
   eventKeyFor,
@@ -13,13 +21,20 @@ import {
   mapStatusTransition,
   parsePositiveSubmissionVersion,
   type AuditClaim,
-  type AuditPatch,
   type HandlerDeps,
   type LoadedProfile,
 } from './handler.ts'
 
 const WEBHOOK_SECRET = 'test-webhook-secret'
 const RESEND_KEY = 'test-resend-key'
+const RETRY_SECRET = 'test-retry-secret'
+
+function acceptedEventResponse() {
+  return new Response(
+    JSON.stringify({ object: 'event', event: 'application_submitted' }),
+    { status: 202 }
+  )
+}
 const PROFILE_ID = '11111111-1111-4111-8111-111111111111'
 const AUDIT_ID = '22222222-2222-4222-8222-222222222222'
 const FETCHED_EMAIL = 'applicant@example.com'
@@ -110,6 +125,7 @@ type RecordedRequest = {
 
 function createDeps(options?: {
   profile?: LoadedProfile | null
+  profiles?: LoadedProfile[]
   claim?: 'claimed' | 'duplicate' | 'error'
   fetchImpl?: HandlerDeps['fetch']
   contactFetch?: (
@@ -120,23 +136,71 @@ function createDeps(options?: {
   calls?: RecordedRequest[]
   loadCalls?: string[]
   claimCalls?: AuditClaim[]
-  updates?: AuditPatch[]
+  transitions?: EmailAttempt[]
   logs?: string[]
   order?: string[]
   env?: Record<string, string | undefined>
-}): HandlerDeps {
+  audit?: AuditLease
+  now?: () => Date
+  beforeEventConfirmation?: () => Promise<void>
+}): HandlerDeps & { audit: AuditLease } {
   const logs = options?.logs ?? []
   const order = options?.order ?? []
   const claimCalls = options?.claimCalls ?? []
-  const updates = options?.updates ?? []
+  const transitions = options?.transitions ?? []
   const env = {
     APPLICATION_STATUS_WEBHOOK_SECRET: WEBHOOK_SECRET,
     RESEND_API_KEY: RESEND_KEY,
+    APPLICATION_STATUS_RETRY_SECRET: RETRY_SECRET,
     ...options?.env,
   }
+  const audit = options?.audit ?? createMemoryAuditLease(options?.now ?? (() => new Date()))
+  const insertPending = audit.insertPending.bind(audit)
+  audit.insertPending = async (input) => {
+    order.push('insertAudit')
+    if (options?.claim === 'error') return { error: true }
+    if (options?.claim === 'duplicate') {
+      seedEmailAttempt(audit, {
+        id: AUDIT_ID,
+        applicationId: input.applicationId,
+        recipientEmail: input.recipientEmail,
+        eventKey: input.eventKey,
+        applicationStatus: input.applicationStatus,
+        resendEventName: input.resendEventName,
+        submissionVersion: input.submissionVersion,
+        processingState: 'event_accepted',
+        claimToken: null,
+        claimedUntil: null,
+        attemptCount: 0,
+        nextAttemptAt: null,
+        deliveryStatus: 'unconfirmed',
+        errorMessage: null,
+        resendEmailId: null,
+        providerEvent: { category: 'event_accepted' },
+      })
+    }
+    const result = await insertPending(input)
+    if (!('error' in result)) {
+      claimCalls.push({
+        applicationId: input.applicationId,
+        recipientEmail: input.recipientEmail,
+        eventKey: input.eventKey,
+        applicationStatus: input.applicationStatus as AuditClaim['applicationStatus'],
+        eventName: input.resendEventName as AuditClaim['eventName'],
+        deliveryStatus: 'queued',
+      })
+    }
+    return result
+  }
+  const transition = audit.transition.bind(audit)
+  audit.transition = async (input) => {
+    order.push('transition')
+    const row = await transition(input)
+    if (row) transitions.push(row)
+    return row
+  }
 
-  const defaultFetch: HandlerDeps['fetch'] = async () =>
-    new Response(JSON.stringify({ id: 'evt_opaque_1' }), { status: 200 })
+  const defaultFetch: HandlerDeps['fetch'] = async () => acceptedEventResponse()
 
   const defaultContactFetch = (method: string) => {
     if (method === 'POST') {
@@ -161,8 +225,12 @@ function createDeps(options?: {
     )
   }
 
+  let profileReads = 0
   return {
     getEnv: (name) => env[name],
+    audit,
+    delay: async () => {},
+    beforeEventConfirmation: options?.beforeEventConfirmation,
     fetch: async (input, init) => {
       order.push('fetch')
       const url = String(input)
@@ -185,19 +253,12 @@ function createDeps(options?: {
     },
     loadProfile: async () => {
       order.push('loadProfile')
+      profileReads += 1
+      if (options?.profiles) {
+        return options.profiles[Math.min(profileReads - 1, options.profiles.length - 1)] ?? null
+      }
       if (options?.profile === null) return null
       return options?.profile ?? loadedProfile()
-    },
-    claimAudit: async (row) => {
-      order.push('claimAudit')
-      claimCalls.push(row)
-      if (options?.claim === 'duplicate') return { status: 'duplicate' }
-      if (options?.claim === 'error') return { status: 'error' }
-      return { status: 'claimed', id: AUDIT_ID }
-    },
-    updateAudit: async (_id, patch) => {
-      order.push('updateAudit')
-      updates.push(patch)
     },
     log: (message) => {
       logs.push(message)
@@ -388,13 +449,11 @@ describe('application-status-email handler', () => {
           }),
           fetchImpl: async (_input, init) => {
             sent = JSON.parse(String(init?.body))
-            return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
-              status: 200,
-            })
+            return acceptedEventResponse()
           },
         })
       )
-      expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+      expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
       expect(sent).toEqual({
         event: row.event,
         email: FETCHED_EMAIL,
@@ -409,9 +468,7 @@ describe('application-status-email handler', () => {
       createDeps({
         fetchImpl: async (_input, init) => {
           sent = JSON.parse(String(init?.body))
-          return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
-            status: 200,
-          })
+          return acceptedEventResponse()
         },
       })
     )
@@ -429,9 +486,7 @@ describe('application-status-email handler', () => {
       createDeps({
         fetchImpl: async (_input, init) => {
           sent = JSON.parse(String(init?.body))
-          return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
-            status: 200,
-          })
+          return acceptedEventResponse()
         },
       })
     )
@@ -445,7 +500,7 @@ describe('application-status-email handler', () => {
       createDeps({ claim: 'duplicate', order })
     )
     expect(await response.json()).toEqual({ ok: true, result: 'duplicate' })
-    expect(order).toEqual(['loadProfile', 'claimAudit'])
+    expect(order).toEqual(['loadProfile', 'insertAudit'])
     expect(order).not.toContain('fetch')
   })
 
@@ -455,67 +510,82 @@ describe('application-status-email handler', () => {
       jsonRequest(webhookPayload({})),
       createDeps({ order })
     )
-    expect(order.indexOf('claimAudit')).toBeGreaterThan(
+    expect(order.indexOf('insertAudit')).toBeGreaterThan(
       order.indexOf('loadProfile')
     )
-    expect(order.indexOf('fetch')).toBeGreaterThan(order.indexOf('claimAudit'))
+    expect(order.indexOf('fetch')).toBeGreaterThan(order.indexOf('insertAudit'))
     expect(eventKeyFor('application_submitted', 1)).toBe(
       'application_submitted:1'
     )
   })
 
-  it('updates audit to sent on an accepted Resend response', async () => {
-    const updates: AuditPatch[] = []
+  it('stores a documented 202 as event_accepted without an email id', async () => {
+    const transitions: EmailAttempt[] = []
     const response = await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
-      createDeps({ updates })
+      createDeps({ transitions })
     )
-    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
-    expect(updates[0]).toMatchObject({
-      deliveryStatus: 'sent',
-      errorText: null,
-      providerEmailId: 'evt_opaque_1',
-      metadata: {
-        event: 'application_submitted',
-        http_status_category: '2xx',
-      },
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
+    expect(transitions.at(-1)).toMatchObject({
+      processingState: 'event_accepted',
+      deliveryStatus: 'unconfirmed',
+      errorMessage: null,
+      resendEmailId: null,
+      nextAttemptAt: null,
+      providerEvent: { category: 'event_accepted' },
     })
   })
 
-  it('updates audit with a sanitized category on Resend or network failure', async () => {
-    const four: AuditPatch[] = []
-    await handleApplicationStatusEmailRequest(
-      jsonRequest(webhookPayload({})),
-      createDeps({
-        updates: four,
-        fetchImpl: async () =>
-          new Response(JSON.stringify({ secret: 'do-not-store' }), {
-            status: 429,
-          }),
-      })
-    )
-    expect(four[0]).toMatchObject({
-      deliveryStatus: 'failed',
-      errorText: 'resend_4xx',
-      metadata: { category: 'resend_4xx', http_status_category: '4xx' },
+  it('stores a non-202 or network failure as event_submission_unknown and does not send again', async () => {
+    const four: EmailAttempt[] = []
+    const fourCalls: RecordedRequest[] = []
+    const fourDeps = createDeps({
+      transitions: four,
+      calls: fourCalls,
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ secret: 'do-not-store' }), {
+          status: 429,
+        }),
     })
-    expect(JSON.stringify(four[0])).not.toContain('do-not-store')
+    await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      fourDeps
+    )
+    expect(four.at(-1)).toMatchObject({
+      processingState: 'event_submission_unknown',
+      deliveryStatus: 'unconfirmed',
+      errorMessage: 'event_submission_unknown',
+      resendEmailId: null,
+      nextAttemptAt: null,
+    })
+    expect(JSON.stringify(four.at(-1))).not.toContain('do-not-store')
+    const eventPosts = () =>
+      fourCalls.filter((call) => call.url === RESEND_EVENTS_URL)
+    expect(eventPosts()).toHaveLength(1)
+    const retry = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      fourDeps
+    )
+    expect(await retry.json()).toEqual({ ok: true, result: 'duplicate' })
+    expect(eventPosts()).toHaveLength(1)
 
-    const net: AuditPatch[] = []
+    const net: EmailAttempt[] = []
     await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
       createDeps({
-        updates: net,
+        transitions: net,
         fetchImpl: async () => {
           throw new Error('connect ECONNREFUSED')
         },
       })
     )
-    expect(net[0]).toMatchObject({
-      deliveryStatus: 'failed',
-      errorText: 'network_error',
+    expect(net.at(-1)).toMatchObject({
+      processingState: 'event_submission_unknown',
+      deliveryStatus: 'unconfirmed',
+      errorMessage: 'event_submission_unknown',
+      resendEmailId: null,
     })
-    expect(JSON.stringify(net[0])).not.toContain('ECONNREFUSED')
+    expect(JSON.stringify(net.at(-1))).not.toContain('ECONNREFUSED')
   })
 
   it('keeps logs and responses free of email, secrets, and applicant details', async () => {
@@ -552,7 +622,7 @@ describe('application-status-email handler', () => {
         profile: loadedProfile(),
       })
     )
-    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
     expect(claimCalls[0]?.eventKey).toBe('application_submitted:1')
     expect(claimCalls[0]?.deliveryStatus).toBe('queued')
   })
@@ -575,13 +645,11 @@ describe('application-status-email handler', () => {
         }),
         fetchImpl: async (_input, init) => {
           sent = JSON.parse(String(init?.body))
-          return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
-            status: 200,
-          })
+          return acceptedEventResponse()
         },
       })
     )
-    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
     expect(claimCalls[0]?.eventKey).toBe('application_resubmitted:2')
     expect(claimCalls[0]?.eventName).toBe('application_resubmitted')
     expect(sent).toEqual({
@@ -623,7 +691,7 @@ describe('application-status-email handler', () => {
         })
       )
       expect(await response.json()).toEqual({ ok: true, result: 'duplicate' })
-      expect(order).toEqual(['loadProfile', 'claimAudit'])
+      expect(order).toEqual(['loadProfile', 'insertAudit'])
       expect(order).not.toContain('fetch')
     }
   })
@@ -640,7 +708,7 @@ describe('application-status-email handler', () => {
     expect(await response.json()).toEqual({ ok: true, result: 'skipped' })
     expect(order).toEqual(['loadProfile'])
     expect(order).not.toContain('fetch')
-    expect(order).not.toContain('claimAudit')
+    expect(order).not.toContain('insertAudit')
   })
 
   it('skips rejected → submitted without an intervening draft', async () => {
@@ -711,32 +779,37 @@ describe('application-status-email handler', () => {
     }
   })
 
-  it('claims queued then marks sent on accepted Resend', async () => {
+  it('claims queued then marks event_accepted on a documented 202', async () => {
     const claimCalls: AuditClaim[] = []
-    const updates: AuditPatch[] = []
+    const transitions: EmailAttempt[] = []
     await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
-      createDeps({ claimCalls, updates })
+      createDeps({ claimCalls, transitions })
     )
     expect(claimCalls[0]?.deliveryStatus).toBe('queued')
-    expect(updates[0]?.deliveryStatus).toBe('sent')
+    expect(transitions.at(-1)?.processingState).toBe('event_accepted')
+    expect(transitions.at(-1)?.deliveryStatus).toBe('unconfirmed')
+    expect(transitions.at(-1)?.resendEmailId).toBeNull()
   })
 
-  it('moves queued claims to failed with a sanitized category', async () => {
+  it('moves a non-202 event response to event_submission_unknown', async () => {
     const claimCalls: AuditClaim[] = []
-    const updates: AuditPatch[] = []
+    const transitions: EmailAttempt[] = []
     await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
       createDeps({
         claimCalls,
-        updates,
+        transitions,
         fetchImpl: async () => new Response('nope', { status: 500 }),
       })
     )
     expect(claimCalls[0]?.deliveryStatus).toBe('queued')
-    expect(updates[0]).toMatchObject({
-      deliveryStatus: 'failed',
-      errorText: 'resend_5xx',
+    expect(transitions.at(-1)).toMatchObject({
+      processingState: 'event_submission_unknown',
+      deliveryStatus: 'unconfirmed',
+      errorMessage: 'event_submission_unknown',
+      resendEmailId: null,
+      nextAttemptAt: null,
     })
   })
 
@@ -755,7 +828,7 @@ describe('application-status-email handler', () => {
       )
       expect(await response.json()).toEqual({ ok: true, result: 'skipped' })
       expect(order).not.toContain('fetch')
-      expect(order).not.toContain('claimAudit')
+      expect(order).not.toContain('insertAudit')
     }
   })
 
@@ -806,7 +879,7 @@ describe('contact first_name sync', () => {
         profile: loadedProfile({ application_status: 'approved' }),
       })
     )
-    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
     expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
       `GET ${RESEND_CONTACTS_URL}/${encodeURIComponent(FETCHED_EMAIL)}`,
       `PATCH ${RESEND_CONTACTS_URL}/${encodeURIComponent(FETCHED_EMAIL)}`,
@@ -832,7 +905,7 @@ describe('contact first_name sync', () => {
         },
       })
     )
-    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
     const create = calls.find(
       (call) => call.method === 'POST' && call.url === RESEND_CONTACTS_URL
     )
@@ -876,7 +949,7 @@ describe('contact first_name sync', () => {
         },
       })
     )
-    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
     const writes = calls.filter((call) => call.method !== 'GET')
     expect(writes.map((call) => call.body)).toEqual([
       { email: FETCHED_EMAIL, first_name: EXPLICIT_FIRST_NAME },
@@ -900,7 +973,7 @@ describe('contact first_name sync', () => {
         },
       })
     )
-    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
     const creates = calls.filter(
       (call) => call.method === 'POST' && call.url === RESEND_CONTACTS_URL
     )
@@ -942,15 +1015,16 @@ describe('contact first_name sync', () => {
 
   it('does not send the status event when contact sync fails', async () => {
     const calls: RecordedRequest[] = []
-    const updates: AuditPatch[] = []
+    const transitions: EmailAttempt[] = []
+    const deps = createDeps({
+      calls,
+      transitions,
+      contactFetch: () =>
+        jsonResponse({ name: 'application_error', message: FETCHED_EMAIL }, 500),
+    })
     const response = await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
-      createDeps({
-        calls,
-        updates,
-        contactFetch: () =>
-          jsonResponse({ name: 'application_error', message: FETCHED_EMAIL }, 500),
-      })
+      deps
     )
     expect(await response.json()).toEqual({
       ok: false,
@@ -958,22 +1032,32 @@ describe('contact first_name sync', () => {
       result: CONTACT_SYNC_FAILED,
     })
     expect(calls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(false)
-    expect(updates[0]).toMatchObject({
-      deliveryStatus: 'failed',
-      errorText: CONTACT_SYNC_FAILED,
-      providerEmailId: null,
-      metadata: { category: CONTACT_SYNC_FAILED },
+    expect(transitions.at(-1)).toMatchObject({
+      processingState: CONTACT_SYNC_FAILED,
+      deliveryStatus: 'queued',
+      errorMessage: CONTACT_SYNC_FAILED,
+      resendEmailId: null,
+      providerEvent: { category: CONTACT_SYNC_FAILED },
     })
-    expect(JSON.stringify(updates[0])).not.toContain(FETCHED_EMAIL)
-    expect(JSON.stringify(updates[0])).not.toContain(EXPLICIT_FIRST_NAME)
+    expect(transitions.at(-1)?.nextAttemptAt).not.toBeNull()
+    expect(JSON.stringify(transitions.at(-1)?.providerEvent)).not.toContain(
+      FETCHED_EMAIL
+    )
+    expect(JSON.stringify(transitions.at(-1)?.errorMessage)).not.toContain(
+      FETCHED_EMAIL
+    )
+    expect(JSON.stringify(transitions.at(-1)?.providerEvent)).not.toContain(
+      EXPLICIT_FIRST_NAME
+    )
 
     const retryOrder: string[] = []
     const retry = await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
-      createDeps({ claim: 'duplicate', order: retryOrder })
+      { ...deps, log: (message) => retryOrder.push(message) }
     )
-    expect(await retry.json()).toEqual({ ok: true, result: 'duplicate' })
-    expect(retryOrder).toEqual(['loadProfile', 'claimAudit'])
+    expect(await retry.json()).toEqual({ ok: true, result: 'not_acquired' })
+    expect(retryOrder).toEqual(['not_acquired'])
+    expect(calls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(false)
   })
 
   it('does not invent a contact name when the explicit first name is missing or blank', async () => {
@@ -983,12 +1067,12 @@ describe('contact first_name sync', () => {
       null,
     ]) {
       const calls: RecordedRequest[] = []
-      const updates: AuditPatch[] = []
+      const transitions: EmailAttempt[] = []
       const response = await handleApplicationStatusEmailRequest(
         jsonRequest(webhookPayload({})),
         createDeps({
           calls,
-          updates,
+          transitions,
           profile: loadedProfile({ application_draft: draft }),
           contactFetch: (url, method) => {
             if (method === 'GET') return jsonResponse({ name: 'not_found' }, 404)
@@ -1002,8 +1086,10 @@ describe('contact first_name sync', () => {
         result: MISSING_FIRST_NAME,
       })
       expect(calls.map((call) => call.method)).toEqual(['GET'])
-      expect(updates[0]?.errorText).toBe(MISSING_FIRST_NAME)
-      expect(JSON.stringify(updates[0])).not.toContain(FETCHED_NAME)
+      expect(transitions.at(-1)?.processingState).toBe(MISSING_FIRST_NAME)
+      expect(transitions.at(-1)?.errorMessage).toBe(MISSING_FIRST_NAME)
+      expect(transitions.at(-1)?.nextAttemptAt).not.toBeNull()
+      expect(JSON.stringify(transitions.at(-1))).not.toContain(FETCHED_NAME)
     }
   })
 
@@ -1030,7 +1116,7 @@ describe('contact first_name sync', () => {
         },
       })
     )
-    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
     expect(calls.map((call) => call.method)).toEqual(['GET', 'POST'])
     expect(calls[1]?.url).toBe(RESEND_EVENTS_URL)
     expect(JSON.stringify(calls)).not.toContain('Kept')
@@ -1071,18 +1157,523 @@ describe('contact first_name sync', () => {
   })
 })
 
+describe('application status email recovery', () => {
+  const ROW_A = '44444444-4444-4444-8444-444444444444'
+  const ROW_B = '55555555-5555-4555-8555-555555555555'
+  const APP_B = '33333333-3333-4333-8333-333333333333'
+  const START = Date.parse('2026-10-07T17:00:00.000Z')
+
+  function dueRow(
+    overrides: Partial<EmailAttempt> & Pick<EmailAttempt, 'id' | 'eventKey'>
+  ): EmailAttempt {
+    return {
+      applicationId: PROFILE_ID,
+      recipientEmail: FETCHED_EMAIL,
+      applicationStatus: 'submitted',
+      resendEventName: 'application_submitted',
+      submissionVersion: 1,
+      processingState: 'contact_sync_pending',
+      claimToken: null,
+      claimedUntil: null,
+      attemptCount: 0,
+      nextAttemptAt: new Date(START - 1000).toISOString(),
+      deliveryStatus: 'queued',
+      errorMessage: null,
+      resendEmailId: null,
+      providerEvent: {},
+      ...overrides,
+    }
+  }
+
+  function retryRequest() {
+    return new Request('http://function.local/application-status-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        [RETRY_SECRET_HEADER]: RETRY_SECRET,
+      },
+      body: JSON.stringify({ mode: 'retry' }),
+    })
+  }
+
+  it('uses the same bounded backoff for a missing first name and a failed sync', () => {
+    const now = START
+    expect(retryNextAttemptAt(now, 1)).toBe(new Date(now + 60_000).toISOString())
+    expect(retryNextAttemptAt(now, 2)).toBe(new Date(now + 120_000).toISOString())
+    expect(retryNextAttemptAt(now, 5)).toBeNull()
+  })
+
+  it('never acquires an exhausted row or a future-scheduled row', async () => {
+    const audit = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_A,
+        eventKey: 'application_submitted:1',
+        processingState: 'contact_sync_failed',
+        attemptCount: 5,
+        nextAttemptAt: null,
+        errorMessage: CONTACT_SYNC_FAILED,
+      })
+    )
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_B,
+        applicationId: APP_B,
+        eventKey: 'application_submitted:1',
+        nextAttemptAt: new Date(START + 60_000).toISOString(),
+      })
+    )
+    expect(await audit.acquireById(ROW_A, 30)).toBeNull()
+    expect(await audit.acquireById(ROW_B, 30)).toBeNull()
+    expect(await audit.acquireNext(30)).toBeNull()
+
+    const calls: RecordedRequest[] = []
+    const response = await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({ audit, calls })
+    )
+    expect(await response.json()).toEqual({ ok: true, result: 'retry_batch' })
+    expect(calls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(false)
+    expect(calls.some((call) => call.url.startsWith(RESEND_CONTACTS_URL))).toBe(
+      false
+    )
+  })
+
+  it('transitions a due failed row back to pending and then accepts the event', async () => {
+    let nowMs = START
+    const audit = createMemoryAuditLease(() => new Date(nowMs))
+    let contactAttempts = 0
+    const transitions: EmailAttempt[] = []
+    const deps = createDeps({
+      audit,
+      transitions,
+      contactFetch: () => {
+        contactAttempts += 1
+        if (contactAttempts === 1) {
+          return jsonResponse({ name: 'application_error' }, 500)
+        }
+        if (contactAttempts === 2) {
+          return jsonResponse({ name: 'not_found' }, 404)
+        }
+        return jsonResponse({ object: 'contact', id: 'con_1' }, 201)
+      },
+    })
+
+    const failed = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      deps
+    )
+    expect(await failed.json()).toMatchObject({ result: CONTACT_SYNC_FAILED })
+    expect(transitions.at(-1)?.processingState).toBe('contact_sync_failed')
+    expect(transitions.at(-1)?.attemptCount).toBe(1)
+    expect(transitions.at(-1)?.nextAttemptAt).toBe(
+      new Date(START + 60_000).toISOString()
+    )
+
+    nowMs = START + 60_000
+    const retried = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      deps
+    )
+    expect(await retried.json()).toEqual({ ok: true, result: 'event_accepted' })
+    expect(
+      transitions.some(
+        (row) =>
+          row.processingState === 'contact_sync_pending' && row.attemptCount === 1
+      )
+    ).toBe(true)
+    expect(transitions.at(-1)?.processingState).toBe('event_accepted')
+  })
+
+  it('transitions a due missing-name row back to pending before contact sync', async () => {
+    const audit = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_A,
+        eventKey: 'application_approved:1',
+        applicationStatus: 'approved',
+        resendEventName: 'application_approved',
+        processingState: 'missing_first_name',
+        attemptCount: 2,
+        nextAttemptAt: new Date(START - 1000).toISOString(),
+        errorMessage: MISSING_FIRST_NAME,
+      })
+    )
+    const transitions: EmailAttempt[] = []
+    const response = await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({
+        audit,
+        transitions,
+        profile: loadedProfile({
+          application_status: 'approved',
+          application_draft: draftWithFirstName(EXPLICIT_FIRST_NAME),
+        }),
+      })
+    )
+    expect(await response.json()).toEqual({ ok: true, result: 'retry_batch' })
+    expect(
+      transitions.some((row) => row.processingState === 'contact_sync_pending')
+    ).toBe(true)
+    expect(transitions.at(-1)).toMatchObject({
+      processingState: 'event_accepted',
+      deliveryStatus: 'unconfirmed',
+      resendEmailId: null,
+      nextAttemptAt: null,
+    })
+  })
+
+  it('does not post a later batch item under an expired lease', async () => {
+    const audit = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_A,
+        eventKey: 'application_submitted:1',
+        recipientEmail: 'first@example.com',
+        nextAttemptAt: new Date(START - 2000).toISOString(),
+      })
+    )
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_B,
+        applicationId: APP_B,
+        eventKey: 'application_submitted:1',
+        recipientEmail: 'second@example.com',
+        nextAttemptAt: new Date(START - 1000).toISOString(),
+      })
+    )
+    let confirmations = 0
+    const calls: RecordedRequest[] = []
+    await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({
+        audit,
+        calls,
+        beforeEventConfirmation: async () => {
+          confirmations += 1
+          if (confirmations === 1) audit.expireLeases()
+        },
+      })
+    )
+    const events = calls.filter((call) => call.url === RESEND_EVENTS_URL)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.body).toEqual({
+      event: 'application_submitted',
+      email: 'second@example.com',
+    })
+    const rows = (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(rows.find((row) => row.id === ROW_A)?.processingState).toBe(
+      'event_submitting'
+    )
+    expect(rows.find((row) => row.id === ROW_B)?.processingState).toBe(
+      'event_accepted'
+    )
+  })
+
+  it('stops obsolete and version-mismatched events on the webhook and the worker', async () => {
+    const versionCalls: RecordedRequest[] = []
+    const versionMismatch = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({ application_submission_version: 1 })),
+      createDeps({
+        calls: versionCalls,
+        profile: loadedProfile({ application_submission_version: 2 }),
+      })
+    )
+    expect(await versionMismatch.json()).toEqual({ ok: true, result: 'skipped' })
+    expect(versionCalls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(
+      false
+    )
+
+    const obsoleteCalls: RecordedRequest[] = []
+    const obsolete = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        calls: obsoleteCalls,
+        profile: loadedProfile({ application_status: 'archived' }),
+      })
+    )
+    expect(await obsolete.json()).toEqual({ ok: true, result: 'obsolete' })
+    expect(obsoleteCalls).toHaveLength(0)
+
+    const changedBeforeSend: RecordedRequest[] = []
+    const recheck = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        calls: changedBeforeSend,
+        profiles: [
+          loadedProfile(),
+          loadedProfile(),
+          loadedProfile({ application_submission_version: 2 }),
+        ],
+      })
+    )
+    expect(await recheck.json()).toEqual({ ok: true, result: 'obsolete' })
+    expect(changedBeforeSend.some((call) => call.url === RESEND_EVENTS_URL)).toBe(
+      false
+    )
+
+    const audit = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_A,
+        eventKey: 'application_submitted:1',
+        submissionVersion: 1,
+      })
+    )
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_B,
+        applicationId: APP_B,
+        eventKey: 'application_approved:1',
+        applicationStatus: 'approved',
+        resendEventName: 'application_approved',
+        submissionVersion: 1,
+      })
+    )
+    const workerCalls: RecordedRequest[] = []
+    let loads = 0
+    const worker = createDeps({ audit, calls: workerCalls })
+    worker.loadProfile = async () => {
+      loads += 1
+      if (loads === 1) {
+        return loadedProfile({ application_submission_version: 2 })
+      }
+      return loadedProfile({ application_status: 'rejected' })
+    }
+    const batch = await handleApplicationStatusEmailRequest(retryRequest(), worker)
+    expect(await batch.json()).toEqual({ ok: true, result: 'retry_batch' })
+    expect(workerCalls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(false)
+    const rows = (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(rows.every((row) => row.processingState === 'obsolete')).toBe(true)
+    expect(rows.every((row) => row.nextAttemptAt == null)).toBe(true)
+  })
+
+  it('stores a missing Resend key for later recovery without a provider call', async () => {
+    let nowMs = START
+    const audit = createMemoryAuditLease(() => new Date(nowMs))
+    const calls: RecordedRequest[] = []
+    const logs: string[] = []
+    const missingKey = createDeps({
+      audit,
+      calls,
+      logs,
+      env: { RESEND_API_KEY: '' },
+    })
+
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      missingKey
+    )
+    const body = await response.json()
+    expect(body).toEqual({
+      ok: false,
+      error: 'failed',
+      result: CONTACT_SYNC_FAILED,
+    })
+    expect(calls).toHaveLength(0)
+    const rows = () => (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(rows()).toHaveLength(1)
+    const scheduled = rows()[0]
+    expect(scheduled).toMatchObject({
+      processingState: CONTACT_SYNC_FAILED,
+      attemptCount: 1,
+      nextAttemptAt: new Date(START + 60_000).toISOString(),
+      claimToken: null,
+      resendEmailId: null,
+    })
+    expect(scheduled?.processingState).not.toBe('event_submitting')
+    const publicText = `${JSON.stringify(body)}\n${logs.join('\n')}\n${scheduled?.errorMessage}`
+    expect(publicText).not.toContain(FETCHED_EMAIL)
+    expect(publicText).not.toContain(EXPLICIT_FIRST_NAME)
+    expect(publicText).not.toContain(WEBHOOK_SECRET)
+    expect(publicText).not.toContain(RESEND_KEY)
+
+    const duplicate = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      missingKey
+    )
+    expect(await duplicate.json()).toEqual({ ok: true, result: 'not_acquired' })
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]).toMatchObject({
+      id: scheduled?.id,
+      attemptCount: 1,
+      nextAttemptAt: scheduled?.nextAttemptAt,
+      processingState: CONTACT_SYNC_FAILED,
+    })
+    expect(calls).toHaveLength(0)
+
+    nowMs = START + 60_000
+    const recoveredCalls: RecordedRequest[] = []
+    const recovered = await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({
+        audit,
+        calls: recoveredCalls,
+        env: { RESEND_API_KEY: RESEND_KEY },
+      })
+    )
+    expect(await recovered.json()).toEqual({ ok: true, result: 'retry_batch' })
+    const events = recoveredCalls.filter((call) => call.url === RESEND_EVENTS_URL)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.body).toEqual({
+      event: 'application_submitted',
+      email: FETCHED_EMAIL,
+    })
+    expect(rows()[0]).toMatchObject({
+      id: scheduled?.id,
+      processingState: 'event_accepted',
+      deliveryStatus: 'unconfirmed',
+      resendEmailId: null,
+      attemptCount: 1,
+    })
+
+    const again = await handleApplicationStatusEmailRequest(
+      retryRequest(),
+      createDeps({
+        audit,
+        calls: recoveredCalls,
+        env: { RESEND_API_KEY: RESEND_KEY },
+      })
+    )
+    expect(await again.json()).toEqual({ ok: true, result: 'retry_batch' })
+    expect(recoveredCalls.filter((call) => call.url === RESEND_EVENTS_URL)).toHaveLength(1)
+  })
+
+  it('does not create a recovery row for an invalid or unauthenticated request', async () => {
+    const cases: Array<{ request: Request; status: number }> = [
+      {
+        request: jsonRequest(webhookPayload({}), { secret: null }),
+        status: 401,
+      },
+      {
+        request: jsonRequest(webhookPayload({}), { secret: 'wrong-secret' }),
+        status: 401,
+      },
+      {
+        request: new Request('http://function.local/application-status-email', {
+          method: 'POST',
+          headers: { [WEBHOOK_SECRET_HEADER]: WEBHOOK_SECRET },
+          body: '{',
+        }),
+        status: 200,
+      },
+      {
+        request: jsonRequest(
+          webhookPayload({ previousStatus: 'submitted', nextStatus: 'submitted' })
+        ),
+        status: 200,
+      },
+      {
+        request: jsonRequest(webhookPayload({ application_submission_version: 2 })),
+        status: 200,
+      },
+    ]
+
+    for (const row of cases) {
+      const audit = createMemoryAuditLease(() => new Date(START))
+      const calls: RecordedRequest[] = []
+      const response = await handleApplicationStatusEmailRequest(
+        row.request,
+        createDeps({
+          audit,
+          calls,
+          env: { RESEND_API_KEY: '' },
+          profile: loadedProfile(),
+        })
+      )
+      expect(response.status).toBe(row.status)
+      expect((audit as AuditLease & { rows: EmailAttempt[] }).rows).toHaveLength(0)
+      expect(calls).toHaveLength(0)
+    }
+  })
+
+  it('does not acquire an exhausted missing-key row or reset its attempt cap', async () => {
+    const audit = createMemoryAuditLease(() => new Date(START))
+    seedEmailAttempt(
+      audit,
+      dueRow({
+        id: ROW_A,
+        eventKey: 'application_submitted:1',
+        processingState: 'contact_sync_failed',
+        attemptCount: 5,
+        nextAttemptAt: null,
+        errorMessage: CONTACT_SYNC_FAILED,
+      })
+    )
+    const calls: RecordedRequest[] = []
+    const deps = createDeps({
+      audit,
+      calls,
+      env: { RESEND_API_KEY: '' },
+    })
+    const webhook = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      deps
+    )
+    expect(await webhook.json()).toEqual({ ok: true, result: 'not_acquired' })
+    const worker = await handleApplicationStatusEmailRequest(retryRequest(), deps)
+    expect(await worker.json()).toEqual({ ok: true, result: 'retry_batch' })
+    const rows = (audit as AuditLease & { rows: EmailAttempt[] }).rows
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      id: ROW_A,
+      processingState: CONTACT_SYNC_FAILED,
+      attemptCount: 5,
+      nextAttemptAt: null,
+    })
+    expect(calls).toHaveLength(0)
+    expect(await audit.acquireById(ROW_A, 30)).toBeNull()
+    expect(await audit.acquireNext(30)).toBeNull()
+  })
+})
+
 const FORBIDDEN_AUDIT_COLUMNS = [
   'provider_email_id',
   'error_text',
   'provider_metadata',
 ] as const
 
-describe('production application_email_log REST payloads', () => {
+describe('production application email lease RPC payloads', () => {
   const supabaseUrl = 'https://example.supabase.co'
   const serviceKey = 'test-service-role-key'
+  const claimToken = '66666666-6666-4666-8666-666666666666'
+
+  function auditRow(state: string, token: string | null) {
+    return {
+      id: AUDIT_ID,
+      application_id: PROFILE_ID,
+      recipient_email: FETCHED_EMAIL,
+      event_key: 'application_submitted:1',
+      application_status: 'submitted',
+      resend_event_name: 'application_submitted',
+      submission_version: 1,
+      processing_state: state,
+      claim_token: token,
+      claimed_until: '2026-10-07T17:00:30.000Z',
+      attempt_count: 0,
+      next_attempt_at:
+        state === 'contact_sync_pending' ? '2026-10-07T17:00:00.000Z' : null,
+      delivery_status:
+        state === 'event_accepted' || state === 'event_submission_unknown'
+          ? 'unconfirmed'
+          : 'queued',
+      error_message:
+        state === 'event_submission_unknown' ? 'event_submission_unknown' : null,
+      resend_email_id: null,
+      provider_event: { category: state },
+    }
+  }
 
   function productionDeps(options?: {
     resendStatus?: number
+    resendBody?: unknown
     resendThrow?: boolean
     restBodies?: Record<string, unknown>[]
   }) {
@@ -1097,7 +1688,7 @@ describe('production application_email_log REST payloads', () => {
         })[name],
       async (input, init) => {
         const url = String(input)
-        const method = init?.method ?? 'GET'
+        const method = (init?.method ?? 'GET').toUpperCase()
         if (url.includes('/rest/v1/profiles')) {
           restBodies.push({ method, url, body: null })
           return new Response(
@@ -1112,21 +1703,46 @@ describe('production application_email_log REST payloads', () => {
             { status: 200 }
           )
         }
-        if (url.includes('/rest/v1/application_email_log')) {
-          restBodies.push({
-            method,
-            url,
-            body: JSON.parse(String(init?.body ?? '{}')),
-          })
-          if (method === 'POST') {
-            return new Response(JSON.stringify([{ id: AUDIT_ID }]), {
-              status: 201,
-            })
+        if (url.includes('/rest/v1/rpc/')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as Record<
+            string,
+            unknown
+          >
+          restBodies.push({ method, url, body })
+          if (url.endsWith('/insert_application_email_pending')) {
+            return new Response(
+              JSON.stringify({
+                inserted: true,
+                row: auditRow('contact_sync_pending', null),
+              }),
+              { status: 200 }
+            )
           }
-          return new Response(null, { status: 200 })
+          if (url.endsWith('/acquire_application_email_lease')) {
+            return new Response(
+              JSON.stringify({ row: auditRow('contact_sync_pending', claimToken) }),
+              { status: 200 }
+            )
+          }
+          if (url.endsWith('/transition_application_email_attempt')) {
+            const nextState = String(body.p_next_state)
+            return new Response(
+              JSON.stringify({
+                row: auditRow(
+                  nextState,
+                  body.p_clear_lease === true ? null : claimToken
+                ),
+              }),
+              { status: 200 }
+            )
+          }
+          if (url.endsWith('/sweep_expired_event_submissions')) {
+            return new Response('0', { status: 200 })
+          }
+          return new Response(JSON.stringify({ row: null }), { status: 200 })
         }
         if (url.startsWith(RESEND_CONTACTS_URL)) {
-          if ((init?.method ?? 'GET').toUpperCase() === 'GET') {
+          if (method === 'GET') {
             return new Response(
               JSON.stringify({
                 object: 'contact',
@@ -1144,35 +1760,38 @@ describe('production application_email_log REST payloads', () => {
         if (options?.resendThrow) {
           throw new Error('connect ECONNREFUSED')
         }
-        return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
-          status: options?.resendStatus ?? 200,
-        })
+        return new Response(
+          JSON.stringify(
+            options?.resendBody ?? {
+              object: 'event',
+              event: 'application_submitted',
+            }
+          ),
+          { status: options?.resendStatus ?? 202 }
+        )
       }
     )
   }
 
-  it('claims with production column names and never sends retired audit fields', async () => {
+  it('inserts pending work through the lease RPC and never sends retired audit fields', async () => {
     const restBodies: Record<string, unknown>[] = []
     await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
       productionDeps({ restBodies })
     )
-    const insert = restBodies.find((row) => row.method === 'POST')
-      ?.body as Record<string, unknown>
+    const insert = restBodies.find((row) =>
+      String(row.url).includes('insert_application_email_pending')
+    )?.body as Record<string, unknown>
     expect(insert).toEqual({
-      application_id: PROFILE_ID,
-      recipient_user_id: PROFILE_ID,
-      recipient_email: FETCHED_EMAIL,
-      event_key: 'application_submitted:1',
-      application_status: 'submitted',
-      delivery_status: 'queued',
-      error_message: null,
-      provider_event: {
-        event: 'application_submitted',
-        stage: 'claimed',
-      },
+      p_application_id: PROFILE_ID,
+      p_recipient_email: FETCHED_EMAIL,
+      p_event_key: 'application_submitted:1',
+      p_application_status: 'submitted',
+      p_resend_event_name: 'application_submitted',
+      p_submission_version: 1,
     })
     const serialized = JSON.stringify(restBodies)
+    expect(serialized).not.toContain('/rest/v1/application_email_log')
     for (const column of FORBIDDEN_AUDIT_COLUMNS) {
       expect(serialized).not.toContain(column)
     }
@@ -1183,48 +1802,64 @@ describe('production application_email_log REST payloads', () => {
     expect(String(profileGet?.url)).not.toContain('full_name')
   })
 
-  it('patches sent using resend_email_id, error_message, and provider_event', async () => {
+  it('records a documented 202 as event_accepted with a null email id', async () => {
     const restBodies: Record<string, unknown>[] = []
-    await handleApplicationStatusEmailRequest(
+    const response = await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
       productionDeps({ restBodies })
     )
-    const patch = restBodies.find((row) => row.method === 'PATCH')
-      ?.body as Record<string, unknown>
-    expect(patch).toEqual({
-      delivery_status: 'sent',
-      error_message: null,
-      resend_email_id: 'evt_opaque_1',
-      provider_event: {
-        event: 'application_submitted',
-        http_status_category: '2xx',
-      },
+    expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
+    const accepted = restBodies.find(
+      (row) =>
+        String(row.url).includes('transition_application_email_attempt') &&
+        (row.body as { p_next_state?: string }).p_next_state === 'event_accepted'
+    )?.body as Record<string, unknown>
+    expect(accepted).toMatchObject({
+      p_expected_state: 'event_submitting',
+      p_next_state: 'event_accepted',
+      p_delivery_status: 'unconfirmed',
+      p_error_message: null,
+      p_resend_email_id: null,
+      p_next_attempt_at: null,
+      p_clear_lease: true,
+      p_provider_event: { category: 'event_accepted' },
     })
     for (const column of FORBIDDEN_AUDIT_COLUMNS) {
-      expect(JSON.stringify(patch)).not.toContain(column)
+      expect(JSON.stringify(accepted)).not.toContain(column)
     }
   })
 
-  it('patches failed using sanitized error_message and production columns only', async () => {
+  it('records a non-202 response as event_submission_unknown', async () => {
     const restBodies: Record<string, unknown>[] = []
-    await handleApplicationStatusEmailRequest(
+    const response = await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
-      productionDeps({ restBodies, resendStatus: 500 })
+      productionDeps({
+        restBodies,
+        resendStatus: 200,
+        resendBody: { id: 'evt_opaque_1' },
+      })
     )
-    const patch = restBodies.find((row) => row.method === 'PATCH')
-      ?.body as Record<string, unknown>
-    expect(patch).toEqual({
-      delivery_status: 'failed',
-      error_message: 'resend_5xx',
-      resend_email_id: null,
-      provider_event: {
-        event: 'application_submitted',
-        http_status_category: '5xx',
-        category: 'resend_5xx',
-      },
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: 'failed',
+      result: 'event_submission_unknown',
     })
+    const unknown = restBodies.find(
+      (row) =>
+        String(row.url).includes('transition_application_email_attempt') &&
+        (row.body as { p_next_state?: string }).p_next_state ===
+          'event_submission_unknown'
+    )?.body as Record<string, unknown>
+    expect(unknown).toMatchObject({
+      p_next_state: 'event_submission_unknown',
+      p_delivery_status: 'unconfirmed',
+      p_error_message: 'event_submission_unknown',
+      p_resend_email_id: null,
+      p_next_attempt_at: null,
+    })
+    expect(JSON.stringify(unknown)).not.toContain('evt_opaque_1')
     for (const column of FORBIDDEN_AUDIT_COLUMNS) {
-      expect(JSON.stringify(patch)).not.toContain(column)
+      expect(JSON.stringify(unknown)).not.toContain(column)
     }
   })
 })

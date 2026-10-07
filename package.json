@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration:application-email-lease": "APPLICATION_EMAIL_LEASE_DESTRUCTIVE_TEST=1 LEASE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:55432/hsc_application_email_lease_test vitest run --config vitest.lease-integration.config.ts",
     "backfill:auth-display-names": "npx --yes tsx scripts/backfill-auth-display-names.ts"
   },
   "dependencies": {
@@ -24,10 +25,12 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "pg": "^8.23.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.2.7"
