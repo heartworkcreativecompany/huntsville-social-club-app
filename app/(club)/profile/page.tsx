@@ -24,6 +24,7 @@ import { computeProfileCompletion } from '@/lib/profile-completion'
 import { parseVerificationState } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
 import ProfileContactEmailCard from '@/components/profile/profile-contact-email-card'
+import EmailMarketingPreferenceCard from '@/components/profile/email-marketing-preference-card'
 import ProfilePhoneVerificationCard from '@/components/profile/profile-phone-verification-card'
 import ProfileForm from '@/app/(club)/members/profile-form'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
@@ -54,6 +55,17 @@ export default async function YourProfilePage() {
   }
 
   const profile = viewer.profile
+  const supabase = await createClient()
+  const marketingResult = await supabase
+    .from('profiles')
+    .select('email_marketing_opt_in, email_marketing_opted_out_at')
+    .eq('id', viewer.userId)
+    .maybeSingle()
+  const marketingReady = !marketingResult.error
+  const marketingOptedIn =
+    marketingReady &&
+    marketingResult.data?.email_marketing_opt_in === true &&
+    !marketingResult.data?.email_marketing_opted_out_at
   const liveDraft = mergeProfileIntoDraft(profile)
   const profilePreview = publicProfileDetailsFromDraft(liveDraft, {
     connectionsOpenTo: profile?.connections_open_to,
@@ -121,7 +133,6 @@ export default async function YourProfilePage() {
     viewer,
     entitlements
   )
-  const supabase = await createClient()
   if (currentMember) {
     const [withBadges] = await attachPublicRecognitionBadges(supabase, [
       currentMember,
@@ -212,6 +223,10 @@ export default async function YourProfilePage() {
                 <MemberPublicDetails details={profilePreview} compact omitHeaderFields />
               </div>
             </Card>
+          ) : null}
+
+          {marketingReady ? (
+            <EmailMarketingPreferenceCard optedIn={marketingOptedIn} />
           ) : null}
 
           <ProfileContactEmailCard

@@ -19,8 +19,8 @@ export const SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LINKS = {
   privacy: '/privacy',
 } as const
 
-export const PHONE_VERIFICATION_REQUIRED_COPY =
-  'A verified mobile number is required to help protect member accounts and support secure membership access.'
+export const PHONE_VERIFICATION_OPTIONAL_COPY =
+  'Phone verification is optional. Request a one-time code only if you want a verified number. A verified number is not required to submit an application or for membership approval.'
 
 export const SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LABEL =
   'Optional: I agree to receive automated SMS messages from Huntsville Social Club about my membership application, account updates, RSVP confirmations, and reminders for events I register to attend. Consent is not required to create an account, submit an application, or become a member. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out or HELP for help.'

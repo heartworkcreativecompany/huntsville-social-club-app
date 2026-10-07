@@ -8,7 +8,6 @@ import {
 import { requireUsPhoneE164 } from '@/lib/member-phone'
 import {
   applySmsMarketingStop,
-  nextSmsAccountNotificationsConsentState,
   type SmsAccountNotificationsConsentRecord,
 } from '@/lib/sms-marketing-consent'
 import { createClient } from '@/lib/supabase/server'
@@ -20,8 +19,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * the SMS provider configured in the Supabase project (commonly Twilio).
  * All numbers are normalized to US E.164 before any Auth/gate updates.
  *
- * Optional account-notification SMS consent is recorded separately and is
- * never required to send a verification code.
+ * Requesting a verification code does not record SMS consent.
+ * New account-notification SMS opt-in is no longer accepted.
+ * Historical sms_marketing_* rows and STOP opt-outs are unchanged.
  */
 
 function revalidatePhonePaths(userId: string) {
@@ -87,63 +87,16 @@ export async function syncPhoneVerificationAfterOtp(phoneInput: string) {
 }
 
 /**
- * Persist optional account-notification SMS consent when the member checks the
- * consent checkbox. Does nothing when optedIn is false (verification may
- * proceed without consent; prior opt-in evidence is preserved).
+ * New SMS consent is not recorded. Historical rows stay in place.
+ * Calling this does not write a profile update.
  */
 export async function recordSmsAccountNotificationsConsent(input: {
   phoneInput: string
   optedIn: boolean
 }) {
-  if (!input.optedIn) {
-    return { success: true as const, updated: false }
-  }
-
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'You must be signed in.' }
-  }
-
-  const parsed = requireUsPhoneE164(input.phoneInput)
-  if (parsed.error || !parsed.e164) {
-    return { error: parsed.error ?? 'Enter a valid phone number.' }
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select(
-      'sms_marketing_opt_in, sms_marketing_opt_in_at, sms_marketing_consent_version, sms_marketing_consent_source, sms_marketing_consent_phone_e164, sms_marketing_opted_out_at'
-    )
-    .eq('id', user.id)
-    .maybeSingle()
-
-  const patch = nextSmsAccountNotificationsConsentState(
-    profile as SmsAccountNotificationsConsentRecord | null,
-    { optedIn: true, phoneE164: parsed.e164 }
-  )
-
-  if (!patch) {
-    return { success: true as const, updated: false, phoneE164: parsed.e164 }
-  }
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      ...patch,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', user.id)
-
-  if (error) {
-    return { error: 'Could not save text-message preferences.' }
-  }
-
-  revalidatePhonePaths(user.id)
-  return { success: true as const, updated: true, phoneE164: parsed.e164 }
+  void input.phoneInput
+  void input.optedIn
+  return { success: true as const, updated: false, retired: true as const }
 }
 
 /** Apply STOP / unsubscribe for account-notification texts by E.164 phone. */
