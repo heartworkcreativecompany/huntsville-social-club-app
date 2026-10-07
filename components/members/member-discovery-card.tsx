@@ -10,7 +10,10 @@ import {
   memberPublicIntentLabel,
 } from '@/lib/member-public-intent'
 import { MemberCardBadges } from '@/components/members/member-badge-row'
-import { primaryMemberPhoto } from '@/lib/member-photos'
+import {
+  MEMBER_DIRECTORY_CARD_PHOTO_ASPECT_CLASS,
+  primaryMemberPhoto,
+} from '@/lib/member-photos'
 import MemberPhotoDisplay from '@/components/members/member-photo-display'
 
 /**
@@ -32,7 +35,9 @@ export default function MemberDiscoveryCard({
         href={`/members/${member.id}`}
         className="block flex-1 no-underline text-inherit"
       >
-        <div className="relative aspect-[4/5] overflow-hidden rounded-lg bg-surface-elevated">
+        <div
+          className={`relative ${MEMBER_DIRECTORY_CARD_PHOTO_ASPECT_CLASS} overflow-hidden rounded-lg bg-surface-elevated`}
+        >
           {primaryPhoto ? (
             <MemberPhotoDisplay
               memberId={member.id}
