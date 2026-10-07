@@ -7,10 +7,17 @@
  *
  * Idempotency: event_key is `${resendEventName}:${applicationSubmissionVersion}`.
  * Version is incremented in Postgres only on draft|needs_info → submitted.
+ * The audit row is claimed before any Resend call. A later webhook with the
+ * same event_key is a duplicate and returns before Resend is called. A claim
+ * marked contact_sync_failed or missing_first_name therefore does not
+ * automatically retry.
  */
 
 export const WEBHOOK_SECRET_HEADER = 'x-application-status-webhook-secret'
 export const RESEND_EVENTS_URL = 'https://api.resend.com/events/send'
+export const RESEND_CONTACTS_URL = 'https://api.resend.com/contacts'
+export const CONTACT_SYNC_FAILED = 'contact_sync_failed'
+export const MISSING_FIRST_NAME = 'missing_first_name'
 
 export const ACTION_URLS = {
   application_submitted:
@@ -39,7 +46,7 @@ const UUID_RE =
 
 export type LoadedProfile = {
   email: string | null
-  full_name: string | null
+  application_draft: unknown
   application_status: string | null
   application_submission_version: number | null
 }
@@ -76,7 +83,12 @@ export type HandlerDeps = {
 
 type JsonResponse = {
   ok: boolean
-  result?: 'sent' | 'skipped' | 'duplicate'
+  result?:
+    | 'sent'
+    | 'skipped'
+    | 'duplicate'
+    | 'missing_first_name'
+    | 'contact_sync_failed'
   error?: 'unauthorized' | 'method_not_allowed' | 'failed'
 }
 
@@ -94,9 +106,223 @@ function isApplicationStatus(value: unknown): value is ApplicationStatus {
   )
 }
 
-function firstNameFromFullName(fullName: string | null | undefined): string {
-  const token = fullName?.trim().split(/\s+/)[0]
-  return token ?? ''
+/** Explicit application first name. Display name and full_name are not names. */
+export function explicitFirstNameFromDraft(draft: unknown): string | null {
+  if (!draft || typeof draft !== 'object') return null
+  const profile = (draft as { profile?: unknown }).profile
+  if (!profile || typeof profile !== 'object') return null
+  const value = (profile as { firstName?: unknown }).firstName
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function usableStoredFirstName(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function contactUrl(email: string): string {
+  return `${RESEND_CONTACTS_URL}/${encodeURIComponent(email)}`
+}
+
+function resendHeaders(apiKey: string, jsonBody: boolean): HeadersInit {
+  return {
+    Authorization: `Bearer ${apiKey}`,
+    Accept: 'application/json',
+    ...(jsonBody ? { 'Content-Type': 'application/json' } : {}),
+  }
+}
+
+async function drain(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel()
+  } catch {
+    /* ignore unread body */
+  }
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+async function providerErrorName(response: Response): Promise<string | null> {
+  const parsed = await readJson(response)
+  if (!parsed || typeof parsed !== 'object') return null
+  const name = (parsed as { name?: unknown }).name
+  return typeof name === 'string' ? name : null
+}
+
+type ContactLookup =
+  | { status: 'found'; firstName: string | null }
+  | { status: 'missing' }
+  | { status: 'error' }
+
+async function lookupContact(
+  fetchImpl: typeof fetch,
+  apiKey: string,
+  email: string
+): Promise<ContactLookup> {
+  let response: Response
+  try {
+    response = await fetchImpl(contactUrl(email), {
+      method: 'GET',
+      headers: resendHeaders(apiKey, false),
+    })
+  } catch {
+    return { status: 'error' }
+  }
+  if (response.status === 404) {
+    await drain(response)
+    return { status: 'missing' }
+  }
+  if (!response.ok) {
+    await drain(response)
+    return { status: 'error' }
+  }
+  const parsed = await readJson(response)
+  const firstName =
+    parsed && typeof parsed === 'object'
+      ? usableStoredFirstName((parsed as { first_name?: unknown }).first_name)
+      : null
+  return { status: 'found', firstName }
+}
+
+async function patchContactFirstName(
+  fetchImpl: typeof fetch,
+  apiKey: string,
+  email: string,
+  firstName: string
+): Promise<boolean> {
+  let response: Response
+  try {
+    response = await fetchImpl(contactUrl(email), {
+      method: 'PATCH',
+      headers: resendHeaders(apiKey, true),
+      body: JSON.stringify({ first_name: firstName }),
+    })
+  } catch {
+    return false
+  }
+  await drain(response)
+  return response.ok
+}
+
+type CreateContactResult = 'created' | 'locked' | 'failed'
+
+/**
+ * Create payload is email + first_name only.
+ * OpenAPI CreateContactOptions requires email and does not define a default
+ * for unsubscribed. Setting unsubscribed true suppresses Broadcasts and
+ * Automation emails, which would block this status message. Broadcasts are
+ * sent to a Segment; omitting segments and topics does not enroll the
+ * contact. unsubscribed is omitted because neither true nor false is a
+ * documented "not subscribed" default that still allows the automation.
+ */
+async function createContact(
+  fetchImpl: typeof fetch,
+  apiKey: string,
+  email: string,
+  firstName: string
+): Promise<CreateContactResult> {
+  let response: Response
+  try {
+    response = await fetchImpl(RESEND_CONTACTS_URL, {
+      method: 'POST',
+      headers: resendHeaders(apiKey, true),
+      body: JSON.stringify({
+        email,
+        first_name: firstName,
+      }),
+    })
+  } catch {
+    return 'failed'
+  }
+  if (response.ok) {
+    await drain(response)
+    return 'created'
+  }
+  const name = await providerErrorName(response)
+  if (response.status === 409 && name === 'resource_locked') return 'locked'
+  return 'failed'
+}
+
+type ContactSyncResult =
+  | { ok: true }
+  | { ok: false; reason: typeof CONTACT_SYNC_FAILED | typeof MISSING_FIRST_NAME }
+
+async function ensureContactFirstName(
+  fetchImpl: typeof fetch,
+  apiKey: string,
+  email: string,
+  draft: unknown
+): Promise<ContactSyncResult> {
+  const explicitName = explicitFirstNameFromDraft(draft)
+  let lookup = await lookupContact(fetchImpl, apiKey, email)
+  if (lookup.status === 'error') return { ok: false, reason: CONTACT_SYNC_FAILED }
+
+  if (lookup.status === 'found') {
+    if (!explicitName) {
+      return lookup.firstName
+        ? { ok: true }
+        : { ok: false, reason: MISSING_FIRST_NAME }
+    }
+    const patched = await patchContactFirstName(
+      fetchImpl,
+      apiKey,
+      email,
+      explicitName
+    )
+    return patched
+      ? { ok: true }
+      : { ok: false, reason: CONTACT_SYNC_FAILED }
+  }
+
+  if (!explicitName) return { ok: false, reason: MISSING_FIRST_NAME }
+
+  const created = await createContact(fetchImpl, apiKey, email, explicitName)
+  if (created === 'created') return { ok: true }
+
+  // A concurrent create can win between the 404 and this POST.
+  // resource_locked (409) is the documented "retry the request" signal.
+  // Any other failure is re-read once in case the contact now exists.
+  lookup = await lookupContact(fetchImpl, apiKey, email)
+  if (lookup.status === 'found') {
+    const patched = await patchContactFirstName(
+      fetchImpl,
+      apiKey,
+      email,
+      explicitName
+    )
+    return patched
+      ? { ok: true }
+      : { ok: false, reason: CONTACT_SYNC_FAILED }
+  }
+  if (lookup.status === 'error') return { ok: false, reason: CONTACT_SYNC_FAILED }
+
+  if (created === 'locked') {
+    const retried = await createContact(fetchImpl, apiKey, email, explicitName)
+    if (retried === 'created') return { ok: true }
+    lookup = await lookupContact(fetchImpl, apiKey, email)
+    if (lookup.status === 'found') {
+      const patched = await patchContactFirstName(
+        fetchImpl,
+        apiKey,
+        email,
+        explicitName
+      )
+      return patched
+        ? { ok: true }
+        : { ok: false, reason: CONTACT_SYNC_FAILED }
+    }
+  }
+
+  return { ok: false, reason: CONTACT_SYNC_FAILED }
 }
 
 function isUuid(value: unknown): value is string {
@@ -349,11 +575,39 @@ export async function handleApplicationStatusEmailRequest(
     return json(200, { ok: false, error: 'failed' })
   }
 
+  const contactSync = await ensureContactFirstName(
+    deps.fetch,
+    resendKey,
+    recipientEmail,
+    profile.application_draft
+  )
+  if (!contactSync.ok) {
+    await deps.updateAudit(claim.id, {
+      deliveryStatus: 'failed',
+      errorText: contactSync.reason,
+      providerEmailId: null,
+      metadata: {
+        event: mapped.eventName,
+        category: contactSync.reason,
+      },
+    })
+    deps.log(contactSync.reason)
+    return json(200, {
+      ok: false,
+      error: 'failed',
+      result: contactSync.reason,
+    })
+  }
+
+  // Documented Send Event body is `event` plus exactly one of `email` or
+  // `contact_id`. first_name and action_url are not documented body fields.
+  // The approval template reads Contact.first_name, and that automation
+  // configures its own action URL. Whether the submitted, resubmitted,
+  // needs-info, or rejected automations read those removed fields was not
+  // established.
   const resendBody = {
     event: resendEventName,
     email: recipientEmail,
-    first_name: firstNameFromFullName(profile.full_name),
-    action_url: mapped.actionUrl,
   }
 
   let resendResponse: Response
@@ -443,7 +697,7 @@ export function createProductionDeps(
       const { url, key } = restHeaders()
       if (!url || !key) return null
       const response = await fetchImpl(
-        `${url}/rest/v1/profiles?id=eq.${id}&select=email,full_name,application_status,application_submission_version`,
+        `${url}/rest/v1/profiles?id=eq.${id}&select=email,application_draft,application_status,application_submission_version`,
         {
           headers: {
             apikey: key,

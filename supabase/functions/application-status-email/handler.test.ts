@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   ACTION_URLS,
+  CONTACT_SYNC_FAILED,
+  MISSING_FIRST_NAME,
+  RESEND_CONTACTS_URL,
   RESEND_EVENTS_URL,
   WEBHOOK_SECRET_HEADER,
   createProductionDeps,
   eventKeyFor,
+  explicitFirstNameFromDraft,
   handleApplicationStatusEmailRequest,
   mapStatusTransition,
   parsePositiveSubmissionVersion,
@@ -20,8 +24,31 @@ const PROFILE_ID = '11111111-1111-4111-8111-111111111111'
 const AUDIT_ID = '22222222-2222-4222-8222-222222222222'
 const FETCHED_EMAIL = 'applicant@example.com'
 const FETCHED_NAME = 'Ada Lovelace'
+const EXPLICIT_FIRST_NAME = 'Pat'
 const WEBHOOK_EMAIL = 'webhook-supplied@example.com'
 const WEBHOOK_NAME = 'Webhook Name'
+
+function draftWithFirstName(firstName: string) {
+  return {
+    profile: {
+      firstName,
+      lastName: 'Lovelace',
+      displayName: FETCHED_NAME,
+    },
+  }
+}
+
+function loadedProfile(
+  overrides: Partial<LoadedProfile> = {}
+): LoadedProfile {
+  return {
+    email: FETCHED_EMAIL,
+    application_draft: draftWithFirstName(EXPLICIT_FIRST_NAME),
+    application_status: 'submitted',
+    application_submission_version: 1,
+    ...overrides,
+  }
+}
 
 function webhookPayload(input: {
   type?: string
@@ -75,10 +102,22 @@ function jsonRequest(
   })
 }
 
+type RecordedRequest = {
+  url: string
+  method: string
+  body: unknown
+}
+
 function createDeps(options?: {
   profile?: LoadedProfile | null
   claim?: 'claimed' | 'duplicate' | 'error'
   fetchImpl?: HandlerDeps['fetch']
+  contactFetch?: (
+    url: string,
+    method: string,
+    body: unknown
+  ) => Response | Promise<Response>
+  calls?: RecordedRequest[]
   loadCalls?: string[]
   claimCalls?: AuditClaim[]
   updates?: AuditPatch[]
@@ -99,23 +138,55 @@ function createDeps(options?: {
   const defaultFetch: HandlerDeps['fetch'] = async () =>
     new Response(JSON.stringify({ id: 'evt_opaque_1' }), { status: 200 })
 
+  const defaultContactFetch = (method: string) => {
+    if (method === 'POST') {
+      return new Response(JSON.stringify({ object: 'contact', id: 'con_1' }), {
+        status: 201,
+      })
+    }
+    if (method === 'PATCH') {
+      return new Response(JSON.stringify({ object: 'contact', id: 'con_1' }), {
+        status: 200,
+      })
+    }
+    return new Response(
+      JSON.stringify({
+        object: 'contact',
+        id: 'con_1',
+        email: FETCHED_EMAIL,
+        first_name: 'Existing',
+        unsubscribed: true,
+      }),
+      { status: 200 }
+    )
+  }
+
   return {
     getEnv: (name) => env[name],
     fetch: async (input, init) => {
       order.push('fetch')
+      const url = String(input)
+      const method = (init?.method ?? 'GET').toUpperCase()
+      let body: unknown = null
+      if (init?.body) {
+        try {
+          body = JSON.parse(String(init.body))
+        } catch {
+          body = null
+        }
+      }
+      options?.calls?.push({ url, method, body })
+      if (url.startsWith(RESEND_CONTACTS_URL)) {
+        return options?.contactFetch
+          ? options.contactFetch(url, method, body)
+          : defaultContactFetch(method)
+      }
       return (options?.fetchImpl ?? defaultFetch)(input, init)
     },
     loadProfile: async () => {
       order.push('loadProfile')
       if (options?.profile === null) return null
-      return (
-        options?.profile ?? {
-          email: FETCHED_EMAIL,
-          full_name: FETCHED_NAME,
-          application_status: 'submitted',
-          application_submission_version: 1,
-        }
-      )
+      return options?.profile ?? loadedProfile()
     },
     claimAudit: async (row) => {
       order.push('claimAudit')
@@ -312,12 +383,9 @@ describe('application-status-email handler', () => {
           })
         ),
         createDeps({
-          profile: {
-            email: FETCHED_EMAIL,
-            full_name: FETCHED_NAME,
+          profile: loadedProfile({
             application_status: row.profileStatus,
-            application_submission_version: 1,
-          },
+          }),
           fetchImpl: async (_input, init) => {
             sent = JSON.parse(String(init?.body))
             return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
@@ -330,13 +398,11 @@ describe('application-status-email handler', () => {
       expect(sent).toEqual({
         event: row.event,
         email: FETCHED_EMAIL,
-        first_name: 'Ada',
-        action_url: ACTION_URLS[row.event],
       })
     }
   })
 
-  it('re-fetches email and name server-side and ignores webhook recipient fields', async () => {
+  it('re-fetches email server-side and ignores webhook recipient fields', async () => {
     let sent: Record<string, unknown> | undefined
     await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
@@ -350,12 +416,13 @@ describe('application-status-email handler', () => {
       })
     )
     expect(sent?.email).toBe(FETCHED_EMAIL)
-    expect(sent?.first_name).toBe('Ada')
     expect(sent?.email).not.toBe(WEBHOOK_EMAIL)
     expect(JSON.stringify(sent)).not.toContain(WEBHOOK_NAME)
+    expect(JSON.stringify(sent)).not.toContain(FETCHED_NAME)
+    expect(JSON.stringify(sent)).not.toContain(EXPLICIT_FIRST_NAME)
   })
 
-  it('sends exactly event, email, first_name, and action_url', async () => {
+  it('sends exactly the documented event and email fields', async () => {
     let sent: Record<string, unknown> | undefined
     await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
@@ -368,12 +435,7 @@ describe('application-status-email handler', () => {
         },
       })
     )
-    expect(Object.keys(sent ?? {}).sort()).toEqual([
-      'action_url',
-      'email',
-      'event',
-      'first_name',
-    ])
+    expect(Object.keys(sent ?? {}).sort()).toEqual(['email', 'event'])
   })
 
   it('does not call Resend when the audit claim is a duplicate', async () => {
@@ -472,6 +534,7 @@ describe('application-status-email handler', () => {
     expect(haystack).not.toContain(PROFILE_ID)
     expect(haystack).not.toContain(WEBHOOK_NAME)
     expect(haystack).not.toContain(FETCHED_NAME)
+    expect(haystack).not.toContain(EXPLICIT_FIRST_NAME)
   })
 
   it('sends application_submitted:1 for draft → submitted at version 1', async () => {
@@ -486,12 +549,7 @@ describe('application-status-email handler', () => {
       ),
       createDeps({
         claimCalls,
-        profile: {
-          email: FETCHED_EMAIL,
-          full_name: FETCHED_NAME,
-          application_status: 'submitted',
-          application_submission_version: 1,
-        },
+        profile: loadedProfile(),
       })
     )
     expect(await response.json()).toEqual({ ok: true, result: 'sent' })
@@ -512,12 +570,9 @@ describe('application-status-email handler', () => {
       ),
       createDeps({
         claimCalls,
-        profile: {
-          email: FETCHED_EMAIL,
-          full_name: FETCHED_NAME,
-          application_status: 'submitted',
+        profile: loadedProfile({
           application_submission_version: 2,
-        },
+        }),
         fetchImpl: async (_input, init) => {
           sent = JSON.parse(String(init?.body))
           return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
@@ -532,8 +587,6 @@ describe('application-status-email handler', () => {
     expect(sent).toEqual({
       event: 'application_resubmitted',
       email: FETCHED_EMAIL,
-      first_name: 'Ada',
-      action_url: ACTION_URLS.application_submitted,
     })
   })
 
@@ -564,12 +617,9 @@ describe('application-status-email handler', () => {
         createDeps({
           claim: 'duplicate',
           order,
-          profile: {
-            email: FETCHED_EMAIL,
-            full_name: FETCHED_NAME,
-            application_status: 'submitted',
+          profile: loadedProfile({
             application_submission_version: row.version,
-          },
+          }),
         })
       )
       expect(await response.json()).toEqual({ ok: true, result: 'duplicate' })
@@ -584,12 +634,7 @@ describe('application-status-email handler', () => {
       jsonRequest(webhookPayload({ application_submission_version: 2 })),
       createDeps({
         order,
-        profile: {
-          email: FETCHED_EMAIL,
-          full_name: FETCHED_NAME,
-          application_status: 'submitted',
-          application_submission_version: 1,
-        },
+        profile: loadedProfile(),
       })
     )
     expect(await response.json()).toEqual({ ok: true, result: 'skipped' })
@@ -656,12 +701,10 @@ describe('application-status-email handler', () => {
         ),
         createDeps({
           claimCalls,
-          profile: {
-            email: FETCHED_EMAIL,
-            full_name: FETCHED_NAME,
+          profile: loadedProfile({
             application_status: row.status,
             application_submission_version: row.version,
-          },
+          }),
         })
       )
       expect(claimCalls[0]?.eventKey).toBe(`${row.event}:${row.version}`)
@@ -716,20 +759,315 @@ describe('application-status-email handler', () => {
     }
   })
 
-  it('posts only to the Resend events endpoint', async () => {
-    let url = ''
+  it('posts the status event only to the documented events endpoint', async () => {
+    const calls: RecordedRequest[] = []
     await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
+      createDeps({ calls })
+    )
+    const eventCalls = calls.filter((call) => call.url === RESEND_EVENTS_URL)
+    expect(eventCalls).toHaveLength(1)
+    expect(eventCalls[0]?.method).toBe('POST')
+    expect(calls.every((call) => call.url.startsWith('https://api.resend.com/'))).toBe(
+      true
+    )
+  })
+})
+
+function jsonResponse(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), { status })
+}
+
+describe('contact first_name sync', () => {
+  it('uses the explicit application first name instead of the display name', () => {
+    expect(
+      explicitFirstNameFromDraft({
+        profile: { firstName: '  Pat  ', displayName: FETCHED_NAME },
+      })
+    ).toBe('Pat')
+    expect(
+      explicitFirstNameFromDraft({
+        profile: { firstName: '   ', displayName: FETCHED_NAME },
+      })
+    ).toBeNull()
+    expect(explicitFirstNameFromDraft({ profile: { displayName: FETCHED_NAME } })).toBe(
+      null
+    )
+  })
+
+  it('updates an existing contact first_name before the status event', async () => {
+    const calls: RecordedRequest[] = []
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(
+        webhookPayload({ previousStatus: 'in_review', nextStatus: 'approved' })
+      ),
       createDeps({
-        fetchImpl: async (input) => {
-          url = String(input)
-          return new Response(JSON.stringify({ id: 'evt_opaque_1' }), {
-            status: 200,
-          })
+        calls,
+        profile: loadedProfile({ application_status: 'approved' }),
+      })
+    )
+    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+      `GET ${RESEND_CONTACTS_URL}/${encodeURIComponent(FETCHED_EMAIL)}`,
+      `PATCH ${RESEND_CONTACTS_URL}/${encodeURIComponent(FETCHED_EMAIL)}`,
+      `POST ${RESEND_EVENTS_URL}`,
+    ])
+    expect(calls[1]?.body).toEqual({ first_name: EXPLICIT_FIRST_NAME })
+    expect(JSON.stringify(calls[1]?.body)).not.toContain(FETCHED_NAME)
+    expect(calls[2]?.body).toEqual({
+      event: 'application_approved',
+      email: FETCHED_EMAIL,
+    })
+  })
+
+  it('creates a missing contact with email and explicit first_name only', async () => {
+    const calls: RecordedRequest[] = []
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        calls,
+        contactFetch: (_url, method) => {
+          if (method === 'GET') return jsonResponse({ name: 'not_found' }, 404)
+          return jsonResponse({ object: 'contact', id: 'con_1' }, 201)
         },
       })
     )
-    expect(url).toBe(RESEND_EVENTS_URL)
+    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    const create = calls.find(
+      (call) => call.method === 'POST' && call.url === RESEND_CONTACTS_URL
+    )
+    expect(create?.body).toEqual({
+      email: FETCHED_EMAIL,
+      first_name: EXPLICIT_FIRST_NAME,
+    })
+    expect(Object.keys(create?.body as object).sort()).toEqual([
+      'email',
+      'first_name',
+    ])
+    expect(calls.at(-1)?.url).toBe(RESEND_EVENTS_URL)
+  })
+
+  it('patches first_name after a documented concurrent create lock', async () => {
+    const calls: RecordedRequest[] = []
+    let gets = 0
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        calls,
+        contactFetch: (_url, method, body) => {
+          if (method === 'GET') {
+            gets += 1
+            if (gets === 1) return jsonResponse({ name: 'not_found' }, 404)
+            return jsonResponse(
+              {
+                object: 'contact',
+                id: 'con_1',
+                first_name: null,
+                unsubscribed: true,
+              },
+              200
+            )
+          }
+          if (method === 'POST') {
+            return jsonResponse({ name: 'resource_locked' }, 409)
+          }
+          expect(body).toEqual({ first_name: EXPLICIT_FIRST_NAME })
+          return jsonResponse({ object: 'contact', id: 'con_1' }, 200)
+        },
+      })
+    )
+    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    const writes = calls.filter((call) => call.method !== 'GET')
+    expect(writes.map((call) => call.body)).toEqual([
+      { email: FETCHED_EMAIL, first_name: EXPLICIT_FIRST_NAME },
+      { first_name: EXPLICIT_FIRST_NAME },
+      { event: 'application_submitted', email: FETCHED_EMAIL },
+    ])
+  })
+
+  it('retries a locked create once when the contact is still missing', async () => {
+    const calls: RecordedRequest[] = []
+    let posts = 0
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        calls,
+        contactFetch: (_url, method) => {
+          if (method === 'GET') return jsonResponse({ name: 'not_found' }, 404)
+          posts += 1
+          if (posts === 1) return jsonResponse({ name: 'resource_locked' }, 409)
+          return jsonResponse({ object: 'contact', id: 'con_1' }, 201)
+        },
+      })
+    )
+    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    const creates = calls.filter(
+      (call) => call.method === 'POST' && call.url === RESEND_CONTACTS_URL
+    )
+    expect(creates).toHaveLength(2)
+    expect(creates[1]?.body).toEqual({
+      email: FETCHED_EMAIL,
+      first_name: EXPLICIT_FIRST_NAME,
+    })
+    expect(calls.at(-1)?.url).toBe(RESEND_EVENTS_URL)
+  })
+
+  it('patches first_name when a concurrent create appears before the lock retry', async () => {
+    const calls: RecordedRequest[] = []
+    let gets = 0
+    await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        calls,
+        contactFetch: (_url, method) => {
+          if (method === 'GET') {
+            gets += 1
+            if (gets === 1) return jsonResponse({ name: 'not_found' }, 404)
+            return jsonResponse(
+              { object: 'contact', id: 'con_1', first_name: null },
+              200
+            )
+          }
+          if (method === 'POST') {
+            return jsonResponse({ name: 'validation_error' }, 422)
+          }
+          return jsonResponse({ object: 'contact', id: 'con_1' }, 200)
+        },
+      })
+    )
+    expect(calls.filter((call) => call.method === 'POST' && call.url === RESEND_CONTACTS_URL)).toHaveLength(1)
+    expect(calls.some((call) => call.method === 'PATCH')).toBe(true)
+    expect(calls.at(-1)?.url).toBe(RESEND_EVENTS_URL)
+  })
+
+  it('does not send the status event when contact sync fails', async () => {
+    const calls: RecordedRequest[] = []
+    const updates: AuditPatch[] = []
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        calls,
+        updates,
+        contactFetch: () =>
+          jsonResponse({ name: 'application_error', message: FETCHED_EMAIL }, 500),
+      })
+    )
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: 'failed',
+      result: CONTACT_SYNC_FAILED,
+    })
+    expect(calls.some((call) => call.url === RESEND_EVENTS_URL)).toBe(false)
+    expect(updates[0]).toMatchObject({
+      deliveryStatus: 'failed',
+      errorText: CONTACT_SYNC_FAILED,
+      providerEmailId: null,
+      metadata: { category: CONTACT_SYNC_FAILED },
+    })
+    expect(JSON.stringify(updates[0])).not.toContain(FETCHED_EMAIL)
+    expect(JSON.stringify(updates[0])).not.toContain(EXPLICIT_FIRST_NAME)
+
+    const retryOrder: string[] = []
+    const retry = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({ claim: 'duplicate', order: retryOrder })
+    )
+    expect(await retry.json()).toEqual({ ok: true, result: 'duplicate' })
+    expect(retryOrder).toEqual(['loadProfile', 'claimAudit'])
+  })
+
+  it('does not invent a contact name when the explicit first name is missing or blank', async () => {
+    for (const draft of [
+      { profile: { firstName: '', displayName: FETCHED_NAME } },
+      { profile: { firstName: '   ', displayName: FETCHED_NAME } },
+      null,
+    ]) {
+      const calls: RecordedRequest[] = []
+      const updates: AuditPatch[] = []
+      const response = await handleApplicationStatusEmailRequest(
+        jsonRequest(webhookPayload({})),
+        createDeps({
+          calls,
+          updates,
+          profile: loadedProfile({ application_draft: draft }),
+          contactFetch: (url, method) => {
+            if (method === 'GET') return jsonResponse({ name: 'not_found' }, 404)
+            throw new Error(`unexpected ${method} ${url}`)
+          },
+        })
+      )
+      expect(await response.json()).toEqual({
+        ok: false,
+        error: 'failed',
+        result: MISSING_FIRST_NAME,
+      })
+      expect(calls.map((call) => call.method)).toEqual(['GET'])
+      expect(updates[0]?.errorText).toBe(MISSING_FIRST_NAME)
+      expect(JSON.stringify(updates[0])).not.toContain(FETCHED_NAME)
+    }
+  })
+
+  it('keeps an existing contact name when no explicit first name is available', async () => {
+    const calls: RecordedRequest[] = []
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        calls,
+        profile: loadedProfile({
+          application_draft: { profile: { firstName: '', displayName: FETCHED_NAME } },
+        }),
+        contactFetch: (_url, method) => {
+          if (method !== 'GET') throw new Error(`unexpected ${method}`)
+          return jsonResponse(
+            {
+              object: 'contact',
+              id: 'con_1',
+              first_name: 'Kept',
+              unsubscribed: true,
+            },
+            200
+          )
+        },
+      })
+    )
+    expect(await response.json()).toEqual({ ok: true, result: 'sent' })
+    expect(calls.map((call) => call.method)).toEqual(['GET', 'POST'])
+    expect(calls[1]?.url).toBe(RESEND_EVENTS_URL)
+    expect(JSON.stringify(calls)).not.toContain('Kept')
+  })
+
+  it('reports missing_first_name when neither side has a usable name', async () => {
+    const calls: RecordedRequest[] = []
+    const response = await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({
+        calls,
+        profile: loadedProfile({ application_draft: null }),
+        contactFetch: () =>
+          jsonResponse(
+            { object: 'contact', id: 'con_1', first_name: '  ', unsubscribed: false },
+            200
+          ),
+      })
+    )
+    expect(await response.json()).toMatchObject({ result: MISSING_FIRST_NAME })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.method).toBe('GET')
+  })
+
+  it('does not send subscription, segment, topic, or suppression fields', async () => {
+    const calls: RecordedRequest[] = []
+    await handleApplicationStatusEmailRequest(
+      jsonRequest(webhookPayload({})),
+      createDeps({ calls })
+    )
+    for (const call of calls) {
+      const serialized = JSON.stringify(call.body)
+      expect(serialized).not.toContain('unsubscribed')
+      expect(serialized).not.toContain('segments')
+      expect(serialized).not.toContain('topics')
+      expect(serialized).not.toContain('suppression')
+    }
   })
 })
 
@@ -761,11 +1099,12 @@ describe('production application_email_log REST payloads', () => {
         const url = String(input)
         const method = init?.method ?? 'GET'
         if (url.includes('/rest/v1/profiles')) {
+          restBodies.push({ method, url, body: null })
           return new Response(
             JSON.stringify([
               {
                 email: FETCHED_EMAIL,
-                full_name: FETCHED_NAME,
+                application_draft: draftWithFirstName(EXPLICIT_FIRST_NAME),
                 application_status: 'submitted',
                 application_submission_version: 1,
               },
@@ -785,6 +1124,22 @@ describe('production application_email_log REST payloads', () => {
             })
           }
           return new Response(null, { status: 200 })
+        }
+        if (url.startsWith(RESEND_CONTACTS_URL)) {
+          if ((init?.method ?? 'GET').toUpperCase() === 'GET') {
+            return new Response(
+              JSON.stringify({
+                object: 'contact',
+                id: 'con_1',
+                first_name: null,
+                unsubscribed: true,
+              }),
+              { status: 200 }
+            )
+          }
+          return new Response(JSON.stringify({ object: 'contact', id: 'con_1' }), {
+            status: 200,
+          })
         }
         if (options?.resendThrow) {
           throw new Error('connect ECONNREFUSED')
@@ -821,6 +1176,11 @@ describe('production application_email_log REST payloads', () => {
     for (const column of FORBIDDEN_AUDIT_COLUMNS) {
       expect(serialized).not.toContain(column)
     }
+    const profileGet = restBodies.find((row) =>
+      String(row.url).includes('/rest/v1/profiles')
+    )
+    expect(String(profileGet?.url)).toContain('application_draft')
+    expect(String(profileGet?.url)).not.toContain('full_name')
   })
 
   it('patches sent using resend_email_id, error_message, and provider_event', async () => {
