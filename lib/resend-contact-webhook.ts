@@ -45,20 +45,33 @@ export function resendContactUnsubscribeEmail(event: unknown): string | null {
   return email
 }
 
+export type ResendSubscribedContactEvent = 'contact.created' | 'contact.updated'
+
 /**
- * A boolean false means the provider contact is subscribed. It is not consent
- * to opt back in. The database decides whether a locally withdrawn profile
- * needs another withdrawal.
+ * Boolean false on contact.created or contact.updated means the provider
+ * contact is subscribed. A missing or non-boolean unsubscribed field does
+ * not. This is not consent to opt back in.
  */
 export function resendContactResubscribeEmail(event: unknown): string | null {
+  const subscribed = resendContactSubscribedEvent(event)
+  return subscribed?.email ?? null
+}
+
+export function resendContactSubscribedEvent(
+  event: unknown
+): { email: string; eventType: ResendSubscribedContactEvent } | null {
   const record = asRecord(event)
-  if (record?.type !== 'contact.updated') return null
-  const data = asRecord(record.data)
+  const eventType =
+    record?.type === 'contact.created' || record?.type === 'contact.updated'
+      ? record.type
+      : null
+  if (!eventType) return null
+  const data = asRecord(record?.data)
   if (!data || data.unsubscribed !== false) return null
   if (typeof data.email !== 'string') return null
   const email = data.email.trim()
   if (!email.includes('@')) return null
-  return email
+  return { email, eventType }
 }
 
 export type ResubscribeReconciliation =
@@ -80,7 +93,8 @@ export async function handleResendContactWebhook(input: {
   ) => Promise<'applied' | 'duplicate'>
   reconcileResubscribe: (
     email: string,
-    svixId: string
+    svixId: string,
+    eventType: ResendSubscribedContactEvent
   ) => Promise<ResubscribeReconciliation>
   recordDelivery: (
     svixId: string,
@@ -125,9 +139,13 @@ export async function handleResendContactWebhook(input: {
     }
   }
 
-  const resubscribeEmail = resendContactResubscribeEmail(event)
-  if (resubscribeEmail) {
-    const result = await input.reconcileResubscribe(resubscribeEmail, svixId)
+  const subscribed = resendContactSubscribedEvent(event)
+  if (subscribed) {
+    const result = await input.reconcileResubscribe(
+      subscribed.email,
+      svixId,
+      subscribed.eventType
+    )
     return {
       status: 200,
       body: {

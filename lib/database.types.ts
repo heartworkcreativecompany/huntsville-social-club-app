@@ -1423,7 +1423,11 @@ export interface Database {
         Returns: string
       }
       reconcile_provider_marketing_resubscribe: {
-        Args: { target_email: string; provider_event_id: string }
+        Args: {
+          target_email: string
+          provider_event_id: string
+          provider_event_type: string
+        }
         Returns: string
       }
       recheck_email_marketing_sync: {

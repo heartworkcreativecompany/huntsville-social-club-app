@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       if (error) throw new Error('unsubscribe_failed')
       return data === 'duplicate' ? 'duplicate' : 'applied'
     },
-    reconcileResubscribe: async (email, svixId) => {
+    reconcileResubscribe: async (email, svixId, eventType) => {
       if (!admin) {
         throw new Error('Admin client unavailable.')
       }
@@ -36,6 +36,7 @@ export async function POST(request: Request) {
         {
           target_email: email,
           provider_event_id: svixId,
+          provider_event_type: eventType,
         }
       )
       if (error) throw new Error('resubscribe_reconcile_failed')

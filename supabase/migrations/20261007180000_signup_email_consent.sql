@@ -425,15 +425,19 @@ end;
 $function$;
 
 -- A late enrollment write can set the provider contact back to subscribed
--- after the withdrawal job has already finished. A verified contact.updated
--- with unsubscribed false must not opt the profile back in. If the profile
--- is locally withdrawn, queue one corrective withdrawal in this same
--- transaction as the event id. Duplicate event ids and an already active
--- withdrawal do not create another job. This does not make the provider
--- write atomic, and it runs only when that webhook is delivered.
+-- after the withdrawal job has already finished. That includes an enroll
+-- POST that creates the contact after a missing-contact withdrawal. A
+-- verified contact.created or contact.updated with boolean unsubscribed
+-- false must not opt the profile back in. If the profile is locally
+-- withdrawn, queue one corrective withdrawal in this same transaction as
+-- the event id. Duplicate event ids and an already active withdrawal do
+-- not create another job. The event does not prove the contact is still
+-- subscribed when the worker runs; that job looks up the contact before
+-- it writes. This does not make the provider write atomic.
 create or replace function public.reconcile_provider_marketing_resubscribe(
   target_email text,
-  provider_event_id text
+  provider_event_id text,
+  provider_event_type text
 )
 returns text
 language plpgsql
@@ -452,14 +456,15 @@ begin
   if target_email is null
     or position('@' in target_email) = 0
     or provider_event_id is null
-    or length(btrim(provider_event_id)) = 0 then
+    or length(btrim(provider_event_id)) = 0
+    or provider_event_type not in ('contact.created', 'contact.updated') then
     raise exception 'invalid resubscribe reconciliation'
       using errcode = '22023';
   end if;
 
   begin
     insert into public.resend_webhook_events (svix_id, event_type)
-    values (provider_event_id, 'contact.updated');
+    values (provider_event_id, provider_event_type);
   exception
     when unique_violation then
       return 'duplicate';
@@ -890,7 +895,7 @@ revoke all on function public.apply_resend_contact_unsubscribe(text, text)
   from public, anon, authenticated;
 revoke all on function public.record_resend_webhook_delivery(text, text)
   from public, anon, authenticated;
-revoke all on function public.reconcile_provider_marketing_resubscribe(text, text)
+revoke all on function public.reconcile_provider_marketing_resubscribe(text, text, text)
   from public, anon, authenticated;
 revoke all on function public.enqueue_email_marketing_enrollment()
   from public, anon, authenticated, service_role;
@@ -908,7 +913,7 @@ revoke all on function public.handle_new_user()
 grant execute on function public.withdraw_email_marketing() to authenticated;
 grant execute on function public.apply_resend_contact_unsubscribe(text, text) to service_role;
 grant execute on function public.record_resend_webhook_delivery(text, text) to service_role;
-grant execute on function public.reconcile_provider_marketing_resubscribe(text, text) to service_role;
+grant execute on function public.reconcile_provider_marketing_resubscribe(text, text, text) to service_role;
 grant execute on function public.recheck_email_marketing_sync(uuid) to service_role;
 grant execute on function public.claim_email_marketing_sync_jobs(integer, uuid) to service_role;
 grant execute on function public.finish_email_marketing_sync_job(uuid, uuid, text, text, timestamptz) to service_role;

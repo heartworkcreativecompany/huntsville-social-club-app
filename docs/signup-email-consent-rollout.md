@@ -113,7 +113,10 @@ column must grant `UPDATE` on that column to `authenticated`. Table-level
 `/api/cron/email-marketing-sync` is not listed in `vercel.json`.
 `/api/resend/webhook` is not registered with Resend by this change.
 No scheduled worker and no registered webhook exist yet. The local
-functions are not live subscription sync.
+functions are not live subscription sync. When the webhook is registered
+later, the required subscriptions are `contact.created` and
+`contact.updated`. Registering only `contact.updated` misses a contact
+created by an enrollment request that lands after withdrawal.
 
 The route returns 401 when `CRON_SECRET` is missing or the bearer token
 does not match. It returns 500 when the service-role client or
@@ -157,12 +160,18 @@ The local opt-out remains, so a later enrollment recheck does not send
 Aborting the worker's fetch does not cancel a provider write Resend has
 already accepted. Response order does not prove which write landed last.
 If the enrollment `unsubscribed: false` arrives after the withdrawal job
-has finished, the contact can be subscribed again. Reconciliation of that
-case depends on Resend delivering a verified `contact.updated` event with
-boolean `unsubscribed: false`. That event does not opt the profile back in.
-When the profile is locally withdrawn, the same database transaction records
-the event id and queues one corrective withdrawal if none is already
-pending or processing. A repeated event does not add another active job.
+has finished, the contact can be subscribed again. A missing-contact
+withdrawal can also be overtaken by an enrollment POST that then creates
+the contact. Reconciliation depends on Resend delivering a verified
+`contact.created` or `contact.updated` event with boolean
+`unsubscribed: false`. A missing, null, or string `unsubscribed` field is
+not that event. Neither event opts the profile back in, and arrival order
+does not establish the contact's current provider state. When the profile
+is locally withdrawn, the same database transaction records the event id
+and queues one corrective withdrawal if none is already pending or
+processing. A repeated event does not add another active job. The
+corrective worker looks up the contact before it writes. It patches
+`unsubscribed: true` only when that lookup finds the contact.
 There is no separate polling fallback. If that webhook is never delivered,
 the provider can stay subscribed until a later verified event. A corrective
 withdrawal uses the same five-attempt lease. Exhausted work stays `failed`

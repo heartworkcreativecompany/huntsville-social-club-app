@@ -8,6 +8,7 @@ import {
 } from '@/lib/email-marketing-sync'
 import {
   handleResendContactWebhook,
+  type ResendSubscribedContactEvent,
   type ResubscribeReconciliation,
 } from '@/lib/resend-contact-webhook'
 
@@ -1091,7 +1092,11 @@ describe('local signup email consent', () => {
     `)
   }
 
-  async function reconcileResubscribe(email: string, eventId: string) {
+  async function reconcileResubscribe(
+    email: string,
+    eventId: string,
+    eventType: ResendSubscribedContactEvent
+  ) {
     const output = await psql(`
       begin;
       select set_config('request.jwt.claims', '{"role":"service_role"}', true);
@@ -1099,7 +1104,8 @@ describe('local signup email consent', () => {
       set local role service_role;
       select public.reconcile_provider_marketing_resubscribe(
         ${sqlText(email)},
-        ${sqlText(eventId)}
+        ${sqlText(eventId)},
+        ${sqlText(eventType)}
       );
       commit;
     `)
@@ -1135,9 +1141,13 @@ describe('local signup email consent', () => {
     expect(await activeWithdrawals(profileId)).toBe('0')
   }
 
-  async function verifiedResubscribe(email: string, eventId: string) {
+  async function verifiedResubscribe(
+    email: string,
+    eventId: string,
+    eventType: ResendSubscribedContactEvent = 'contact.updated'
+  ) {
     const raw = JSON.stringify({
-      type: 'contact.updated',
+      type: eventType,
       data: { email, unsubscribed: false },
     })
     const signed = signWebhook(raw, eventId)
@@ -1209,6 +1219,230 @@ describe('local signup email consent', () => {
         retrySql: 'null',
       })
     ).toBe(true)
+    expect(await consentState(profileId)).toBe('false|true')
+  })
+
+  it('corrects a subscribed contact created after a missing-contact withdrawal', async () => {
+    const email = 'signup-consent-reconcile-created@example.com'
+    const profileId = await marketingProfile(email)
+    const enroll = parseClaim(await claimProfile(profileId))
+    expect(enroll.action).toBe('enroll')
+
+    let releasePost = () => {}
+    const postLanded = new Promise<void>((resolve) => {
+      releasePost = resolve
+    })
+    let markPostStarted = () => {}
+    const postInFlight = new Promise<void>((resolve) => {
+      markPostStarted = resolve
+    })
+    const calls: string[] = []
+    const enrollment = runEmailMarketingSyncAttempt({
+      action: 'enroll',
+      readLocal: async () => ({
+        email,
+        emailConfirmed: true,
+        optIn: true,
+        optedOutAt: null,
+      }),
+      lookupProvider: async () => {
+        calls.push('enroll-GET')
+        return 'missing'
+      },
+      send: async (input) => {
+        calls.push(`enroll-${input.method}:${String(input.body.unsubscribed)}`)
+        markPostStarted()
+        await postLanded
+      },
+      recordProviderUnsubscribe: async () => {
+        throw new Error('the in-flight enrollment must not change consent')
+      },
+    })
+
+    try {
+      await postInFlight
+      expect(calls).toEqual(['enroll-GET', 'enroll-POST:false'])
+
+      await psql(`
+        select public.apply_email_marketing_withdrawal(${sqlText(profileId)}::uuid)
+      `)
+      expect(await consentState(profileId)).toBe('false|true')
+      const withdrawn = parseClaim(await claimProfile(profileId))
+      expect(withdrawn.action).toBe('withdraw')
+      const absent = await runEmailMarketingSyncAttempt({
+        action: 'withdraw',
+        readLocal: async () => ({
+          email,
+          emailConfirmed: true,
+          optIn: false,
+          optedOutAt: '2026-10-07T00:00:00.000Z',
+        }),
+        lookupProvider: async () => {
+          calls.push('withdraw-GET')
+          return 'missing'
+        },
+        send: async () => {
+          throw new Error('a missing contact must not be created by withdrawal')
+        },
+        recordProviderUnsubscribe: async () => {
+          throw new Error('a missing contact must not change consent')
+        },
+      })
+      expect(absent).toBe('withdraw_contact_absent')
+      expect(calls).toEqual(['enroll-GET', 'enroll-POST:false', 'withdraw-GET'])
+      expect(
+        await finishProfileJob({
+          jobId: withdrawn.jobId,
+          token: withdrawn.token,
+          status: 'synced',
+          error: null,
+          retrySql: 'null',
+        })
+      ).toBe(true)
+      expect(
+        await finishProfileJob({
+          jobId: enroll.jobId,
+          token: enroll.token,
+          status: 'synced',
+          error: null,
+          retrySql: 'null',
+        })
+      ).toBe(false)
+      expect(await activeWithdrawals(profileId)).toBe('0')
+      expect(await consentState(profileId)).toBe('false|true')
+
+      releasePost()
+      await expect(enrollment).resolves.toBe('send_unsubscribed_false')
+
+      const created = await verifiedResubscribe(
+        email,
+        'msg-contact-created',
+        'contact.created'
+      )
+      expect(created.body.correction).toBe('correction_queued')
+      expect(
+        await psql(`
+          select event_type
+          from public.resend_webhook_events
+          where svix_id = 'msg-contact-created'
+        `)
+      ).toBe('contact.created')
+      expect(await activeWithdrawals(profileId)).toBe('1')
+      expect(await consentState(profileId)).toBe('false|true')
+
+      const duplicate = await verifiedResubscribe(
+        email,
+        'msg-contact-created',
+        'contact.created'
+      )
+      expect(duplicate.body.duplicate).toBe(true)
+      const another = await verifiedResubscribe(
+        email,
+        'msg-contact-created-2',
+        'contact.created'
+      )
+      expect(another.body.correction).toBe('correction_pending')
+      expect(await activeWithdrawals(profileId)).toBe('1')
+      expect(await consentState(profileId)).toBe('false|true')
+
+      const correction = parseClaim(await claimProfile(profileId))
+      expect(correction.action).toBe('withdraw')
+      const correctionCalls: string[] = []
+      const decision = await runEmailMarketingSyncAttempt({
+        action: 'withdraw',
+        readLocal: async () => ({
+          email,
+          emailConfirmed: true,
+          optIn: false,
+          optedOutAt: '2026-10-07T00:00:00.000Z',
+        }),
+        lookupProvider: async () => {
+          correctionCalls.push('GET')
+          return 'subscribed'
+        },
+        send: async (input) => {
+          correctionCalls.push(`${input.method}:${String(input.body.unsubscribed)}`)
+        },
+        recordProviderUnsubscribe: async () => {
+          throw new Error('correction must not opt the profile back in')
+        },
+      })
+      expect(decision).toBe('send_unsubscribed_true')
+      expect(correctionCalls).toEqual(['GET', 'PATCH:true'])
+      expect(
+        await finishProfileJob({
+          jobId: correction.jobId,
+          token: correction.token,
+          status: 'synced',
+          error: null,
+          retrySql: 'null',
+        })
+      ).toBe(true)
+      expect(await consentState(profileId)).toBe('false|true')
+    } finally {
+      releasePost()
+    }
+  })
+
+  it('does not enqueue a correction for a created unsubscribe, malformed field, or bad signature', async () => {
+    const email = 'signup-consent-reconcile-created-ignore@example.com'
+    const profileId = await marketingProfile(email)
+    await completeInitialWithdrawal(profileId)
+    let writes = 0
+    const payloads = [
+      { type: 'contact.created', data: { email, unsubscribed: true } },
+      { type: 'contact.created', data: { email } },
+      { type: 'contact.created', data: { email, unsubscribed: 'false' } },
+      { type: 'contact.updated', data: { email, unsubscribed: null } },
+    ]
+    for (const [index, payload] of payloads.entries()) {
+      const raw = JSON.stringify(payload)
+      const signed = signWebhook(raw, `msg-created-ignore-${index}`)
+      const result = await handleResendContactWebhook({
+        rawBody: raw,
+        svixId: signed.id,
+        svixTimestamp: signed.timestamp,
+        svixSignature: signed.signature,
+        secret: webhookSecret,
+        applyUnsubscribe: async () => {
+          writes += 1
+          return 'applied'
+        },
+        reconcileResubscribe: async () => {
+          writes += 1
+          return 'correction_queued'
+        },
+        recordDelivery: async () => 'new',
+      })
+      expect(result.status).toBe(200)
+      expect(result.body.correction).toBeUndefined()
+      expect(result.body.ignored).toBe(true)
+    }
+    const invalid = await handleResendContactWebhook({
+      rawBody: JSON.stringify({
+        type: 'contact.created',
+        data: { email, unsubscribed: false },
+      }),
+      svixId: 'msg-created-bad-signature',
+      svixTimestamp: String(Math.floor(Date.now() / 1000)),
+      svixSignature: 'v1,not-a-real-signature',
+      secret: webhookSecret,
+      applyUnsubscribe: async () => {
+        writes += 1
+        return 'applied'
+      },
+      reconcileResubscribe: async () => {
+        writes += 1
+        return 'correction_queued'
+      },
+      recordDelivery: async () => {
+        writes += 1
+        return 'new'
+      },
+    })
+    expect(invalid.status).toBe(400)
+    expect(writes).toBe(0)
+    expect(await activeWithdrawals(profileId)).toBe('0')
     expect(await consentState(profileId)).toBe('false|true')
   })
 
@@ -1360,7 +1594,8 @@ describe('local signup email consent', () => {
         set local role service_role;
         select public.reconcile_provider_marketing_resubscribe(
           ${sqlText(email)},
-          'msg-reconcile-rollback'
+          'msg-reconcile-rollback',
+          'contact.created'
         );
         commit;
       `)
@@ -1372,6 +1607,26 @@ describe('local signup email consent', () => {
       `)
       expect(events).toBe('0')
       expect(await activeWithdrawals(profileId)).toBe('0')
+      expect(await consentState(profileId)).toBe('false|true')
+      const updatedRollback = await psqlError(`
+        begin;
+        select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+        select set_config('request.jwt.claim.role', 'service_role', true);
+        set local role service_role;
+        select public.reconcile_provider_marketing_resubscribe(
+          ${sqlText(email)},
+          'msg-reconcile-rollback-updated',
+          'contact.updated'
+        );
+        commit;
+      `)
+      expect(updatedRollback).toMatch(/forced withdraw failure/)
+      const updatedEvents = await psql(`
+        select count(*)::text
+        from public.resend_webhook_events
+        where svix_id = 'msg-reconcile-rollback-updated'
+      `)
+      expect(updatedEvents).toBe('0')
       expect(await consentState(profileId)).toBe('false|true')
     } finally {
       await psql(`

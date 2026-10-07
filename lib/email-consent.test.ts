@@ -18,6 +18,7 @@ import {
 } from '@/lib/email-marketing-sync'
 import {
   handleResendContactWebhook,
+  resendContactResubscribeEmail,
   resendContactUnsubscribeEmail,
   type ResubscribeReconciliation,
 } from '@/lib/resend-contact-webhook'
@@ -266,6 +267,121 @@ describe('resend webhook signatures', () => {
     expect(invalid.status).toBe(400)
     expect(reconciled).toBe(1)
     expect(recorded).toBe(0)
+    expect(applyCalled).toBe(false)
+
+    const created = '{"type":"contact.created","data":{"email":"a@example.com","unsubscribed":false}}'
+    const createdSigned = sign(created, String(now), 'msg_created')
+    let createdType = ''
+    const createdCorrection = await handleResendContactWebhook({
+      rawBody: created,
+      svixId: createdSigned.id,
+      svixTimestamp: createdSigned.timestamp,
+      svixSignature: createdSigned.signature,
+      secret: testSecret,
+      nowSeconds: now,
+      applyUnsubscribe: async () => {
+        applyCalled = true
+        return 'applied'
+      },
+      reconcileResubscribe: async (_email, _svixId, eventType) => {
+        reconciled += 1
+        createdType = eventType
+        return 'correction_queued'
+      },
+      recordDelivery: async () => {
+        recorded += 1
+        return 'new'
+      },
+    })
+    expect(createdCorrection.body.correction).toBe('correction_queued')
+    expect(createdType).toBe('contact.created')
+    expect(reconciled).toBe(2)
+    expect(recorded).toBe(0)
+    expect(applyCalled).toBe(false)
+
+    const createdUnsubscribed =
+      '{"type":"contact.created","data":{"email":"a@example.com","unsubscribed":true}}'
+    expect(resendContactResubscribeEmail(JSON.parse(createdUnsubscribed))).toBeNull()
+    const createdTrue = sign(createdUnsubscribed, String(now), 'msg_created_true')
+    const ignoredCreate = await handleResendContactWebhook({
+      rawBody: createdUnsubscribed,
+      svixId: createdTrue.id,
+      svixTimestamp: createdTrue.timestamp,
+      svixSignature: createdTrue.signature,
+      secret: testSecret,
+      nowSeconds: now,
+      applyUnsubscribe: async () => {
+        applyCalled = true
+        return 'applied'
+      },
+      reconcileResubscribe: async () => {
+        reconciled += 1
+        return 'correction_queued'
+      },
+      recordDelivery: async () => {
+        recorded += 1
+        return 'new'
+      },
+    })
+    expect(ignoredCreate.body.ignored).toBe(true)
+    expect(reconciled).toBe(2)
+    expect(applyCalled).toBe(false)
+
+    for (const payload of [
+      '{"type":"contact.created","data":{"email":"a@example.com"}}',
+      '{"type":"contact.created","data":{"email":"a@example.com","unsubscribed":"false"}}',
+      '{"type":"contact.created","data":{"email":"a@example.com","unsubscribed":null}}',
+      '{"type":"contact.updated","data":{"email":"a@example.com","unsubscribed":"false"}}',
+    ]) {
+      expect(resendContactResubscribeEmail(JSON.parse(payload))).toBeNull()
+      const malformed = sign(payload, String(now), `msg_malformed_${recorded}`)
+      const ignored = await handleResendContactWebhook({
+        rawBody: payload,
+        svixId: malformed.id,
+        svixTimestamp: malformed.timestamp,
+        svixSignature: malformed.signature,
+        secret: testSecret,
+        nowSeconds: now,
+        applyUnsubscribe: async () => {
+          applyCalled = true
+          return 'applied'
+        },
+        reconcileResubscribe: async () => {
+          reconciled += 1
+          return 'correction_queued'
+        },
+        recordDelivery: async () => {
+          recorded += 1
+          return 'new'
+        },
+      })
+      expect(ignored.body.ignored).toBe(true)
+    }
+    expect(reconciled).toBe(2)
+    expect(applyCalled).toBe(false)
+
+    const badCreated = await handleResendContactWebhook({
+      rawBody: created,
+      svixId: 'msg_bad_created',
+      svixTimestamp: String(now),
+      svixSignature: 'v1,not-a-real-signature',
+      secret: testSecret,
+      nowSeconds: now,
+      applyUnsubscribe: async () => {
+        applyCalled = true
+        return 'applied'
+      },
+      reconcileResubscribe: async () => {
+        reconciled += 1
+        return 'correction_queued'
+      },
+      recordDelivery: async () => {
+        recorded += 1
+        return 'new'
+      },
+    })
+    expect(badCreated.status).toBe(400)
+    expect(reconciled).toBe(2)
     expect(applyCalled).toBe(false)
   })
 })
