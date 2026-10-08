@@ -921,7 +921,7 @@ describe('contact first_name sync', () => {
     )
   })
 
-  it('updates an existing contact first_name before the status event', async () => {
+  it('updates an existing contact with first_name only and leaves subscription unchanged', async () => {
     const calls: RecordedRequest[] = []
     const response = await handleApplicationStatusEmailRequest(
       jsonRequest(
@@ -939,6 +939,8 @@ describe('contact first_name sync', () => {
       `POST ${RESEND_EVENTS_URL}`,
     ])
     expect(calls[1]?.body).toEqual({ first_name: EXPLICIT_FIRST_NAME })
+    expect(Object.keys(calls[1]?.body as object)).toEqual(['first_name'])
+    expect(calls[1]?.body).not.toHaveProperty('unsubscribed')
     expect(JSON.stringify(calls[1]?.body)).not.toContain(FETCHED_NAME)
     expect(calls[2]?.body).toEqual({
       event: 'application_approved',
@@ -946,7 +948,7 @@ describe('contact first_name sync', () => {
     })
   })
 
-  it('creates a missing contact with email and explicit first_name only', async () => {
+  it('creates a missing contact explicitly unsubscribed, with email and first_name', async () => {
     const calls: RecordedRequest[] = []
     const response = await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),
@@ -965,10 +967,12 @@ describe('contact first_name sync', () => {
     expect(create?.body).toEqual({
       email: FETCHED_EMAIL,
       first_name: EXPLICIT_FIRST_NAME,
+      unsubscribed: true,
     })
     expect(Object.keys(create?.body as object).sort()).toEqual([
       'email',
       'first_name',
+      'unsubscribed',
     ])
     expect(calls.at(-1)?.url).toBe(RESEND_EVENTS_URL)
   })
@@ -1005,10 +1009,15 @@ describe('contact first_name sync', () => {
     expect(await response.json()).toEqual({ ok: true, result: 'event_accepted' })
     const writes = calls.filter((call) => call.method !== 'GET')
     expect(writes.map((call) => call.body)).toEqual([
-      { email: FETCHED_EMAIL, first_name: EXPLICIT_FIRST_NAME },
+      {
+        email: FETCHED_EMAIL,
+        first_name: EXPLICIT_FIRST_NAME,
+        unsubscribed: true,
+      },
       { first_name: EXPLICIT_FIRST_NAME },
       { event: 'application_submitted', email: FETCHED_EMAIL },
     ])
+    expect(writes[1]?.body).not.toHaveProperty('unsubscribed')
   })
 
   it('retries a locked create once when the contact is still missing', async () => {
@@ -1031,10 +1040,13 @@ describe('contact first_name sync', () => {
       (call) => call.method === 'POST' && call.url === RESEND_CONTACTS_URL
     )
     expect(creates).toHaveLength(2)
-    expect(creates[1]?.body).toEqual({
-      email: FETCHED_EMAIL,
-      first_name: EXPLICIT_FIRST_NAME,
-    })
+    for (const create of creates) {
+      expect(create.body).toEqual({
+        email: FETCHED_EMAIL,
+        first_name: EXPLICIT_FIRST_NAME,
+        unsubscribed: true,
+      })
+    }
     expect(calls.at(-1)?.url).toBe(RESEND_EVENTS_URL)
   })
 
@@ -1061,8 +1073,17 @@ describe('contact first_name sync', () => {
         },
       })
     )
-    expect(calls.filter((call) => call.method === 'POST' && call.url === RESEND_CONTACTS_URL)).toHaveLength(1)
-    expect(calls.some((call) => call.method === 'PATCH')).toBe(true)
+    const create = calls.find(
+      (call) => call.method === 'POST' && call.url === RESEND_CONTACTS_URL
+    )
+    const patch = calls.find((call) => call.method === 'PATCH')
+    expect(create?.body).toEqual({
+      email: FETCHED_EMAIL,
+      first_name: EXPLICIT_FIRST_NAME,
+      unsubscribed: true,
+    })
+    expect(patch?.body).toEqual({ first_name: EXPLICIT_FIRST_NAME })
+    expect(patch?.body).not.toHaveProperty('unsubscribed')
     expect(calls.at(-1)?.url).toBe(RESEND_EVENTS_URL)
   })
 
@@ -1194,7 +1215,7 @@ describe('contact first_name sync', () => {
     expect(calls[0]?.method).toBe('GET')
   })
 
-  it('does not send subscription, segment, topic, or suppression fields', async () => {
+  it('does not send subscription, segment, topic, or suppression fields when updating an existing contact', async () => {
     const calls: RecordedRequest[] = []
     await handleApplicationStatusEmailRequest(
       jsonRequest(webhookPayload({})),

@@ -387,13 +387,11 @@ async function patchContactFirstName(
 type CreateContactResult = 'created' | 'locked' | 'failed'
 
 /**
- * Create payload is email + first_name only.
- * OpenAPI CreateContactOptions requires email and does not define a default
- * for unsubscribed. Setting unsubscribed true suppresses Broadcasts and
- * Automation emails, which would block this status message. Broadcasts are
- * sent to a Segment; omitting segments and topics does not enroll the
- * contact. unsubscribed is omitted because neither true nor false is a
- * documented "not subscribed" default that still allows the automation.
+ * Create a missing contact as email, first_name, and unsubscribed true.
+ * The Create Contact reference does not define a default when unsubscribed
+ * is omitted, and true unsubscribes the contact from Broadcasts. Segments
+ * and topics stay omitted. An existing contact is patched with first_name
+ * only, so a name update does not change its subscription state.
  */
 async function createContact(
   fetchImpl: typeof fetch,
@@ -411,6 +409,7 @@ async function createContact(
       body: JSON.stringify({
         email,
         first_name: firstName,
+        unsubscribed: true,
       }),
     },
     budget,
