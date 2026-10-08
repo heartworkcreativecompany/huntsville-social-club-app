@@ -106,10 +106,10 @@ describe('signup form source', () => {
     expect(phoneCard).toContain('requestPhoneChangeOtp')
   })
 
-  it('creates a missing status contact unsubscribed and does not resubscribe an existing one', () => {
-    expect(statusHandler).toContain('unsubscribed: true')
-    expect(statusHandler).not.toContain('unsubscribed: false')
+  it('patches an existing status contact name and does not create or resubscribe one', () => {
     expect(statusHandler).toContain('JSON.stringify({ first_name: firstName })')
+    expect(statusHandler).not.toContain('unsubscribed:')
+    expect(statusHandler).not.toContain('async function createContact')
   })
 })
 

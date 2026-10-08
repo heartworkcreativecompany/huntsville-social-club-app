@@ -10,10 +10,15 @@
  * The audit row is inserted before any Resend call. Acquiring that row counts
  * one attempt. Pre-send failures keep the acquired count and can be retried
  * until attempt 5. A profile reload that fails does not make the event
- * obsolete. The event is sent only to the address whose contact name was
- * synced on that attempt. A later address change retries the same row.
+ * obsolete. The event is sent only to the address used for that attempt's
+ * contact lookup. A later address change retries the same row.
  * Event submission is not retried after it has been attempted.
  * next_attempt_at null is not due work.
+ *
+ * Name synchronization only patches first_name on a contact that already
+ * exists. A definitive 404 skips that write and does not block the status
+ * event. This does not guarantee Automation delivery to an unsubscribed
+ * contact, and it does not activate signup-to-contact enrollment.
  */
 
 import {
@@ -384,57 +389,17 @@ async function patchContactFirstName(
   )
 }
 
-type CreateContactResult = 'created' | 'locked' | 'failed'
-
-/**
- * Create a missing contact as email, first_name, and unsubscribed true.
- * The Create Contact reference does not define a default when unsubscribed
- * is omitted, and true unsubscribes the contact from Broadcasts. Segments
- * and topics stay omitted. An existing contact is patched with first_name
- * only, so a name update does not change its subscription state.
- */
-async function createContact(
-  fetchImpl: typeof fetch,
-  apiKey: string,
-  email: string,
-  firstName: string,
-  budget: HttpBudget
-): Promise<CreateContactResult> {
-  const fetched = await fetchBounded(
-    fetchImpl,
-    RESEND_CONTACTS_URL,
-    {
-      method: 'POST',
-      headers: resendHeaders(apiKey, true),
-      body: JSON.stringify({
-        email,
-        first_name: firstName,
-        unsubscribed: true,
-      }),
-    },
-    budget,
-    CONTACT_HTTP_TIMEOUT_MS
-  )
-  if (!fetched) return 'failed'
-  const { response, signal } = fetched
-  if (response.ok) {
-    await cancelBody(response)
-    return 'created'
-  }
-  let name: string | null
-  try {
-    name = await providerErrorName(response, signal)
-  } catch {
-    return 'failed'
-  }
-  if (response.status === 409 && name === 'resource_locked') return 'locked'
-  return 'failed'
-}
-
 type ContactSyncResult =
   | { ok: true }
   | { ok: false; reason: typeof CONTACT_SYNC_FAILED | typeof MISSING_FIRST_NAME }
 
+/**
+ * Patch first_name on a contact that already exists. HTTP 404 is the only
+ * not-found result: skip the name write and let the status event continue.
+ * Authentication, permission, timeout, and other lookup failures stay
+ * retryable sync failures. No name-sync request creates a contact or sends
+ * unsubscribed.
+ */
 async function ensureContactFirstName(
   fetchImpl: typeof fetch,
   apiKey: string,
@@ -444,88 +409,25 @@ async function ensureContactFirstName(
   budget: HttpBudget
 ): Promise<ContactSyncResult> {
   const explicitName = explicitFirstNameFromDraft(draft)
-  let lookup = await lookupContact(fetchImpl, apiKey, email, budget)
+  const lookup = await lookupContact(fetchImpl, apiKey, email, budget)
   if (lookup.status === 'error') return { ok: false, reason: CONTACT_SYNC_FAILED }
-
-  if (lookup.status === 'found') {
-    if (!explicitName) {
-      return lookup.firstName
-        ? { ok: true }
-        : { ok: false, reason: MISSING_FIRST_NAME }
-    }
-    const patched = await patchContactFirstName(
-      fetchImpl,
-      apiKey,
-      email,
-      explicitName,
-      delay,
-      budget
-    )
-    return patched
+  if (lookup.status === 'missing') return { ok: true }
+  if (!explicitName) {
+    return lookup.firstName
       ? { ok: true }
-      : { ok: false, reason: CONTACT_SYNC_FAILED }
+      : { ok: false, reason: MISSING_FIRST_NAME }
   }
-
-  if (!explicitName) return { ok: false, reason: MISSING_FIRST_NAME }
-
-  const created = await createContact(
+  const patched = await patchContactFirstName(
     fetchImpl,
     apiKey,
     email,
     explicitName,
+    delay,
     budget
   )
-  if (created === 'created') return { ok: true }
-
-  // resource_locked is the documented retry-after-delay signal for contact writes.
-  // One delayed re-read, then at most one more create or first_name patch.
-  // The delay is inside the pre-send deadline, not a fresh 30s lease.
-  if (created === 'locked' && !(await delayWithinBudget(delay, budget))) {
-    return { ok: false, reason: CONTACT_SYNC_FAILED }
-  }
-  lookup = await lookupContact(fetchImpl, apiKey, email, budget)
-  if (lookup.status === 'found') {
-    if (lookup.firstName === explicitName) return { ok: true }
-    const patched = await patchContactFirstName(
-      fetchImpl,
-      apiKey,
-      email,
-      explicitName,
-      delay,
-      budget
-    )
-    return patched
-      ? { ok: true }
-      : { ok: false, reason: CONTACT_SYNC_FAILED }
-  }
-  if (lookup.status === 'error') return { ok: false, reason: CONTACT_SYNC_FAILED }
-  if (created !== 'locked') return { ok: false, reason: CONTACT_SYNC_FAILED }
-
-  const retried = await createContact(
-    fetchImpl,
-    apiKey,
-    email,
-    explicitName,
-    budget
-  )
-  if (retried === 'created') return { ok: true }
-  lookup = await lookupContact(fetchImpl, apiKey, email, budget)
-  if (lookup.status === 'found') {
-    if (lookup.firstName === explicitName) return { ok: true }
-    const patched = await patchContactFirstName(
-      fetchImpl,
-      apiKey,
-      email,
-      explicitName,
-      delay,
-      budget
-    )
-    return patched
-      ? { ok: true }
-      : { ok: false, reason: CONTACT_SYNC_FAILED }
-  }
-
-  return { ok: false, reason: CONTACT_SYNC_FAILED }
+  return patched
+    ? { ok: true }
+    : { ok: false, reason: CONTACT_SYNC_FAILED }
 }
 
 function isUuid(value: unknown): value is string {
