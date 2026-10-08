@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import {
   EMAIL_MARKETING_SYNC_LEASE_MS,
+  contactWritePayload,
   nextMarketingSyncDelaySeconds,
   runEmailMarketingSyncAttempt,
   type EmailMarketingSyncDecision,
   type LocalMarketingConsent,
+  type MarketingContactWriteBody,
+  type MarketingNameWriteBody,
 } from '@/lib/email-marketing-sync'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -15,9 +18,9 @@ const COMPLETION_RESERVE_MS = 1000
 const MAX_JOBS_PER_INVOCATION = 20
 
 function isAuthorized(request: Request): boolean {
-  const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret) return false
-  return request.headers.get('authorization') === `Bearer ${cronSecret}`
+  const workerSecret = process.env.EMAIL_MARKETING_SYNC_SECRET
+  if (!workerSecret) return false
+  return request.headers.get('authorization') === `Bearer ${workerSecret}`
 }
 
 type SyncJob = {
@@ -32,6 +35,10 @@ type SyncJob = {
 type RecheckRow = {
   decision: string
   recipient_email: string | null
+  given_name: string | null
+  family_name: string | null
+  application_first_name: string | null
+  application_last_name: string | null
 }
 
 type FinishStatus = 'pending' | 'synced' | 'skipped' | 'failed'
@@ -81,7 +88,7 @@ async function providerRequest(input: {
   url: string
   method: 'GET' | 'POST' | 'PATCH'
   apiKey: string
-  body?: { unsubscribed: boolean } | { email: string; unsubscribed: boolean }
+  body?: MarketingContactWriteBody | MarketingNameWriteBody | ReturnType<typeof contactWritePayload>
   signal: AbortSignal
 }): Promise<{ status: number; json: { unsubscribed?: unknown } | null }> {
   if (input.signal.aborted) {
@@ -128,7 +135,7 @@ async function lookupProvider(
 
 async function sendSubscription(input: {
   email: string
-  body: { unsubscribed: boolean }
+  body: MarketingContactWriteBody
   method: 'POST' | 'PATCH'
   apiKey: string
   signal: AbortSignal
@@ -137,10 +144,7 @@ async function sendSubscription(input: {
     input.method === 'POST'
       ? RESEND_CONTACTS_URL
       : `${RESEND_CONTACTS_URL}/${encodeURIComponent(input.email)}`
-  const payload =
-    input.method === 'POST'
-      ? { email: input.email, unsubscribed: input.body.unsubscribed }
-      : { unsubscribed: input.body.unsubscribed }
+  const payload = contactWritePayload(input)
   const result = await providerRequest({
     url,
     method: input.method,
@@ -153,9 +157,37 @@ async function sendSubscription(input: {
   }
 }
 
+async function sendContactName(input: {
+  email: string
+  body: MarketingNameWriteBody
+  apiKey: string
+  signal: AbortSignal
+}) {
+  const payload: MarketingNameWriteBody = {}
+  if (input.body.first_name) payload.first_name = input.body.first_name
+  if (input.body.last_name) payload.last_name = input.body.last_name
+  if (!payload.first_name && !payload.last_name) return
+  const result = await providerRequest({
+    url: `${RESEND_CONTACTS_URL}/${encodeURIComponent(input.email)}`,
+    method: 'PATCH',
+    apiKey: input.apiKey,
+    body: payload,
+    signal: input.signal,
+  })
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error('provider_write_failed')
+  }
+}
+
 function localFromDecision(row: RecheckRow | undefined, action: SyncJob['action']): LocalMarketingConsent {
+  const names = {
+    givenName: row?.given_name ?? null,
+    familyName: row?.family_name ?? null,
+    applicationFirstName: row?.application_first_name ?? null,
+    applicationLastName: row?.application_last_name ?? null,
+  }
   if (!row || row.decision === 'skip_no_email' || row.decision === 'missing_job') {
-    return { email: null, emailConfirmed: false, optIn: false, optedOutAt: null }
+    return { email: null, emailConfirmed: false, optIn: false, optedOutAt: null, ...names }
   }
   if (row.decision === 'defer_unconfirmed') {
     return {
@@ -163,6 +195,7 @@ function localFromDecision(row: RecheckRow | undefined, action: SyncJob['action'
       emailConfirmed: false,
       optIn: true,
       optedOutAt: null,
+      ...names,
     }
   }
   if (row.decision === 'skip_withdrawn') {
@@ -171,6 +204,7 @@ function localFromDecision(row: RecheckRow | undefined, action: SyncJob['action'
       emailConfirmed: true,
       optIn: true,
       optedOutAt: new Date(0).toISOString(),
+      ...names,
     }
   }
   if (row.decision === 'skip_not_opted_in') {
@@ -179,6 +213,7 @@ function localFromDecision(row: RecheckRow | undefined, action: SyncJob['action'
       emailConfirmed: true,
       optIn: false,
       optedOutAt: null,
+      ...names,
     }
   }
   return {
@@ -186,6 +221,7 @@ function localFromDecision(row: RecheckRow | undefined, action: SyncJob['action'
     emailConfirmed: true,
     optIn: action === 'enroll',
     optedOutAt: null,
+    ...names,
   }
 }
 
@@ -287,6 +323,7 @@ export async function GET(request: Request) {
         },
         lookupProvider: (email) => lookupProvider(email, apiKey, signal),
         send: (sendInput) => sendSubscription({ ...sendInput, apiKey, signal }),
+        sendName: (nameInput) => sendContactName({ ...nameInput, apiKey, signal }),
         recordProviderUnsubscribe: async (email) => {
           const { error } = await admin.rpc('apply_resend_contact_unsubscribe', {
             target_email: email,

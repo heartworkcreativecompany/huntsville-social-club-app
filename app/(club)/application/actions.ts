@@ -24,6 +24,7 @@ import {
 } from '@/lib/membership-systems'
 import { runCompatibilityConnectionsLifecycle } from '@/lib/compatibility/sync-server'
 import { syncAuthDisplayNameBestEffort } from '@/lib/sync-auth-display-name'
+import { loadSignupNames } from '@/lib/load-signup-names'
 
 export async function saveApplicationDraft(draft: ApplicationDraft) {
   const supabase = await createClient()
@@ -113,7 +114,8 @@ export async function submitApplication() {
     return { error: 'This application cannot be submitted right now.' }
   }
 
-  const draft = mergeProfileIntoDraft(profile)
+  const signupNames = await loadSignupNames(supabase, user.id)
+  const draft = mergeProfileIntoDraft({ ...profile, ...signupNames })
   const validationError = validateApplicationForSubmit(draft)
 
   if (validationError) {
@@ -192,5 +194,6 @@ export async function getApplicationDraftForUser(): Promise<ApplicationDraft> {
 
   if (!profile) return emptyDraft()
 
-  return mergeProfileIntoDraft(profile)
+  const signupNames = await loadSignupNames(supabase, user.id)
+  return mergeProfileIntoDraft({ ...profile, ...signupNames })
 }

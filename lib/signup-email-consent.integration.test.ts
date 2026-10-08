@@ -211,6 +211,63 @@ describe('local signup email consent', () => {
     )
   })
 
+  it('persists signup names without setting the public display name or enrolling a declined opt-in', async () => {
+    const named = await signUp('signup-consent-names@example.com', {
+      essential_email_acknowledgement: true,
+      email_marketing_opt_in: false,
+      given_name: '  José  ',
+      family_name: "O'Brien",
+    })
+    expect(named.status).toBeLessThan(400)
+    const namedRow = await psql(`
+      select concat_ws('|',
+        coalesce(given_name, ''),
+        coalesce(family_name, ''),
+        coalesce(full_name, '')
+      )
+      from public.profiles
+      where id = ${sqlText(named.userId ?? '')}::uuid
+    `)
+    expect(namedRow).toBe("José|O'Brien|")
+    const jobs = await psql(`
+      select count(*)
+      from public.email_marketing_sync
+      where profile_id = ${sqlText(named.userId ?? '')}::uuid
+    `)
+    expect(jobs).toBe('0')
+
+    const single = await signUp('signup-consent-single-name@example.com', {
+      essential_email_acknowledgement: true,
+      email_marketing_opt_in: false,
+      given_name: '李',
+      family_name: '   ',
+    })
+    expect(single.status).toBeLessThan(400)
+    const singleRow = await psql(`
+      select concat_ws('|', coalesce(given_name, ''), coalesce(family_name, ''))
+      from public.profiles
+      where id = ${sqlText(single.userId ?? '')}::uuid
+    `)
+    expect(singleRow).toBe('李|')
+
+    const rejected = await psql(`
+      select concat_ws('|',
+        coalesce(public.signup_name_from_metadata('{"given_name":true}'::jsonb, 'given_name'), 'null'),
+        coalesce(public.signup_name_from_metadata(jsonb_build_object('given_name', repeat('a', 81)), 'given_name'), 'null')
+      )
+    `)
+    expect(rejected).toBe('null|null')
+
+    const applicationNames = await psql(`
+      select concat_ws('|',
+        coalesce(public.explicit_application_name('{"profile":{"firstName":" Ada ","displayName":"Public Name"}}'::jsonb, 'firstName'), 'null'),
+        coalesce(public.explicit_application_name('{"profile":{"lastName":" Lovelace "}}'::jsonb, 'lastName'), 'null'),
+        coalesce(public.explicit_application_name('{"full_name":"Ada Lovelace","profile":{"displayName":"Public Name"}}'::jsonb, 'firstName'), 'null')
+      )
+    `)
+    expect(applicationNames).toBe('Ada|Lovelace|null')
+  })
+
   it('records marketing evidence separately and still lets that account sign in', async () => {
     const email = 'signup-consent-marketing@example.com'
     const created = await signUp(email, {
@@ -325,12 +382,26 @@ describe('local signup email consent', () => {
         update public.profiles
         set full_name = 'Ordinary Update'
         where id = ${sqlText(userId ?? '')}::uuid
+          and id = (select auth.uid())
         returning id
       )
-      select count(*)::text from updated;
+      select (select auth.uid())::text || '|' || count(*)::text
+      from updated;
       commit;
     `)
-    expect(updated).toContain('1')
+    const updateResult = updated
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !['BEGIN', 'SET', 'COMMIT', 'ROLLBACK'].includes(line))
+      .at(-1)
+    expect(updateResult).toBe(`${userId}|1`)
+
+    const storedName = await psql(`
+      select coalesce(full_name, '')
+      from public.profiles
+      where id = ${sqlText(userId ?? '')}::uuid
+    `)
+    expect(storedName).toBe('Ordinary Update')
 
     const forbidden = await psqlError(`
       begin;

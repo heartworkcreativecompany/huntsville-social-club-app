@@ -12,7 +12,9 @@
 -- and the consent migration's confirmation trigger uses it.
 -- public.profiles with
 -- id, email, role, and full_name, the existing on_auth_user_created
--- trigger, and a member self-update policy. It does not replay the
+-- trigger, and member self-select and self-update policies. An update
+-- cannot see an existing row unless a select policy allows it too.
+-- It does not replay the
 -- statements listed in docs/signup-email-consent-rollout.md that stop
 -- a fresh run of the full chain.
 
@@ -24,6 +26,14 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles enable row level security;
+
+drop policy if exists "Users can view their own profile"
+  on public.profiles;
+create policy "Users can view their own profile"
+  on public.profiles
+  for select
+  to authenticated
+  using (id = (select auth.uid()));
 
 drop policy if exists "Users can update their own profile except role"
   on public.profiles;

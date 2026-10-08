@@ -13,6 +13,8 @@ import {
   APPLICATION_PAGE_SUBMITTED_INTRO,
 } from '@/lib/application-form-content'
 import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
+import { loadSignupNames } from '@/lib/load-signup-names'
+import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
 import ApplicationProfilePreview from '@/components/application/application-profile-preview'
@@ -28,7 +30,10 @@ export default async function ApplicationPage() {
   const profile = viewer.profile
   const status = viewer.applicationStatus
   const next = nextActionForApplicant(status)
-  const draft = mergeProfileIntoDraft(profile)
+  const signupNames = await loadSignupNames(await createClient(), viewer.userId)
+  const draft = mergeProfileIntoDraft(
+    profile ? { ...profile, ...signupNames } : null
+  )
   const showReadOnlyPreview =
     !canEditApplication(status) && status !== 'approved'
   const adminNotes = profile?.admin_review_notes?.trim() || null

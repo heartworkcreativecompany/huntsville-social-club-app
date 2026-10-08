@@ -118,8 +118,10 @@ later, the required subscriptions are `contact.created` and
 `contact.updated`. Registering only `contact.updated` misses a contact
 created by an enrollment request that lands after withdrawal.
 
-The route returns 401 when `CRON_SECRET` is missing or the bearer token
-does not match. It returns 500 when the service-role client or
+The route returns 401 unless `Authorization` is `Bearer` plus
+`EMAIL_MARKETING_SYNC_SECRET`. `CRON_SECRET` does not authorize it, and the
+path stays out of `vercel.json` so a shared Vercel cron secret cannot start
+this worker. It returns 500 when the service-role client or
 `RESEND_API_KEY` is missing, and it does not call Resend in those cases.
 
 Enrollment is queued in two places. `handle_new_user` inserts a pending
@@ -132,10 +134,48 @@ in and not withdrawn.
 Do not send live contacts, messages, or webhook replays as part of rollout
 until those are chosen separately.
 
-Enrollment writes only the contact `unsubscribed` flag. It does not add
-segments or topics. Each attempt rechecks email confirmation, current local
-consent, and the provider unsubscribe state before an enrollment write.
-Local withdrawal wins over a queued enrollment.
+Contact names come from the trimmed explicit
+`application_draft.profile.firstName` and `lastName` when those values
+exist, because the application can correct the signup name. Otherwise the
+persisted signup `given_name` and `family_name` are used. `full_name` and
+the public display name are never split into a provider contact name.
+
+Creating a missing contact for a confirmed marketing opt-in sends
+`unsubscribed: false` and those resolved names when they exist. An existing
+contact receives a subscription patch of `{ unsubscribed }` and, separately,
+a name-only patch when a resolved name exists. The name patch does not
+include `unsubscribed`. An absent local name does not clear a name already
+stored by the provider. Withdrawal patches `{ unsubscribed: true }` only
+when the contact exists. It does not write names, and a missing contact is
+not created. It does not add segments or topics. Each attempt rechecks
+email confirmation, current local consent, and the provider unsubscribe
+state before an enrollment write. Local withdrawal wins over a queued
+enrollment. Accounts created before signup names keep null signup names.
+An explicit application name can still be used for those accounts.
+
+## Activation order
+
+None of these steps is authorized by the local change.
+
+1. Apply the reviewed forward migration
+   `20261008030000_signup_names.sql` only after a dry-run lists that file
+   alone.
+2. Deploy the reviewed application that reads the new columns and serves
+   the signup name fields.
+3. Configure `RESEND_WEBHOOK_SECRET` in a deployment, then register verified
+   `contact.created` and `contact.updated` delivery before any provider
+   write. Registering only `contact.updated` misses a contact created after
+   withdrawal.
+4. Configure `EMAIL_MARKETING_SYNC_SECRET` and an approved scheduler that
+   calls `/api/cron/email-marketing-sync` with that bearer. Do not set
+   `CRON_SECRET` or `APPLICATION_STATUS_RETRY_SECRET`, and do not add this
+   path to `vercel.json`.
+5. Activate provider processing only after a separate approval of the
+   pending-job inventory and the expected effect of each job.
+
+A secret added after a deployment is not part of that deployment's
+runtime. Using the secret requires a deployment created with it already
+configured. Adding the variable does not update the already-live runtime.
 
 The worker acquires one job at a time and holds a 20-second lease. Attempts
 are counted when the lease is acquired. A failed attempt waits 60 seconds,
@@ -186,8 +226,8 @@ publish a promise that unsubscribing from news and offers leaves application,
 account, or membership mail unaffected until that sending path is verified.
 The public privacy page does not make that promise.
 
-Hosted Auth hook activation, Resend webhook registration, and the marketing
-sync worker are three further steps. None of them is turned on by merging
+The hosted Auth hook stays off. Webhook registration and the marketing
+worker follow the activation order above. Neither is turned on by merging
 this branch or by the local `supabase/config.toml` hook entry.
 
 ## Proposed public wording

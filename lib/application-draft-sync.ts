@@ -148,6 +148,8 @@ export function mergeProfileIntoDraft(
     connections_open_to?: string[] | null
     connection_intents?: string[] | null
     discovery_intent?: string | null
+    given_name?: string | null
+    family_name?: string | null
   } | null
 ): ApplicationDraft {
   if (!profile) return emptyDraft()
@@ -156,12 +158,23 @@ export function mergeProfileIntoDraft(
     ? parseApplicationDraft(profile.application_draft)
     : emptyDraft()
 
+  const signupGivenName = profile.given_name?.trim() ?? ''
+  const signupFamilyName = profile.family_name?.trim() ?? ''
+  if (!parsed.profile.firstName.trim() && signupGivenName) {
+    parsed.profile.firstName = signupGivenName
+  }
+  if (!parsed.profile.lastName.trim() && signupFamilyName) {
+    parsed.profile.lastName = signupFamilyName
+  }
+
   if (!parsed.profile.displayName.trim() && profile.full_name?.trim()) {
     parsed.profile.displayName = profile.full_name.trim()
-    const parts = profile.full_name.trim().split(/\s+/)
-    if (!parsed.profile.firstName.trim()) {
+    if (!signupGivenName && !parsed.profile.firstName.trim()) {
+      const parts = profile.full_name.trim().split(/\s+/)
       parsed.profile.firstName = parts[0] ?? ''
-      parsed.profile.lastName = parts.slice(1).join(' ')
+      if (!parsed.profile.lastName.trim()) {
+        parsed.profile.lastName = parts.slice(1).join(' ')
+      }
     }
   }
 
