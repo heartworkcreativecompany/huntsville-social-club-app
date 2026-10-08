@@ -83,25 +83,34 @@ async function psqlFile(file, user = 'postgres') {
 
 async function waitForPostgres() {
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    try {
-      await docker(
-        [
-          'exec',
-          dbContainer,
-          'psql',
-          '-U',
-          'postgres',
-          '-d',
-          'postgres',
-          '-c',
-          'select 1',
-        ],
-        { stdio: 'ignore' }
-      )
-      return
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 500))
+    const logs = await run('docker', ['logs', dbContainer], {
+      capture: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).catch(() => '')
+    const ready = String(logs).lastIndexOf('database system is ready to accept connections')
+    const shutdown = String(logs).lastIndexOf('database system is shut down')
+    if (ready !== -1 && ready > shutdown) {
+      try {
+        await docker(
+          [
+            'exec',
+            dbContainer,
+            'psql',
+            '-U',
+            'postgres',
+            '-d',
+            'postgres',
+            '-c',
+            'select 1',
+          ],
+          { stdio: 'ignore' }
+        )
+        return
+      } catch {
+        // The image can restart once during its first startup.
+      }
     }
+    await new Promise((resolve) => setTimeout(resolve, 500))
   }
   throw new Error('Isolated Postgres did not become ready.')
 }
@@ -141,6 +150,39 @@ async function main() {
     '-v',
     'ON_ERROR_STOP=1',
     '-c',
+    `do $disable_event_triggers$
+     declare
+       trigger_name text;
+     begin
+       foreach trigger_name in array array[
+         'issue_graphql_placeholder',
+         'pgrst_ddl_watch',
+         'pgrst_drop_watch',
+         'issue_pg_cron_access',
+         'issue_pg_net_access',
+         'issue_pg_graphql_access'
+       ]
+       loop
+         if exists (
+           select 1 from pg_catalog.pg_event_trigger where evtname = trigger_name
+         ) then
+           execute format('alter event trigger %I disable', trigger_name);
+         end if;
+       end loop;
+     end
+     $disable_event_triggers$;`,
+  ])
+  await dockerRetry([
+    'exec',
+    dbContainer,
+    'psql',
+    '-U',
+    'supabase_admin',
+    '-d',
+    'postgres',
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-c',
     `alter role supabase_auth_admin password '${dbPassword}';`,
   ])
   await dockerRetry([
@@ -157,7 +199,34 @@ async function main() {
     'alter table auth.users add column if not exists email_confirmed_at timestamptz, add column if not exists email_change_token_new text;',
   ])
   await psqlFile('supabase/tests/signup-email-consent/baseline.sql')
+  await docker([
+    'exec',
+    dbContainer,
+    'psql',
+    '-U',
+    'supabase_admin',
+    '-d',
+    'postgres',
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-c',
+    'alter role postgres superuser;',
+  ])
   await psqlFile('supabase/migrations/20261007180000_signup_email_consent.sql')
+  await psqlFile('supabase/migrations/20261008030000_signup_names.sql')
+  await docker([
+    'exec',
+    dbContainer,
+    'psql',
+    '-U',
+    'supabase_admin',
+    '-d',
+    'postgres',
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-c',
+    'alter role postgres nosuperuser;',
+  ])
   await docker([
     'run',
     '-d',

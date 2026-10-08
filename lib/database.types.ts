@@ -18,6 +18,8 @@ export interface Database {
           id: string
           email: string | null
           full_name: string | null
+          given_name: string | null
+          family_name: string | null
           role: string | null
           created_at: string | null
           updated_at: string | null
@@ -95,6 +97,8 @@ export interface Database {
           id: string
           email?: string | null
           full_name?: string | null
+          given_name?: string | null
+          family_name?: string | null
           role?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -172,6 +176,8 @@ export interface Database {
           id?: string
           email?: string | null
           full_name?: string | null
+          given_name?: string | null
+          family_name?: string | null
           role?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -1438,6 +1444,10 @@ export interface Database {
           action: string
           decision: string
           recipient_email: string | null
+          given_name: string | null
+          family_name: string | null
+          application_first_name: string | null
+          application_last_name: string | null
         }[]
       }
       claim_email_marketing_sync_jobs: {

@@ -33,12 +33,97 @@ export type LocalMarketingConsent = {
   emailConfirmed: boolean
   optIn: boolean
   optedOutAt: string | null
+  givenName?: string | null
+  familyName?: string | null
+  applicationFirstName?: string | null
+  applicationLastName?: string | null
+}
+
+export type MarketingContactWriteBody = {
+  unsubscribed: boolean
+  first_name?: string
+  last_name?: string
 }
 
 export function marketingSubscriptionBody(unsubscribed: boolean): {
   unsubscribed: boolean
 } {
   return { unsubscribed }
+}
+
+export type ResolvedContactNames = {
+  firstName: string | null
+  lastName: string | null
+}
+
+export type MarketingNameWriteBody = {
+  first_name?: string
+  last_name?: string
+}
+
+function explicitContactName(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+/**
+ * Application first and last names win when they are explicit. Signup names
+ * fill only the fields the application has not set. Display names are not a
+ * contact-name source.
+ */
+export function resolveMarketingContactNames(
+  local: Pick<
+    LocalMarketingConsent,
+    'applicationFirstName' | 'applicationLastName' | 'givenName' | 'familyName'
+  >
+): ResolvedContactNames {
+  return {
+    firstName:
+      explicitContactName(local.applicationFirstName) ??
+      explicitContactName(local.givenName),
+    lastName:
+      explicitContactName(local.applicationLastName) ??
+      explicitContactName(local.familyName),
+  }
+}
+
+/** Create body. Empty name fields are omitted so a blank value is not sent. */
+export function enrollmentCreateBody(input: {
+  unsubscribed: boolean
+  names: ResolvedContactNames
+}): MarketingContactWriteBody {
+  const body: MarketingContactWriteBody = { unsubscribed: input.unsubscribed }
+  if (input.names.firstName) body.first_name = input.names.firstName
+  if (input.names.lastName) body.last_name = input.names.lastName
+  return body
+}
+
+/** Name-only patch. Null when neither name is resolved, so an existing provider name is left alone. */
+export function contactNameBody(names: ResolvedContactNames): MarketingNameWriteBody | null {
+  const body: MarketingNameWriteBody = {}
+  if (names.firstName) body.first_name = names.firstName
+  if (names.lastName) body.last_name = names.lastName
+  return body.first_name || body.last_name ? body : null
+}
+
+export function contactWritePayload(input: {
+  method: 'POST' | 'PATCH'
+  email: string
+  body: MarketingContactWriteBody
+}): {
+  email?: string
+  unsubscribed: boolean
+  first_name?: string
+  last_name?: string
+} {
+  if (input.method === 'PATCH') return { unsubscribed: input.body.unsubscribed }
+  return {
+    email: input.email,
+    unsubscribed: input.body.unsubscribed,
+    ...(input.body.first_name ? { first_name: input.body.first_name } : {}),
+    ...(input.body.last_name ? { last_name: input.body.last_name } : {}),
+  }
 }
 
 /**
@@ -76,8 +161,13 @@ export function nextMarketingSyncDelaySeconds(attemptCount: number): number | nu
 
 export type MarketingSyncSender = (input: {
   email: string
-  body: { unsubscribed: boolean }
+  body: MarketingContactWriteBody
   method: 'POST' | 'PATCH'
+}) => Promise<void>
+
+export type MarketingNameSender = (input: {
+  email: string
+  body: MarketingNameWriteBody
 }) => Promise<void>
 
 export type MarketingSyncProviderLookup = (
@@ -94,8 +184,14 @@ export async function runEmailMarketingSyncAttempt(input: {
   readLocal: () => Promise<LocalMarketingConsent>
   lookupProvider: MarketingSyncProviderLookup
   send: MarketingSyncSender
+  sendName?: MarketingNameSender
   recordProviderUnsubscribe: (email: string) => Promise<void>
 }): Promise<EmailMarketingSyncDecision> {
+  const sendName =
+    input.sendName ??
+    (async () => {
+      throw new Error('name write was not provided')
+    })
   const first = await input.readLocal()
   const initial = decideEmailMarketingSync({
     action: input.action,
@@ -130,8 +226,8 @@ export async function runEmailMarketingSyncAttempt(input: {
     }
     await input.send({
       email: afterLookup.email,
-      body: marketingSubscriptionBody(true),
       method: 'PATCH',
+      body: marketingSubscriptionBody(true),
     })
     return 'send_unsubscribed_true'
   }
@@ -155,10 +251,24 @@ export async function runEmailMarketingSyncAttempt(input: {
     return decision
   }
 
+  const names = resolveMarketingContactNames(afterProvider)
+  if (provider === 'missing') {
+    await input.send({
+      email: afterProvider.email,
+      method: 'POST',
+      body: enrollmentCreateBody({ unsubscribed: false, names }),
+    })
+    return 'send_unsubscribed_false'
+  }
+
   await input.send({
     email: afterProvider.email,
+    method: 'PATCH',
     body: marketingSubscriptionBody(false),
-    method: provider === 'missing' ? 'POST' : 'PATCH',
   })
+  const nameBody = contactNameBody(names)
+  if (nameBody) {
+    await sendName({ email: afterProvider.email, body: nameBody })
+  }
   return 'send_unsubscribed_false'
 }

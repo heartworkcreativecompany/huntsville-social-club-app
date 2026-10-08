@@ -581,21 +581,31 @@ describe('signup and phone UI', () => {
 })
 
 describe('marketing sync authentication', () => {
-  it('returns 401 when the cron secret is missing or wrong', async () => {
-    const previous = process.env.CRON_SECRET
-    delete process.env.CRON_SECRET
+  it('returns 401 unless the dedicated marketing worker secret matches', async () => {
+    const previousWorker = process.env.EMAIL_MARKETING_SYNC_SECRET
+    const previousCron = process.env.CRON_SECRET
+    delete process.env.EMAIL_MARKETING_SYNC_SECRET
+    process.env.CRON_SECRET = 'shared-cron-secret'
     const { GET } = await import('@/app/api/cron/email-marketing-sync/route')
     const missing = await GET(new Request('http://127.0.0.1/api/cron/email-marketing-sync'))
     expect(missing.status).toBe(401)
-    process.env.CRON_SECRET = 'signup-consent-test-cron'
+    const sharedCron = await GET(
+      new Request('http://127.0.0.1/api/cron/email-marketing-sync', {
+        headers: { authorization: 'Bearer shared-cron-secret' },
+      })
+    )
+    expect(sharedCron.status).toBe(401)
+    process.env.EMAIL_MARKETING_SYNC_SECRET = 'marketing-worker-secret'
     const wrong = await GET(
       new Request('http://127.0.0.1/api/cron/email-marketing-sync', {
         headers: { authorization: 'Bearer something-else' },
       })
     )
     expect(wrong.status).toBe(401)
-    if (previous === undefined) delete process.env.CRON_SECRET
-    else process.env.CRON_SECRET = previous
+    if (previousWorker === undefined) delete process.env.EMAIL_MARKETING_SYNC_SECRET
+    else process.env.EMAIL_MARKETING_SYNC_SECRET = previousWorker
+    if (previousCron === undefined) delete process.env.CRON_SECRET
+    else process.env.CRON_SECRET = previousCron
   })
 })
 

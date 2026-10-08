@@ -9,6 +9,7 @@ import {
   ESSENTIAL_EMAIL_ACKNOWLEDGEMENT_REQUIRED_MESSAGE,
   signupEmailConsentMetadata,
 } from '@/lib/email-consent'
+import { signupNameError, signupNameMetadata } from '@/lib/signup-name'
 import AuthPageShell from '@/components/auth/auth-page-shell'
 import AuthStatusBanner from '@/components/auth/auth-status-banner'
 import { createClient } from '@/lib/supabase/client'
@@ -46,6 +47,8 @@ function SignUpForm() {
   const supabase = createClient()
   const searchParams = useSearchParams()
   const returnPath = safeUpgradeReturnPath(searchParams.get('next'))
+  const [givenName, setGivenName] = useState('')
+  const [familyName, setFamilyName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -63,6 +66,18 @@ function SignUpForm() {
     e.preventDefault()
     setError('')
     setSuccess(false)
+
+    const givenNameError = signupNameError(givenName, true)
+    if (givenNameError) {
+      setError(givenNameError)
+      return
+    }
+
+    const familyNameError = signupNameError(familyName, false)
+    if (familyNameError) {
+      setError(familyNameError)
+      return
+    }
 
     const emailError = validateEmail(email)
     if (emailError) {
@@ -96,10 +111,13 @@ function SignUpForm() {
       password,
       options: {
         emailRedirectTo: authCallbackUrl(returnPath ?? '/login?confirmed=1'),
-        data: signupEmailConsentMetadata({
-          essentialAcknowledged,
-          marketingOptIn,
-        }),
+        data: {
+          ...signupNameMetadata({ givenName, familyName }),
+          ...signupEmailConsentMetadata({
+            essentialAcknowledged,
+            marketingOptIn,
+          }),
+        },
       },
     })
 
@@ -142,6 +160,36 @@ function SignUpForm() {
         </AuthStatusBanner>
       ) : (
         <form className="grid gap-4" onSubmit={handleSubmit} noValidate>
+          <label className="grid gap-1.5 text-sm">
+            <span className="font-medium text-foreground">First name</span>
+            <input
+              type="text"
+              name="givenName"
+              autoComplete="given-name"
+              value={givenName}
+              onChange={(e) => setGivenName(e.target.value)}
+              className={inputClassName}
+              disabled={isPending}
+              required
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm">
+            <span className="font-medium text-foreground">Last name</span>
+            <input
+              type="text"
+              name="familyName"
+              autoComplete="family-name"
+              value={familyName}
+              onChange={(e) => setFamilyName(e.target.value)}
+              className={inputClassName}
+              disabled={isPending}
+            />
+            <span className="text-xs text-muted-foreground">
+              Optional if you use one name.
+            </span>
+          </label>
+
           <label className="grid gap-1.5 text-sm">
             <span className="font-medium text-foreground">Email</span>
             <input
