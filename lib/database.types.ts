@@ -31,6 +31,15 @@ export interface Database {
           sms_marketing_consent_source: string | null
           sms_marketing_consent_phone_e164: string | null
           sms_marketing_opted_out_at: string | null
+          essential_email_acknowledged: boolean
+          essential_email_acknowledged_at: string | null
+          essential_email_acknowledgement_source: string | null
+          essential_email_acknowledgement_version: string | null
+          email_marketing_opt_in: boolean
+          email_marketing_opt_in_at: string | null
+          email_marketing_consent_source: string | null
+          email_marketing_consent_version: string | null
+          email_marketing_opted_out_at: string | null
           identity_verification_status: string
           identity_verification_session_id: string | null
           identity_verified_at: string | null
@@ -108,6 +117,15 @@ export interface Database {
           sms_marketing_consent_source?: string | null
           sms_marketing_consent_phone_e164?: string | null
           sms_marketing_opted_out_at?: string | null
+          essential_email_acknowledged?: boolean
+          essential_email_acknowledged_at?: string | null
+          essential_email_acknowledgement_source?: string | null
+          essential_email_acknowledgement_version?: string | null
+          email_marketing_opt_in?: boolean
+          email_marketing_opt_in_at?: string | null
+          email_marketing_consent_source?: string | null
+          email_marketing_consent_version?: string | null
+          email_marketing_opted_out_at?: string | null
           identity_verification_status?: string
           identity_verification_session_id?: string | null
           identity_verified_at?: string | null
@@ -176,6 +194,15 @@ export interface Database {
           sms_marketing_consent_source?: string | null
           sms_marketing_consent_phone_e164?: string | null
           sms_marketing_opted_out_at?: string | null
+          essential_email_acknowledged?: boolean
+          essential_email_acknowledged_at?: string | null
+          essential_email_acknowledgement_source?: string | null
+          essential_email_acknowledgement_version?: string | null
+          email_marketing_opt_in?: boolean
+          email_marketing_opt_in_at?: string | null
+          email_marketing_consent_source?: string | null
+          email_marketing_consent_version?: string | null
+          email_marketing_opted_out_at?: string | null
           identity_verification_status?: string
           identity_verification_session_id?: string | null
           identity_verified_at?: string | null
@@ -1312,12 +1339,63 @@ export interface Database {
         }
         Relationships: []
       }
+      email_marketing_sync: {
+        Row: {
+          id: string
+          profile_id: string
+          action: string
+          status: string
+          attempt_count: number
+          next_attempt_at: string | null
+          last_error: string | null
+          lease_owner: string | null
+          lease_expires_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          action: string
+          status?: string
+          attempt_count?: number
+          next_attempt_at?: string | null
+          last_error?: string | null
+          lease_owner?: string | null
+          lease_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          action?: string
+          status?: string
+          attempt_count?: number
+          next_attempt_at?: string | null
+          last_error?: string | null
+          lease_owner?: string | null
+          lease_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       member_profiles: {
         Row: Omit<
           Database['public']['Tables']['profiles']['Row'],
-          'email'
+          | 'email'
+          | 'essential_email_acknowledged'
+          | 'essential_email_acknowledged_at'
+          | 'essential_email_acknowledgement_source'
+          | 'essential_email_acknowledgement_version'
+          | 'email_marketing_opt_in'
+          | 'email_marketing_opt_in_at'
+          | 'email_marketing_consent_source'
+          | 'email_marketing_consent_version'
+          | 'email_marketing_opted_out_at'
         >
         Relationships: []
       }
@@ -1332,6 +1410,57 @@ export interface Database {
       }
     }
     Functions: {
+      withdraw_email_marketing: {
+        Args: Record<string, never>
+        Returns: undefined
+      }
+      apply_resend_contact_unsubscribe: {
+        Args: { target_email: string; provider_event_id: string }
+        Returns: string
+      }
+      record_resend_webhook_delivery: {
+        Args: { provider_event_id: string; provider_event_type: string }
+        Returns: string
+      }
+      reconcile_provider_marketing_resubscribe: {
+        Args: {
+          target_email: string
+          provider_event_id: string
+          provider_event_type: string
+        }
+        Returns: string
+      }
+      recheck_email_marketing_sync: {
+        Args: { target_job_id: string }
+        Returns: {
+          job_id: string
+          profile_id: string
+          action: string
+          decision: string
+          recipient_email: string | null
+        }[]
+      }
+      claim_email_marketing_sync_jobs: {
+        Args: { limit_count: number; target_profile_id?: string | null }
+        Returns: {
+          id: string
+          profile_id: string
+          action: string
+          attempt_count: number
+          lease_owner: string
+          lease_expires_at: string
+        }[]
+      }
+      finish_email_marketing_sync_job: {
+        Args: {
+          target_job_id: string
+          owner_token: string
+          next_status: string
+          error_code: string | null
+          retry_at: string | null
+        }
+        Returns: boolean
+      }
       event_taken_seat_count: {
         Args: { p_event_id: string }
         Returns: number

@@ -9,6 +9,10 @@ import {
 } from '@/lib/identity-verification-copy'
 import { SUPPORT_EMAIL } from '@/lib/site'
 import {
+  PRIVACY_EMAIL_SECTION_TITLE,
+  privacyEmailSectionParagraphs,
+} from '@/lib/email-consent'
+import {
   PRIVACY_MOBILE_SECTION_TITLE,
   PRIVACY_POLICY_LAST_UPDATED,
   privacyMobileSectionParagraphs,
@@ -54,6 +58,13 @@ export default function PrivacyPage() {
         Application photos are stored in private storage. Signed URLs are
         generated at view time and are never stored in our database.
       </p>
+
+      <h2 id="email" className="text-display text-lg font-semibold">
+        {PRIVACY_EMAIL_SECTION_TITLE}
+      </h2>
+      {privacyEmailSectionParagraphs.map((paragraph) => (
+        <p key={paragraph.slice(0, 48)}>{paragraph}</p>
+      ))}
 
       <h2
         id="mobile-numbers-and-text-messages"

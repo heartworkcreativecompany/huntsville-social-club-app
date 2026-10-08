@@ -60,6 +60,7 @@ export default function ApplicantVerificationProgress({
 }) {
   const router = useRouter()
   const [phoneOpen, setPhoneOpen] = useState(false)
+  const [phoneSkipped, setPhoneSkipped] = useState(false)
   const [identityError, setIdentityError] = useState('')
   const [isPending, startTransition] = useTransition()
 
@@ -168,14 +169,33 @@ export default function ApplicantVerificationProgress({
                 <div className="mt-3 grid gap-3">
                   {!phoneOpen ? (
                     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                      {phoneSkipped ? (
+                        <p className="text-sm text-muted-foreground">
+                          You can verify a phone number later. It is not required
+                          for membership approval.
+                        </p>
+                      ) : null}
                       <button
                         type="button"
                         className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
-                        onClick={() => setPhoneOpen(true)}
+                        onClick={() => {
+                          setPhoneSkipped(false)
+                          setPhoneOpen(true)
+                        }}
                       >
                         {status === 'pending_review'
                           ? 'Continue phone verification'
                           : 'Start phone verification'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`${buttonSecondaryClassName} ${mobileFullButtonClassName}`}
+                        onClick={() => {
+                          setPhoneOpen(false)
+                          setPhoneSkipped(true)
+                        }}
+                      >
+                        Skip for now
                       </button>
                     </div>
                   ) : (
@@ -259,7 +279,7 @@ function gateDescription(key: ApprovalGateKey): string {
       return ''
     case 'phone_verified':
       // Underlying flow: Supabase Auth phone_change SMS (provider set in Supabase).
-      return 'Verify your mobile number with a text code.'
+      return 'Optional. Verify your mobile number with a text code if you want to. Not required for membership approval.'
     case 'photos_reviewed':
       return 'Membership team reviews your photos.'
     case 'application_reviewed':

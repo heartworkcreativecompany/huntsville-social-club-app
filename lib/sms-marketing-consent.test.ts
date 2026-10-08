@@ -6,7 +6,7 @@ import {
   isEligibleForAccountNotificationSms,
   isSmsStopKeyword,
   nextSmsAccountNotificationsConsentState,
-  PHONE_VERIFICATION_REQUIRED_COPY,
+  PHONE_VERIFICATION_OPTIONAL_COPY,
   SMS_ACCOUNT_NOTIFICATIONS_CONSENT_DEFAULT_CHECKED,
   SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LABEL,
   SMS_ACCOUNT_NOTIFICATIONS_CONSENT_LINKS,
@@ -71,10 +71,10 @@ describe('phone verification vs optional account-notification consent UI rules',
     expect(MARKETING_BROWSER_ROUTES).toContain('/terms')
   })
 
-  it('explains that verified mobile is required for account protection', () => {
-    expect(PHONE_VERIFICATION_REQUIRED_COPY).toBe(
-      'A verified mobile number is required to help protect member accounts and support secure membership access.'
-    )
+  it('explains that phone verification is optional for approval', () => {
+    expect(PHONE_VERIFICATION_OPTIONAL_COPY).toMatch(/optional/i)
+    expect(PHONE_VERIFICATION_OPTIONAL_COPY).toMatch(/not required/i)
+    expect(PHONE_VERIFICATION_OPTIONAL_COPY).not.toMatch(/is required/i)
   })
 })
 
@@ -263,11 +263,11 @@ describe('privacy policy mobile SMS section', () => {
     expect(privacyMobileSectionParagraphs.join('\n')).toMatch(/HELP/)
   })
 
-  it('describes account-notification SMS rather than promotional marketing texts', () => {
-    const optInCopy = privacyMobileSectionParagraphs[2]
-    expect(optInCopy).toMatch(/account updates/i)
-    expect(optInCopy).not.toMatch(/promot/i)
-    expect(optInCopy).not.toMatch(/marketing/i)
-    expect(privacyMobileSectionParagraphs[3]).not.toMatch(/4 messages per month/i)
+  it('retires optional account-notification texts and keeps historical STOP records', () => {
+    const retired = privacyMobileSectionParagraphs.join('\n')
+    expect(retired).toMatch(/no longer offers optional account-notification or marketing text messages/i)
+    expect(retired).toMatch(/not used as email consent/i)
+    expect(retired).toMatch(/optional for membership approval/i)
+    expect(retired).not.toMatch(/may send automated SMS messages about their membership application/i)
   })
 })

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:integration:signup-consent": "node scripts/signup-consent-integration.mjs",
     "test:watch": "vitest",
     "backfill:auth-display-names": "npx --yes tsx scripts/backfill-auth-display-names.ts"
   },
