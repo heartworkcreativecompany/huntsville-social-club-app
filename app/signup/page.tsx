@@ -3,6 +3,12 @@
 import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import {
+  EMAIL_MARKETING_OPT_IN_LABEL,
+  ESSENTIAL_EMAIL_ACKNOWLEDGEMENT_LABEL,
+  ESSENTIAL_EMAIL_ACKNOWLEDGEMENT_REQUIRED_MESSAGE,
+  signupEmailConsentMetadata,
+} from '@/lib/email-consent'
 import AuthPageShell from '@/components/auth/auth-page-shell'
 import AuthStatusBanner from '@/components/auth/auth-status-banner'
 import { createClient } from '@/lib/supabase/client'
@@ -46,6 +52,8 @@ function SignUpForm() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [isPending, setIsPending] = useState(false)
+  const [essentialAcknowledged, setEssentialAcknowledged] = useState(false)
+  const [marketingOptIn, setMarketingOptIn] = useState(false)
 
   useEffect(() => {
     trackApplicationViewContent()
@@ -74,6 +82,11 @@ function SignUpForm() {
       return
     }
 
+    if (!essentialAcknowledged) {
+      setError(ESSENTIAL_EMAIL_ACKNOWLEDGEMENT_REQUIRED_MESSAGE)
+      return
+    }
+
     setIsPending(true)
 
     const trimmedEmail = email.trim()
@@ -83,6 +96,10 @@ function SignUpForm() {
       password,
       options: {
         emailRedirectTo: authCallbackUrl(returnPath ?? '/login?confirmed=1'),
+        data: signupEmailConsentMetadata({
+          essentialAcknowledged,
+          marketingOptIn,
+        }),
       },
     })
 
@@ -168,6 +185,44 @@ function SignUpForm() {
             />
           </label>
 
+          <div className="grid gap-3">
+            <div className="flex min-h-11 gap-3 text-sm">
+              <input
+                id="essential-email-acknowledgement"
+                name="essential_email_acknowledgement"
+                type="checkbox"
+                className="mt-1 h-5 w-5 shrink-0 rounded border-border"
+                checked={essentialAcknowledged}
+                onChange={(event) => setEssentialAcknowledged(event.target.checked)}
+                disabled={isPending}
+                required
+              />
+              <label
+                htmlFor="essential-email-acknowledgement"
+                className="min-w-0 text-sm leading-relaxed text-foreground"
+              >
+                {ESSENTIAL_EMAIL_ACKNOWLEDGEMENT_LABEL}
+              </label>
+            </div>
+            <div className="flex min-h-11 gap-3 text-sm">
+              <input
+                id="email-marketing-opt-in"
+                name="email_marketing_opt_in"
+                type="checkbox"
+                className="mt-1 h-5 w-5 shrink-0 rounded border-border"
+                checked={marketingOptIn}
+                onChange={(event) => setMarketingOptIn(event.target.checked)}
+                disabled={isPending}
+              />
+              <label
+                htmlFor="email-marketing-opt-in"
+                className="min-w-0 text-sm leading-relaxed text-muted-foreground"
+              >
+                {EMAIL_MARKETING_OPT_IN_LABEL}
+              </label>
+            </div>
+          </div>
+
           {error ? (
             <p className="text-sm break-words text-danger" role="alert">
               {error}
@@ -177,7 +232,7 @@ function SignUpForm() {
           <button
             type="submit"
             className={`${buttonPrimaryClassName} ${mobileFullButtonClassName}`}
-            disabled={isPending}
+            disabled={isPending || !essentialAcknowledged}
           >
             {isPending ? 'Creating account…' : 'Create account'}
           </button>
