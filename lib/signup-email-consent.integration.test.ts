@@ -382,12 +382,26 @@ describe('local signup email consent', () => {
         update public.profiles
         set full_name = 'Ordinary Update'
         where id = ${sqlText(userId ?? '')}::uuid
+          and id = (select auth.uid())
         returning id
       )
-      select count(*)::text from updated;
+      select (select auth.uid())::text || '|' || count(*)::text
+      from updated;
       commit;
     `)
-    expect(updated).toContain('1')
+    const updateResult = updated
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !['BEGIN', 'SET', 'COMMIT', 'ROLLBACK'].includes(line))
+      .at(-1)
+    expect(updateResult).toBe(`${userId}|1`)
+
+    const storedName = await psql(`
+      select coalesce(full_name, '')
+      from public.profiles
+      where id = ${sqlText(userId ?? '')}::uuid
+    `)
+    expect(storedName).toBe('Ordinary Update')
 
     const forbidden = await psqlError(`
       begin;
