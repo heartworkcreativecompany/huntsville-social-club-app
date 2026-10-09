@@ -1450,6 +1450,21 @@ export interface Database {
           application_last_name: string | null
         }[]
       }
+      claim_ensure_contact_jobs: {
+        Args: { limit_count: number; target_profile_id?: string | null }
+        Returns: {
+          id: string
+          profile_id: string
+          action: string
+          attempt_count: number
+          lease_owner: string
+          lease_expires_at: string
+        }[]
+      }
+      requeue_ensure_contact: {
+        Args: { target_profile_id: string }
+        Returns: string
+      }
       claim_email_marketing_sync_jobs: {
         Args: { limit_count: number; target_profile_id?: string | null }
         Returns: {

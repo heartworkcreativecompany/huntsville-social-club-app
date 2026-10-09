@@ -272,3 +272,113 @@ export async function runEmailMarketingSyncAttempt(input: {
   }
   return 'send_unsubscribed_false'
 }
+
+export type EnsureContactDecision =
+  | 'create_contact'
+  | 'patch_name'
+  | 'missing_first_name'
+  | 'skip_no_email'
+
+export type EnsureContactCreateBody = {
+  unsubscribed: false
+  first_name: string
+  last_name?: string
+}
+
+export type SignupContactNameSource = {
+  givenName: string | null
+  familyName: string | null
+}
+
+/** Signup names only. Application names and display names are not inputs. */
+export function signupContactNames(source: SignupContactNameSource): ResolvedContactNames {
+  return {
+    firstName: explicitContactName(source.givenName),
+    lastName: explicitContactName(source.familyName),
+  }
+}
+
+export function ensureContactCreateBody(names: {
+  firstName: string
+  lastName: string | null
+}): EnsureContactCreateBody {
+  const body: EnsureContactCreateBody = {
+    unsubscribed: false,
+    first_name: names.firstName,
+  }
+  if (names.lastName) body.last_name = names.lastName
+  return body
+}
+
+export function ensureContactCompletion(
+  decision: EnsureContactDecision,
+  attemptCount: number
+): { status: 'pending' | 'synced' | 'skipped' | 'failed'; lastError: string | null; delaySeconds: number | null } {
+  if (decision === 'missing_first_name') {
+    const delaySeconds = nextMarketingSyncDelaySeconds(attemptCount)
+    return {
+      status: delaySeconds === null ? 'failed' : 'pending',
+      lastError: 'missing_first_name',
+      delaySeconds,
+    }
+  }
+  if (decision === 'skip_no_email') {
+    return { status: 'skipped', lastError: 'skip_no_email', delaySeconds: null }
+  }
+  return { status: 'synced', lastError: null, delaySeconds: null }
+}
+
+export function ensureContactProviderFailure(attemptCount: number): {
+  status: 'pending' | 'failed'
+  lastError: 'provider_error'
+  delaySeconds: number | null
+} {
+  const delaySeconds = nextMarketingSyncDelaySeconds(attemptCount)
+  return {
+    status: delaySeconds === null ? 'failed' : 'pending',
+    lastError: 'provider_error',
+    delaySeconds,
+  }
+}
+
+/**
+ * Creates a named contact, or patches signup names onto a contact that
+ * already exists. The patch never includes `unsubscribed`. Marketing opt-in
+ * is not an input.
+ */
+export async function runEnsureContactAttempt(input: {
+  readLocal: () => Promise<SignupContactNameSource & { email: string | null }>
+  lookupProvider: MarketingSyncProviderLookup
+  createContact: (input: {
+    email: string
+    body: EnsureContactCreateBody
+  }) => Promise<'created' | 'conflict'>
+  patchName: (input: { email: string; body: MarketingNameWriteBody }) => Promise<void>
+}): Promise<EnsureContactDecision> {
+  const first = await input.readLocal()
+  if (!first.email) return 'skip_no_email'
+  if (!signupContactNames(first).firstName) return 'missing_first_name'
+
+  const provider = await input.lookupProvider(first.email)
+  const again = await input.readLocal()
+  const names = signupContactNames(again)
+  if (!again.email) return 'skip_no_email'
+  if (!names.firstName) return 'missing_first_name'
+
+  const nameBody = contactNameBody(names)
+  if (!nameBody?.first_name) return 'missing_first_name'
+
+  if (provider === 'missing') {
+    const created = await input.createContact({
+      email: again.email,
+      body: ensureContactCreateBody({
+        firstName: nameBody.first_name,
+        lastName: nameBody.last_name ?? null,
+      }),
+    })
+    if (created === 'created') return 'create_contact'
+  }
+
+  await input.patchName({ email: again.email, body: nameBody })
+  return 'patch_name'
+}

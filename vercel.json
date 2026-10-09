@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/application-status-email",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/signup-contact-sync",
+      "schedule": "* * * * *"
     }
   ]
 }
