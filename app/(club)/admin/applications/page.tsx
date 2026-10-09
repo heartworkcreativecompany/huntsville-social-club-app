@@ -125,6 +125,12 @@ export default async function AdminApplicationsPage() {
           Message reports
         </Link>
         <Link
+          href="/admin/member-vouches"
+          className="text-muted-foreground underline"
+        >
+          Member vouches
+        </Link>
+        <Link
           href="/admin/moderation-actions"
           className="text-muted-foreground underline"
         >

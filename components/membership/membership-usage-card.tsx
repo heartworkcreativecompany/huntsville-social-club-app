@@ -99,6 +99,10 @@ export default function MembershipUsageCard({
         </div>
       )}
 
+      {display.historyLabel ? (
+        <p className="mt-3 text-sm text-muted-foreground">{display.historyLabel}</p>
+      ) : null}
+
       {showPaidUsage && display.showGuestInvites ? (
         <p className="mt-2 text-sm text-muted-foreground">
           Guest invites remaining this period: {guestInvitesRemaining}

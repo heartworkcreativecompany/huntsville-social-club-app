@@ -62,21 +62,21 @@ describe('member profile messaging helpers', () => {
     ).toBe('composer')
   })
 
-  it('shows upgrade lock for free sender regardless of recipient', () => {
+  it('hides messaging controls when the viewer lacks paid messaging', () => {
     expect(
       profileMessagingUiMode({
         isSelf: false,
         senderCanMessage: false,
         recipientCanMessage: true,
       })
-    ).toBe('upgrade')
+    ).toBe('hidden')
     expect(
       profileMessagingUiMode({
         isSelf: false,
         senderCanMessage: false,
         recipientCanMessage: false,
       })
-    ).toBe('upgrade')
+    ).toBe('hidden')
   })
 
   it('shows neutral unavailable notice for paid sender + ineligible recipient', () => {
@@ -200,8 +200,8 @@ describe('server wiring for new requests vs replies', () => {
       join(__dirname, '../lib/require-messaging.ts'),
       'utf8'
     )
-    expect(requireSource).toContain('isCuratedIntroConversationForMember')
-    expect(requireSource).toContain('isMessageRequestConversationForMember')
+    expect(requireSource).not.toContain('isCuratedIntroConversationForMember')
+    expect(requireSource).not.toContain('isMessageRequestConversationForMember')
     expect(requireSource).toContain('assertCanStartMessageRequest')
     expect(requireSource).toContain('MUTUAL_MESSAGING_REQUIRED_MESSAGE')
   })

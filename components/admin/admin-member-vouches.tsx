@@ -24,7 +24,7 @@ export default function AdminMemberVouches({
     )
   }
 
-  const moderate = (vouchId: string, status: 'active' | 'removed' | 'flagged') => {
+  const moderate = (vouchId: string, status: 'approved' | 'rejected') => {
     startTransition(async () => {
       await moderateMemberVouch({ vouchId, status })
     })
@@ -38,7 +38,7 @@ export default function AdminMemberVouches({
           className="rounded-lg border border-border bg-background/50 p-3"
         >
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={vouch.status === 'active' ? 'success' : 'muted'}>
+            <Badge variant={vouch.status === 'approved' ? 'success' : 'muted'}>
               {vouch.status}
             </Badge>
             <span className="font-medium text-foreground">
@@ -50,44 +50,38 @@ export default function AdminMemberVouches({
           </p>
           {vouch.note ? (
             <p className="mt-1 text-muted-foreground">
-              <span className="font-medium text-foreground">Note: </span>
+              <span className="font-medium text-foreground">Endorsement: </span>
               {vouch.note}
             </p>
-          ) : null}
+          ) : (
+            <p className="mt-1 text-muted-foreground">
+              No written endorsement was submitted.
+            </p>
+          )}
           {vouch.moderation_reason ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              Moderation: {vouch.moderation_reason}
+              Internal note: {vouch.moderation_reason}
             </p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
-            {vouch.status !== 'active' ? (
+            {vouch.status !== 'approved' ? (
               <button
                 type="button"
                 className={buttonSecondaryClassName}
                 disabled={isPending}
-                onClick={() => moderate(vouch.id, 'active')}
+                onClick={() => moderate(vouch.id, 'approved')}
               >
-                Restore
+                Approve
               </button>
             ) : null}
-            {vouch.status !== 'flagged' ? (
+            {vouch.status !== 'rejected' ? (
               <button
                 type="button"
                 className={buttonSecondaryClassName}
                 disabled={isPending}
-                onClick={() => moderate(vouch.id, 'flagged')}
+                onClick={() => moderate(vouch.id, 'rejected')}
               >
-                Flag
-              </button>
-            ) : null}
-            {vouch.status !== 'removed' ? (
-              <button
-                type="button"
-                className={buttonSecondaryClassName}
-                disabled={isPending}
-                onClick={() => moderate(vouch.id, 'removed')}
-              >
-                Remove
+                Reject
               </button>
             ) : null}
           </div>

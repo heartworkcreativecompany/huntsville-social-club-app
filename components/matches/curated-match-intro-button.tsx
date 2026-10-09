@@ -40,10 +40,13 @@ export default function CuratedMatchIntroButton({
         ? 'intro_requested'
         : displayState
 
-  if (!canMessage && (effectiveState === 'new' || effectiveState === 'viewed')) {
+  if (!canMessage) {
     return (
       <p className="text-sm text-muted-foreground">
-        Messaging and intros require an eligible paid membership.
+        An active paid membership is required to message.{' '}
+        <Link href="/upgrade" className="font-medium text-accent underline">
+          View memberships
+        </Link>
       </p>
     )
   }

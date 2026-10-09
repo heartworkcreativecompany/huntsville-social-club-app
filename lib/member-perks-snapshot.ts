@@ -71,6 +71,7 @@ export function membershipPerksSnapshotFromEntitlements(
   entitlements: Pick<
     MemberEntitlements,
     | 'productTier'
+    | 'billingProductTier'
     | 'premiumCreditsRemaining'
     | 'circleSocialCreditsRemaining'
     | 'guestInvitesRemaining'
@@ -78,17 +79,18 @@ export function membershipPerksSnapshotFromEntitlements(
     | 'subscriptionActive'
   >
 ): MembershipPerksSnapshot {
-  if (!isPaidPerksTier(entitlements.productTier)) {
+  const planTier = entitlements.billingProductTier
+  if (!isPaidPerksTier(planTier)) {
     return freeMemberPerksSnapshot('member')
   }
 
   const grantedDefault =
-    entitlements.productTier === 'elite_circle'
+    planTier === 'elite_circle'
       ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
       : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
 
   return normalizeMemberPerksSnapshot({
-    productTier: entitlements.productTier,
+    productTier: planTier,
     hasPaidMembership: true,
     premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
     creditsGranted: entitlements.activeCycle?.credits_granted ?? grantedDefault,

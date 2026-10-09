@@ -12,6 +12,7 @@ import type {
   CreateMessageRequestResult,
   RespondToMessageRequestResult,
 } from '@/lib/message-request-flow'
+import { recipientHasPaidMessaging } from '@/lib/curated-intro-notifications'
 import {
   sendCuratedIntroMatchedEmail,
   sendCuratedIntroMatchedTargetEmail,
@@ -80,27 +81,45 @@ export async function notifyMessageRequestAccepted(
   ])
   const requester = profiles.get(result.requesterId)
   const target = profiles.get(result.targetMemberId)
+  const [requesterEntitled, targetEntitled] = await Promise.all([
+    recipientHasPaidMessaging(supabase, result.requesterId),
+    recipientHasPaidMessaging(supabase, result.targetMemberId),
+  ])
 
   void createMemberNotification(supabase, {
     userId: result.requesterId,
     type: 'message_request_accepted',
-    href: conversationNotificationHref(result.conversationId),
-    metadata: {
-      conversationId: result.conversationId,
-      targetMemberId: result.targetMemberId,
-    },
+    href: requesterEntitled
+      ? conversationNotificationHref(result.conversationId)
+      : '/upgrade',
+    body: requesterEntitled
+      ? undefined
+      : 'Your message request was accepted. An active paid membership is required to message.',
+    metadata: requesterEntitled
+      ? {
+          conversationId: result.conversationId,
+          targetMemberId: result.targetMemberId,
+        }
+      : { membershipRequired: true },
   })
 
   if (result.recommendationId) {
     void createMemberNotification(supabase, {
       userId: result.requesterId,
       type: 'curated_intro_matched',
-      href: conversationNotificationHref(result.conversationId),
-      metadata: {
-        conversationId: result.conversationId,
-        targetMemberId: result.targetMemberId,
-        recommendationId: result.recommendationId,
-      },
+      href: requesterEntitled
+        ? conversationNotificationHref(result.conversationId)
+        : '/upgrade',
+      body: requesterEntitled
+        ? undefined
+        : 'Your curated intro was approved. An active paid membership is required to message.',
+      metadata: requesterEntitled
+        ? {
+            conversationId: result.conversationId,
+            targetMemberId: result.targetMemberId,
+            recommendationId: result.recommendationId,
+          }
+        : { membershipRequired: true },
     })
   }
 
@@ -112,6 +131,7 @@ export async function notifyMessageRequestAccepted(
       to: requesterEmail,
       otherMemberName: displayName(target),
       conversationId: result.conversationId,
+      recipientEntitled: requesterEntitled,
     })
   }
 
@@ -120,6 +140,7 @@ export async function notifyMessageRequestAccepted(
       to: targetEmail,
       otherMemberName: displayName(requester),
       conversationId: result.conversationId,
+      recipientEntitled: targetEntitled,
     })
   }
 }

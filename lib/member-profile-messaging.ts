@@ -44,7 +44,7 @@ export function profileMessagingUiMode(input: {
   recipientCanMessage: boolean
 }): ProfileMessagingUiMode {
   if (input.isSelf) return 'hidden'
-  if (!input.senderCanMessage) return 'upgrade'
+  if (!input.senderCanMessage) return 'hidden'
   if (!input.recipientCanMessage) return 'unavailable'
   return 'composer'
 }

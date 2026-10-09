@@ -1,4 +1,5 @@
 import type Stripe from 'stripe'
+import { scheduledCancellationHasEnded } from '@/lib/membership-billing-period'
 import {
   isPaidMembershipTier,
   tierFromStripePriceId,
@@ -77,7 +78,10 @@ export function resolvePaidTierForSubscription(
 export function paidTierFromActiveStoredPriceId(billing: {
   subscription_status?: string | null
   stripe_price_id?: string | null
+  cancel_at_period_end?: boolean | null
+  billing_period_end?: string | null
 }): PaidMembershipTier | null {
   if (billing.subscription_status !== 'active') return null
+  if (scheduledCancellationHasEnded(billing)) return null
   return tierFromStripePriceId(billing.stripe_price_id)
 }

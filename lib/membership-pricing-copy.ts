@@ -18,6 +18,10 @@ export const CONNECT_MONTHLY_PRICE = '$9.99/month'
 /** Membership card / entitlement copy for Connect. No credit or Circle matching claims. */
 export const CONNECT_MEMBERSHIP_INCLUDED_COPY =
   'Direct messaging and member discovery are included with Connect.'
+
+/** Connect plan whose subscription is not an active paid messaging entitlement. */
+export const CONNECT_DISCOVERY_WITHOUT_MESSAGING_COPY =
+  'Member discovery is included with Connect. Direct messaging is not included with the current subscription status.'
 export const INNER_CIRCLE_MONTHLY_PRICE = '$29.99/month'
 export const ELITE_CIRCLE_MONTHLY_PRICE = '$69.99/month'
 

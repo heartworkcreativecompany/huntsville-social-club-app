@@ -7,11 +7,14 @@ import {
   conversationNotificationHref,
   createMemberNotification,
 } from '@/lib/member-notifications'
+import { loadMemberEntitlementsForUserId } from '@/lib/load-member-entitlements'
+import { canUseMessaging } from '@/lib/membership-entitlements'
 import {
   sendCuratedIntroDeclinedEmail,
   sendCuratedIntroMatchedEmail,
   sendCuratedIntroMatchedTargetEmail,
 } from '@/lib/transactional-email'
+import type { CuratedIntroEmailAudience } from '@/lib/curated-intro-email'
 import type {
   CuratedIntroDeclineResult,
   CuratedIntroMatchResult,
@@ -46,6 +49,55 @@ function displayName(profile: ProfileRow | undefined): string {
   return memberDisplayName(profile)
 }
 
+export async function recipientHasPaidMessaging(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<boolean> {
+  const entitlements = await loadMemberEntitlementsForUserId(userId, supabase)
+  return Boolean(entitlements && canUseMessaging(entitlements))
+}
+
+async function sendApprovedIntroEmail(
+  supabase: SupabaseClient<Database>,
+  input: {
+    userId: string
+    email: string | null | undefined
+    otherMemberName: string
+    conversationId: string
+    audience: CuratedIntroEmailAudience
+  }
+) {
+  const entitled = await recipientHasPaidMessaging(supabase, input.userId)
+  if (input.email) {
+    const payload = {
+      to: input.email,
+      otherMemberName: input.otherMemberName,
+      conversationId: input.conversationId,
+      recipientEntitled: entitled,
+    }
+    if (input.audience === 'requester') {
+      void sendCuratedIntroMatchedEmail(payload)
+    } else {
+      void sendCuratedIntroMatchedTargetEmail(payload)
+    }
+  }
+
+  void createMemberNotification(supabase, {
+    userId: input.userId,
+    type: 'curated_intro_matched',
+    href: entitled
+      ? conversationNotificationHref(input.conversationId)
+      : '/upgrade',
+    title: entitled ? undefined : 'Curated intro approved',
+    body: entitled
+      ? undefined
+      : 'Your curated intro was approved. An active paid membership is required to message.',
+    metadata: entitled
+      ? { conversationId: input.conversationId }
+      : { membershipRequired: true },
+  })
+}
+
 export async function notifyCuratedIntroMatched(
   supabase: SupabaseClient<Database>,
   result: CuratedIntroMatchResult
@@ -63,31 +115,21 @@ export async function notifyCuratedIntroMatched(
   const requesterEmail = accountEmails.get(result.requesterId)
   const targetEmail = accountEmails.get(result.targetMemberId)
 
-  if (requesterEmail) {
-    void sendCuratedIntroMatchedEmail({
-      to: requesterEmail,
-      otherMemberName: displayName(target),
-      conversationId: result.conversationId,
-    })
-  }
-
-  void createMemberNotification(supabase, {
+  await sendApprovedIntroEmail(supabase, {
     userId: result.requesterId,
-    type: 'curated_intro_matched',
-    href: conversationNotificationHref(result.conversationId),
-    metadata: {
-      conversationId: result.conversationId,
-      targetMemberId: result.targetMemberId,
-    },
+    email: requesterEmail,
+    otherMemberName: displayName(target),
+    conversationId: result.conversationId,
+    audience: 'requester',
   })
 
-  if (targetEmail) {
-    void sendCuratedIntroMatchedTargetEmail({
-      to: targetEmail,
-      otherMemberName: displayName(requester),
-      conversationId: result.conversationId,
-    })
-  }
+  await sendApprovedIntroEmail(supabase, {
+    userId: result.targetMemberId,
+    email: targetEmail,
+    otherMemberName: displayName(requester),
+    conversationId: result.conversationId,
+    audience: 'target',
+  })
 }
 
 export async function notifyCuratedIntroDeclined(
@@ -100,7 +142,6 @@ export async function notifyCuratedIntroDeclined(
   }
   const profiles = await loadProfiles(supabase, profileIds)
   const accountEmails = await loadProfileAccountEmails(profileIds)
-  const requester = profiles.get(result.requesterId)
   const requesterEmail = accountEmails.get(result.requesterId)
 
   if (requesterEmail) {

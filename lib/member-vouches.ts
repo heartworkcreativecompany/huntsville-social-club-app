@@ -1,6 +1,6 @@
 export type VouchType = 'personal' | 'professional' | 'community'
 
-export type VouchStatus = 'active' | 'removed' | 'flagged'
+export type VouchStatus = 'pending' | 'approved' | 'rejected'
 
 export type MemberVouch = {
   id: string
@@ -67,12 +67,33 @@ export function emptyVouchSummary(): VouchSummary {
   return { personal: 0, professional: 0, community: 0, total: 0 }
 }
 
+export function isPublicVouchStatus(status: string | null | undefined): boolean {
+  return status === 'approved'
+}
+
+export function vouchModerationAllowed(role: string | null | undefined): boolean {
+  return role === 'admin'
+}
+
+/**
+ * Changing an approved written endorsement takes it off the profile
+ * until an admin approves the new text.
+ */
+export function endorsementEditRequiresRereview(input: {
+  previousStatus: VouchStatus | string
+  previousNote: string | null
+  nextNote: string | null
+}): boolean {
+  if (input.previousStatus !== 'approved') return false
+  return (input.previousNote ?? '') !== (input.nextNote ?? '')
+}
+
 export function summarizeVouches(
   rows: Pick<MemberVouch, 'vouch_type' | 'status'>[]
 ): VouchSummary {
   const summary = emptyVouchSummary()
   for (const row of rows) {
-    if (row.status !== 'active') continue
+    if (!isPublicVouchStatus(row.status)) continue
     if (row.vouch_type === 'personal') summary.personal += 1
     if (row.vouch_type === 'professional') summary.professional += 1
     if (row.vouch_type === 'community') summary.community += 1
@@ -95,3 +116,11 @@ export const VOUCH_DISCLAIMER =
   'Member vouches are community signals from other approved members. They are not guarantees of safety, compatibility, or conduct.'
 
 export const VOUCH_NOTE_MAX = 200
+
+export type PublicVouchEndorsement = {
+  id: string
+  vouchType: VouchType
+  authorName: string
+  approvedAt: string | null
+  endorsement: string | null
+}

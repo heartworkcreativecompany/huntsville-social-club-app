@@ -6,43 +6,29 @@ import { isCircleProductTier } from '@/lib/membership-tier-config'
 import {
   parseMembershipBilling,
   type MembershipBilling,
-  type SubscriptionStatus,
 } from '@/lib/membership-systems'
+import {
+  buildSyncedMembershipBilling,
+  rememberedPaidTier,
+  shouldApplyStripeBillingEvent,
+  subscriptionGrantsPaidAccess,
+} from '@/lib/stripe/membership-billing-sync'
+
+export {
+  buildSyncedMembershipBilling,
+  mapStripeSubscriptionStatus,
+  shouldApplyStripeBillingEvent,
+} from '@/lib/stripe/membership-billing-sync'
 import { getStripe, type PaidMembershipTier } from '@/lib/stripe/config'
 import {
   primarySubscriptionPriceId,
   resolvePaidTierForSubscription,
 } from '@/lib/stripe/resolve-paid-tier'
+import type { Json } from '@/lib/database.types'
 import { subscriptionPeriod } from '@/lib/stripe/invoice-helpers'
 import { runCompatibilitySubscriptionLifecycle } from '@/lib/compatibility/subscription-sync-hook'
 
 export { resolvePaidTierForSubscription } from '@/lib/stripe/resolve-paid-tier'
-
-export function mapStripeSubscriptionStatus(
-  status: Stripe.Subscription.Status
-): SubscriptionStatus {
-  switch (status) {
-    case 'active':
-    case 'trialing':
-      return 'active'
-    case 'past_due':
-      return 'past_due'
-    case 'canceled':
-    case 'unpaid':
-      return 'cancelled'
-    case 'incomplete':
-    case 'paused':
-      return 'grace'
-    case 'incomplete_expired':
-      return 'cancelled'
-    default:
-      return 'none'
-  }
-}
-
-function subscriptionGrantsPaidAccess(status: Stripe.Subscription.Status): boolean {
-  return status === 'active' || status === 'trialing'
-}
 
 export function resolveUserIdFromStripeMetadata(
   metadata: Stripe.Metadata | null | undefined
@@ -74,6 +60,59 @@ export async function resolveUserIdForSubscription(
 export type SyncStripeSubscriptionOptions = {
   startEntitlementCycle?: boolean
   renewEntitlementCycle?: boolean
+  /** Stripe Event.created (unix seconds). Older events must not overwrite newer billing. */
+  eventCreated?: number
+}
+
+async function persistMembershipBilling(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  existing: MembershipBilling,
+  billing: MembershipBilling
+): Promise<MembershipBilling> {
+  const eventCreated = billing.stripe_event_created
+  if (
+    eventCreated == null ||
+    !shouldApplyStripeBillingEvent({
+      existingEventCreated: existing.stripe_event_created,
+      incomingEventCreated: eventCreated,
+      existingStatus: existing.subscription_status,
+      incomingStatus: billing.subscription_status,
+    })
+  ) {
+    return existing
+  }
+
+  const { data, error } = await supabase.rpc('apply_membership_billing_sync', {
+    p_user_id: userId,
+    p_billing: billing as unknown as Json,
+    p_event_created: eventCreated,
+  })
+
+  if (!error) {
+    return parseMembershipBilling(data)
+  }
+
+  const missingFunction =
+    error.code === 'PGRST202' ||
+    error.message.includes('apply_membership_billing_sync')
+  if (!missingFunction) {
+    throw new Error(error.message)
+  }
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({
+      membership_billing: billing as unknown as Json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId)
+
+  if (updateError) {
+    throw new Error(updateError.message)
+  }
+
+  return billing
 }
 
 export async function syncStripeSubscription(
@@ -93,7 +132,6 @@ export async function syncStripeSubscription(
     productTierFallback
   )
   const grantsAccess = subscriptionGrantsPaidAccess(subscription.status)
-  const internalStatus = mapStripeSubscriptionStatus(subscription.status)
 
   if (grantsAccess && !mappedTier) {
     console.error('[stripe_sync] active subscription missing mapped paid tier', {
@@ -123,60 +161,34 @@ export async function syncStripeSubscription(
 
   const existing = parseMembershipBilling(profile?.membership_billing)
   const previousBilling = { ...existing }
+  const eventCreated =
+    options?.eventCreated ?? Math.floor(Date.now() / 1000)
+  const billing = buildSyncedMembershipBilling({
+    existing,
+    subscriptionStatus: subscription.status,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+    mappedTier,
+    priceId,
+    periodStart,
+    periodEnd,
+    customerId,
+    subscriptionId: subscription.id,
+    trialEnd,
+    eventCreated,
+  })
 
-  let tier: MembershipBilling['tier'] = existing.tier
-  if (grantsAccess && mappedTier) {
-    tier = mappedTier
-  } else if (
-    subscription.status === 'canceled' ||
-    subscription.status === 'unpaid' ||
-    subscription.status === 'incomplete_expired'
-  ) {
-    tier = 'member'
+  const saved = await persistMembershipBilling(
+    supabase,
+    userId,
+    existing,
+    billing
+  )
+  if (saved.stripe_event_created !== billing.stripe_event_created) {
+    return saved
   }
 
-  const billing: MembershipBilling = {
-    ...existing,
-    tier,
-    plan: grantsAccess && mappedTier ? 'monthly' : existing.plan,
-    subscription_status: internalStatus,
-    stripe_customer_id: customerId,
-    stripe_subscription_id: subscription.id,
-    stripe_price_id: priceId,
-    renewal_at: periodEnd.toISOString(),
-    billing_period_start: periodStart.toISOString(),
-    billing_period_end: periodEnd.toISOString(),
-    trial_end: trialEnd?.toISOString() ?? null,
-    cancelled_at:
-      subscription.status === 'canceled'
-        ? new Date().toISOString()
-        : grantsAccess
-          ? null
-          : existing.cancelled_at,
-    plan_change_pending: null,
-    payment_failure: {
-      active: subscription.status === 'past_due',
-      since:
-        subscription.status === 'past_due'
-          ? existing.payment_failure.since ?? new Date().toISOString()
-          : null,
-      reminder_sent_at: existing.payment_failure.reminder_sent_at,
-    },
-  }
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      membership_billing: billing,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', userId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  if (grantsAccess && mappedTier) {
+  const accessEnded = saved.subscription_status === 'cancelled'
+  if (!accessEnded && grantsAccess && mappedTier) {
     if (
       (options?.startEntitlementCycle || options?.renewEntitlementCycle) &&
       isCircleProductTier(mappedTier)
@@ -194,11 +206,11 @@ export async function syncStripeSubscription(
   await runCompatibilitySubscriptionLifecycle(supabase, {
     userId,
     previousBilling,
-    nextBilling: billing,
+    nextBilling: saved,
     role: profile?.role,
   })
 
-  return billing
+  return saved
 }
 
 export async function downgradeMembershipFromStripe(
@@ -215,18 +227,23 @@ export async function downgradeMembershipFromStripe(
   const existing = parseMembershipBilling(profile?.membership_billing)
   const previousBilling = { ...existing }
 
+  const now = new Date()
   const billing: MembershipBilling = {
     ...existing,
     tier: 'member',
     plan: null,
     subscription_status: 'cancelled',
-    cancelled_at: new Date().toISOString(),
+    cancelled_at: existing.cancelled_at ?? now.toISOString(),
     stripe_subscription_id: subscription?.id ?? existing.stripe_subscription_id,
     stripe_price_id: null,
     trial_end: null,
     renewal_at: null,
-    billing_period_start: null,
-    billing_period_end: null,
+    cancel_at_period_end: false,
+    ended_paid_tier: rememberedPaidTier(existing, null),
+    stripe_event_created:
+      existing.stripe_event_created != null
+        ? existing.stripe_event_created + 1
+        : Math.floor(now.getTime() / 1000),
     payment_failure: {
       active: false,
       since: null,
@@ -234,22 +251,15 @@ export async function downgradeMembershipFromStripe(
     },
   }
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      membership_billing: billing,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', userId)
-
-  if (error) {
-    throw new Error(error.message)
+  const saved = await persistMembershipBilling(supabase, userId, existing, billing)
+  if (saved.stripe_event_created !== billing.stripe_event_created) {
+    return
   }
 
   await runCompatibilitySubscriptionLifecycle(supabase, {
     userId,
     previousBilling,
-    nextBilling: billing,
+    nextBilling: saved,
     role: profile?.role,
   })
 }

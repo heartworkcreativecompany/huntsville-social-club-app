@@ -6,6 +6,7 @@ import MemberProfilePresentation from '@/components/members/member-profile-prese
 import MemberProfileMessagePanel from '@/components/members/member-profile-message-panel'
 import { loadMemberProfile } from '@/lib/load-directory-profiles'
 import {
+  loadApprovedVouchEndorsements,
   loadViewerVouchesForMember,
   loadVouchSummaryForMember,
 } from '@/lib/load-member-vouches'
@@ -88,6 +89,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
 
   const canVouch = canBrowseDiscovery && !isSelf
   const vouchSummary = await loadVouchSummaryForMember(member.id)
+  const vouchEndorsements = await loadApprovedVouchEndorsements(member.id)
   const viewerVouches = canVouch
     ? await loadViewerVouchesForMember(viewer.userId, member.id)
     : []
@@ -123,6 +125,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
         limited={!isAdmin}
         details={profileDetails}
         vouchSummary={vouchSummary}
+        vouchEndorsements={vouchEndorsements}
         viewerVouches={viewerVouches}
         canVouch={canVouch}
         footer={

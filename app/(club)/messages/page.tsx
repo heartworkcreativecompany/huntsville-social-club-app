@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import CuratedIntroMessagingNotice from '@/components/messages/curated-intro-messaging-notice'
 import MessagingSuspendedNotice from '@/components/messages/messaging-suspended-notice'
 import MessagesInbox from '@/components/messages/messages-inbox'
 import PageHeader from '@/components/ui/page-header'
@@ -29,6 +28,7 @@ export default async function MessagesPage() {
     userId: viewer.userId,
     canMessage: entitlements?.canMessage ?? false,
     messagingSuspended,
+    adminModeration: viewer.role === 'admin',
   })
 
   if (!access.canAccessInbox) {
@@ -37,7 +37,7 @@ export default async function MessagesPage() {
         <PageHeader
           eyebrow="Inbox"
           title="Messages"
-          description="Private conversations open after a member accepts your message request."
+          description="An active paid membership is required to read and send messages."
         />
         <MessagingPaywall membershipsHref="/upgrade" />
       </>
@@ -52,14 +52,13 @@ export default async function MessagesPage() {
         eyebrow="Inbox"
         title="Messages"
         description={
-          access.introOnlyAccess
-            ? 'Your curated intro conversations are open here. Upgrade for broader member messaging.'
+          access.adminModeration && !entitlements?.canMessage
+            ? 'Admin moderation view. Your personal membership does not include messaging.'
             : 'Message requests and conversations with members you have connected with.'
         }
       />
 
       {messagingSuspended ? <MessagingSuspendedNotice /> : null}
-      {access.introOnlyAccess ? <CuratedIntroMessagingNotice /> : null}
 
       <MessagesInbox previews={previews} error={error} />
     </>

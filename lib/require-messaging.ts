@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { isCuratedIntroConversationForMember } from '@/lib/curated-intro-messaging-access'
 import {
   buildMemberEntitlementsWithOverride,
   loadMemberEntitlementsForUserId,
@@ -52,9 +51,9 @@ async function loadViewerMessagingEntitlements(): Promise<
 }
 
 /**
- * Sender messaging gate for conversation activity (including replies).
- * Existing conversation reply permissions are unchanged — see
- * `canSendMessageInConversation` and the conversationId exception below.
+ * Personal messaging gate. An approved curated intro, an existing
+ * conversation, or an admin/founder badge does not grant access.
+ * Admin moderation uses the admin queues, not this check.
  */
 export async function assertMessagingAllowed(options?: {
   conversationId?: string
@@ -62,40 +61,18 @@ export async function assertMessagingAllowed(options?: {
   | { ok: true; userId: string }
   | { ok: false; error: string }
 > {
+  void options?.conversationId
   const loaded = await loadViewerMessagingEntitlements()
   if (!loaded.ok) {
     return loaded
   }
 
   const { userId, entitlements } = loaded
-  const supabase = await createClient()
 
   if (!canUseMessaging(entitlements)) {
-    if (options?.conversationId) {
-      const { isMessageRequestConversationForMember } = await import(
-        '@/lib/curated-intro-messaging-access'
-      )
-      const [isIntroConversation, isRequestConversation] = await Promise.all([
-        isCuratedIntroConversationForMember(
-          supabase,
-          userId,
-          options.conversationId
-        ),
-        isMessageRequestConversationForMember(
-          supabase,
-          userId,
-          options.conversationId
-        ),
-      ])
-
-      if (isIntroConversation || isRequestConversation) {
-        return { ok: true, userId }
-      }
-    }
-
     return {
       ok: false,
-      error: messagingUpgradeMessage(entitlements.productTier),
+      error: messagingUpgradeMessage(entitlements.billingProductTier),
     }
   }
 
@@ -122,7 +99,7 @@ export async function assertCanStartMessageRequest(input: {
   if (!canUseMessaging(senderEntitlements)) {
     return {
       ok: false,
-      error: messagingUpgradeMessage(senderEntitlements.productTier),
+      error: messagingUpgradeMessage(senderEntitlements.billingProductTier),
     }
   }
 

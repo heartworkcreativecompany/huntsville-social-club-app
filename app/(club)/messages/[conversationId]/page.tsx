@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
-import CuratedIntroMessagingNotice from '@/components/messages/curated-intro-messaging-notice'
+import { redirect } from 'next/navigation'
 import MessageThread from '@/components/messages/message-thread'
 import MessagingSuspendedNotice from '@/components/messages/messaging-suspended-notice'
+import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import { MessagingPaywall } from '@/components/membership/feature-paywalls'
 import { resolveMemberMessagingAccess } from '@/lib/curated-intro-messaging-access'
@@ -11,6 +11,7 @@ import {
   markConversationMessagesRead,
 } from '@/lib/member-messages'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { MEMBER_MESSAGING_UPGRADE_PATH } from '@/lib/member-profile-messaging'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
@@ -39,6 +40,7 @@ export default async function ConversationPage({
     canMessage: entitlements?.canMessage ?? false,
     messagingSuspended,
     conversationId,
+    adminModeration: viewer.role === 'admin',
   })
 
   if (!access.canAccessConversation) {
@@ -47,9 +49,9 @@ export default async function ConversationPage({
         <PageHeader
           eyebrow="Inbox"
           title="Messages"
-          description="This conversation is only available to participants in the message request."
+          description="An active paid membership is required to open this conversation."
         />
-        <MessagingPaywall membershipsHref="/upgrade" />
+        <MessagingPaywall membershipsHref={MEMBER_MESSAGING_UPGRADE_PATH} />
       </>
     )
   }
@@ -65,10 +67,32 @@ export default async function ConversationPage({
   }
 
   if (!thread) {
-    notFound()
+    return (
+      <>
+        <PageHeader
+          eyebrow="Inbox"
+          title="Conversation unavailable"
+          description="You do not have access to this conversation."
+        />
+        <Card>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            This link does not open a conversation you can view. If you expected
+            a curated intro, an active paid membership is required to message.
+          </p>
+          <Link
+            href={MEMBER_MESSAGING_UPGRADE_PATH}
+            className="mt-4 inline-flex text-sm font-medium text-accent underline"
+          >
+            View memberships
+          </Link>
+        </Card>
+      </>
+    )
   }
 
-  await markConversationMessagesRead(supabase, viewer.userId, conversationId)
+  if (entitlements?.canMessage) {
+    await markConversationMessagesRead(supabase, viewer.userId, conversationId)
+  }
 
   return (
     <>
@@ -87,7 +111,6 @@ export default async function ConversationPage({
       />
 
       {messagingSuspended ? <MessagingSuspendedNotice /> : null}
-      {access.introOnlyAccess ? <CuratedIntroMessagingNotice /> : null}
 
       <MessageThread
         conversationId={thread.conversationId}
@@ -96,7 +119,7 @@ export default async function ConversationPage({
         initialUnreadCount={thread.unreadCount}
         initialBlockState={thread.blockState}
         initialReportState={thread.reportState}
-        messagingSuspended={messagingSuspended}
+        messagingSuspended={messagingSuspended || !entitlements?.canMessage}
         status={thread.status}
         viewerIsInitiator={thread.viewerIsInitiator}
         recontactStatus={thread.recontactStatus}

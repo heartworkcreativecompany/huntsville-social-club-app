@@ -14,6 +14,7 @@ import {
   resolveApplicationStatus,
   type ApplicationStatus,
 } from '@/lib/application'
+import { scheduledCancellationHasEnded } from '@/lib/membership-billing-period'
 import { paidTierFromActiveStoredPriceId } from '@/lib/stripe/resolve-paid-tier'
 
 // ---------------------------------------------------------------------------
@@ -285,6 +286,27 @@ export const MEMBERSHIP_TIER_DEFS: MembershipTierDef[] = [
   },
 ]
 
+/**
+ * Paid tier label that is currently entitled.
+ * Ignores role, founder badges, and a stored tier whose subscription has ended.
+ */
+export function currentlyEntitledBillingTier(
+  billing: MembershipBilling,
+  now: Date = new Date()
+): 'connect' | 'inner_circle' | 'elite_circle' | null {
+  if (scheduledCancellationHasEnded(billing, now)) return null
+  const status = billing.subscription_status
+  if (status !== 'active' && status !== 'grace') {
+    return null
+  }
+  if (billing.tier === 'elite_circle' || billing.tier === 'premium_member') {
+    return 'elite_circle'
+  }
+  if (billing.tier === 'inner_circle') return 'inner_circle'
+  if (billing.tier === 'connect') return 'connect'
+  return paidTierFromActiveStoredPriceId(billing)
+}
+
 export function resolveMembershipTier(input: {
   application_status?: string | null
   role?: string | null
@@ -304,10 +326,12 @@ export function resolveMembershipTier(input: {
   if (billing.tier === 'vendor_reviewed' || premium.public_badge === 'vendor_reviewed') {
     return 'vendor_reviewed'
   }
-  if (billing.tier === 'elite_circle') return 'elite_circle'
-  if (billing.tier === 'premium_member') return 'elite_circle'
-  if (billing.tier === 'inner_circle') return 'inner_circle'
-  if (billing.tier === 'connect') return 'connect'
+
+  // Stored tier labels are historical until the subscription is currently entitled.
+  const paidTier = currentlyEntitledBillingTier(billing)
+  if (paidTier === 'elite_circle') return 'elite_circle'
+  if (paidTier === 'inner_circle') return 'inner_circle'
+  if (paidTier === 'connect') return 'connect'
 
   if (status === 'approved') return 'member'
   if (status === 'submitted' || status === 'in_review' || status === 'needs_info') {
@@ -921,6 +945,17 @@ export type MembershipBilling = {
   stripe_price_id: string | null
   trial_end: string | null
   plan_change_pending: 'upgrade' | 'downgrade' | null
+  /**
+   * Stripe cancel_at_period_end. Access continues until billing_period_end.
+   * Distinct from an immediately cancelled subscription (subscription_status cancelled).
+   */
+  cancel_at_period_end: boolean
+  /** Unix seconds of the last Stripe event applied to this billing record. */
+  stripe_event_created: number | null
+  /**
+   * Last paid plan after access ended. Display history only — never an entitlement.
+   */
+  ended_paid_tier: 'connect' | 'inner_circle' | 'elite_circle' | null
   payment_failure: {
     active: boolean
     since: string | null
@@ -947,6 +982,9 @@ export function emptyMembershipBilling(): MembershipBilling {
     stripe_price_id: null,
     trial_end: null,
     plan_change_pending: null,
+    cancel_at_period_end: false,
+    stripe_event_created: null,
+    ended_paid_tier: null,
     payment_failure: {
       active: false,
       since: null,
@@ -1025,6 +1063,18 @@ export function parseMembershipBilling(value: unknown): MembershipBilling {
     plan_change_pending:
       planChange === 'upgrade' || planChange === 'downgrade'
         ? planChange
+        : null,
+    cancel_at_period_end: raw.cancel_at_period_end === true,
+    stripe_event_created:
+      typeof raw.stripe_event_created === 'number' &&
+      Number.isFinite(raw.stripe_event_created)
+        ? raw.stripe_event_created
+        : null,
+    ended_paid_tier:
+      raw.ended_paid_tier === 'connect' ||
+      raw.ended_paid_tier === 'inner_circle' ||
+      raw.ended_paid_tier === 'elite_circle'
+        ? raw.ended_paid_tier
         : null,
     payment_failure: {
       active: Boolean(failure.active),

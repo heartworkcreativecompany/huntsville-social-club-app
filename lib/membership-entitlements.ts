@@ -17,6 +17,7 @@ import {
   type RegistrationMethod,
 } from '@/lib/membership-tier-config'
 import {
+  CONNECT_DISCOVERY_WITHOUT_MESSAGING_COPY,
   CONNECT_MEMBERSHIP_INCLUDED_COPY,
   ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
   FEATURE_GATE_COPY,
@@ -31,11 +32,12 @@ import {
   isActiveMembershipAccessOverride,
   type SlimMembershipAccessOverride,
 } from '@/lib/membership-access-override'
+import { scheduledCancellationHasEnded } from '@/lib/membership-billing-period'
 import {
+  currentlyEntitledBillingTier,
   parseMembershipBilling,
   type MembershipBilling,
 } from '@/lib/membership-systems'
-import { paidTierFromActiveStoredPriceId } from '@/lib/stripe/resolve-paid-tier'
 import { formatEventTimestampInChicago } from '@/lib/event-time'
 
 export type EntitlementCycle = {
@@ -58,6 +60,11 @@ export type EntitlementCycle = {
 
 export type MemberEntitlements = {
   productTier: ProductTier
+  /**
+   * Current plan from billing or an active access override.
+   * Ignores admin/host role elevation. Messaging and the membership card use this.
+   */
+  billingProductTier: ProductTier
   productTierLabel: string
   billing: MembershipBilling
   activeCycle: EntitlementCycle | null
@@ -152,35 +159,23 @@ export function resolveProductTier(input: {
     return input.accessOverride.tier
   }
 
-  const normalized = normalizeBillingTier(billing.tier)
-
-  if (normalized === 'elite_circle' || normalized === 'community_partner') {
-    return subscriptionIsActive(billing) ? 'elite_circle' : 'member'
+  if (
+    normalizeBillingTier(billing.tier) === 'community_partner' &&
+    subscriptionIsActive(billing, input.now)
+  ) {
+    return 'elite_circle'
   }
 
-  if (normalized === 'inner_circle') {
-    return subscriptionIsActive(billing) ? 'inner_circle' : 'member'
-  }
-
-  if (normalized === 'connect') {
-    return subscriptionIsActive(billing) ? 'connect' : 'member'
-  }
-
-  // Stale `membership_billing.tier` (often `member`) with a mapped *active*
-  // Stripe price must still grant that paid tier — not a display-only label.
-  // Do not use `grace` here: Stripe `incomplete`/`paused` map to grace and
-  // sync intentionally leaves `tier` at `member` until payment succeeds.
-  const fromStoredPrice = paidTierFromActiveStoredPriceId(billing)
-  if (fromStoredPrice) return fromStoredPrice
-
-  if (input.applicationApproved) {
-    return 'member'
-  }
-
-  return 'member'
+  // Confirmed current entitlement only. A saved Elite/Connect label, a previous
+  // subscription, or an ended cancel-at-period-end does not qualify.
+  return currentlyEntitledBillingTier(billing, input.now ?? new Date()) ?? 'member'
 }
 
-export function subscriptionIsActive(billing: MembershipBilling): boolean {
+export function subscriptionIsActive(
+  billing: MembershipBilling,
+  now: Date = new Date()
+): boolean {
+  if (scheduledCancellationHasEnded(billing, now)) return false
   return (
     billing.subscription_status === 'active' ||
     billing.subscription_status === 'grace'
@@ -233,9 +228,26 @@ export function buildMemberEntitlements(input: {
       }
     : null
   const productTier = resolveProductTier({ ...input, accessOverride })
+  const billingProductTier = resolveProductTier({
+    role: 'member',
+    billing,
+    applicationApproved: input.applicationApproved,
+    accessOverride,
+    now: input.now,
+  })
   const now = input.now ?? new Date()
   const isCircle = isCircleProductTier(productTier)
-  const canMessage = isMessagingProductTier(productTier)
+  // Messaging requires an active paid subscription, or an active Inner/Elite
+  // complimentary override. Grace, including a stored paid tier or price from
+  // incomplete, paused, or a manual status, does not qualify. Other club
+  // tools still use productTier, which can remain entitled during grace.
+  const paidMessagingTier = accessOverride
+    ? accessOverride.tier
+    : billing.subscription_status === 'active'
+      ? currentlyEntitledBillingTier(billing, now)
+      : null
+  const canMessage =
+    paidMessagingTier != null && isMessagingProductTier(paidMessagingTier)
   const holdoverMatching =
     productTier === 'connect' &&
     isUnexpiredCircleEntitlementCycle(input.activeCycle, now)
@@ -264,6 +276,7 @@ export function buildMemberEntitlements(input: {
 
   return {
     productTier,
+    billingProductTier,
     productTierLabel: PRODUCT_TIER_LABELS[productTier],
     billing,
     activeCycle,
@@ -647,7 +660,11 @@ export function membershipPerkCopyLines(
     return [memberFreeSummary()]
   }
   if (entitlements.productTier === 'connect') {
-    return [CONNECT_MEMBERSHIP_INCLUDED_COPY]
+    return [
+      entitlements.canMessage
+        ? CONNECT_MEMBERSHIP_INCLUDED_COPY
+        : CONNECT_DISCOVERY_WITHOUT_MESSAGING_COPY,
+    ]
   }
   return []
 }

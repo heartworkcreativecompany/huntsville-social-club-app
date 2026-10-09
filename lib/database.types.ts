@@ -1416,6 +1416,14 @@ export interface Database {
       }
     }
     Functions: {
+      apply_membership_billing_sync: {
+        Args: {
+          p_user_id: string
+          p_billing: Json
+          p_event_created: number
+        }
+        Returns: Json
+      }
       withdraw_email_marketing: {
         Args: Record<string, never>
         Returns: undefined

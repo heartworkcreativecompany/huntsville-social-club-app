@@ -3,7 +3,6 @@ import type Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe } from '@/lib/stripe/config'
 import {
-  downgradeMembershipFromStripe,
   resolveUserIdForSubscription,
   resolveUserIdFromStripeMetadata,
   syncStripeSubscription,
@@ -94,7 +93,10 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       await syncStripeSubscription(admin, {
         userId,
         subscription,
-        options: { startEntitlementCycle: true },
+        options: {
+          startEntitlementCycle: true,
+          eventCreated: event.created,
+        },
         productTierFallback:
           typeof session.metadata?.product_tier === 'string'
             ? session.metadata.product_tier
@@ -104,15 +106,20 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
     }
 
     case 'customer.subscription.created':
-    case 'customer.subscription.updated': {
+    case 'customer.subscription.updated':
+    case 'customer.subscription.deleted': {
       const incoming = event.data.object as Stripe.Subscription
-      const subscription = await stripe.subscriptions.retrieve(incoming.id)
+      const subscription =
+        event.type === 'customer.subscription.deleted'
+          ? incoming
+          : await stripe.subscriptions.retrieve(incoming.id)
       const userId = await resolveUserIdForSubscription(subscription)
       if (!userId) return
 
       await syncStripeSubscription(admin, {
         userId,
         subscription,
+        options: { eventCreated: event.created },
         productTierFallback:
           typeof incoming.metadata?.product_tier === 'string'
             ? incoming.metadata.product_tier
@@ -120,15 +127,6 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
               ? subscription.metadata.product_tier
               : null,
       })
-      return
-    }
-
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object as Stripe.Subscription
-      const userId = await resolveUserIdForSubscription(subscription)
-      if (!userId) return
-
-      await downgradeMembershipFromStripe(admin, userId, subscription)
       return
     }
 
@@ -146,7 +144,10 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       await syncStripeSubscription(admin, {
         userId,
         subscription,
-        options: { renewEntitlementCycle: true },
+        options: {
+          renewEntitlementCycle: true,
+          eventCreated: event.created,
+        },
       })
       return
     }
@@ -163,6 +164,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       await syncStripeSubscription(admin, {
         userId,
         subscription,
+        options: { eventCreated: event.created },
       })
       return
     }

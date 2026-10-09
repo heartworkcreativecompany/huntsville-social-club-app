@@ -3,6 +3,7 @@ import {
   type SlimMembershipAccessOverride,
 } from '@/lib/membership-access-override'
 import {
+  currentlyEntitledBillingTier,
   membershipTierBadge,
   parseMembershipBilling,
   parsePremiumVerification,
@@ -14,7 +15,6 @@ import {
   SEEDED_RECOGNITION_BADGES,
   type PublicRecognitionBadge,
 } from '@/lib/recognition-badges/catalog'
-import { paidTierFromActiveStoredPriceId } from '@/lib/stripe/resolve-paid-tier'
 
 export type PublicPaidTier = 'connect' | 'inner_circle' | 'elite_circle'
 
@@ -52,16 +52,7 @@ export function effectivePublicTier(input: {
   if (isStaffRole(input.role)) return null
 
   const billing = parseMembershipBilling(input.billing)
-  if (billing.tier === 'elite_circle' || billing.tier === 'premium_member') {
-    return 'elite_circle'
-  }
-  if (billing.tier === 'inner_circle') {
-    return 'inner_circle'
-  }
-  if (billing.tier === 'connect') {
-    return 'connect'
-  }
-  return paidTierFromActiveStoredPriceId(billing)
+  return currentlyEntitledBillingTier(billing, input.now ?? new Date())
 }
 
 export function resolvePublicMembershipTier(input: {

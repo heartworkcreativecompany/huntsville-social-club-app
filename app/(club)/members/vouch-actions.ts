@@ -7,6 +7,7 @@ import {
   VOUCH_NOTE_MAX,
   VOUCH_RELATIONSHIP_OPTIONS,
   VOUCH_TYPE_OPTIONS,
+  vouchModerationAllowed,
   type VouchType,
 } from '@/lib/member-vouches'
 
@@ -89,7 +90,7 @@ export async function createMemberVouch(input: {
     vouch_type: input.vouchType,
     relationship_context: context,
     note: note || null,
-    status: 'active',
+    status: 'pending',
   })
 
   if (insertError) {
@@ -122,7 +123,8 @@ export async function withdrawMemberVouch(vouchId: string) {
   const { error: updateError } = await supabase
     .from('member_vouches')
     .update({
-      status: 'removed',
+      status: 'rejected',
+      moderation_reason: 'Withdrawn by member.',
       updated_at: new Date().toISOString(),
     })
     .eq('id', vouchId)
@@ -135,9 +137,55 @@ export async function withdrawMemberVouch(vouchId: string) {
   return { success: true as const }
 }
 
+export async function updateMemberVouchEndorsement(input: {
+  vouchId: string
+  note: string
+}) {
+  const { error, supabase, userId } = await requireApprovedMember()
+  if (error || !supabase || !userId) return { error: error ?? 'Unauthorized.' }
+
+  const note = input.note.trim()
+  if (note.length > VOUCH_NOTE_MAX) {
+    return { error: `Notes must be ${VOUCH_NOTE_MAX} characters or fewer.` }
+  }
+
+  const { data: vouch } = await supabase
+    .from('member_vouches')
+    .select('vouchee_id, voucher_id, note, status')
+    .eq('id', input.vouchId)
+    .single()
+
+  if (!vouch || vouch.voucher_id !== userId) {
+    return { error: 'Vouch not found.' }
+  }
+
+  if ((vouch.note ?? '') === (note || '') && vouch.status !== 'rejected') {
+    return { success: true as const }
+  }
+
+  const { error: updateError } = await supabase
+    .from('member_vouches')
+    .update({
+      note: note || null,
+      status: 'pending',
+      moderated_at: null,
+      moderated_by: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.vouchId)
+
+  if (updateError) {
+    return { error: updateError.message }
+  }
+
+  revalidatePath(`/members/${vouch.vouchee_id}`)
+  revalidatePath('/admin/member-vouches')
+  return { success: true as const }
+}
+
 export async function moderateMemberVouch(input: {
   vouchId: string
-  status: 'active' | 'removed' | 'flagged'
+  status: 'approved' | 'rejected'
   reason?: string
 }) {
   const supabase = await createClient()
@@ -155,7 +203,7 @@ export async function moderateMemberVouch(input: {
     .eq('id', user.id)
     .single()
 
-  if (admin?.role !== 'admin') {
+  if (!vouchModerationAllowed(admin?.role)) {
     return { error: 'Admin access required.' }
   }
 
@@ -186,5 +234,6 @@ export async function moderateMemberVouch(input: {
 
   revalidatePath(`/members/${vouch.vouchee_id}`)
   revalidatePath('/admin/applications')
+  revalidatePath('/admin/member-vouches')
   return { success: true as const }
 }
