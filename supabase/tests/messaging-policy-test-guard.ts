@@ -60,16 +60,21 @@ export function assertMessagingPolicyTestAllowed(
   }
 
   const databaseName = decodeURIComponent(parsed.pathname.replace(/^\//, ''))
-  if (databaseName !== MESSAGING_POLICY_DATABASE_NAME) {
-    refuse(
-      `the database name must be ${MESSAGING_POLICY_DATABASE_NAME}. Loopback does not authorize another database.`
-    )
-  }
+  // Keep these as plain strings. Comparing them as the exported literal
+  // constants makes the maintenance-database check unreachable to TypeScript
+  // after the exact-name check, and `next build` then fails.
+  const exactDatabaseName: string = MESSAGING_POLICY_DATABASE_NAME
+  const maintenanceDatabaseName: string = MESSAGING_POLICY_MAINTENANCE_DATABASE
   if (
-    databaseName === MESSAGING_POLICY_MAINTENANCE_DATABASE ||
+    databaseName === maintenanceDatabaseName ||
     !databaseName.endsWith('_test')
   ) {
     refuse('the database name is not test-only.')
+  }
+  if (databaseName !== exactDatabaseName) {
+    refuse(
+      `the database name must be ${MESSAGING_POLICY_DATABASE_NAME}. Loopback does not authorize another database.`
+    )
   }
 
   return {
