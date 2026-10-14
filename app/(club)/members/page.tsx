@@ -1,15 +1,25 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
 import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
 import AdminMemberManagementCard from '@/components/admin/admin-member-management-card'
-import MemberDirectorySection from '@/components/members/member-directory-section'
+import MemberDirectoryBrowser from '@/components/members/member-directory-browser'
 import { MembersDashboardLayout } from '@/components/members/members-dashboard-layout'
-import { loadDirectoryProfiles } from '@/lib/load-directory-profiles'
+import { loadDirectoryPage } from '@/lib/load-directory-profiles'
+import {
+  directoryHref,
+  parseDirectoryQuery,
+  type MemberDirectorySearchParams,
+} from '@/lib/member-directory-query'
 import { getViewer } from '@/lib/viewer'
 
-export default async function MembersPage() {
+export default async function MembersPage({
+  searchParams,
+}: {
+  searchParams: Promise<MemberDirectorySearchParams>
+}) {
   const viewer = await getViewer()
 
   if (!viewer) {
@@ -18,8 +28,26 @@ export default async function MembersPage() {
 
   const isAdmin = viewer.role === 'admin'
   const canBrowseDiscovery = viewer.canAccessApp
-  const { members: directoryMembers, error: directoryError } =
-    await loadDirectoryProfiles(viewer.userId, canBrowseDiscovery, isAdmin)
+  const directoryQuery = parseDirectoryQuery(await searchParams)
+  const directory = await loadDirectoryPage(
+    viewer.userId,
+    canBrowseDiscovery,
+    isAdmin,
+    directoryQuery
+  )
+
+  if (
+    canBrowseDiscovery &&
+    !directory.error &&
+    directoryQuery.page !== directory.page
+  ) {
+    redirect(
+      directoryHref('/members', {
+        ...directoryQuery,
+        page: directory.page,
+      })
+    )
+  }
 
   return (
     <MembersDashboardLayout
@@ -46,12 +74,30 @@ export default async function MembersPage() {
       }
       directory={
         <section className="mb-12">
-          {directoryError ? (
-            <p className="text-sm text-danger">
-              Could not load directory: {directoryError}
-            </p>
+          {directory.error ? (
+            <MemberDirectoryBrowser
+              members={[]}
+              matchCount={0}
+              eligibleCount={Math.max(directory.eligibleCount, 1)}
+              page={directory.page}
+              browseState={directoryQuery.browse}
+              search={directoryQuery.search}
+              loadError={directory.error}
+            />
+          ) : canBrowseDiscovery && directory.eligibleCount > 0 ? (
+            <MemberDirectoryBrowser
+              members={directory.members}
+              matchCount={directory.matchCount}
+              eligibleCount={directory.eligibleCount}
+              page={directory.page}
+              browseState={directoryQuery.browse}
+              search={directoryQuery.search}
+            />
           ) : canBrowseDiscovery ? (
-            <MemberDirectorySection members={directoryMembers} />
+            <EmptyState
+              title="No members to discover yet"
+              description="As the roster grows, verified profiles will appear here."
+            />
           ) : (
             <EmptyState
               title="Membership approval required"

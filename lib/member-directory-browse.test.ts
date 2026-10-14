@@ -132,7 +132,10 @@ describe('default directory browse UI', () => {
     expect(html).toContain('Dating')
     expect(html).toContain('Friends')
     expect(html).toContain('aria-pressed="true"')
-    expect(html).toContain('Showing 4 of 4 members')
+    expect(html).toContain('Search members')
+    expect(html).toContain('Search by name')
+    expect(html).toContain('Showing 1–4 of 4 members.')
+    expect(html).not.toContain('Member directory pages')
     expect(html).not.toContain('All industries')
     expect(html).not.toContain('Name: A–Z')
     expect(html).not.toContain('Industry: A–Z')
@@ -327,7 +330,7 @@ describe('counts and empty states', () => {
         ],
       })
     )
-    expect(html).toContain('Showing 1 of 1 members')
+    expect(html).toContain('Showing 1–1 of 1 member.')
     expect(html).not.toContain('employer')
     expect(html).not.toContain('company')
   })
@@ -357,6 +360,69 @@ describe('privacy and data selectors', () => {
     expect(loadDirectorySource()).toContain('location_city: null')
     expect(loadDirectorySource()).toContain('location_zip: null')
     expect(loadDirectorySource()).toContain('birth_year: null')
+  })
+})
+
+describe('member name search', () => {
+  it('matches partial names without case or surrounding spaces, and ignores email', () => {
+    const roster = [
+      ...members,
+      stubMember({
+        id: 'email-only',
+        full_name: 'Pat Example',
+        contactEmail: 'taylor.tech@example.com',
+      }),
+    ]
+
+    expect(
+      browseDirectoryMembers(roster, DEFAULT_DIRECTORY_BROWSE_STATE, '  tAyLoR  ').map(
+        (member) => member.id
+      )
+    ).toEqual(['tech-dating'])
+
+    expect(
+      browseDirectoryMembers(
+        roster,
+        {
+          browseMode: 'intentions',
+          intentFilter: 'friends',
+          industryFilter: 'all',
+        },
+        'frank'
+      ).map((member) => member.id)
+    ).toEqual(['food-friends'])
+
+    expect(
+      browseDirectoryMembers(
+        roster,
+        {
+          browseMode: 'intentions',
+          intentFilter: 'friends',
+          industryFilter: 'all',
+        },
+        '   '
+      ).map((member) => member.id)
+    ).toEqual(['food-friends', 'none-all'])
+
+    expect(
+      browseDirectoryMembers(
+        roster,
+        DEFAULT_DIRECTORY_BROWSE_STATE,
+        'taylor.tech@example.com'
+      )
+    ).toEqual([])
+  })
+
+  it('uses the member id as a stable tie-breaker for identical names', () => {
+    const tied = [
+      stubMember({ id: 'b-same', full_name: 'Same Name' }),
+      stubMember({ id: 'a-same', full_name: 'Same Name' }),
+    ]
+    expect(
+      browseDirectoryMembers(tied, DEFAULT_DIRECTORY_BROWSE_STATE).map(
+        (member) => member.id
+      )
+    ).toEqual(['a-same', 'b-same'])
   })
 })
 

@@ -6,12 +6,22 @@ import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
+import AdminUserSearch from '@/components/admin/admin-user-search'
 import { resolveApplicationStatus, type ApplicationStatus } from '@/lib/application'
+import {
+  adminUserSearchOrFilter,
+  countPendingApplications,
+  normalizeAdminUserSearch,
+} from '@/lib/admin-user-search'
 import { getViewer } from '@/lib/viewer'
 import RoleUpdate from './role-update'
 import RemoveMemberButton from '@/components/admin/remove-member-button'
 
-export default async function AdminUsersPage() {
+export default async function AdminUsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>
+}) {
   const viewer = await getViewer()
 
   if (!viewer) {
@@ -33,19 +43,17 @@ export default async function AdminUsersPage() {
   }
 
   const supabase = requireAdminClient()
+  const search = normalizeAdminUserSearch((await searchParams).q)
 
-  const { data: users, error } = await supabase
-    .from('profiles')
-    .select(
-      'id, email, full_name, role, created_at, application_status, membership_intent, verified_at'
-    )
-    .order('email', { ascending: true })
+  const [{ data: users, error }, { data: statusRows, error: statusError }] =
+    await Promise.all([
+      loadAdminUserRows(supabase, search),
+      loadAdminStatusRows(supabase),
+    ])
 
-  const pendingCount =
-    users?.filter((p) => {
-      const status = resolveApplicationStatus(p) as ApplicationStatus
-      return status !== 'approved'
-    }).length ?? 0
+  const pendingCount = statusError
+    ? null
+    : countPendingApplications(statusRows ?? [])
 
   return (
     <>
@@ -54,7 +62,7 @@ export default async function AdminUsersPage() {
         title="User management"
         description="Review applications, assign roles, and maintain a high-trust member roster."
         actions={
-          pendingCount > 0 ? (
+          pendingCount === null ? undefined : pendingCount > 0 ? (
             <Badge variant="warning">{pendingCount} in queue</Badge>
           ) : (
             <Badge variant="success">Queue clear</Badge>
@@ -72,10 +80,17 @@ export default async function AdminUsersPage() {
         </p>
       </Card>
 
+      <AdminUserSearch search={search} />
+
       {error ? (
         <p className="text-sm text-danger">Could not load users: {error.message}</p>
       ) : !users?.length ? (
-        <EmptyState title="No users found" />
+        <EmptyState
+          title={search ? 'No matching users' : 'No users found'}
+          description={
+            search ? 'Try a different name or email.' : undefined
+          }
+        />
       ) : (
         <ul className="grid gap-4">
           {users.map((profile) => (
@@ -147,4 +162,69 @@ export default async function AdminUsersPage() {
       )}
     </>
   )
+}
+
+const ADMIN_USER_FIELDS =
+  'id, email, full_name, role, created_at, application_status, membership_intent, verified_at'
+const ADMIN_USER_PAGE_SIZE = 1000
+const ADMIN_USER_ROW_CAP = 20000
+
+type AdminClient = ReturnType<typeof requireAdminClient>
+
+async function loadAdminUserRows(supabase: AdminClient, search: string) {
+  const rows: {
+    id: string
+    email: string | null
+    full_name: string | null
+    role: string | null
+    created_at: string | null
+    application_status: string | null
+    membership_intent: string | null
+    verified_at: string | null
+  }[] = []
+
+  for (let from = 0; from < ADMIN_USER_ROW_CAP; from += ADMIN_USER_PAGE_SIZE) {
+    let query = supabase
+      .from('profiles')
+      .select(ADMIN_USER_FIELDS)
+      .order('email', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + ADMIN_USER_PAGE_SIZE - 1)
+    if (search) query = query.or(adminUserSearchOrFilter(search))
+
+    const { data, error } = await query
+    if (error) return { data: null, error }
+    const batch = data ?? []
+    rows.push(...batch)
+    if (batch.length < ADMIN_USER_PAGE_SIZE) return { data: rows, error: null }
+  }
+
+  return {
+    data: null,
+    error: { message: 'The user list is too large to search completely.' },
+  }
+}
+
+async function loadAdminStatusRows(supabase: AdminClient) {
+  const rows: {
+    application_status: string | null
+    role: string | null
+  }[] = []
+
+  for (let from = 0; from < ADMIN_USER_ROW_CAP; from += ADMIN_USER_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('application_status, role')
+      .order('id', { ascending: true })
+      .range(from, from + ADMIN_USER_PAGE_SIZE - 1)
+    if (error) return { data: null, error }
+    const batch = data ?? []
+    rows.push(...batch)
+    if (batch.length < ADMIN_USER_PAGE_SIZE) return { data: rows, error: null }
+  }
+
+  return {
+    data: null,
+    error: { message: 'Could not count the application queue.' },
+  }
 }

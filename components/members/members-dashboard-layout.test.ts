@@ -58,8 +58,8 @@ describe('Members directory layout', () => {
   it('no longer renders moved Dashboard modules on the Members page', () => {
     const membersPage = membersPageSource()
 
-    expect(membersPage).toContain('MemberDirectorySection')
-    expect(membersPage).toContain('loadDirectoryProfiles')
+    expect(membersPage).toContain('MemberDirectoryBrowser')
+    expect(membersPage).toContain('loadDirectoryPage')
     expect(membersPage).toContain('title="Member directory"')
     expect(membersPage).not.toContain('RecentMessagesPreview')
     expect(membersPage).not.toContain('CuratedIntroCard')
