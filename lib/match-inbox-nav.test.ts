@@ -236,7 +236,7 @@ describe('canonical page gates versus nav', () => {
       questionnaire: null,
     })
     expect(noFriends.status).toBe('no_friends')
-    expect(noFriends.ctaHref).toBe('/profile')
+    expect(noFriends.ctaHref).toBe('/profile#edit-profile')
     expect(
       resolveFriendshipMatchesView({ canViewMatches: noFriends.canViewMatches })
         .loadRecommendations

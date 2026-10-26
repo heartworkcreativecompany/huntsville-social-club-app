@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import ApplicationPhotosField from '@/components/application/application-photos-field'
 import ChipMultiSelect from '@/components/application/chip-multi-select'
@@ -45,6 +45,7 @@ import {
   parseIndustryValue,
 } from '@/lib/industries'
 import { updateMemberProfile } from './actions'
+import { revealProfileSection } from '@/components/profile/profile-section'
 
 type ProfileFormProps = {
   memberId: string
@@ -109,6 +110,8 @@ export default function ProfileForm({
   const [icebreakerText, setIcebreakerText] = useState(icebreaker)
   const [photos, setPhotos] = useState(editorPhotos)
   const [message, setMessage] = useState('')
+  const [messageIsError, setMessageIsError] = useState(false)
+  const messageRef = useRef<HTMLParagraphElement>(null)
   const [isPending, startTransition] = useTransition()
 
   const photosDirty = !photosEqual(livePhotos, photos)
@@ -117,8 +120,14 @@ export default function ProfileForm({
     pendingFieldLabels.includes('Photos') &&
     !photosDirty
 
+  useEffect(() => {
+    if (!message) return
+    revealProfileSection('edit-profile', messageRef.current)
+  }, [message, messageIsError])
+
   const handleSave = () => {
     setMessage('')
+    setMessageIsError(false)
     startTransition(async () => {
       const result = await updateMemberProfile({
         displayName: name,
@@ -139,10 +148,12 @@ export default function ProfileForm({
       })
 
       if (result.error) {
+        setMessageIsError(true)
         setMessage(result.error)
         return
       }
 
+      setMessageIsError(false)
       setMessage(
         result.pending
           ? 'Changes submitted for review. Your live profile is unchanged until staff approves.'
@@ -154,7 +165,9 @@ export default function ProfileForm({
 
   return (
     <Card>
-      <h2 className="text-display text-lg font-semibold">Edit profile</h2>
+      <h2 className="profile-section-title text-display text-lg font-semibold">
+        Edit profile
+      </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Text and photo updates are reviewed before going live in the member
         directory. Your approved profile stays public until staff approves
@@ -419,7 +432,13 @@ export default function ProfileForm({
         </button>
 
         {message ? (
-          <p className="min-w-0 text-sm break-words text-muted-foreground">
+          <p
+            ref={messageRef}
+            role={messageIsError ? 'alert' : 'status'}
+            className={`min-w-0 text-sm break-words ${
+              messageIsError ? 'text-danger' : 'text-muted-foreground'
+            }`}
+          >
             {message}
           </p>
         ) : null}

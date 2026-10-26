@@ -135,7 +135,7 @@ export function evaluateFriendshipAccess(
       headline: 'Friendship compatibility',
       detail:
         'Friendship recommendations are for members open to making friends. Add Friends under connection preferences on your profile, then submit for review.',
-      ctaHref: '/profile',
+      ctaHref: '/profile#edit-profile',
       ctaLabel: 'Edit profile',
       mutationError: FRIENDSHIP_MUTATION_DENIED_NO_FRIENDS,
     }

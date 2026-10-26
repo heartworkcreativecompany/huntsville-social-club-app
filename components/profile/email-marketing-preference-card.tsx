@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/card'
 import { withdrawEmailMarketing } from '@/app/(club)/members/email-marketing-actions'
 import { EMAIL_MARKETING_OPT_IN_LABEL } from '@/lib/email-consent'
 import { buttonSecondaryClassName, mobileFullButtonClassName } from '@/lib/event-labels'
+import { revealProfileSection } from '@/components/profile/profile-section'
 
 export default function EmailMarketingPreferenceCard({
   optedIn,
@@ -14,13 +15,21 @@ export default function EmailMarketingPreferenceCard({
 }) {
   const router = useRouter()
   const [error, setError] = useState('')
+  const errorRef = useRef<HTMLParagraphElement>(null)
   const [done, setDone] = useState(false)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (!error) return
+    revealProfileSection('email-preferences', errorRef.current)
+  }, [error])
   const subscribed = optedIn && !done
 
   return (
     <Card>
-      <h2 className="text-display text-lg font-semibold">Email preferences</h2>
+      <h2 className="profile-section-title text-display text-lg font-semibold">
+        Email preferences
+      </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {subscribed
           ? EMAIL_MARKETING_OPT_IN_LABEL
@@ -48,7 +57,7 @@ export default function EmailMarketingPreferenceCard({
         </button>
       ) : null}
       {error ? (
-        <p className="mt-3 text-sm text-danger" role="alert">
+        <p ref={errorRef} className="mt-3 text-sm text-danger" role="alert">
           {error}
         </p>
       ) : null}

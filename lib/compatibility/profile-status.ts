@@ -95,7 +95,7 @@ export function summarizeCompatibilityProfileStatus(input: {
       detail:
         'Curated matches are for members open to dating. Add Dating under connection preferences on your profile, then submit for review.',
       showCard: true,
-      ctaHref: '/profile',
+      ctaHref: '/profile#edit-profile',
       ctaLabel: 'Edit profile',
     }
   }
@@ -146,7 +146,7 @@ export function summarizeCompatibilityProfileStatus(input: {
       showCard: true,
       ctaHref: profile.curated_matches_pause_reason === 'subscription_inactive'
         ? '/upgrade'
-        : '/profile',
+        : '/profile#edit-profile',
       ctaLabel:
         profile.curated_matches_pause_reason === 'subscription_inactive'
           ? 'View memberships'

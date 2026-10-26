@@ -14,7 +14,7 @@ export default function ProfileStrengthModule({
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="profile-section-title">
           <p className="eyebrow">Profile strength</p>
           <h2 className="text-display mt-1 text-lg font-semibold">
             {percent}% complete

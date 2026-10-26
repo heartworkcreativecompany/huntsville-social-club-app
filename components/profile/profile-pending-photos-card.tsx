@@ -13,10 +13,12 @@ export default function ProfilePendingPhotosCard({
 }) {
   return (
     <Card className="border-warning/40 bg-warning/5">
+      <div className="profile-section-title">
       <p className="eyebrow">Pending photos</p>
       <h2 className="text-display mt-1 text-lg font-semibold">
         Photo changes awaiting review
       </h2>
+      </div>
       <p className="mt-2 text-sm text-muted-foreground">
         Other members still see your approved live photos until staff approves
         these updates.
