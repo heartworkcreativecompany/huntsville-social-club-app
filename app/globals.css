@@ -157,3 +157,24 @@ body {
     }
   }
 }
+
+/*
+ * The official wordmark SVG is a square canvas. On small screens that
+ * transparent margin made the club header about 153px tall. Crop to the
+ * ink and tighten vertical padding below the desktop breakpoint only.
+ * Measured ink on the 1024px asset: x 72–949, y 313–681.
+ */
+@media (width < 64rem) {
+  [data-club-header='mobile'] {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+    padding-bottom: 0.75rem;
+  }
+
+  .club-header-wordmark img {
+    height: 48px;
+    width: auto;
+    max-width: none;
+    object-fit: contain;
+    object-view-box: inset(30.57% 7.32% 33.5% 7.03%);
+  }
+}

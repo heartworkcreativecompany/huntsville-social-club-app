@@ -169,6 +169,7 @@ describe('ClubNavMarkup', () => {
     const html = renderNav({ mobileOpen: false })
 
     expect(html).toContain('grid-cols-[44px_minmax(0,1fr)_44px]')
+    expect(html).toContain('club-header-wordmark')
     expect(html).toContain('lg:hidden')
     expect(html).toContain('h-11 w-11 min-h-11 min-w-11')
     expect(html).toContain('justify-center')
@@ -292,7 +293,7 @@ describe('ClubNav interaction wiring', () => {
     expect(source).toContain('contentScroll.scrollTop = previousContentTop')
     expect(source).toContain('overflow-y-auto overscroll-contain')
     expect(source).toContain(
-      'max-h-[calc(var(--club-frame-height,100dvh)-var(--club-header-height,5.5rem)-env(safe-area-inset-bottom))]'
+      'max-h-[calc(var(--club-frame-height,100dvh)-var(--club-header-height,4.75rem)-env(safe-area-inset-bottom))]'
     )
     expect(source).toContain('data-club-site-header')
     expect(source).toContain('bg-surface')
