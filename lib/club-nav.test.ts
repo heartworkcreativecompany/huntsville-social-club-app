@@ -288,6 +288,14 @@ describe('ClubNav interaction wiring', () => {
     )
     expect(source).toContain("document.body.style.overflow = 'hidden'")
     expect(source).toContain('setMobileOpen(false)')
+    expect(source).toContain('[data-club-content-scroll]')
+    expect(source).toContain('contentScroll.scrollTop = previousContentTop')
+    expect(source).toContain('overflow-y-auto overscroll-contain')
+    expect(source).toContain(
+      'max-h-[calc(var(--club-frame-height,100dvh)-var(--club-header-height,5.5rem)-env(safe-area-inset-bottom))]'
+    )
+    expect(source).toContain('data-club-site-header')
+    expect(source).toContain('bg-surface')
     expect(source).toContain('key={pathname}')
     expect(source).toContain('onCloseMobileNav')
     expect(source).toContain('toggleRef.current?.focus()')

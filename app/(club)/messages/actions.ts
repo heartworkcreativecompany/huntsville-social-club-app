@@ -34,8 +34,11 @@ import {
   assertCanStartMessageRequest,
   assertMessagingAllowed,
 } from '@/lib/require-messaging'
+import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { markConversationMessagesRead } from '@/lib/member-messages'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { getViewer } from '@/lib/viewer'
 
 function revalidateConversation(conversationId: string) {
   revalidatePath('/messages')
@@ -351,6 +354,27 @@ export async function sendMemberMessage(input: {
   revalidateConversation(input.conversationId)
 
   return { success: true as const }
+}
+
+/**
+ * Mark the open thread read only when the viewer is looking at the latest
+ * messages. Callers skip this while older history is on screen.
+ * Paid-messaging RLS still rejects anyone who cannot message.
+ */
+export async function markVisibleConversationRead(conversationId: string) {
+  const viewer = await getViewer()
+  if (!viewer?.canAccessApp) {
+    return { ok: false as const }
+  }
+
+  const { entitlements } = await loadMemberEntitlementsForViewer()
+  if (!entitlements?.canMessage) {
+    return { ok: false as const }
+  }
+
+  const supabase = await createClient()
+  await markConversationMessagesRead(supabase, viewer.userId, conversationId)
+  return { ok: true as const }
 }
 
 export async function blockMemberInConversation(conversationId: string) {

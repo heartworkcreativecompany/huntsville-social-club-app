@@ -1,15 +1,13 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import ConversationViewport from '@/components/messages/conversation-viewport'
 import MessageThread from '@/components/messages/message-thread'
 import MessagingSuspendedNotice from '@/components/messages/messaging-suspended-notice'
 import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import { MessagingPaywall } from '@/components/membership/feature-paywalls'
 import { resolveMemberMessagingAccess } from '@/lib/curated-intro-messaging-access'
-import {
-  loadConversationThread,
-  markConversationMessagesRead,
-} from '@/lib/member-messages'
+import { loadConversationThread } from '@/lib/member-messages'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { MEMBER_MESSAGING_UPGRADE_PATH } from '@/lib/member-profile-messaging'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
@@ -90,12 +88,8 @@ export default async function ConversationPage({
     )
   }
 
-  if (entitlements?.canMessage) {
-    await markConversationMessagesRead(supabase, viewer.userId, conversationId)
-  }
-
   return (
-    <>
+    <ConversationViewport>
       <PageHeader
         eyebrow="Inbox"
         title="Messages"
@@ -113,6 +107,7 @@ export default async function ConversationPage({
       {messagingSuspended ? <MessagingSuspendedNotice /> : null}
 
       <MessageThread
+        key={thread.conversationId}
         conversationId={thread.conversationId}
         otherUserName={thread.otherUserName}
         initialMessages={thread.messages}
@@ -120,10 +115,11 @@ export default async function ConversationPage({
         initialBlockState={thread.blockState}
         initialReportState={thread.reportState}
         messagingSuspended={messagingSuspended || !entitlements?.canMessage}
+        canMarkRead={Boolean(entitlements?.canMessage)}
         status={thread.status}
         viewerIsInitiator={thread.viewerIsInitiator}
         recontactStatus={thread.recontactStatus}
       />
-    </>
+    </ConversationViewport>
   )
 }
