@@ -21,6 +21,8 @@ describe('conversation scrolling', () => {
     expect(thread).toContain("'(prefers-reduced-motion: reduce)'")
     expect(thread).toContain('markVisibleConversationRead')
     expect(thread).toContain('shouldMarkConversationRead')
+    expect(thread).toContain('bindConversationReadOnVisibility')
+    expect(thread).toContain("document.visibilityState === 'visible'")
     expect(messages).toContain(".order('created_at', { ascending: true })")
     expect(page).toContain('key={thread.conversationId}')
     expect(page).toContain('canMarkRead={Boolean(entitlements?.canMessage)}')

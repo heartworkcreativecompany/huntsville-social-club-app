@@ -131,6 +131,56 @@ export function shouldMarkConversationRead(input: {
   canMarkRead: boolean
   viewingLatest: boolean
   hasUnreadIncoming: boolean
+  documentVisible: boolean
 }): boolean {
-  return input.canMarkRead && input.viewingLatest && input.hasUnreadIncoming
+  return (
+    input.canMarkRead &&
+    input.viewingLatest &&
+    input.hasUnreadIncoming &&
+    input.documentVisible
+  )
+}
+
+export type ConversationVisibilityTarget = {
+  visibilityState: string
+  addEventListener(type: 'visibilitychange', listener: () => void): void
+  removeEventListener(type: 'visibilitychange', listener: () => void): void
+}
+
+/**
+ * Re-check read receipts when the document becomes visible. The returned
+ * function detaches the listener so a later event cannot mark the
+ * conversation that has been switched away or unmounted.
+ */
+export function bindConversationReadOnVisibility(input: {
+  target: ConversationVisibilityTarget
+  conversationId: string
+  getState: () => {
+    canMarkRead: boolean
+    viewingLatest: boolean
+    hasUnreadIncoming: boolean
+  }
+  markRead: (conversationId: string) => void
+}): () => void {
+  let detached = false
+
+  const onVisibilityChange = () => {
+    if (detached) return
+    const state = input.getState()
+    if (
+      !shouldMarkConversationRead({
+        ...state,
+        documentVisible: input.target.visibilityState === 'visible',
+      })
+    ) {
+      return
+    }
+    input.markRead(input.conversationId)
+  }
+
+  input.target.addEventListener('visibilitychange', onVisibilityChange)
+  return () => {
+    detached = true
+    input.target.removeEventListener('visibilitychange', onVisibilityChange)
+  }
 }

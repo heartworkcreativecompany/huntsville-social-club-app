@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  bindConversationReadOnVisibility,
   incomingCountAfter,
   isHistoryPrepend,
   isNearMessageBottom,
@@ -7,6 +8,7 @@ import {
   planConversationScroll,
   scrollBehaviorForJump,
   shouldMarkConversationRead,
+  type ConversationVisibilityTarget,
   type MessageScrollSnapshot,
 } from '@/lib/conversation-scroll'
 
@@ -181,6 +183,7 @@ describe('message scroll helpers', () => {
         canMarkRead: true,
         viewingLatest: true,
         hasUnreadIncoming: true,
+        documentVisible: true,
       })
     ).toBe(true)
     expect(
@@ -188,6 +191,7 @@ describe('message scroll helpers', () => {
         canMarkRead: true,
         viewingLatest: false,
         hasUnreadIncoming: true,
+        documentVisible: true,
       })
     ).toBe(false)
     expect(
@@ -195,6 +199,7 @@ describe('message scroll helpers', () => {
         canMarkRead: false,
         viewingLatest: true,
         hasUnreadIncoming: true,
+        documentVisible: true,
       })
     ).toBe(false)
     expect(
@@ -202,7 +207,131 @@ describe('message scroll helpers', () => {
         canMarkRead: true,
         viewingLatest: true,
         hasUnreadIncoming: false,
+        documentVisible: true,
       })
     ).toBe(false)
+    expect(
+      shouldMarkConversationRead({
+        canMarkRead: true,
+        viewingLatest: true,
+        hasUnreadIncoming: true,
+        documentVisible: false,
+      })
+    ).toBe(false)
+  })
+})
+
+class FakeVisibilityDocument implements ConversationVisibilityTarget {
+  visibilityState: 'visible' | 'hidden' = 'hidden'
+  private listeners = new Set<() => void>()
+
+  addEventListener(_type: 'visibilitychange', listener: () => void) {
+    this.listeners.add(listener)
+  }
+
+  removeEventListener(_type: 'visibilitychange', listener: () => void) {
+    this.listeners.delete(listener)
+  }
+
+  become(state: 'visible' | 'hidden') {
+    this.visibilityState = state
+    for (const listener of this.listeners) listener()
+  }
+}
+
+describe('hidden-tab read receipts', () => {
+  it('does not mark incoming messages while the document is hidden', () => {
+    const marked: string[] = []
+    const target = new FakeVisibilityDocument()
+    bindConversationReadOnVisibility({
+      target,
+      conversationId: 'thread-a',
+      getState: () => ({
+        canMarkRead: true,
+        viewingLatest: true,
+        hasUnreadIncoming: true,
+      }),
+      markRead: (conversationId) => marked.push(conversationId),
+    })
+
+    expect(marked).toEqual([])
+    expect(
+      shouldMarkConversationRead({
+        canMarkRead: true,
+        viewingLatest: true,
+        hasUnreadIncoming: true,
+        documentVisible: target.visibilityState === 'visible',
+      })
+    ).toBe(false)
+  })
+
+  it('stays unread when the document returns while older history is in view', () => {
+    const marked: string[] = []
+    const target = new FakeVisibilityDocument()
+    bindConversationReadOnVisibility({
+      target,
+      conversationId: 'thread-a',
+      getState: () => ({
+        canMarkRead: true,
+        viewingLatest: false,
+        hasUnreadIncoming: true,
+      }),
+      markRead: (conversationId) => marked.push(conversationId),
+    })
+
+    target.become('visible')
+    expect(marked).toEqual([])
+  })
+
+  it('marks eligible messages when the document returns at the latest message', () => {
+    const marked: string[] = []
+    const target = new FakeVisibilityDocument()
+    bindConversationReadOnVisibility({
+      target,
+      conversationId: 'thread-a',
+      getState: () => ({
+        canMarkRead: true,
+        viewingLatest: true,
+        hasUnreadIncoming: true,
+      }),
+      markRead: (conversationId) => marked.push(conversationId),
+    })
+
+    target.become('visible')
+    expect(marked).toEqual(['thread-a'])
+  })
+
+  it('ignores visibility events after the conversation unmounts or switches', () => {
+    const marked: string[] = []
+    const target = new FakeVisibilityDocument()
+    const detach = bindConversationReadOnVisibility({
+      target,
+      conversationId: 'thread-a',
+      getState: () => ({
+        canMarkRead: true,
+        viewingLatest: true,
+        hasUnreadIncoming: true,
+      }),
+      markRead: (conversationId) => marked.push(conversationId),
+    })
+    detach()
+    target.become('visible')
+
+    const detachNext = bindConversationReadOnVisibility({
+      target,
+      conversationId: 'thread-b',
+      getState: () => ({
+        canMarkRead: true,
+        viewingLatest: true,
+        hasUnreadIncoming: true,
+      }),
+      markRead: (conversationId) => marked.push(conversationId),
+    })
+    target.become('visible')
+    detachNext()
+    target.become('hidden')
+    target.become('visible')
+
+    expect(marked).toEqual(['thread-b'])
   })
 })

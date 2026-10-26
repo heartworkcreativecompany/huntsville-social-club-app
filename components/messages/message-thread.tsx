@@ -7,6 +7,7 @@ import {
   sendMemberMessage,
 } from '@/app/(club)/messages/actions'
 import {
+  bindConversationReadOnVisibility,
   isNearMessageBottom,
   latestJumpLabel,
   planConversationScroll,
@@ -209,6 +210,7 @@ export default function MessageThread({
         canMarkRead,
         viewingLatest: stickToBottomRef.current,
         hasUnreadIncoming,
+        documentVisible: document.visibilityState === 'visible',
       })
     ) {
       return
@@ -224,6 +226,23 @@ export default function MessageThread({
   useEffect(() => {
     markIfViewingLatest()
   }, [markIfViewingLatest])
+
+  useEffect(() => {
+    return bindConversationReadOnVisibility({
+      target: document,
+      conversationId,
+      getState: () => ({
+        canMarkRead,
+        viewingLatest: stickToBottomRef.current,
+        hasUnreadIncoming: messages.some(
+          (message) => message.isUnread && !message.isOwn
+        ),
+      }),
+      markRead: () => {
+        markIfViewingLatest()
+      },
+    })
+  }, [canMarkRead, conversationId, markIfViewingLatest, messages])
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
