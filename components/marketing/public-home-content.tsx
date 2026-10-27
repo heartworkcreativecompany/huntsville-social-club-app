@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import ApplyMembershipCta from '@/components/marketing/apply-membership-cta'
+import EventImageCard from '@/components/events/event-image-card'
 import PublicHomeHeader from '@/components/marketing/public-home-header'
 import { marketingButtonPrimaryClassName } from '@/lib/event-labels'
 import {
@@ -95,33 +96,24 @@ export function PublicHomeExperiences({
                 const price = publicEventPriceLabel(event.fee_cents)
                 return (
                   <li key={event.id}>
-                    <Link
+                    <EventImageCard
                       href={`${VIEW_ALL_EVENTS_HREF}/${event.id}`}
-                      className="group relative block min-h-[16rem] overflow-hidden rounded-xl border border-border no-underline"
+                      imageSrc={coverSrc}
+                      imageSizes="(max-width: 1024px) 100vw, 33vw"
+                      unoptimized={isRemoteEventCoverImage(coverSrc)}
                     >
-                      <Image
-                        src={coverSrc}
-                        alt={event.title}
-                        fill
-                        sizes="(max-width: 1024px) 100vw, 33vw"
-                        className="object-cover transition duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                        unoptimized={isRemoteEventCoverImage(coverSrc)}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
-                      <div className="relative flex h-full min-h-[16rem] flex-col justify-end p-5">
-                        <h3 className="font-brand text-lg font-semibold text-white">
-                          {event.title}
-                        </h3>
-                        <p className="mt-2 text-sm leading-relaxed text-white/80">
-                          {when}
+                      <h3 className="font-brand text-lg font-semibold text-balance text-foreground">
+                        {event.title}
+                      </h3>
+                      <p className="text-sm leading-relaxed text-muted-foreground">
+                        {when}
+                      </p>
+                      {price ? (
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                          {price}
                         </p>
-                        {price ? (
-                          <p className="mt-1 text-sm leading-relaxed text-white/80">
-                            {price}
-                          </p>
-                        ) : null}
-                      </div>
-                    </Link>
+                      ) : null}
+                    </EventImageCard>
                   </li>
                 )
               })}
@@ -140,26 +132,19 @@ export function PublicHomeExperiences({
             </p>
             <ul className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {IMPLIED_EXPERIENCES.map((item) => (
-                <li
-                  key={item.title}
-                  className="group relative min-h-[16rem] overflow-hidden rounded-xl border border-border"
-                >
-                  <Image
-                    src={item.imageSrc}
-                    alt={item.imageAlt}
-                    fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                    className="object-cover transition duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
-                  <div className="relative flex h-full min-h-[16rem] flex-col justify-end p-5">
-                    <h3 className="font-brand text-lg font-semibold text-white">
+                <li key={item.title}>
+                  <EventImageCard
+                    imageSrc={item.imageSrc}
+                    imageAlt={item.imageAlt}
+                    imageSizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                  >
+                    <h3 className="font-brand text-lg font-semibold text-balance text-foreground">
                       {item.title}
                     </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-white/80">
+                    <p className="text-sm leading-relaxed text-muted-foreground">
                       {item.description}
                     </p>
-                  </div>
+                  </EventImageCard>
                 </li>
               ))}
             </ul>

@@ -71,6 +71,8 @@ describe('public calendar pages', () => {
     expect(page).not.toContain('attendee')
     expect(page).not.toContain('rsvp_question')
     expect(page).not.toContain('result.error}')
+    expect(page).toContain('EventImageCard')
+    expect(page).not.toContain('from-black/')
   })
 
   it('shows one public event and points members at the members host to RSVP', () => {
@@ -84,6 +86,9 @@ describe('public calendar pages', () => {
     expect(page).not.toContain('All events')
     expect(page).toContain('formatEventScheduleInChicago')
     expect(page).toContain('publicEventPriceLabel')
+    expect(page).toContain('EventImageCard')
+    expect(page).not.toContain('from-black/')
+    expect(page).not.toContain('<Link')
     expect(page).not.toContain('PublicGuestRsvpForm')
     expect(page).not.toContain('dangerouslySetInnerHTML')
     expect(page).not.toContain('owner_id')
@@ -121,6 +126,11 @@ describe('member calendar stays behind login', () => {
       expect(source).not.toContain('formatEventScheduleInChicago')
       expect(source).not.toContain('publicEventScheduleLabel')
     }
+    expect(richCard).toContain('EventImageCard')
+    expect(richCard).not.toContain('<Link')
+    expect(richCard).not.toContain('from-black/')
+    expect(detail).toContain('EventImageCard')
+    expect(detail).not.toContain('from-black/')
   })
 })
 

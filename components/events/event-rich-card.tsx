@@ -1,6 +1,4 @@
-import Image from 'next/image'
-import Link from 'next/link'
-import Card from '@/components/ui/card'
+import EventImageCard from '@/components/events/event-image-card'
 import EventMetaBadges from '@/components/events/event-meta-badges'
 import EventTypeBadge from '@/components/events/event-type-badge'
 import { formatEventDate, buttonPrimaryClassName } from '@/lib/event-labels'
@@ -62,66 +60,53 @@ export default function EventRichCard({
   })
 
   return (
-    <Card className="overflow-hidden p-0">
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-elevated">
-        <Image
-          src={coverSrc}
-          alt=""
-          fill
-          sizes="(max-width: 768px) 100vw, 50vw"
-          className="object-cover"
-          unoptimized={isRemoteEventCoverImage(coverSrc)}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
-        <div className="absolute top-4 left-4 flex flex-wrap gap-2">
-          <EventTypeBadge eventType={event.event_type} />
-        </div>
-        <div className="absolute right-0 bottom-0 left-0 p-5">
-          <p className="text-xs tracking-wide text-white/75">
-            {formatEventDate(event.starts_at)}
-          </p>
-          <h3 className="font-brand mt-1 text-2xl font-semibold text-white">
-            {event.title}
-          </h3>
-        </div>
-      </div>
+    <EventImageCard
+      href={`/events/${event.id}`}
+      imageSrc={coverSrc}
+      imageSizes="(max-width: 1024px) 100vw, 50vw"
+      unoptimized={isRemoteEventCoverImage(coverSrc)}
+    >
+      <EventTypeBadge eventType={event.event_type} />
+      <h3 className="font-brand text-2xl font-semibold text-balance text-foreground">
+        {event.title}
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        {formatEventDate(event.starts_at)}
+      </p>
+      {event.location ? (
+        <p className="text-sm text-muted-foreground">{event.location}</p>
+      ) : null}
 
-      <div className="space-y-3 p-5 sm:p-6">
-        <EventMetaBadges
-          isPast={isPast}
-          isCancelled={isCancelled}
-          currentUserStatus={currentUserStatus}
-          spotsLabel={spotsLabel}
-        />
+      <EventMetaBadges
+        isPast={isPast}
+        isCancelled={isCancelled}
+        currentUserStatus={currentUserStatus}
+        spotsLabel={spotsLabel}
+      />
 
-        {event.location ? (
-          <p className="text-sm text-muted-foreground">{event.location}</p>
+      <p className="text-sm text-foreground">
+        Hosted by <span className="font-medium text-accent">{creatorLabel}</span>
+      </p>
+
+      <p className="text-sm text-muted-foreground">
+        {memberGoingLabel(counts.going)}
+        {spotsLabel && spotsLabel !== 'Sold out' ? (
+          <span> · {spotsLabel}</span>
         ) : null}
-
-        <p className="text-sm text-foreground">
-          Hosted by <span className="font-medium text-accent">{creatorLabel}</span>
-        </p>
-
-        <p className="text-sm text-muted-foreground">
-          {memberGoingLabel(counts.going)}
-          {spotsLabel && spotsLabel !== 'Sold out' ? (
-            <span> · {spotsLabel}</span>
-          ) : null}
-          {spotsLabel === 'Sold out' ? (
-            <span className="text-danger"> · Sold out</span>
-          ) : null}
-        </p>
-
-        {rsvpActionLabel ? (
-          <p className="text-sm font-medium text-accent">{rsvpActionLabel}</p>
+        {spotsLabel === 'Sold out' ? (
+          <span className="text-danger"> · Sold out</span>
         ) : null}
+      </p>
 
-        <div className="border-t border-border pt-4">
-          <Link href={`/events/${event.id}`} className={buttonPrimaryClassName}>
-            {isPast || isCancelled ? 'View event' : 'View details'}
-          </Link>
-        </div>
+      {rsvpActionLabel ? (
+        <p className="text-sm font-medium text-accent">{rsvpActionLabel}</p>
+      ) : null}
+
+      <div className="border-t border-border pt-4">
+        <span className={buttonPrimaryClassName}>
+          {isPast || isCancelled ? 'View event' : 'View details'}
+        </span>
       </div>
-    </Card>
+    </EventImageCard>
   )
 }

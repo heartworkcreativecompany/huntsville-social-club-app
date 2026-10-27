@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import EventDescription from '@/components/events/event-description'
+import EventImageCard from '@/components/events/event-image-card'
 import EventTypeBadge from '@/components/events/event-type-badge'
 import PublicEventTickets from '@/components/marketing/public-event-tickets'
 import PublicMarketingFrame, {
@@ -92,28 +92,23 @@ export default async function PublicEventDetailPage({
   return (
     <PublicMarketingFrame>
       <div className="mx-auto max-w-6xl px-5 pt-6 pb-16 sm:px-6 sm:pt-8 sm:pb-20 md:px-10">
-        <div className="relative aspect-[21/9] w-full overflow-hidden rounded-xl bg-surface-elevated">
-          <Image
-            src={coverSrc}
-            alt=""
-            fill
-            priority
-            sizes="(max-width: 1152px) 100vw, 1152px"
-            className="object-cover"
-            unoptimized={isRemoteEventCoverImage(coverSrc)}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-          <div className="absolute right-0 bottom-0 left-0 p-6 sm:p-8">
-            <EventTypeBadge eventType={event.event_type} />
-            <h1 className="font-brand mt-3 text-3xl font-semibold text-white sm:text-4xl">
-              {event.title}
-            </h1>
-            <p className="mt-2 text-sm text-white/80">
-              {when}
-              {event.location ? ` · ${event.location}` : ''}
-            </p>
-          </div>
-        </div>
+        <EventImageCard
+          imageSrc={coverSrc}
+          imageSizes="(max-width: 1152px) 100vw, 1152px"
+          unoptimized={isRemoteEventCoverImage(coverSrc)}
+          priority
+          aspectClassName="aspect-[21/9]"
+          bodyClassName="space-y-2 p-6 sm:p-8"
+        >
+          <EventTypeBadge eventType={event.event_type} />
+          <h1 className="font-brand text-3xl font-semibold text-balance text-foreground sm:text-4xl">
+            {event.title}
+          </h1>
+          <p className="text-sm text-muted-foreground">{when}</p>
+          {event.location ? (
+            <p className="text-sm text-muted-foreground">{event.location}</p>
+          ) : null}
+        </EventImageCard>
 
         <div className="mt-8 max-w-2xl">
           {checkoutNotice ? (
