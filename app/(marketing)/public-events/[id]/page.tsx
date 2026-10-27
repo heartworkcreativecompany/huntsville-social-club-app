@@ -1,15 +1,12 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import EventDescription from '@/components/events/event-description'
 import EventTypeBadge from '@/components/events/event-type-badge'
-import PublicGuestRsvpForm from '@/components/marketing/public-guest-rsvp-form'
+import PublicEventTickets from '@/components/marketing/public-event-tickets'
 import PublicMarketingFrame, {
   memberEventRsvpHref,
-  publicMarketingSignupHref,
 } from '@/components/marketing/public-marketing-frame'
-import { marketingButtonSecondaryClassName } from '@/lib/event-labels'
 import {
   eventCoverImage,
   isRemoteEventCoverImage,
@@ -91,19 +88,11 @@ export default async function PublicEventDetailPage({
   const coverSrc = eventCoverImage(event.id, event.cover_image_url)
   const when = formatEventScheduleInChicago(event.starts_at, event.ends_at)
   const price = publicEventPriceLabel(event.fee_cents)
-  const signupHref = publicMarketingSignupHref()
 
   return (
     <PublicMarketingFrame>
       <div className="mx-auto max-w-6xl px-5 pt-6 pb-16 sm:px-6 sm:pt-8 sm:pb-20 md:px-10">
-        <Link
-          href="/events"
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
-          All events
-        </Link>
-
-        <div className="relative mt-6 aspect-[21/9] w-full overflow-hidden rounded-xl bg-surface-elevated">
+        <div className="relative aspect-[21/9] w-full overflow-hidden rounded-xl bg-surface-elevated">
           <Image
             src={coverSrc}
             alt=""
@@ -145,33 +134,13 @@ export default async function PublicEventDetailPage({
 
           <EventDescription text={event.description} />
 
-          <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
-            <a
-              href={memberEventRsvpHref(event.id)}
-              className={marketingButtonSecondaryClassName}
-            >
-              Members: sign in to RSVP
-            </a>
-            <Link
-              href={signupHref}
-              className="text-sm font-medium text-accent underline underline-offset-4"
-            >
-              Apply for membership
-            </Link>
-          </div>
-
-          {guestOffer.kind === 'sold_out' ? (
-            <p className="mt-6 text-sm font-medium text-foreground">Sold out</p>
-          ) : null}
-          {listing && guestOffer.kind === 'open' ? (
-            <PublicGuestRsvpForm
-              eventId={event.id}
-              priceLabel={guestOffer.priceLabel}
-              rsvpQuestion={listing.rsvpQuestion}
-              rsvpQuestionRequired={listing.rsvpQuestionRequired}
-              spotsLeft={guestOffer.spotsLeft}
-            />
-          ) : null}
+          <PublicEventTickets
+            eventId={event.id}
+            memberHref={memberEventRsvpHref(event.id)}
+            offer={guestOffer}
+            rsvpQuestion={listing?.rsvpQuestion ?? null}
+            rsvpQuestionRequired={listing?.rsvpQuestionRequired ?? false}
+          />
         </div>
       </div>
     </PublicMarketingFrame>

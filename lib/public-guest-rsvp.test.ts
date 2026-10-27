@@ -69,7 +69,7 @@ describe('guest RSVP offer', () => {
       priceLabel: '$15',
       spotsLeft: null,
     })
-    expect(guestRsvpButtonLabel('$15')).toBe('RSVP as a guest for $15')
+    expect(guestRsvpButtonLabel('$15')).toBe('Buy a Ticket')
   })
 
   it('hides the guest form for free, started, and priority-window events', () => {
@@ -279,7 +279,8 @@ describe('guest RSVP form markup', () => {
       })
     )
 
-    expect(html).toContain('RSVP as a guest for $15')
+    expect(html).toContain('Buy a Ticket')
+    expect(html).not.toContain('RSVP as a guest')
     expect(html).toContain('Only 4 spots left.')
     expect(html).not.toContain('owner_id')
     expect(html).not.toContain('general_rsvp_opens_at')
@@ -303,7 +304,7 @@ describe('guest RSVP form markup', () => {
     expect(formSource).not.toContain('owner_id')
     expect(formSource).not.toContain('event_attendees')
     expect(pageSource).toContain('memberEventRsvpHref(event.id)')
-    expect(pageSource).toContain('Members: sign in to RSVP')
+    expect(pageSource).toContain('PublicEventTickets')
     expect(listSource).not.toContain('PublicGuestRsvpForm')
     expect(listSource).not.toContain('startGuestEventCheckout')
   })

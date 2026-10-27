@@ -22,16 +22,27 @@ export default function PublicGuestRsvpForm({
   rsvpQuestion,
   rsvpQuestionRequired,
   spotsLeft,
+  open,
+  onOpenChange,
 }: {
   eventId: string
   priceLabel: string
   rsvpQuestion: string | null
   rsvpQuestionRequired: boolean
   spotsLeft: number | null
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const formId = useId()
   const nameRef = useRef<HTMLInputElement>(null)
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = open !== undefined
+  const isOpen = isControlled ? open : internalOpen
+
+  function setOpen(next: boolean) {
+    if (!isControlled) setInternalOpen(next)
+    onOpenChange?.(next)
+  }
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [rsvpAnswer, setRsvpAnswer] = useState('')
@@ -42,8 +53,8 @@ export default function PublicGuestRsvpForm({
   const spots = spotsLeftLabel(spotsLeft)
 
   useEffect(() => {
-    if (open) nameRef.current?.focus()
-  }, [open])
+    if (isOpen) nameRef.current?.focus()
+  }, [isOpen])
   const nameId = `${formId}-name`
   const emailId = `${formId}-email`
   const answerId = `${formId}-answer`
@@ -86,7 +97,7 @@ export default function PublicGuestRsvpForm({
       {spots ? (
         <p className="mb-3 text-sm text-muted-foreground">{spots}</p>
       ) : null}
-      {open ? null : (
+      {isOpen ? null : (
         <button
           type="button"
           className={paymentButtonClassName}
@@ -96,7 +107,7 @@ export default function PublicGuestRsvpForm({
           {guestRsvpButtonLabel(priceLabel)}
         </button>
       )}
-      {open ? (
+      {isOpen ? (
         <form
           className="relative grid max-w-lg gap-4"
           onSubmit={onSubmit}

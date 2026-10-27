@@ -78,12 +78,13 @@ describe('public calendar pages', () => {
     expect(page).toContain('loadPublicEvent')
     expect(page).toContain('notFound()')
     expect(page).toContain('EventDescription')
-    expect(page).toContain('Members: sign in to RSVP')
-    expect(page).toContain('Apply for membership')
+    expect(page).toContain('PublicEventTickets')
+    expect(page).toContain('memberEventRsvpHref(event.id)')
+    expect(page).not.toContain('Apply for membership')
+    expect(page).not.toContain('All events')
     expect(page).toContain('formatEventScheduleInChicago')
     expect(page).toContain('publicEventPriceLabel')
-    expect(page).toContain('PublicGuestRsvpForm')
-    expect(page).toContain('Sold out')
+    expect(page).not.toContain('PublicGuestRsvpForm')
     expect(page).not.toContain('dangerouslySetInnerHTML')
     expect(page).not.toContain('owner_id')
     expect(page).not.toContain('general_rsvp_opens_at')
@@ -120,6 +121,24 @@ describe('member calendar stays behind login', () => {
       expect(source).not.toContain('formatEventScheduleInChicago')
       expect(source).not.toContain('publicEventScheduleLabel')
     }
+  })
+})
+
+describe('public marketing frame', () => {
+  it('keeps the shared header outside the content scroller', () => {
+    const frame = readRepoFile('components/marketing/public-marketing-frame.tsx')
+    const header = readRepoFile('components/marketing/public-home-header.tsx')
+    const headerIndex = frame.indexOf('<PublicHomeHeader')
+    const scrollIndex = frame.indexOf('data-public-content-scroll')
+
+    expect(frame).toContain('VisualViewportFrame')
+    expect(frame).toContain('tone="solid"')
+    expect(headerIndex).toBeGreaterThan(-1)
+    expect(scrollIndex).toBeGreaterThan(headerIndex)
+    expect(header).toContain('HOME_HEADER_JOIN_CTA')
+    expect(header).toContain('HOME_HEADER_SIGN_IN')
+    expect(header).toContain('bg-background')
+    expect(header).not.toContain('max-sm:hidden')
   })
 })
 

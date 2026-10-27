@@ -1,5 +1,6 @@
 import PublicHomeHeader from '@/components/marketing/public-home-header'
 import SiteFooter from '@/components/shell/site-footer'
+import VisualViewportFrame from '@/components/shell/visual-viewport-frame'
 import { portalCtaHref } from '@/lib/hostnames'
 
 export function publicMarketingSignupHref(): string {
@@ -23,17 +24,26 @@ export default function PublicMarketingFrame({
   const signupHref = publicMarketingSignupHref()
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
+    <VisualViewportFrame>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3 focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-accent-foreground"
       >
         Skip to content
       </a>
-      <PublicHomeHeader loginHref={loginHref} signupHref={signupHref} />
-      <main id="main-content">{children}</main>
-      <SiteFooter variant="marketing" signupHref={signupHref} />
-    </div>
+      <PublicHomeHeader
+        loginHref={loginHref}
+        signupHref={signupHref}
+        tone="solid"
+      />
+      <div
+        data-public-content-scroll
+        className="min-h-0 flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain scroll-pt-4"
+      >
+        <main id="main-content">{children}</main>
+        <SiteFooter variant="marketing" signupHref={signupHref} />
+      </div>
+    </VisualViewportFrame>
   )
 }
 
