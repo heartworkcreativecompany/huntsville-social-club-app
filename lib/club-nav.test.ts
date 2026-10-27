@@ -295,6 +295,12 @@ describe('ClubNav interaction wiring', () => {
     expect(source).toContain(
       'max-h-[calc(var(--club-frame-height,100dvh)-var(--club-header-height,4.75rem)-env(safe-area-inset-bottom))]'
     )
+    const css = readFileSync(join(__dirname, '../app/globals.css'), 'utf8')
+    expect(css).toContain('width: 120px')
+    expect(css).toContain('height: 120px')
+    expect(css).toContain('overflow: hidden')
+    expect(css).not.toContain('height: 48px')
+    expect(css).not.toContain('object-view-box: inset')
     expect(source).toContain('data-club-site-header')
     expect(source).toContain('bg-surface')
     expect(source).toContain('key={pathname}')

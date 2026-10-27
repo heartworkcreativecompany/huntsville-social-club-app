@@ -159,22 +159,46 @@ body {
 }
 
 /*
- * The official wordmark SVG is a square canvas. On small screens that
- * transparent margin made the club header about 153px tall. Crop to the
- * ink and tighten vertical padding below the desktop breakpoint only.
- * Measured ink on the 1024px asset: x 72–949, y 313–681.
+ * The wordmark SVG is a square canvas. Below the desktop breakpoint the
+ * image stays at its pre-compact rendered size (120px, or 132px from sm)
+ * and the link clips the transparent margin. Measured ink at 120px:
+ * x 8.5–111.5, y 37–80, plus 1px so the star and letters are not cut.
  */
 @media (width < 64rem) {
   [data-club-header='mobile'] {
-    padding-top: max(0.75rem, env(safe-area-inset-top));
-    padding-bottom: 0.75rem;
+    padding-top: max(0.875rem, env(safe-area-inset-top));
+    padding-bottom: 0.875rem;
+  }
+
+  .club-header-wordmark {
+    display: inline-flex;
+    flex: none;
+    align-items: flex-start;
+    justify-content: flex-start;
+    width: 105px;
+    height: 45px;
+    overflow: hidden;
   }
 
   .club-header-wordmark img {
-    height: 48px;
-    width: auto;
+    width: 120px;
+    height: 120px;
     max-width: none;
-    object-fit: contain;
-    object-view-box: inset(30.57% 7.32% 33.5% 7.03%);
+    object-fit: fill;
+    object-view-box: none;
+    transform: translate(-7.5px, -36px);
+  }
+}
+
+@media (width >= 40rem) and (width < 64rem) {
+  .club-header-wordmark {
+    width: 115.5px;
+    height: 49.5px;
+  }
+
+  .club-header-wordmark img {
+    width: 132px;
+    height: 132px;
+    transform: translate(-8.25px, -39.6px);
   }
 }
