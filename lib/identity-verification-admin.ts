@@ -96,6 +96,8 @@ export async function approveInPersonIdentity(
 
   const existing = await loadActiveInPersonIdentity(admin, input.profileId)
   if (existing) {
+    // A repeat does not create another active row and does not backfill a
+    // missing audit. Reconciling that gap is a separate moderation insert.
     return { ok: true, alreadyVerified: true }
   }
 
@@ -132,6 +134,7 @@ export async function approveInPersonIdentity(
       method: IN_PERSON_IDENTITY_METHOD,
       source: 'admin_action',
     }),
+    tolerateMissingTable: false,
   })
   if (!audit.ok) {
     return { ok: false, error: 'In-person verification was saved, but the audit record failed.' }
@@ -180,6 +183,7 @@ export async function revokeInPersonIdentity(
     sourceType: 'in_person_identity_verification',
     sourceId: existing.id,
     details: JSON.stringify({ method: IN_PERSON_IDENTITY_METHOD }),
+    tolerateMissingTable: false,
   })
   if (!audit.ok) {
     return { ok: false, error: 'In-person verification was revoked, but the audit record failed.' }

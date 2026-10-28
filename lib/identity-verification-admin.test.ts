@@ -122,6 +122,108 @@ describe('in-person identity admin actions', () => {
     expect(String(audit.details)).not.toContain('front desk')
   })
 
+  it('reports partial success when the audit table is missing', async () => {
+    const { client, calls } = createClient({
+      in_person_identity_verifications: [
+        { data: null, error: null },
+        { data: { id: 'row-1' }, error: null },
+      ],
+      moderation_actions: [
+        {
+          data: null,
+          error: {
+            code: '42P01',
+            message: 'relation "moderation_actions" does not exist',
+          },
+        },
+      ],
+    })
+
+    const result = await approveInPersonIdentity(client, {
+      isAdmin: true,
+      actorId: 'admin-1',
+      profileId: 'member-2',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'In-person verification was saved, but the audit record failed.',
+    })
+    expect(
+      calls
+        .filter((call) => call.table === 'in_person_identity_verifications')
+        .flatMap((call) => call.inserts)
+    ).toHaveLength(1)
+  })
+
+  it('reports partial success when a saved revocation cannot be audited', async () => {
+    const { client } = createClient({
+      in_person_identity_verifications: [
+        {
+          data: {
+            id: 'row-1',
+            source: 'admin_action',
+            approved_by: 'admin-1',
+            approved_at: '2026-10-01T00:00:00.000Z',
+            reconciled_at: null,
+            note: null,
+            status: 'verified',
+            revoked_at: null,
+          },
+          error: null,
+        },
+        { data: { id: 'row-1' }, error: null },
+      ],
+      moderation_actions: [
+        {
+          data: null,
+          error: { code: '42501', message: 'permission denied for table moderation_actions' },
+        },
+      ],
+    })
+
+    const result = await revokeInPersonIdentity(client, {
+      isAdmin: true,
+      actorId: 'admin-2',
+      profileId: 'member-2',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'In-person verification was revoked, but the audit record failed.',
+    })
+  })
+
+  it('does not write another verification or audit when one is already active', async () => {
+    const { client, calls } = createClient({
+      in_person_identity_verifications: [
+        {
+          data: {
+            id: 'row-1',
+            source: 'admin_action',
+            approved_by: 'admin-1',
+            approved_at: '2026-10-01T00:00:00.000Z',
+            reconciled_at: null,
+            note: null,
+            status: 'verified',
+            revoked_at: null,
+          },
+          error: null,
+        },
+      ],
+    })
+
+    const result = await approveInPersonIdentity(client, {
+      isAdmin: true,
+      actorId: 'admin-2',
+      profileId: 'member-2',
+    })
+
+    expect(result).toEqual({ ok: true, alreadyVerified: true })
+    expect(calls.flatMap((call) => call.inserts)).toHaveLength(0)
+    expect(calls.some((call) => call.table === 'moderation_actions')).toBe(false)
+  })
+
   it('revokes in-person verification without clearing Stripe evidence', async () => {
     const { client, calls } = createClient({
       in_person_identity_verifications: [
