@@ -32,6 +32,12 @@ export default function PricingPageContent({
         <p className="mt-3 text-sm text-muted-foreground">
           {PRICING_SUPPORTING_LINE}
         </p>
+        {mode === 'member' && currentTier === 'connect' ? (
+          <p className="mt-4 max-w-3xl text-sm text-muted-foreground">
+            Your current plan is Connect. It remains active and can be managed
+            in billing. New memberships are Free, Inner Circle, and Elite Circle.
+          </p>
+        ) : null}
       </header>
 
       <div className="mt-12">

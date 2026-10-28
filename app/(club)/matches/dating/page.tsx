@@ -16,9 +16,11 @@ import {
   loadCuratedMatchRecommendations,
   sortCuratedMatchItems,
 } from '@/lib/load-curated-matches'
+import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -145,13 +147,17 @@ export default async function DatingMatchesPage() {
     archivedRecommendationCount: inboxCounts.archived,
     messagingSuspended: isMessagingSuspended(gatedViewer.profile),
   })
+  const identityStatus = await loadAcceptedIdentityStatus(
+    createAdminClient(),
+    gatedViewer.userId
+  )
 
   return (
     <>
       <PageHeader
         eyebrow="Dating"
         title="Dating Matches"
-        description="Staff-curated recommendations based on your private compatibility questionnaire. Request an intro when a match feels right — direct messaging opens after the intro is matched."
+        description="Recommendations based on your private compatibility questionnaire. Send a message request when a match feels right, or pass. A conversation opens only if they accept."
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <Link
@@ -182,7 +188,7 @@ export default async function DatingMatchesPage() {
 
       <CuratedMatchesList
         items={sortedItems}
-        canMessage={context.canMessage}
+        identityStatus={identityStatus}
         showDevSeed={isDevRecommendationSeedAllowed()}
         availability={availability}
       />

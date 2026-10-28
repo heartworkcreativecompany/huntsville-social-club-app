@@ -223,8 +223,8 @@ describe('message write paths', () => {
     expect(participants).toContain('loadAcceptedIdentityStatus')
     expect(actions).toContain('requireOtherIdentity: false')
     expect(intros).toContain('assertCanStartMessageRequest')
-    expect(matches).toContain('assertMessagingAllowed')
-    expect(matches).toContain('entitlements?.canMessage')
+    expect(matches).toContain('sendMessageRequest')
+    expect(matches).not.toContain('entitlements?.canMessage')
   })
 
   it('replaces paid messaging RLS with the shared identity function', () => {

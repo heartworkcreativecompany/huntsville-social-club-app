@@ -27,6 +27,8 @@ function emailCaptureDirectory(): string | null {
   return captureDir
 }
 
+let emailCaptureSequence = 0
+
 async function sendEmail(payload: EmailPayload) {
   const captureDir = emailCaptureDirectory()
   if (captureDir) {
@@ -38,7 +40,7 @@ async function sendEmail(payload: EmailPayload) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 48)
-    const stamp = `${Date.now()}-${slug || 'email'}`
+    const stamp = `${Date.now()}-${emailCaptureSequence++}-${slug || 'email'}`
     await writeFile(join(captureDir, `${stamp}.html`), payload.html, 'utf8')
     await writeFile(
       join(captureDir, `${stamp}.json`),
@@ -322,7 +324,7 @@ export async function sendCuratedMatchesDeliveredEmail(input: {
     'New curated matches',
     `<p>Hi ${input.memberName},</p>
      <p>You have <strong>${matchLabel}</strong> waiting in your matches inbox.</p>
-     <p>Review the profiles, request an intro when someone feels right, or pass if it is not a fit.</p>`,
+     <p>Review the profiles, send a message request when someone feels right, or pass if it is not a fit. A conversation opens only if they accept.</p>`,
     { label: 'View matches', href: `${origin}/matches/dating` }
   )
 

@@ -99,8 +99,25 @@ const PAID_TIERS: PaidMembershipTier[] = [
   'elite_circle',
 ]
 
+/** Tiers a new checkout or plan link may start. Connect remains a recognized existing plan. */
+export const PURCHASABLE_MEMBERSHIP_TIERS = [
+  'inner_circle',
+  'elite_circle',
+] as const
+
+export type PurchasableMembershipTier = (typeof PURCHASABLE_MEMBERSHIP_TIERS)[number]
+
+export const CONNECT_NEW_SALE_RETIRED_MESSAGE =
+  'Connect is no longer available for new purchase. Inner Circle and Elite Circle remain available.'
+
 export function isPaidMembershipTier(value: string): value is PaidMembershipTier {
   return PAID_TIERS.includes(value as PaidMembershipTier)
+}
+
+export function isPurchasableMembershipTier(
+  value: string
+): value is PurchasableMembershipTier {
+  return (PURCHASABLE_MEMBERSHIP_TIERS as readonly string[]).includes(value)
 }
 
 function envPriceIdForTier(tier: PaidMembershipTier): string | undefined {

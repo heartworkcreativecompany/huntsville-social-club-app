@@ -6,15 +6,15 @@ import {
 import { MUTUAL_MESSAGING_REQUIRED_MESSAGE } from '@/lib/membership-entitlements'
 
 /**
- * Canonical in-app upgrade path for messaging entitlement.
- * Prefer `/upgrade` (authenticated plans) over marketing `/pricing`.
+ * Profile messaging follows approval and accepted identity.
+ * Paid plan state is a separate entitlement and does not open or close messaging.
  */
 export const MEMBER_MESSAGING_UPGRADE_PATH = '/upgrade' as const
 
 export const MEMBER_MESSAGING_LOCKED_COPY =
-  'Messaging is available with a paid membership.' as const
+  'Messaging requires an approved membership and verified identity.' as const
 
-export const MEMBER_MESSAGING_UPGRADE_CTA = 'Upgrade membership' as const
+export const MEMBER_MESSAGING_UPGRADE_CTA = 'Check identity verification' as const
 
 /** Neutral notice when the viewer is paid but a new request is not mutually eligible. */
 export const MEMBER_MESSAGING_MUTUAL_REQUIRED_COPY =

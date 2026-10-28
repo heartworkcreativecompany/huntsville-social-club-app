@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 
 const CURATED_INTRO_WELCOME_BODY =
-  'Your curated intro was approved. You can message each other here — say hello when you are ready.'
+  'You can message each other here — say hello when you are ready.'
 
 export async function insertCuratedIntroWelcomeMessage(
   supabase: SupabaseClient<Database>,

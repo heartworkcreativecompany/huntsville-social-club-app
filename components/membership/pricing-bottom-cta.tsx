@@ -12,7 +12,6 @@ import type { PricingPlanKey, PricingSurfaceMode } from '@/lib/membership-plan-l
 
 const PLAN_KEYS = [
   'member',
-  'connect',
   'inner_circle',
   'elite_circle',
 ] as const satisfies readonly PricingPlanKey[]

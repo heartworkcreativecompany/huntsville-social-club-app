@@ -9,7 +9,6 @@ import RecentNotifications, {
   DASHBOARD_NOTIFICATION_PREVIEW_LIMIT,
 } from '@/components/dashboard/recent-notifications'
 import UpcomingEventsPreview from '@/components/dashboard/upcoming-events-preview'
-import CuratedIntroCard from '@/components/members/curated-intro-card'
 import RecentMessagesPreview from '@/components/messages/recent-messages-preview'
 import ConnectMatchesTeaser from '@/components/dashboard/connect-matches-teaser'
 import PageHeader from '@/components/ui/page-header'
@@ -51,7 +50,6 @@ export default async function DashboardPage() {
     loadOwnFriendshipQuestionnaire(supabase, viewer.userId).catch(() => null),
   ])
 
-  const canMessage = entitlements?.canMessage ?? false
   const showConnectMatchesTeaser = shouldHideCuratedMatchingSurfaces(entitlements)
   const datingContext = compatibilityContextForViewer(viewer, entitlements)
   const friendshipContext = friendshipContextForViewer(
@@ -114,9 +112,7 @@ export default async function DashboardPage() {
       userId: viewer.userId,
       role: viewer.role,
     }),
-    canMessage
-      ? loadRecentMessagePreviews(supabase, viewer.userId, 3)
-      : Promise.resolve({ previews: [], error: null }),
+    loadRecentMessagePreviews(supabase, viewer.userId, 3),
     datingRecommendationsPromise,
     friendshipRecommendationsPromise,
   ])
@@ -133,7 +129,7 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Discovery"
         title="Dashboard"
-        description="Your latest updates and next steps for curated intros, member discovery, and recent conversations."
+        description="Your latest updates and next steps for recommendations, member discovery, and conversations."
         actions={<ApplicationStatusBadge status={viewer.applicationStatus} />}
       />
 
@@ -169,18 +165,12 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      {canMessage ? (
-        <div className="mb-10">
-          <RecentMessagesPreview
-            previews={messageResult.previews}
-            error={messageResult.error}
-          />
-        </div>
-      ) : null}
-
-      <section className="mb-10">
-        <CuratedIntroCard />
-      </section>
+      <div className="mb-10">
+        <RecentMessagesPreview
+          previews={messageResult.previews}
+          error={messageResult.error}
+        />
+      </div>
     </>
   )
 }

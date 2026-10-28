@@ -100,7 +100,7 @@ export default async function AdminCuratedMatchesPage({
           href="/admin/curated-intros"
           className="font-medium text-accent underline"
         >
-          Curated intro requests
+          Past intro requests
         </Link>
         <Link
           href="/admin/applications"

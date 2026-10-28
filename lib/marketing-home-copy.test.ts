@@ -55,13 +55,11 @@ describe('public homepage copy', () => {
   it('uses verified membership names and prices without invented discounts', () => {
     expect(HOME_MEMBERSHIP_TIERS.map((tier) => tier.name)).toEqual([
       PRICING_PLANS.member.name,
-      PRICING_PLANS.connect.name,
       PRICING_PLANS.inner_circle.name,
       PRICING_PLANS.elite_circle.name,
     ])
     expect(HOME_MEMBERSHIP_TIERS.map((tier) => tier.price)).toEqual([
       PRICING_PLANS.member.price,
-      PRICING_PLANS.connect.price,
       PRICING_PLANS.inner_circle.price,
       PRICING_PLANS.elite_circle.price,
     ])

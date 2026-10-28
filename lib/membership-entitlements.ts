@@ -681,11 +681,8 @@ export function creditsSummary(entitlements: MemberEntitlements): string | null 
   return freeRegistrationsSummary(entitlements)
 }
 
-export function messagingUpgradeMessage(tier: ProductTier): string {
-  if (tier === 'member') {
-    return FEATURE_GATE_COPY.messaging.inline
-  }
-  return 'Messaging is available on your plan.'
+export function messagingUpgradeMessage(_tier: ProductTier): string {
+  return FEATURE_GATE_COPY.messaging.inline
 }
 
 export type { RegistrationMethod }

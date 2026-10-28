@@ -87,7 +87,7 @@ export default async function AdminProfileRevisionsPage() {
           href="/admin/curated-intros"
           className="text-muted-foreground underline"
         >
-          Curated intros
+          Past intro requests
         </Link>
         <Link
           href="/admin/message-reports"

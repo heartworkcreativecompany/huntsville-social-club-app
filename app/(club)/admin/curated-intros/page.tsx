@@ -33,8 +33,8 @@ export default async function AdminCuratedIntrosPage() {
     <>
       <PageHeader
         eyebrow="Operations"
-        title="Curated intro requests"
-        description="Review intro requests from curated match recommendations, open conversations, or decline when a connection is not appropriate."
+        title="Past intro requests"
+        description="Historical record only. New staff introductions are turned off, and these requests are not approved, declined, or converted from this page."
         actions={
           pendingCount > 0 ? (
             <Badge variant="warning">{pendingCount} pending</Badge>
@@ -84,8 +84,8 @@ export default async function AdminCuratedIntrosPage() {
         <p className="text-sm text-danger">{error}</p>
       ) : items.length === 0 ? (
         <EmptyState
-          title="No curated intro requests"
-          description="When members request intros from their curated matches inbox, those requests will appear here for staff review."
+          title="No past intro requests"
+          description="Existing requests stay here. New staff introductions are turned off."
         />
       ) : (
         <AdminCuratedIntroQueue items={sortedItems} />

@@ -19,8 +19,16 @@ function cookieFrom(response: NextResponse): string | undefined {
 }
 
 describe('pending membership plan capture', () => {
-  it('captures Connect, Inner Circle, and Elite Circle from signup and login next params', () => {
-    for (const tier of ['connect', 'inner_circle', 'elite_circle'] as const) {
+  it('captures Inner Circle and Elite Circle, and drops retired Connect links', () => {
+    expect(
+      capturePendingMembershipPlan({
+        pathname: '/signup',
+        searchParams: new URLSearchParams(
+          `next=${encodeURIComponent('/upgrade?plan=connect')}`
+        ),
+      })
+    ).toBeNull()
+    for (const tier of ['inner_circle', 'elite_circle'] as const) {
       const next = encodeURIComponent(`/upgrade?plan=${tier}`)
       expect(
         capturePendingMembershipPlan({
@@ -144,7 +152,7 @@ describe('resolveMembershipContinuation', () => {
         approved: true,
         cookiePlan: 'connect',
       })
-    ).toEqual({ path: '/upgrade?plan=connect', clearCookie: true })
+    ).toEqual({ path: '/upgrade', clearCookie: true })
     expect(
       resolveMembershipContinuation({
         signedIn: true,
@@ -194,7 +202,7 @@ describe('resolveMembershipContinuation', () => {
         cookiePlan: 'connect',
         requestedPlan: 'not_a_tier',
       })
-    ).toEqual({ path: '/upgrade?plan=connect', clearCookie: true })
+    ).toEqual({ path: '/upgrade', clearCookie: true })
     expect(
       resolveMembershipContinuation({
         signedIn: false,

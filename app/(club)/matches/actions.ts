@@ -3,24 +3,21 @@
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import { isDevRecommendationSeedAllowed, seedDevCuratedRecommendationsForUser } from '@/lib/compatibility/seed-dev-recommendations'
 import { sendMessageRequest } from '@/app/(club)/messages/actions'
-import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
-import { messagingUpgradeMessage } from '@/lib/membership-entitlements'
-import { assertMessagingAllowed } from '@/lib/require-messaging'
 import { createClient } from '@/lib/supabase/server'
+import { getViewer } from '@/lib/viewer'
 
-async function assertCuratedMatchMessaging() {
-  const gate = await assertMessagingAllowed()
-  if (!gate.ok) return gate
-
-  const { entitlements } = await loadMemberEntitlementsForViewer()
-  if (!entitlements?.canMessage) {
-    return {
-      ok: false as const,
-      error: messagingUpgradeMessage(entitlements?.billingProductTier ?? 'member'),
-    }
+async function approvedMemberId(): Promise<
+  | { ok: true; userId: string }
+  | { ok: false; error: string }
+> {
+  const viewer = await getViewer()
+  if (!viewer) {
+    return { ok: false, error: 'You must be signed in.' }
   }
-
-  return gate
+  if (!viewer.canAccessApp) {
+    return { ok: false, error: 'Membership approval is required.' }
+  }
+  return { ok: true, userId: viewer.userId }
 }
 
 export async function seedDevMatchRecommendations() {
@@ -28,7 +25,7 @@ export async function seedDevMatchRecommendations() {
     return { error: 'Dev seeding is only available in local development.' }
   }
 
-  const gate = await assertCuratedMatchMessaging()
+  const gate = await approvedMemberId()
   if (!gate.ok) {
     return { error: gate.error }
   }
@@ -58,7 +55,7 @@ export async function requestCuratedMatchIntro(
   recommendationId: string,
   body: string
 ) {
-  const gate = await assertCuratedMatchMessaging()
+  const gate = await approvedMemberId()
   if (!gate.ok) {
     return { error: gate.error }
   }
@@ -110,7 +107,7 @@ export async function requestCuratedMatchIntro(
 }
 
 export async function passCuratedRecommendation(recommendationId: string) {
-  const gate = await assertCuratedMatchMessaging()
+  const gate = await approvedMemberId()
   if (!gate.ok) {
     return { error: gate.error }
   }

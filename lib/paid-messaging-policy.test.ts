@@ -442,7 +442,8 @@ describe.sequential('curated intro email dispatch', () => {
     expect(paidHtml).not.toMatch(/without upgrading/i)
     expect(unpaidHtml).toContain('href="http://localhost:3010/upgrade"')
     expect(unpaidHtml).not.toContain('/messages/')
-    expect(unpaidHtml).toMatch(/active paid membership is required/i)
+    expect(unpaidHtml).toMatch(/verified identity/i)
+    expect(unpaidHtml).not.toMatch(/active paid membership is required/i)
   })
 
   it('does not let EMAIL_CAPTURE_DIR suppress production delivery', async () => {
@@ -512,7 +513,8 @@ describe('curated intro emails', () => {
 
     expect(unpaid.opensConversation).toBe(false)
     expect(unpaid.cta.href).toBe('https://club.example/upgrade')
-    expect(unpaid.bodyHtml).toMatch(/active paid membership is required/i)
+    expect(unpaid.bodyHtml).toMatch(/verified identity/i)
+    expect(unpaid.bodyHtml).not.toMatch(/active paid membership is required/i)
     expect(unpaid.bodyHtml + unpaid.text + unpaid.cta.href).not.toContain('/messages/')
     expect(unpaid.bodyHtml).not.toMatch(/without upgrading/i)
   })

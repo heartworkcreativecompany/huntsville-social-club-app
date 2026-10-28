@@ -1,6 +1,10 @@
 import Link from 'next/link'
 import Badge from '@/components/ui/badge'
-import type { CuratedIntroQueueItem } from '@/lib/load-curated-intro-queue'
+import {
+  historicalIntroKindLabel,
+  historicalIntroStatusLabel,
+  type CuratedIntroQueueItem,
+} from '@/lib/load-curated-intro-queue'
 
 function statusBadgeVariant(
   status: string
@@ -9,26 +13,13 @@ function statusBadgeVariant(
     case 'pending':
       return 'warning'
     case 'matched':
+    case 'accepted':
       return 'success'
     case 'declined':
+    case 'closed':
       return 'muted'
     default:
       return 'accent'
-  }
-}
-
-function statusLabel(status: string): string {
-  switch (status) {
-    case 'pending':
-      return 'Awaiting recipient'
-    case 'matched':
-      return 'Accepted'
-    case 'declined':
-      return 'Declined'
-    case 'closed':
-      return 'Closed'
-    default:
-      return status
   }
 }
 
@@ -40,8 +31,9 @@ export default function AdminCuratedIntroQueue({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Message requests are accepted or declined by recipients. This queue is a
-        read-only audit trail — staff no longer approve intros here.
+        Historical staff introduction records only. Ongoing member message
+        requests are not listed here, and this page does not approve, decline,
+        or email.
       </p>
 
       {items.map((item) => (
@@ -61,11 +53,13 @@ export default function AdminCuratedIntroQueue({
                 {item.target?.email ? ` · ${item.target.email}` : ''}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Requested {new Date(item.createdAt).toLocaleString()}
+                {historicalIntroKindLabel(item.kind)} · Requested{' '}
+                {new Date(item.createdAt).toLocaleString()}
+                {item.recommendationId ? '' : ' · No recommendation'}
               </p>
             </div>
             <Badge variant={statusBadgeVariant(item.status)}>
-              {statusLabel(item.status)}
+              {historicalIntroStatusLabel(item.status)}
             </Badge>
           </div>
 

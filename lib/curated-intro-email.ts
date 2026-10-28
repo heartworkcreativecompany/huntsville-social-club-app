@@ -55,12 +55,12 @@ export function buildCuratedIntroApprovedEmail(input: {
   const href = `${input.origin}${MEMBER_MESSAGING_UPGRADE_PATH}`
   const title = 'Curated intro approved'
   const bodyHtml = `<p>We approved a curated intro with <strong>${name}</strong>.</p>
-     <p>An active paid membership is required to message. This approval does not include messaging access.</p>`
+     <p>Messaging requires an approved membership and verified identity. This approval does not grant messaging.</p>`
   return {
     subject: 'Curated intro approved',
     title,
     bodyHtml,
-    text: `${title}\n\nWe approved a curated intro with ${name}. An active paid membership is required to message.\n\nView memberships: ${href}`,
+    text: `${title}\n\nWe approved a curated intro with ${name}. Messaging requires an approved membership and verified identity.\n\nView memberships: ${href}`,
     cta: { label: 'View memberships', href },
     opensConversation: false,
   }

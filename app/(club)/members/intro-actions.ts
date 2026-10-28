@@ -5,9 +5,10 @@ import { sendMessageRequest } from '@/app/(club)/messages/actions'
 import { assertCanStartMessageRequest } from '@/lib/require-messaging'
 
 export async function requestCuratedIntro(note?: string) {
+  void note
   return {
     error:
-      'Concierge intro requests are paused. Message members directly from their profile when you have messaging access.',
+      'Concierge intro requests are turned off. Send a message request from a recommendation or member profile.',
   }
 }
 

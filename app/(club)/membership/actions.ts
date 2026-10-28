@@ -17,7 +17,8 @@ import {
 import {
   appBaseUrl,
   getStripe,
-  isPaidMembershipTier,
+  CONNECT_NEW_SALE_RETIRED_MESSAGE,
+  isPurchasableMembershipTier,
   isStripeConfigured,
   optionalCheckoutTrialDays,
   stripePriceIdForTier,
@@ -30,6 +31,10 @@ function subscriptionBlocksNewCheckout(billing: ReturnType<typeof parseMembershi
 }
 
 export async function createMembershipCheckoutSession(tierInput: string) {
+  if (tierInput === 'connect') {
+    return { error: CONNECT_NEW_SALE_RETIRED_MESSAGE }
+  }
+
   // Guard: only STRIPE_SECRET_KEY is required. Live price IDs are provided by
   // lib/stripe/config.ts (STRIPE_LIVE_PRICE_IDS) and must not block checkout.
   if (!isStripeConfigured()) {
@@ -45,7 +50,7 @@ export async function createMembershipCheckoutSession(tierInput: string) {
     return { error: 'Membership approval is required before upgrading.' }
   }
 
-  if (!isPaidMembershipTier(tierInput)) {
+  if (!isPurchasableMembershipTier(tierInput)) {
     return { error: 'Invalid membership plan selected.' }
   }
 

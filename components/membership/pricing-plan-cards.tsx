@@ -39,11 +39,11 @@ export default function PricingPlanCards({
     />
   )
 
-  const plans: PlanKey[] = ['member', 'connect', 'inner_circle', 'elite_circle']
+  const plans: PlanKey[] = ['member', 'inner_circle', 'elite_circle']
 
   return (
     <>
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {plans.map((key) => {
           const plan = PRICING_PLANS[key]
           const highlighted = key === 'inner_circle'

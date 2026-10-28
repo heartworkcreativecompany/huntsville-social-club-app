@@ -45,7 +45,7 @@ export default function UpgradePlans() {
       <PageHeader
         eyebrow="Membership"
         title="Upgrade your membership"
-        description="Unlock messaging, Circle Social credits, premium event credits, and more."
+        description="Inner Circle and Elite Circle add curated matches, Circle Social credits, and premium event credits. Messaging requires approval and accepted identity on every plan."
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -54,7 +54,7 @@ export default function UpgradePlans() {
           <h2 className="text-display mt-1 text-2xl font-semibold">Inner Circle</h2>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             <li>Inner Circle badge</li>
-            <li>Messaging enabled</li>
+            <li>Messaging after approval and identity verification</li>
             <li>
               {INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event
               credit per billing period

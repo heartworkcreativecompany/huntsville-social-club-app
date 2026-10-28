@@ -164,7 +164,8 @@ describe('mutual messaging eligibility', () => {
   it('keeps paid messaging entitlement separate from intentional identity access', () => {
     const free = entitlements(false)
     expect(canUseMessaging(free)).toBe(false)
-    expect(messagingUpgradeMessage(free.productTier)).toMatch(/Upgrade/i)
+    expect(messagingUpgradeMessage(free.productTier)).toMatch(/verified identity/i)
+    expect(messagingUpgradeMessage(free.productTier)).not.toMatch(/upgrade/i)
   })
 })
 

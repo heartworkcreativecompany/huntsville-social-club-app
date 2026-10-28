@@ -122,7 +122,7 @@ export const MEMBER_NOTIFICATION_TEMPLATES: Record<
   },
   membership_upgraded: {
     title: 'Membership updated',
-    body: 'Your membership now includes curated intros, curated matches, and messaging.',
+    body: 'Your membership now includes curated match recommendations and messaging.',
     href: '/profile',
   },
   profile_revision_approved: {

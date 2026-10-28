@@ -58,7 +58,7 @@ describe('membership pricing copy — Circle Social entitlements', () => {
     expect(PRICING_PLANS.elite_circle.bullets).toContain(
       '2 included premium event credits per billing period'
     )
-    expect(COMPARISON_TABLE.rows.find((row) => row[0] === 'Circle Socials')?.[4]).toBe(
+    expect(COMPARISON_TABLE.rows.find((row) => row[0] === 'Circle Socials')?.[3]).toBe(
       ELITE_CIRCLE_SOCIALS_INCLUDED_COPY
     )
     expect(allCustomerFacingCopy()).toContain(ELITE_CIRCLE_SOCIALS_INCLUDED_COPY)

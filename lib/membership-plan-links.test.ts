@@ -17,7 +17,7 @@ import {
 
 describe('paidMembershipPlanFromQuery', () => {
   it('accepts only canonical paid tiers', () => {
-    expect(paidMembershipPlanFromQuery('connect')).toBe('connect')
+    expect(paidMembershipPlanFromQuery('connect')).toBeNull()
     expect(paidMembershipPlanFromQuery('inner_circle')).toBe('inner_circle')
     expect(paidMembershipPlanFromQuery('elite_circle')).toBe('elite_circle')
   })
@@ -51,7 +51,7 @@ describe('signup and upgrade return paths', () => {
   })
 
   it('extracts only validated paid plans from safe next paths', () => {
-    expect(paidPlanFromSafeNext('/upgrade?plan=connect')).toBe('connect')
+    expect(paidPlanFromSafeNext('/upgrade?plan=connect')).toBeNull()
     expect(paidPlanFromSafeNext('/upgrade?plan=inner_circle')).toBe(
       'inner_circle'
     )
@@ -65,9 +65,7 @@ describe('signup and upgrade return paths', () => {
   })
 
   it('accepts encoded or raw upgrade next values and rejects open redirects', () => {
-    expect(safeUpgradeReturnPath('/upgrade?plan=connect')).toBe(
-      '/upgrade?plan=connect'
-    )
+    expect(safeUpgradeReturnPath('/upgrade?plan=connect')).toBe('/upgrade')
     expect(safeUpgradeReturnPath('/upgrade?plan=inner_circle')).toBe(
       '/upgrade?plan=inner_circle'
     )
@@ -94,7 +92,7 @@ describe('membershipPlanCtaKind', () => {
         mode: 'public',
         currentTier: 'member',
       })
-    ).toBe('signup_with_plan')
+    ).toBe('billing_unavailable')
     expect(
       membershipPlanCtaKind({
         planKey: 'inner_circle',
@@ -125,7 +123,7 @@ describe('membershipPlanCtaKind', () => {
         mode: 'member',
         currentTier: 'member',
       })
-    ).toBe('checkout')
+    ).toBe('billing_unavailable')
     expect(
       membershipPlanCtaKind({
         planKey: 'inner_circle',
@@ -146,9 +144,7 @@ describe('membershipPlanCtaKind', () => {
     const paidPairs = [
       ['connect', 'inner_circle'],
       ['connect', 'elite_circle'],
-      ['inner_circle', 'connect'],
       ['inner_circle', 'elite_circle'],
-      ['elite_circle', 'connect'],
       ['elite_circle', 'inner_circle'],
     ] as const
 
