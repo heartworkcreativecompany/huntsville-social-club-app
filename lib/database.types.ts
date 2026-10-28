@@ -541,6 +541,54 @@ export interface Database {
         }
         Relationships: []
       }
+      in_person_identity_verifications: {
+        Row: {
+          id: string
+          profile_id: string
+          method: string
+          status: string
+          source: string
+          approved_by: string | null
+          approved_at: string | null
+          reconciled_at: string | null
+          note: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          method?: string
+          status: string
+          source: string
+          approved_by?: string | null
+          approved_at?: string | null
+          reconciled_at?: string | null
+          note?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          method?: string
+          status?: string
+          source?: string
+          approved_by?: string | null
+          approved_at?: string | null
+          reconciled_at?: string | null
+          note?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       membership_access_overrides: {
         Row: {
           id: string
@@ -1416,6 +1464,10 @@ export interface Database {
       }
     }
     Functions: {
+      profile_has_accepted_identity: {
+        Args: { check_user_id: string }
+        Returns: boolean
+      }
       apply_membership_billing_sync: {
         Args: {
           p_user_id: string

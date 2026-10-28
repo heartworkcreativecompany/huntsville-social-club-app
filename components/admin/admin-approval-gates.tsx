@@ -85,12 +85,11 @@ export default function AdminApprovalGates({
         )}
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        Required gates must be approved before membership approval. Stripe
-        Identity sync updates identity status only — final membership approval
-        stays a separate manual action. Phone verification is optional and
-        completed by the member via Supabase Auth SMS.
-      </p>
+        <p className="text-sm text-muted-foreground">
+          Email, photos, application review, and locality must be approved
+          before membership approval. Identity verification is separate: Stripe
+          Identity or an in-person check. Phone verification is optional.
+        </p>
 
       <ul className="grid gap-3">
         {APPROVAL_GATE_DEFS.map((def) => {
@@ -142,20 +141,27 @@ export default function AdminApprovalGates({
                 <Badge variant={badgeTone}>{badgeLabel}</Badge>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <select
-                  value={status}
-                  disabled={isPending}
-                  onChange={(e) =>
-                    setGate(def.key, e.target.value as ReviewStatus)
-                  }
-                  className="rounded-md border border-border bg-surface px-2 py-1 text-xs"
-                >
-                  {GATE_STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {reviewStatusLabel(s)}
-                    </option>
-                  ))}
-                </select>
+                {isIdentity ? (
+                  <p className="text-xs text-muted-foreground">
+                    Use Approve in-person identity verification. This checklist
+                    does not record an identity check.
+                  </p>
+                ) : (
+                  <select
+                    value={status}
+                    disabled={isPending}
+                    onChange={(e) =>
+                      setGate(def.key, e.target.value as ReviewStatus)
+                    }
+                    className="rounded-md border border-border bg-surface px-2 py-1 text-xs"
+                  >
+                    {GATE_STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {reviewStatusLabel(s)}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </li>
           )
@@ -227,7 +233,7 @@ export default function AdminApprovalGates({
             )
           }}
         >
-          Reset identity verification
+          Reset Stripe Identity
         </button>
       </div>
 

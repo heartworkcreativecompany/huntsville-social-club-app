@@ -18,10 +18,12 @@ import { getViewer } from '@/lib/viewer'
 import { formatIndustryLabel } from '@/lib/industries'
 import AdminApplicationPhotoGallery from '@/components/admin/admin-application-photo-gallery'
 import AdminApprovalGates from '@/components/admin/admin-approval-gates'
+import AdminInPersonIdentityVerification from '@/components/admin/admin-in-person-identity-verification'
 import RefreshIdentityStatusButton from '@/components/admin/refresh-identity-status-button'
 import AdminBillingStatus from '@/components/admin/admin-billing-status'
 import AdminLocalityReview from '@/components/admin/admin-locality-review'
 import AdminMemberVouches from '@/components/admin/admin-member-vouches'
+import { loadActiveInPersonIdentity } from '@/lib/identity-verification-admin'
 import { loadAdminVouchesForMember } from '@/lib/load-member-vouches'
 import {
   identityVerificationDisplayLabel,
@@ -87,6 +89,10 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
   const locality = parseLocalityConfirmation(applicant.locality_confirmation)
   const billing = parseMembershipBilling(applicant.membership_billing)
   const memberVouches = await loadAdminVouchesForMember(applicant.id)
+  const inPersonIdentity = await loadActiveInPersonIdentity(
+    supabase,
+    applicant.id
+  )
   const legalName = [draft.profile.firstName, draft.profile.lastName]
     .filter(Boolean)
     .join(' ')
@@ -330,14 +336,13 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
               Approval requirements
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Required gates must be approved before final membership approval.
-              Phone verification is optional and does not block approval.
+              Email, photos, application review, and locality must be approved
+              before membership approval. Identity verification is separate and
+              does not block approval. Phone verification is optional.
             </p>
             <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
               <div>
-                <dt className="text-muted-foreground">
-                  Identity &amp; location status
-                </dt>
+                <dt className="text-muted-foreground">Stripe Identity status</dt>
                 <dd className="font-medium text-foreground">
                   {identityVerificationDisplayLabel(
                     applicant.identity_verification_status
@@ -366,11 +371,16 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
               </div>
             </dl>
             <p className="mt-3 text-xs text-muted-foreground">
-              Stripe Identity updates this status automatically. Document images,
-              selfies, and extracted ID values are not stored or shown here.
+              Stripe Identity updates this Stripe status automatically. An
+              in-person check is recorded separately and is not written as a
+              Stripe success. Document images are not stored or shown here.
               Membership approval remains a separate manual action below.
             </p>
             <RefreshIdentityStatusButton applicantId={applicant.id} />
+            <AdminInPersonIdentityVerification
+              profileId={applicant.id}
+              active={inPersonIdentity}
+            />
             <div className="mt-4">
               <AdminApprovalGates
                 applicantId={applicant.id}

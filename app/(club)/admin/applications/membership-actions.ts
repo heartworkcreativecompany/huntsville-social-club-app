@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
+import { refuseLegacyIdentityGateUpdate } from '@/lib/identity-verification'
 import {
   type ApprovalGateKey,
   type LocalityConfirmation,
@@ -47,6 +48,9 @@ export async function updateApprovalGate(
   gate: ApprovalGateKey,
   status: ReviewStatus
 ) {
+  const identityRefusal = refuseLegacyIdentityGateUpdate(gate)
+  if (identityRefusal) return { error: identityRefusal }
+
   const auth = await requireAdmin()
   if (auth.error || !auth.supabase) {
     return { error: auth.error ?? 'Unauthorized' }

@@ -419,17 +419,17 @@ export const APPROVAL_GATE_DEFS: ApprovalGateDef[] = [
     key: 'phone_verified',
     label: 'Phone verification',
     description:
-      'Optional. Member verifies a phone number via Supabase Auth SMS (provider configured in Supabase, commonly Twilio). Not required for membership approval — Stripe Identity covers identity and location.',
+      'Optional. Member verifies a phone number via Supabase Auth SMS (provider configured in Supabase, commonly Twilio). Not required for membership approval.',
     requiredForApproval: false,
     implemented: true,
     completedBy: 'member',
   },
   {
     key: 'identity_verified',
-    label: 'Identity & location verification',
+    label: 'Identity verification',
     description:
-      'Required. Government ID + matching selfie via Stripe Identity before membership approval. Confirms identity and location signals. Document/selfie images are not stored in our database.',
-    requiredForApproval: true,
+      'Optional for membership approval. Stripe Identity or an admin in-person check. Either one is accepted. Document images are not stored here.',
+    requiredForApproval: false,
     implemented: true,
     completedBy: 'member',
   },
@@ -679,12 +679,17 @@ export function identityVerificationDisplayLabel(
 }
 
 /**
- * Member-facing identity row state from Stripe Identity session status
- * (source of truth for this step once a session exists).
+ * Display state on the application status page.
+ * Stripe success, an active in-person record, or the legacy identity-step
+ * gate hides the Stripe call to action. The gate fallback stays until the
+ * legacy backfill so those members are not asked to repeat Stripe.
+ * Messaging and the public badge must use resolveIdentityVerification,
+ * which does not treat the gate as identity evidence.
  */
 export function identityVerificationRowState(
   stripeStatus: string | null | undefined,
-  gateStatus: ReviewStatus
+  gateStatus: ReviewStatus,
+  inPersonVerified = false
 ): {
   label: string
   tone: 'success' | 'warning' | 'muted' | 'danger'
@@ -701,7 +706,7 @@ export function identityVerificationRowState(
       ? stripeStatus
       : 'not_started'
 
-  if (gateStatus === 'approved' || status === 'verified') {
+  if (inPersonVerified || gateStatus === 'approved' || status === 'verified') {
     return {
       label: identityVerificationDisplayLabel('verified'),
       tone: 'success',

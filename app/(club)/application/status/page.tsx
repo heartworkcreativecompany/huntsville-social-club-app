@@ -3,9 +3,11 @@ import { redirect } from 'next/navigation'
 import ApplicationStatusPanel from '@/components/application/application-status-panel'
 import PageHeader from '@/components/ui/page-header'
 import { syncEmailApprovalGateForUser } from '@/lib/approval-gate-sync'
+import { loadActiveInPersonIdentity } from '@/lib/identity-verification-admin'
 import { loadProfileForUser } from '@/lib/load-profile'
 import { parseApprovalGates } from '@/lib/membership-systems'
 import { reconcileIdentityVerification } from '@/lib/stripe/identity'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -57,6 +59,10 @@ export default async function ApplicationStatusPage({
   if (emailConfirmed) {
     gates.email_verified = 'approved'
   }
+  const inPersonIdentity = await loadActiveInPersonIdentity(
+    createAdminClient(),
+    viewer.userId
+  )
 
   const showSubmitBanner = params.submitted === '1'
   const showIdentityReturnNotice = params.identity === 'return'
@@ -91,6 +97,7 @@ export default async function ApplicationStatusPage({
         }
         verifiedPhoneE164={profile?.verified_phone_e164}
         authPhoneE164={user?.phone ?? null}
+        inPersonIdentityVerified={Boolean(inPersonIdentity)}
         showSubmitBanner={showSubmitBanner}
         showIdentityReturnNotice={showIdentityReturnNotice}
       />
