@@ -314,8 +314,8 @@ export function shouldHideCuratedMatchingSurfaces(
 }
 
 /**
- * New message requests require both parties to have active paid messaging.
- * Does not encode which party failed — callers must use a generic error/UI.
+ * Paid-plan helper retained for Circle and Connect product checks.
+ * Intentional messaging does not use this function.
  */
 export function canStartMessageRequest(input: {
   senderEntitlements: Pick<MemberEntitlements, 'canMessage'>
@@ -331,9 +331,9 @@ export function canStartMessageRequest(input: {
   )
 }
 
-/** Safe copy for UI + server when a new request is blocked by mutual eligibility. */
+/** Safe copy when a new request is blocked without naming which member failed. */
 export const MUTUAL_MESSAGING_REQUIRED_MESSAGE =
-  'Messaging is available when both members have an active paid membership.' as const
+  'Messaging is available when both members have verified identity.' as const
 
 function paidPerEventDecision(
   description: string,

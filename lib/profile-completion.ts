@@ -4,7 +4,11 @@ import {
   resolveMemberPublicIntents,
 } from '@/lib/member-public-intent'
 import { photosFromApplicationDraft } from '@/lib/member-photos'
-import { isMemberPubliclyVerified, parseVerificationState } from '@/lib/membership-systems'
+import {
+  isMemberPubliclyVerified,
+  parseVerificationState,
+  type PublicIdentityStatus,
+} from '@/lib/membership-systems'
 import type { ViewerProfile } from '@/lib/viewer'
 
 export type ProfileCompletionItem = {
@@ -16,7 +20,8 @@ export type ProfileCompletionItem = {
 /** Live approved profile fields for strength checklist — not pending revisions. */
 export function computeProfileCompletion(
   profile: ViewerProfile | null,
-  liveDraft: ApplicationDraft
+  liveDraft: ApplicationDraft,
+  identity: PublicIdentityStatus = 'unavailable'
 ): { percent: number; items: ProfileCompletionItem[] } {
   const livePhotos = photosFromApplicationDraft(profile?.application_draft ?? liveDraft)
   const verification = parseVerificationState(profile?.verification_state)
@@ -70,12 +75,15 @@ export function computeProfileCompletion(
       label: 'Interests',
       done: liveInterests.length >= 1,
     },
-    {
-      key: 'verification',
-      label: 'Phone & review checks',
-      done: isMemberPubliclyVerified(verification),
-    },
   ]
+
+  if (identity !== 'unavailable') {
+    items.push({
+      key: 'verification',
+      label: 'Phone, review, and identity checks',
+      done: isMemberPubliclyVerified(verification, identity),
+    })
+  }
 
   const doneCount = items.filter((item) => item.done).length
   const percent = Math.round((doneCount / items.length) * 100)

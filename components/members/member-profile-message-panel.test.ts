@@ -3,18 +3,19 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import MemberProfileMessageForm from '@/components/members/member-profile-message-form'
 import {
-  MEMBER_MESSAGING_LOCKED_COPY,
   MEMBER_MESSAGING_MUTUAL_REQUIRED_COPY,
   MEMBER_MESSAGING_UPGRADE_PATH,
+  PROFILE_IDENTITY_REQUIRED_COPY,
+  PROFILE_IDENTITY_UNAVAILABLE_COPY,
 } from '@/lib/member-profile-messaging'
 
 describe('MemberProfileMessageForm', () => {
-  it('shows composer for paid sender + paid recipient', () => {
+  it('shows composer when both members are identity verified', () => {
     const html = renderToStaticMarkup(
       createElement(MemberProfileMessageForm, {
         firstName: 'Jordan',
-        senderCanMessage: true,
-        recipientCanMessage: true,
+        senderIdentity: 'verified',
+        recipientIdentity: 'verified',
         isSelf: false,
         onSend: async () => ({ success: true as const }),
       })
@@ -23,18 +24,18 @@ describe('MemberProfileMessageForm', () => {
     expect(html).toContain('Message Jordan')
     expect(html).toContain('<textarea')
     expect(html).toMatch(/Send message request|Sending/)
-    expect(html).not.toContain(MEMBER_MESSAGING_LOCKED_COPY)
+    expect(html).not.toContain(PROFILE_IDENTITY_REQUIRED_COPY)
     expect(html).not.toContain(MEMBER_MESSAGING_MUTUAL_REQUIRED_COPY)
     expect(html).not.toContain(MEMBER_MESSAGING_UPGRADE_PATH)
     expect(html).not.toContain('name="targetMemberId"')
   })
 
-  it('shows neutral notice for paid sender + ineligible recipient (no composer)', () => {
+  it('shows a neutral notice when the recipient is not identity verified', () => {
     const html = renderToStaticMarkup(
       createElement(MemberProfileMessageForm, {
         firstName: 'Jordan',
-        senderCanMessage: true,
-        recipientCanMessage: false,
+        senderIdentity: 'verified',
+        recipientIdentity: 'unverified',
         isSelf: false,
         onSend: async () => ({ success: true as const }),
       })
@@ -44,45 +45,48 @@ describe('MemberProfileMessageForm', () => {
     expect(html).not.toContain('<textarea')
     expect(html).not.toContain('Send message request')
     expect(html).not.toContain('/upgrade')
-    expect(html).not.toMatch(/free|subscription|billing|stripe|inner circle|elite/i)
+    expect(html).not.toMatch(/free|subscription|billing|stripe|in-person|inner circle|elite/i)
   })
 
-  it('hides the messaging box for a viewer without paid messaging', () => {
+  it('asks an identity-unverified sender to verify, without a paid upgrade', () => {
     const html = renderToStaticMarkup(
       createElement(MemberProfileMessageForm, {
         firstName: 'Jordan',
-        senderCanMessage: false,
-        recipientCanMessage: true,
+        senderIdentity: 'unverified',
+        recipientIdentity: 'verified',
         isSelf: false,
         onSend: async () => ({ success: true as const }),
       })
     )
 
-    expect(html).toBe('')
+    expect(html).toContain(PROFILE_IDENTITY_REQUIRED_COPY)
+    expect(html).toContain('/application/status')
     expect(html).not.toContain('<textarea')
-    expect(html).not.toContain('Send message request')
+    expect(html).not.toContain(MEMBER_MESSAGING_UPGRADE_PATH)
   })
 
-  it('hides the messaging box when neither member can message', () => {
+  it('does not describe a failed lookup as unverified', () => {
     const html = renderToStaticMarkup(
       createElement(MemberProfileMessageForm, {
         firstName: 'Jordan',
-        senderCanMessage: false,
-        recipientCanMessage: false,
+        senderIdentity: 'unavailable',
+        recipientIdentity: 'verified',
         isSelf: false,
         onSend: async () => ({ success: true as const }),
       })
     )
 
-    expect(html).toBe('')
+    expect(html).toContain(PROFILE_IDENTITY_UNAVAILABLE_COPY)
+    expect(html).not.toContain(PROFILE_IDENTITY_REQUIRED_COPY)
+    expect(html).not.toContain('<textarea')
   })
 
   it('hides messaging UI on self profiles', () => {
     const html = renderToStaticMarkup(
       createElement(MemberProfileMessageForm, {
         firstName: 'Self',
-        senderCanMessage: true,
-        recipientCanMessage: true,
+        senderIdentity: 'verified',
+        recipientIdentity: 'verified',
         isSelf: true,
         onSend: async () => ({ success: true as const }),
       })

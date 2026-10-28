@@ -1,8 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { loadBlockedUserIdsForMember } from '@/lib/compatibility/match-candidate-pool'
 import type { Database } from '@/lib/database.types'
-import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { validateMemberMessageBody } from '@/lib/member-message-limits'
+import { assertMembersMayExchange } from '@/lib/messaging-participants'
 import { orderedPair } from '@/lib/member-messages'
 import {
   isConversationRecipient,
@@ -10,7 +9,6 @@ import {
   type ConversationStatus,
 } from '@/lib/message-request-states'
 import { retryMessageRequestAfterRecontact } from '@/lib/message-recontact-flow'
-import { isMessagingSuspended } from '@/lib/messaging-suspension'
 
 type ConversationRow = {
   id: string
@@ -62,49 +60,9 @@ async function validateParticipants(
   requesterId: string,
   targetMemberId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data: profiles, error } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
-    .select('id, messaging_suspended_at, application_status')
-    .in('id', [requesterId, targetMemberId])
-
-  if (error) {
-    return { ok: false, error: error.message }
-  }
-
-  if ((profiles ?? []).length !== 2) {
-    return { ok: false, error: 'Member profile not found.' }
-  }
-
-  for (const profile of profiles ?? []) {
-    if (profile.application_status !== 'approved') {
-      return { ok: false, error: 'Both members must be approved to message.' }
-    }
-
-    if (isMessagingSuspended(profile)) {
-      return {
-        ok: false,
-        error: 'Messaging is suspended for one of the members in this request.',
-      }
-    }
-  }
-
-  const requesterBlocks = await loadBlockedUserIdsForMember(
-    supabase,
-    requesterId
-  )
-  if (requesterBlocks.has(targetMemberId)) {
-    return { ok: false, error: 'You cannot message this member.' }
-  }
-
-  const targetBlocks = await loadBlockedUserIdsForMember(
-    supabase,
-    targetMemberId
-  )
-  if (targetBlocks.has(requesterId)) {
-    return { ok: false, error: 'This member is unavailable for messaging.' }
-  }
-
-  return { ok: true }
+  return assertMembersMayExchange(supabase, requesterId, targetMemberId, {
+    requireOtherIdentity: true,
+  })
 }
 
 export async function createMessageRequest(

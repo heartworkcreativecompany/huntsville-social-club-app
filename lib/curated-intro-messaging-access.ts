@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 
 /** Accepted curated-match conversation where this member participates. */
 export async function isCuratedIntroConversationForMember(
@@ -129,12 +130,15 @@ export async function resolveMemberMessagingAccess(
   _supabase: SupabaseClient<Database>,
   input: {
     userId: string
-    canMessage: boolean
+    identityStatus: AcceptedIdentityStatus
     messagingSuspended: boolean
     conversationId?: string
     adminModeration?: boolean
   }
 ): Promise<MemberMessagingAccess> {
+  void input.messagingSuspended
+  void input.identityStatus
+
   if (input.adminModeration) {
     return {
       canAccessInbox: true,
@@ -144,18 +148,10 @@ export async function resolveMemberMessagingAccess(
     }
   }
 
-  if (!input.canMessage) {
-    return {
-      canAccessInbox: false,
-      canAccessConversation: false,
-      introOnlyAccess: false,
-      adminModeration: false,
-    }
-  }
-
+  // Identity and suspension gate sending, not reading an existing thread.
   return {
     canAccessInbox: true,
-    canAccessConversation: Boolean(input.conversationId) || input.canMessage,
+    canAccessConversation: true,
     introOnlyAccess: false,
     adminModeration: false,
   }

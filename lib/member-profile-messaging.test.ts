@@ -46,62 +46,62 @@ describe('member profile messaging helpers', () => {
     expect(
       profileMessagingUiMode({
         isSelf: true,
-        senderCanMessage: true,
-        recipientCanMessage: true,
+        senderIdentity: 'verified',
+        recipientIdentity: 'verified',
       })
     ).toBe('hidden')
   })
 
-  it('shows composer when both sender and recipient can message', () => {
+  it('shows composer when both members have accepted identity', () => {
     expect(
       profileMessagingUiMode({
         isSelf: false,
-        senderCanMessage: true,
-        recipientCanMessage: true,
+        senderIdentity: 'verified',
+        recipientIdentity: 'verified',
       })
     ).toBe('composer')
   })
 
-  it('hides messaging controls when the viewer lacks paid messaging', () => {
+  it('asks the viewer to verify identity instead of offering a paid upgrade', () => {
     expect(
       profileMessagingUiMode({
         isSelf: false,
-        senderCanMessage: false,
-        recipientCanMessage: true,
+        senderIdentity: 'unverified',
+        recipientIdentity: 'verified',
       })
-    ).toBe('hidden')
+    ).toBe('identity_required')
     expect(
       profileMessagingUiMode({
         isSelf: false,
-        senderCanMessage: false,
-        recipientCanMessage: false,
+        senderIdentity: 'unverified',
+        recipientIdentity: 'unverified',
       })
-    ).toBe('hidden')
+    ).toBe('identity_required')
   })
 
-  it('shows neutral unavailable notice for paid sender + ineligible recipient', () => {
+  it('shows neutral unavailable notice when the recipient is not identity verified', () => {
     expect(
       profileMessagingUiMode({
         isSelf: false,
-        senderCanMessage: true,
-        recipientCanMessage: false,
+        senderIdentity: 'verified',
+        recipientIdentity: 'unverified',
       })
     ).toBe('unavailable')
   })
 
-  it('shows composer after recipient becomes paid (refreshed entitlements)', () => {
+  it('shows composer after the recipient identity decision is refreshed', () => {
     expect(
       profileMessagingUiMode({
         isSelf: false,
-        senderCanMessage: true,
-        recipientCanMessage: false,
+        senderIdentity: 'verified',
+        recipientIdentity: 'unverified',
       })
     ).toBe('unavailable')
     expect(
       profileMessagingUiMode({
         isSelf: false,
-        senderCanMessage: true,
-        recipientCanMessage: true,
+        senderIdentity: 'verified',
+        recipientIdentity: 'verified',
       })
     ).toBe('composer')
   })
@@ -151,7 +151,7 @@ describe('mutual messaging eligibility', () => {
 
   it('uses a safe mutual error that does not leak plan or billing details', () => {
     expect(MUTUAL_MESSAGING_REQUIRED_MESSAGE).toBe(
-      'Messaging is available when both members have an active paid membership.'
+      'Messaging is available when both members have verified identity.'
     )
     expect(MEMBER_MESSAGING_MUTUAL_REQUIRED_COPY).toBe(
       MUTUAL_MESSAGING_REQUIRED_MESSAGE
@@ -161,7 +161,7 @@ describe('mutual messaging eligibility', () => {
     )
   })
 
-  it('keeps sender upgrade messaging for free members via canUseMessaging', () => {
+  it('keeps paid messaging entitlement separate from intentional identity access', () => {
     const free = entitlements(false)
     expect(canUseMessaging(free)).toBe(false)
     expect(messagingUpgradeMessage(free.productTier)).toMatch(/Upgrade/i)
@@ -203,17 +203,20 @@ describe('server wiring for new requests vs replies', () => {
     expect(requireSource).not.toContain('isCuratedIntroConversationForMember')
     expect(requireSource).not.toContain('isMessageRequestConversationForMember')
     expect(requireSource).toContain('assertCanStartMessageRequest')
-    expect(requireSource).toContain('MUTUAL_MESSAGING_REQUIRED_MESSAGE')
+    expect(requireSource).toContain('IDENTITY_MUTUAL_MESSAGE')
+    expect(requireSource).toContain('loadAcceptedIdentityStatus')
+    expect(requireSource).not.toContain('canUseMessaging')
   })
 
-  it('profile page loads recipient entitlements and does not use user_metadata', () => {
+  it('profile page loads identity decisions and does not use user_metadata', () => {
     const source = readFileSync(
       join(__dirname, '../app/(club)/members/[id]/page.tsx'),
       'utf8'
     )
-    expect(source).toContain('loadMemberEntitlementsForUserId')
-    expect(source).toContain('senderCanMessage')
-    expect(source).toContain('recipientCanMessage')
+    expect(source).not.toContain('loadMemberEntitlementsForUserId')
+    expect(source).toContain('senderIdentity')
+    expect(source).toContain('recipientIdentity')
+    expect(source).toContain('loadAcceptedIdentityStatus')
     expect(source).not.toContain('user_metadata')
   })
 

@@ -2,6 +2,7 @@
 
 import { requestMemberIntro } from '@/app/(club)/members/intro-actions'
 import MemberProfileMessageForm from '@/components/members/member-profile-message-form'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 
 /**
  * Profile-page messaging panel. Recipient id is always the prop from the
@@ -10,21 +11,21 @@ import MemberProfileMessageForm from '@/components/members/member-profile-messag
 export default function MemberProfileMessagePanel({
   targetMemberId,
   firstName,
-  senderCanMessage,
-  recipientCanMessage,
+  senderIdentity,
+  recipientIdentity,
   isSelf = false,
 }: {
   targetMemberId: string
   firstName: string
-  senderCanMessage: boolean
-  recipientCanMessage: boolean
+  senderIdentity: AcceptedIdentityStatus
+  recipientIdentity: AcceptedIdentityStatus
   isSelf?: boolean
 }) {
   return (
     <MemberProfileMessageForm
       firstName={firstName}
-      senderCanMessage={senderCanMessage}
-      recipientCanMessage={recipientCanMessage}
+      senderIdentity={senderIdentity}
+      recipientIdentity={recipientIdentity}
       isSelf={isSelf}
       onSend={(body) => requestMemberIntro(targetMemberId, body)}
     />

@@ -64,6 +64,7 @@ export type DirectoryMember = {
   discovery_industry: string | null
   public_intents: MemberPublicIntentValue[]
   verification_state: VerificationState
+  publicIdentity?: 'verified' | 'unverified' | 'unavailable'
   membership_tier: MembershipTierKey
   vendor_reviewed_badge: boolean
   recognitionBadges?: PublicRecognitionBadge[]
@@ -343,7 +344,13 @@ export function filterDirectoryMembers(
       return false
     }
 
-    if (filters.verifiedOnly && !isMemberPubliclyVerified(member.verification_state)) {
+    if (
+      filters.verifiedOnly &&
+      !isMemberPubliclyVerified(
+        member.verification_state,
+        member.publicIdentity ?? 'unavailable'
+      )
+    ) {
       return false
     }
 

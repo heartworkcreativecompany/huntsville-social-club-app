@@ -1,3 +1,8 @@
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
+import {
+  IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE,
+  IDENTITY_REQUIRED_BEFORE_MESSAGING,
+} from '@/lib/identity-verification'
 import { MUTUAL_MESSAGING_REQUIRED_MESSAGE } from '@/lib/membership-entitlements'
 
 /**
@@ -35,16 +40,26 @@ export function resolveProfileMessageRecipientId(routeMemberId: string): string 
 export type ProfileMessagingUiMode =
   | 'hidden'
   | 'composer'
-  | 'upgrade'
+  | 'identity_required'
+  | 'identity_unavailable'
   | 'unavailable'
 
 export function profileMessagingUiMode(input: {
   isSelf: boolean
-  senderCanMessage: boolean
-  recipientCanMessage: boolean
+  senderIdentity: AcceptedIdentityStatus
+  recipientIdentity: AcceptedIdentityStatus
 }): ProfileMessagingUiMode {
   if (input.isSelf) return 'hidden'
-  if (!input.senderCanMessage) return 'hidden'
-  if (!input.recipientCanMessage) return 'unavailable'
+  if (
+    input.senderIdentity === 'unavailable' ||
+    input.recipientIdentity === 'unavailable'
+  ) {
+    return 'identity_unavailable'
+  }
+  if (input.senderIdentity !== 'verified') return 'identity_required'
+  if (input.recipientIdentity !== 'verified') return 'unavailable'
   return 'composer'
 }
+
+export const PROFILE_IDENTITY_REQUIRED_COPY = IDENTITY_REQUIRED_BEFORE_MESSAGING
+export const PROFILE_IDENTITY_UNAVAILABLE_COPY = IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE

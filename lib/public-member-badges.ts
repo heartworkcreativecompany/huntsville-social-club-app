@@ -4,12 +4,15 @@ import {
 } from '@/lib/membership-access-override'
 import {
   currentlyEntitledBillingTier,
+  memberVerifiedTrustBadge,
   membershipTierBadge,
   parseMembershipBilling,
   parsePremiumVerification,
   resolveMembershipTier,
   type DisplayBadge,
   type MembershipTierKey,
+  type PublicIdentityStatus,
+  type VerificationState,
 } from '@/lib/membership-systems'
 import {
   SEEDED_RECOGNITION_BADGES,
@@ -106,8 +109,17 @@ export function visiblePublicMemberBadges(input: {
   role?: string | null
   membership_tier: MembershipTierKey
   recognitionBadges?: PublicRecognitionBadge[] | null
+  verification_state?: VerificationState
+  publicIdentity?: PublicIdentityStatus
 }): DisplayBadge[] {
   const badges: DisplayBadge[] = []
+  if (input.verification_state && input.publicIdentity) {
+    const verified = memberVerifiedTrustBadge(
+      input.verification_state,
+      input.publicIdentity
+    )
+    if (verified) badges.push(verified)
+  }
   const staffLabel = publicStaffRoleLabel(input.role)
   if (staffLabel) {
     badges.push({

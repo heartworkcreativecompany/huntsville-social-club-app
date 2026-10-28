@@ -136,7 +136,7 @@ describe('membership approval no longer writes identity', () => {
 })
 
 describe('migration boundaries', () => {
-  it('keeps in-person evidence out of Stripe columns and messaging policies', () => {
+  it('keeps the original migration from rewriting messaging and wires later checks to the resolver', () => {
     expect(MIGRATION).toContain('in_person_identity_verifications')
     expect(MIGRATION).toContain('legacy_approval_gates.identity_verified')
     expect(MIGRATION).not.toContain('member_has_paid_messaging')
@@ -145,12 +145,13 @@ describe('migration boundaries', () => {
     expect(PREVIEW).toContain('identity_verification_status is distinct from')
     expect(PREVIEW).toContain('approved_by')
     expect(PREVIEW).toContain('null')
-    expect(MESSAGING).not.toContain('resolveIdentityVerification')
-    expect(MESSAGING).not.toContain('profile_has_accepted_identity')
+    expect(MESSAGING).toContain('loadAcceptedIdentityStatus')
+    expect(MESSAGING).not.toContain('canUseMessaging')
     const publicBadge = BADGES.slice(
-      BADGES.indexOf('export function isMemberPubliclyVerified')
-    ).slice(0, 500)
+      BADGES.indexOf('export function publicVerifiedBadgeReason')
+    ).slice(0, 900)
     expect(publicBadge).toContain('state.email === \'approved\'')
+    expect(publicBadge).toContain('identity !== \'verified\'')
     expect(publicBadge).not.toContain('identity_verification_status')
     expect(publicBadge).not.toContain('in_person')
   })

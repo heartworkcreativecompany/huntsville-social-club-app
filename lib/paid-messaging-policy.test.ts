@@ -54,14 +54,14 @@ function sync(existing: MembershipBilling, input: {
 }
 
 describe('paid messaging entitlement', () => {
-  it('does not treat an approved curated intro as messaging access', async () => {
+  it('does not treat an approved curated intro as a separate messaging grant', async () => {
     const access = await resolveMemberMessagingAccess({} as never, {
       userId: 'member-1',
-      canMessage: false,
+      identityStatus: 'unverified',
       messagingSuspended: false,
       conversationId: 'conversation-1',
     })
-    expect(access.canAccessConversation).toBe(false)
+    expect(access.canAccessConversation).toBe(true)
     expect(access.introOnlyAccess).toBe(false)
     expect(canUseMessaging(
       buildMemberEntitlements({
@@ -523,7 +523,8 @@ describe('curated intro emails', () => {
       'utf8'
     )
     expect(page).not.toContain('notFound(')
-    expect(page).toContain('An active paid membership is required')
+    expect(page).toContain('IDENTITY_REQUIRED_BEFORE_MESSAGING')
+    expect(page).not.toContain('An active paid membership is required')
     expect(page).toContain('Conversation unavailable')
     const email = readFileSync(join(repoRoot, 'lib/curated-intro-email.ts'), 'utf8')
     expect(email).toContain('return `/messages/${conversationId}`')

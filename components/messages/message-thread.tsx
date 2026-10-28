@@ -59,6 +59,7 @@ export default function MessageThread({
   initialBlockState,
   initialReportState,
   messagingSuspended = false,
+  identitySendBlock = null,
   canMarkRead = false,
   status = 'accepted',
   viewerIsInitiator = false,
@@ -71,6 +72,7 @@ export default function MessageThread({
   initialBlockState: ConversationBlockState
   initialReportState: ConversationReportState
   messagingSuspended?: boolean
+  identitySendBlock?: string | null
   canMarkRead?: boolean
   status?: 'pending' | 'accepted' | 'declined'
   viewerIsInitiator?: boolean
@@ -116,9 +118,13 @@ export default function MessageThread({
     recontactStatus === 'awaiting_recipient' && !viewerIsInitiator
   const showRecontactRetry =
     isDeclined && viewerIsInitiator && recontactStatus === 'allowed'
+  const identityBlocksSend = Boolean(identitySendBlock)
+  const canTakeMessagingAction =
+    !isBlocked && !messagingSuspended && !identityBlocksSend
   const composeDisabled =
     isBlocked ||
     messagingSuspended ||
+    identityBlocksSend ||
     isPendingRequest ||
     (isDeclined && !showRecontactRetry) ||
     showRecontactRetry
@@ -361,11 +367,11 @@ export default function MessageThread({
         />
       ) : null}
 
-      {isPendingRequest && !viewerIsInitiator ? (
+      {canTakeMessagingAction && isPendingRequest && !viewerIsInitiator ? (
         <MessageRequestControls conversationId={conversationId} />
       ) : null}
 
-      {showRecontactReconsider ? (
+      {canTakeMessagingAction && showRecontactReconsider ? (
         <RecontactReconsiderControls
           conversationId={conversationId}
           requesterName={otherUserName}
@@ -475,21 +481,23 @@ export default function MessageThread({
       ) : null}
       </div>
 
-      {showRecontactRetry ? (
+      {canTakeMessagingAction && showRecontactRetry ? (
         <RecontactRetryForm
           conversationId={conversationId}
           otherUserName={otherUserName}
         />
       ) : null}
 
-      {showRecontactRequest ? (
+      {canTakeMessagingAction && showRecontactRequest ? (
         <RecontactRequestControls conversationId={conversationId} />
       ) : null}
 
-      {composeDisabled && !showRecontactRetry ? (
+      {composeDisabled && (!showRecontactRetry || !canTakeMessagingAction) ? (
         <div className="shrink-0 border-t border-border px-5 py-4 text-sm text-muted-foreground">
           {messagingSuspended
             ? 'Messaging is suspended on your account.'
+            : identitySendBlock
+              ? identitySendBlock
             : isPendingRequest && !viewerIsInitiator
               ? 'Accept or decline this request to continue.'
               : isPendingRequest

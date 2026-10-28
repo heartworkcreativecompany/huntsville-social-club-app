@@ -51,7 +51,7 @@ describe('isMemberPubliclyVerified', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toBe(true)
 
     expect(
@@ -61,7 +61,7 @@ describe('isMemberPubliclyVerified', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toBe(false)
 
     expect(
@@ -69,7 +69,7 @@ describe('isMemberPubliclyVerified', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toBe(false)
   })
 })
@@ -83,7 +83,7 @@ describe('memberVerifiedTrustBadge', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toEqual({
       key: 'verified',
       label: MEMBER_VERIFIED_BADGE_LABEL,
@@ -94,7 +94,7 @@ describe('memberVerifiedTrustBadge', () => {
       cardVerificationBadges({
         email: 'approved',
         photo_reviewed: 'approved',
-      })
+      }, 'verified')
     ).toEqual([])
   })
 })

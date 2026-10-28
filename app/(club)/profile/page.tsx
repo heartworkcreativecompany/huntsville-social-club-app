@@ -20,6 +20,7 @@ import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
 import MemberPublicDetails from '@/components/members/member-public-details'
 import { buildDirectoryMember } from '@/lib/members-discovery'
 import { photosFromApplicationDraft } from '@/lib/member-photos'
+import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
 import { computeProfileCompletion } from '@/lib/profile-completion'
 import { parseVerificationState } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
@@ -31,6 +32,7 @@ import ProfileSection from '@/components/profile/profile-section'
 import { applicationStatusLabel } from '@/lib/application'
 import { parseProfileRevisionHistory } from '@/lib/profile-revision-history'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { attachPublicRecognitionBadges } from '@/lib/recognition-badges/public'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
@@ -73,7 +75,11 @@ export default async function YourProfilePage() {
   const profilePreview = publicProfileDetailsFromDraft(liveDraft, {
     connectionsOpenTo: profile?.connections_open_to,
   })
-  const completion = computeProfileCompletion(profile, liveDraft)
+  const identityStatus = await loadAcceptedIdentityStatus(
+    createAdminClient(),
+    viewer.userId
+  )
+  const completion = computeProfileCompletion(profile, liveDraft, identityStatus)
 
   const revisionStatus = profileRevisionStatusFromDb(
     profile?.profile_revision_status ?? null
@@ -131,6 +137,7 @@ export default async function YourProfilePage() {
 
   if (currentMember) {
     currentMember.photos = livePhotos
+    currentMember.publicIdentity = identityStatus
   }
   const { summary: compatibilitySummary } = compatibilityContextForViewer(
     viewer,

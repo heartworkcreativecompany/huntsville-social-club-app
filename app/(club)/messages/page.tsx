@@ -2,11 +2,15 @@ import { redirect } from 'next/navigation'
 import MessagingSuspendedNotice from '@/components/messages/messaging-suspended-notice'
 import MessagesInbox from '@/components/messages/messages-inbox'
 import PageHeader from '@/components/ui/page-header'
-import { MessagingPaywall } from '@/components/membership/feature-paywalls'
 import { resolveMemberMessagingAccess } from '@/lib/curated-intro-messaging-access'
+import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
+import {
+  IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE,
+  IDENTITY_REQUIRED_BEFORE_MESSAGING,
+} from '@/lib/identity-verification'
 import { loadInboxPreviews } from '@/lib/member-messages'
-import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -22,29 +26,25 @@ export default async function MessagesPage() {
   }
 
   const messagingSuspended = isMessagingSuspended(viewer.profile)
-  const { entitlements } = await loadMemberEntitlementsForViewer()
+  const identityStatus = await loadAcceptedIdentityStatus(
+    createAdminClient(),
+    viewer.userId
+  )
   const supabase = await createClient()
   const access = await resolveMemberMessagingAccess(supabase, {
     userId: viewer.userId,
-    canMessage: entitlements?.canMessage ?? false,
+    identityStatus,
     messagingSuspended,
     adminModeration: viewer.role === 'admin',
   })
 
-  if (!access.canAccessInbox) {
-    return (
-      <>
-        <PageHeader
-          eyebrow="Inbox"
-          title="Messages"
-          description="An active paid membership is required to read and send messages."
-        />
-        <MessagingPaywall membershipsHref="/upgrade" />
-      </>
-    )
-  }
-
   const { previews, error } = await loadInboxPreviews(supabase, viewer.userId)
+  const identityNotice =
+    identityStatus === 'unavailable'
+      ? IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE
+      : identityStatus === 'verified'
+        ? null
+        : IDENTITY_REQUIRED_BEFORE_MESSAGING
 
   return (
     <>
@@ -52,12 +52,17 @@ export default async function MessagesPage() {
         eyebrow="Inbox"
         title="Messages"
         description={
-          access.adminModeration && !entitlements?.canMessage
-            ? 'Admin moderation view. Your personal membership does not include messaging.'
+          access.adminModeration && identityStatus === 'unavailable'
+            ? 'Admin moderation view. Identity verification could not be confirmed for sending.'
+            : access.adminModeration && identityStatus !== 'verified'
+              ? 'Admin moderation view. Verify your identity before sending your own messages.'
             : 'Message requests and conversations with members you have connected with.'
         }
       />
 
+      {identityNotice ? (
+        <p className="mb-4 text-sm text-muted-foreground">{identityNotice}</p>
+      ) : null}
       {messagingSuspended ? <MessagingSuspendedNotice /> : null}
 
       <MessagesInbox previews={previews} error={error} />

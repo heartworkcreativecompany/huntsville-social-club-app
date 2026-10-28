@@ -618,7 +618,7 @@ describe('public verified badge', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toBe(false)
   })
 })

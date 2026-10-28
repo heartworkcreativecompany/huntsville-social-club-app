@@ -28,6 +28,7 @@ import {
 } from '@/lib/profile-query-fields'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { attachPublicRecognitionBadges } from '@/lib/recognition-badges/public'
+import { attachPublicIdentityDecisions } from '@/lib/identity-verification-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadActiveMembershipAccessOverridesByUserIds } from '@/lib/membership-access-override/admin'
 import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
@@ -120,10 +121,13 @@ export async function loadDirectoryProfiles(
     createAdminClient(),
     rows.map((profile) => profile.id)
   )
-  const members = await attachPublicRecognitionBadges(
-    supabase,
-    rows.map((profile) =>
-      finalizeMember(profile, isAdmin, overrides.get(profile.id) ?? null)
+  const members = await attachPublicIdentityDecisions(
+    createAdminClient(),
+    await attachPublicRecognitionBadges(
+      supabase,
+      rows.map((profile) =>
+        finalizeMember(profile, isAdmin, overrides.get(profile.id) ?? null)
+      )
     )
   )
 
@@ -263,10 +267,13 @@ async function hydrateDirectoryPage(
     createAdminClient(),
     ordered.map((row) => row.id)
   )
-  const members = await attachPublicRecognitionBadges(
-    supabase,
-    ordered.map((row) =>
-      finalizeMember(row, isAdmin, overrides.get(row.id) ?? null)
+  const members = await attachPublicIdentityDecisions(
+    createAdminClient(),
+    await attachPublicRecognitionBadges(
+      supabase,
+      ordered.map((row) =>
+        finalizeMember(row, isAdmin, overrides.get(row.id) ?? null)
+      )
     )
   )
   return { members, error: null }
@@ -395,9 +402,12 @@ export async function loadMemberProfile(
     createAdminClient(),
     [profile.id]
   )
-  const [member] = await attachPublicRecognitionBadges(supabase, [
-    finalizeMember(profile, isAdmin, overrides.get(profile.id) ?? null),
-  ])
+  const [member] = await attachPublicIdentityDecisions(
+    createAdminClient(),
+    await attachPublicRecognitionBadges(supabase, [
+      finalizeMember(profile, isAdmin, overrides.get(profile.id) ?? null),
+    ])
+  )
 
   return {
     member,

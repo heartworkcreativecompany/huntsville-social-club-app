@@ -28,7 +28,9 @@ import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements
 import { loadMemberNotifications } from '@/lib/load-member-notifications'
 import { loadUpcomingEventsPreview } from '@/lib/load-upcoming-events'
 import { loadRecentMessagePreviews } from '@/lib/member-messages'
+import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
 import { computeProfileCompletion } from '@/lib/profile-completion'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -64,7 +66,15 @@ export default async function DashboardPage() {
   const canLoadFriendshipRecommendations = friendsView.loadRecommendations
 
   const liveDraft = mergeProfileIntoDraft(viewer.profile)
-  const completion = computeProfileCompletion(viewer.profile, liveDraft)
+  const identityStatus = await loadAcceptedIdentityStatus(
+    createAdminClient(),
+    viewer.userId
+  )
+  const completion = computeProfileCompletion(
+    viewer.profile,
+    liveDraft,
+    identityStatus
+  )
   const actionNeededCards = buildDashboardActionNeeded({
     datingStatus: datingContext.summary.status,
     friendshipStatus: friendshipContext.access.status,

@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -185,6 +186,11 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
     case 'identity.verification_session.canceled': {
       const session = event.data.object as Stripe.Identity.VerificationSession
       await applyIdentityVerificationSession(admin, session)
+      revalidatePath('/members')
+      revalidatePath('/messages')
+      revalidatePath('/profile')
+      revalidatePath('/dashboard')
+      revalidatePath('/application/status')
       return
     }
 

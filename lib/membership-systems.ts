@@ -180,24 +180,29 @@ function badgeVariantForStatus(
 /** Public verification badges for member-facing UI (single combined badge only). */
 export function publicVerificationBadges(
   state: VerificationState,
+  identity: PublicIdentityStatus,
   _options?: { maxCount?: number; includePending?: boolean }
 ): DisplayBadge[] {
-  const badge = memberVerifiedTrustBadge(state)
+  const badge = memberVerifiedTrustBadge(state, identity)
   return badge ? [badge] : []
 }
 
 /** Card-level badges — single verified badge when fully verified. */
-export function cardVerificationBadges(state: VerificationState): DisplayBadge[] {
-  return publicVerificationBadges(state)
+export function cardVerificationBadges(
+  state: VerificationState,
+  identity: PublicIdentityStatus
+): DisplayBadge[] {
+  return publicVerificationBadges(state, identity)
 }
 
 export const MEMBER_VERIFIED_BADGE_LABEL = 'Verified'
 
-/** Single public trust badge when all verification requirements are met. */
+/** Single public trust badge when profile checks and accepted identity are met. */
 export function memberVerifiedTrustBadge(
-  state: VerificationState
+  state: VerificationState,
+  identity: PublicIdentityStatus
 ): DisplayBadge | null {
-  if (!isMemberPubliclyVerified(state)) return null
+  if (!isMemberPubliclyVerified(state, identity)) return null
   return {
     key: 'verified',
     label: MEMBER_VERIFIED_BADGE_LABEL,
@@ -681,10 +686,9 @@ export function identityVerificationDisplayLabel(
 /**
  * Display state on the application status page.
  * Stripe success, an active in-person record, or the legacy identity-step
- * gate hides the Stripe call to action. The gate fallback stays until the
- * legacy backfill so those members are not asked to repeat Stripe.
- * Messaging and the public badge must use resolveIdentityVerification,
- * which does not treat the gate as identity evidence.
+ * gate hides the Stripe call to action so a member is not asked to repeat
+ * Stripe. This display is not identity evidence. Messaging and the public
+ * badge use resolveIdentityVerification, which ignores the gate.
  */
 export function identityVerificationRowState(
   stripeStatus: string | null | undefined,
@@ -1276,18 +1280,44 @@ export function discoveryColumnsFromDraft(draft: ApplicationDraft) {
   }
 }
 
-export function isMemberPubliclyVerified(state: VerificationState): boolean {
-  return (
+export type PublicIdentityStatus = 'verified' | 'unverified' | 'unavailable'
+
+export type PublicVerifiedBadgeReason =
+  | 'shown'
+  | 'hidden_profile_requirements'
+  | 'hidden_identity_unverified'
+  | 'hidden_identity_unavailable'
+
+/**
+ * Public verified badge. Identity must already be resolved by
+ * resolveIdentityVerification. An unavailable lookup is not shown as
+ * unverified, and it does not display the badge.
+ */
+export function publicVerifiedBadgeReason(
+  state: VerificationState,
+  identity: PublicIdentityStatus
+): PublicVerifiedBadgeReason {
+  if (identity === 'unavailable') return 'hidden_identity_unavailable'
+  const profileChecks =
     state.email === 'approved' &&
     state.phone === 'approved' &&
     state.profile_reviewed === 'approved' &&
     state.photo_reviewed === 'approved' &&
     state.locality === 'approved'
-  )
+  if (!profileChecks) return 'hidden_profile_requirements'
+  if (identity !== 'verified') return 'hidden_identity_unverified'
+  return 'shown'
+}
+
+export function isMemberPubliclyVerified(
+  state: VerificationState,
+  identity: PublicIdentityStatus
+): boolean {
+  return publicVerifiedBadgeReason(state, identity) === 'shown'
 }
 
 export const PUBLIC_VERIFIED_BADGE_SUMMARY =
-  'Verified members have confirmed email and phone, staff-reviewed application and photos, and confirmed locality.'
+  'Verified members have confirmed email and phone, staff-reviewed application and photos, confirmed locality, and verified identity.'
 
 export function applicantStatusSummary(status: ApplicationStatus): string {
   return applicationStatusLabel(status)

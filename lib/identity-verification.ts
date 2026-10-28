@@ -22,13 +22,29 @@ export type IdentityVerificationResolution = {
   methods: IdentityVerificationMethod[]
 }
 
+/** Lookup succeeded and produced a yes/no answer, or the lookup itself failed. */
+export type AcceptedIdentityStatus = 'verified' | 'unverified' | 'unavailable'
+
+export type InPersonIdentityLookup =
+  | { ok: true; record: InPersonIdentityRecord | null }
+  | { ok: false }
+
+export const IDENTITY_REQUIRED_BEFORE_MESSAGING =
+  'Verify your identity before sending messages.' as const
+
+export const IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE =
+  'Identity verification could not be confirmed. Try again before sending.' as const
+
+export const IDENTITY_MUTUAL_MESSAGE =
+  'Messaging is available when both members have verified identity.' as const
+
 export type InPersonIdentityRecord = {
   status: 'verified' | 'revoked'
   revokedAt: string | null
 }
 
 /**
- * Accepted identity evidence for a future messaging and badge check.
+ * Accepted identity evidence.
  * Stripe success and an active in-person record are both sufficient.
  * Payment, role, founder status, complimentary access, and the legacy
  * approval gate are intentionally ignored.
@@ -57,6 +73,41 @@ export function resolveIdentityVerification(input: {
     methods.push('in_person')
   }
   return { verified: methods.length > 0, methods }
+}
+
+/**
+ * Absent in-person evidence is unverified. A failed lookup is unavailable
+ * and must not be treated as a successful unverified result.
+ * Stripe evidence is used only after the in-person lookup succeeds.
+ */
+export function acceptedIdentityStatus(input: {
+  stripeStatus?: string | null
+  inPersonLookup: InPersonIdentityLookup
+  billingTier?: string | null
+  complimentary?: boolean
+  role?: string | null
+  founder?: boolean
+  approvalGateIdentity?: string | null
+}): AcceptedIdentityStatus {
+  if (!input.inPersonLookup.ok) return 'unavailable'
+  const resolved = resolveIdentityVerification({
+    stripeStatus: input.stripeStatus,
+    inPerson: input.inPersonLookup.record,
+    billingTier: input.billingTier,
+    complimentary: input.complimentary,
+    role: input.role,
+    founder: input.founder,
+    approvalGateIdentity: input.approvalGateIdentity,
+  })
+  return resolved.verified ? 'verified' : 'unverified'
+}
+
+export function classifyInPersonLookup(input: {
+  error: { message?: string } | null
+  record: InPersonIdentityRecord | null
+}): InPersonIdentityLookup {
+  if (input.error) return { ok: false }
+  return { ok: true, record: input.record }
 }
 
 export function refuseLegacyIdentityGateUpdate(

@@ -25,15 +25,18 @@ describe('conversation scrolling', () => {
     expect(thread).toContain("document.visibilityState === 'visible'")
     expect(messages).toContain(".order('created_at', { ascending: true })")
     expect(page).toContain('key={thread.conversationId}')
-    expect(page).toContain('canMarkRead={Boolean(entitlements?.canMessage)}')
+    expect(page).toContain("canMarkRead={identityStatus === 'verified'}")
     expect(page).not.toContain('markConversationMessagesRead')
-    expect(page).toContain('adminModeration: viewer.role === \'admin\'')
+    expect(page).toContain('loadConversationThread')
+    expect(page).not.toContain('!access.canAccessConversation')
+    const inbox = source('app/(club)/messages/page.tsx')
+    expect(inbox).toContain("adminModeration: viewer.role === 'admin'")
   })
 
-  it('marks a conversation read only through the paid messaging gate', () => {
+  it('marks a conversation read only after accepted identity', () => {
     const actions = source('app/(club)/messages/actions.ts')
     expect(actions).toContain('export async function markVisibleConversationRead')
-    expect(actions).toContain('if (!entitlements?.canMessage)')
+    expect(actions).toContain("if (identity !== 'verified')")
     expect(actions).toContain('markConversationMessagesRead')
   })
 })

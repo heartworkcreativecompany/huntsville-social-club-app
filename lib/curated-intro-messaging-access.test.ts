@@ -14,7 +14,7 @@ describe('resolveMemberMessagingAccess', () => {
 
     const access = await resolveMemberMessagingAccess(supabase, {
       userId: 'user-1',
-      canMessage: true,
+      identityStatus: 'verified',
       messagingSuspended: false,
     })
 
@@ -26,7 +26,7 @@ describe('resolveMemberMessagingAccess', () => {
     })
   })
 
-  it('does not grant inbox access from a curated intro or an old conversation', async () => {
+  it('keeps history readable when identity or suspension blocks sending', async () => {
     const supabase = {
       from: () => {
         throw new Error('should not query intro exceptions')
@@ -35,14 +35,14 @@ describe('resolveMemberMessagingAccess', () => {
 
     const access = await resolveMemberMessagingAccess(supabase, {
       userId: 'user-1',
-      canMessage: false,
+      identityStatus: 'unverified',
       messagingSuspended: true,
       conversationId: 'conversation-1',
     })
 
     expect(access).toEqual({
-      canAccessInbox: false,
-      canAccessConversation: false,
+      canAccessInbox: true,
+      canAccessConversation: true,
       introOnlyAccess: false,
       adminModeration: false,
     })
@@ -57,7 +57,7 @@ describe('resolveMemberMessagingAccess', () => {
 
     const access = await resolveMemberMessagingAccess(supabase, {
       userId: 'admin-1',
-      canMessage: false,
+      identityStatus: 'unverified',
       messagingSuspended: false,
       adminModeration: true,
       conversationId: 'conversation-1',

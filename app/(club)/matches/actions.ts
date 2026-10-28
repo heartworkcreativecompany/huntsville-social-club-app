@@ -3,15 +3,32 @@
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import { isDevRecommendationSeedAllowed, seedDevCuratedRecommendationsForUser } from '@/lib/compatibility/seed-dev-recommendations'
 import { sendMessageRequest } from '@/app/(club)/messages/actions'
+import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { messagingUpgradeMessage } from '@/lib/membership-entitlements'
 import { assertMessagingAllowed } from '@/lib/require-messaging'
 import { createClient } from '@/lib/supabase/server'
+
+async function assertCuratedMatchMessaging() {
+  const gate = await assertMessagingAllowed()
+  if (!gate.ok) return gate
+
+  const { entitlements } = await loadMemberEntitlementsForViewer()
+  if (!entitlements?.canMessage) {
+    return {
+      ok: false as const,
+      error: messagingUpgradeMessage(entitlements?.billingProductTier ?? 'member'),
+    }
+  }
+
+  return gate
+}
 
 export async function seedDevMatchRecommendations() {
   if (!isDevRecommendationSeedAllowed()) {
     return { error: 'Dev seeding is only available in local development.' }
   }
 
-  const gate = await assertMessagingAllowed()
+  const gate = await assertCuratedMatchMessaging()
   if (!gate.ok) {
     return { error: gate.error }
   }
@@ -41,7 +58,7 @@ export async function requestCuratedMatchIntro(
   recommendationId: string,
   body: string
 ) {
-  const gate = await assertMessagingAllowed()
+  const gate = await assertCuratedMatchMessaging()
   if (!gate.ok) {
     return { error: gate.error }
   }
@@ -93,7 +110,7 @@ export async function requestCuratedMatchIntro(
 }
 
 export async function passCuratedRecommendation(recommendationId: string) {
-  const gate = await assertMessagingAllowed()
+  const gate = await assertCuratedMatchMessaging()
   if (!gate.ok) {
     return { error: gate.error }
   }
