@@ -1468,6 +1468,14 @@ export interface Database {
         Args: { check_user_id: string }
         Returns: boolean
       }
+      record_in_person_identity_verification: {
+        Args: { target_profile_id: string; confirmed: boolean }
+        Returns: Json
+      }
+      revoke_in_person_identity_verification: {
+        Args: { target_profile_id: string; reason: string }
+        Returns: Json
+      }
       apply_membership_billing_sync: {
         Args: {
           p_user_id: string

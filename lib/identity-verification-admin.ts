@@ -2,11 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import {
   acceptedIdentityStatus,
-  IN_PERSON_IDENTITY_METHOD,
   type AcceptedIdentityStatus,
   type InPersonIdentitySource,
 } from '@/lib/identity-verification'
-import { logModerationAction } from '@/lib/moderation-actions'
 
 export const IN_PERSON_IDENTITY_NOT_AUTHORIZED =
   'Administrator access required.' as const
@@ -77,14 +75,6 @@ export function adminIdentitySourceLabels(input: {
   return sources
 }
 
-function normalizeNote(note: string | null | undefined): string | null {
-  const trimmed = note?.trim() ?? ''
-  if (!trimmed) return null
-  return trimmed.length > NOTE_MAX_LENGTH
-    ? trimmed.slice(0, NOTE_MAX_LENGTH)
-    : trimmed
-}
-
 function isMissingRelation(error: { code?: string; message?: string } | null) {
   if (!error) return false
   if (error.code === '42P01' || error.code === '42703') return true
@@ -131,80 +121,74 @@ export async function loadActiveInPersonIdentity(
   }
 }
 
-export async function approveInPersonIdentity(
-  admin: AdminClient,
-  input: {
-    isAdmin: boolean
-    actorId: string
-    profileId: string
-    note?: string | null
+function identityRpcError(
+  message: string,
+  fallback: string
+): string {
+  if (
+    message.includes('Administrator access required') ||
+    message.includes('authentication required')
+  ) {
+    return IN_PERSON_IDENTITY_NOT_AUTHORIZED
   }
+  if (message.includes('Confirm the in-person identity check')) {
+    return 'Confirm the in-person identity check before recording it.'
+  }
+  if (message.includes('Member not found')) return 'Member not found.'
+  if (message.includes('No in-person identity verification is active')) {
+    return 'No in-person identity verification is active.'
+  }
+  if (message.includes('A revocation reason is required')) {
+    return 'A revocation reason is required.'
+  }
+  if (message.includes('280 characters')) {
+    return 'Keep the revocation reason to 280 characters.'
+  }
+  if (message.includes('document numbers')) {
+    return 'Do not include document numbers or biometric data.'
+  }
+  return fallback
+}
+
+function alreadyVerifiedResult(data: unknown): boolean {
+  if (!data || typeof data !== 'object' || !('already_verified' in data)) {
+    return false
+  }
+  return (data as { already_verified?: unknown }).already_verified === true
+}
+
+export async function approveInPersonIdentity(
+  supabase: AdminClient,
+  input: { profileId: string; confirmed: boolean }
 ): Promise<
   | { ok: true; alreadyVerified: boolean }
   | { ok: false; error: string }
 > {
-  if (!input.isAdmin) {
-    return { ok: false, error: IN_PERSON_IDENTITY_NOT_AUTHORIZED }
-  }
-  if (!input.actorId || !input.profileId) {
-    return { ok: false, error: IN_PERSON_IDENTITY_NOT_AUTHORIZED }
-  }
-
-  const existing = await loadActiveInPersonIdentity(admin, input.profileId)
-  if (existing) {
-    // A repeat does not create another active row and does not backfill a
-    // missing audit. Reconciling that gap is a separate moderation insert.
-    return { ok: true, alreadyVerified: true }
-  }
-
-  const note = normalizeNote(input.note)
-  if (note && inPersonTextContainsDocumentData(note)) {
+  if (input.confirmed !== true) {
     return {
       ok: false,
-      error: 'Do not store document numbers or biometric data in the note.',
+      error: 'Confirm the in-person identity check before recording it.',
     }
   }
+  if (!input.profileId) return { ok: false, error: 'Member not found.' }
 
-  const approvedAt = new Date().toISOString()
-  const { data, error } = await admin
-    .from('in_person_identity_verifications')
-    .insert({
-      profile_id: input.profileId,
-      method: IN_PERSON_IDENTITY_METHOD,
-      status: 'verified',
-      source: 'admin_action',
-      approved_by: input.actorId,
-      approved_at: approvedAt,
-      reconciled_at: null,
-      note,
-    })
-    .select('id')
-    .single()
-
-  if (error || !data) {
-    if (error?.code === '23505') {
-      return { ok: true, alreadyVerified: true }
+  const { data, error } = await supabase.rpc(
+    'record_in_person_identity_verification',
+    {
+      target_profile_id: input.profileId,
+      confirmed: true,
     }
-    return { ok: false, error: 'Could not record in-person identity verification.' }
+  )
+  if (error) {
+    return {
+      ok: false,
+      error: identityRpcError(
+        error.message,
+        'Could not record in-person identity verification.'
+      ),
+    }
   }
-
-  const audit = await logModerationAction(admin, {
-    actorId: input.actorId,
-    targetMemberId: input.profileId,
-    actionType: 'in_person_identity_verified',
-    sourceType: 'in_person_identity_verification',
-    sourceId: data.id,
-    details: JSON.stringify({
-      method: IN_PERSON_IDENTITY_METHOD,
-      source: 'admin_action',
-    }),
-    tolerateMissingTable: false,
-  })
-  if (!audit.ok) {
-    return { ok: false, error: 'In-person verification was saved, but the audit record failed.' }
-  }
-
-  return { ok: true, alreadyVerified: false }
+  return { ok: true, alreadyVerified: alreadyVerifiedResult(data) }
 }
 
 export function revocationReasonError(reason: string | null | undefined): string | null {
@@ -220,60 +204,29 @@ export function revocationReasonError(reason: string | null | undefined): string
 }
 
 export async function revokeInPersonIdentity(
-  admin: AdminClient,
-  input: {
-    isAdmin: boolean
-    actorId: string
-    profileId: string
-    reason: string
-  }
+  supabase: AdminClient,
+  input: { profileId: string; reason: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!input.isAdmin) {
-    return { ok: false, error: IN_PERSON_IDENTITY_NOT_AUTHORIZED }
-  }
-  if (!input.actorId || !input.profileId) {
-    return { ok: false, error: IN_PERSON_IDENTITY_NOT_AUTHORIZED }
-  }
   const reasonError = revocationReasonError(input.reason)
   if (reasonError) return { ok: false, error: reasonError }
-  const reason = input.reason.trim()
+  if (!input.profileId) return { ok: false, error: 'Member not found.' }
 
-  const existing = await loadActiveInPersonIdentity(admin, input.profileId)
-  if (!existing) {
-    return { ok: false, error: 'No in-person identity verification is active.' }
+  const { error } = await supabase.rpc(
+    'revoke_in_person_identity_verification',
+    {
+      target_profile_id: input.profileId,
+      reason: input.reason.trim(),
+    }
+  )
+  if (error) {
+    return {
+      ok: false,
+      error: identityRpcError(
+        error.message,
+        'Could not revoke in-person identity verification.'
+      ),
+    }
   }
-
-  const revokedAt = new Date().toISOString()
-  const { data, error } = await admin
-    .from('in_person_identity_verifications')
-    .update({
-      status: 'revoked',
-      revoked_at: revokedAt,
-      revoked_by: input.actorId,
-    })
-    .eq('id', existing.id)
-    .is('revoked_at', null)
-    .select('id')
-    .maybeSingle()
-
-  if (error || !data) {
-    return { ok: false, error: 'Could not revoke in-person identity verification.' }
-  }
-
-  const audit = await logModerationAction(admin, {
-    actorId: input.actorId,
-    targetMemberId: input.profileId,
-    actionType: 'in_person_identity_revoked',
-    sourceType: 'in_person_identity_verification',
-    sourceId: existing.id,
-    reason,
-    details: JSON.stringify({ method: IN_PERSON_IDENTITY_METHOD }),
-    tolerateMissingTable: false,
-  })
-  if (!audit.ok) {
-    return { ok: false, error: 'In-person verification was revoked, but the audit record failed.' }
-  }
-
   return { ok: true }
 }
 

@@ -19,6 +19,9 @@ const authState: {
 }
 
 const adminClient = vi.fn()
+const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = []
+let rpcError: { message: string } | null = null
+let rpcData: unknown = { id: 'row-1', already_verified: false }
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
@@ -35,6 +38,10 @@ vi.mock('@/lib/supabase/server', () => ({
         }),
       }),
     }),
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ fn, args })
+      return { data: rpcError ? null : rpcData, error: rpcError }
+    },
   }),
 }))
 
@@ -93,23 +100,15 @@ function createClient(results: Record<string, QueryResult[]>) {
   }
 }
 
-const activeRow = {
-  id: 'row-1',
-  source: 'admin_action',
-  approved_by: 'admin-session',
-  approved_at: '2026-10-01T00:00:00.000Z',
-  reconciled_at: null,
-  note: null,
-  status: 'verified',
-  revoked_at: null,
-}
-
 describe('in-person identity server actions', () => {
   beforeEach(() => {
     authState.user = { id: 'admin-session' }
     authState.role = 'admin'
     adminClient.mockReset()
     revalidatePath.mockReset()
+    rpcCalls.length = 0
+    rpcError = null
+    rpcData = { id: 'row-1', already_verified: false }
   })
 
   it('denies a signed-out caller before any write', async () => {
@@ -141,14 +140,9 @@ describe('in-person identity server actions', () => {
     expect(adminClient).not.toHaveBeenCalled()
   })
 
-  it('records with the session admin and ignores an unconfirmed request', async () => {
+  it('records through the session client and ignores an unconfirmed request', async () => {
     const { client, calls } = createClient({
       profiles: [{ data: { id: 'member-2' }, error: null }],
-      in_person_identity_verifications: [
-        { data: null, error: null },
-        { data: { id: 'row-1' }, error: null },
-      ],
-      moderation_actions: [{ data: null, error: null }],
     })
     adminClient.mockReturnValue(client)
     const { approveInPersonIdentityVerification } = await import(
@@ -161,27 +155,41 @@ describe('in-person identity server actions', () => {
       error: 'Confirm the in-person identity check before recording it.',
     })
     expect(calls).toHaveLength(0)
+    expect(rpcCalls).toHaveLength(0)
 
     const result = await approveInPersonIdentityVerification('member-2', true)
     expect(result).toEqual({ success: true, alreadyVerified: false })
-    const insert = calls
-      .filter((call) => call.table === 'in_person_identity_verifications')
-      .flatMap((call) => call.inserts)[0] as Record<string, unknown>
-    expect(insert.approved_by).toBe('admin-session')
-    expect(insert.note).toBeNull()
-    expect(insert).not.toHaveProperty('application_status')
-    expect(insert).not.toHaveProperty('messaging_suspended_at')
+    expect(rpcCalls).toEqual([
+      {
+        fn: 'record_in_person_identity_verification',
+        args: { target_profile_id: 'member-2', confirmed: true },
+      },
+    ])
+    expect(rpcCalls[0]?.args).not.toHaveProperty('actor_id')
+    expect(rpcCalls[0]?.args).not.toHaveProperty('approved_by')
     expect(revalidatePath).toHaveBeenCalledWith('/admin/users/member-2')
   })
 
-  it('revokes with the session admin and keeps the row', async () => {
+  it('does not refresh when the atomic write fails', async () => {
+    const { client } = createClient({
+      profiles: [{ data: { id: 'member-2' }, error: null }],
+    })
+    adminClient.mockReturnValue(client)
+    rpcError = { message: 'forced audit failure' }
+    const { approveInPersonIdentityVerification } = await import(
+      '@/app/(club)/admin/applications/identity-actions'
+    )
+    await expect(
+      approveInPersonIdentityVerification('member-2', true)
+    ).resolves.toEqual({
+      error: 'Could not record in-person identity verification.',
+    })
+    expect(revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('revokes through the session client without an actor argument', async () => {
     const { client, calls } = createClient({
       profiles: [{ data: { id: 'member-2' }, error: null }],
-      in_person_identity_verifications: [
-        { data: activeRow, error: null },
-        { data: { id: 'row-1' }, error: null },
-      ],
-      moderation_actions: [{ data: null, error: null }],
     })
     adminClient.mockReturnValue(client)
     const { revokeInPersonIdentityVerification } = await import(
@@ -192,26 +200,24 @@ describe('in-person identity server actions', () => {
       revokeInPersonIdentityVerification('member-2', '   ')
     ).resolves.toEqual({ error: 'A revocation reason is required.' })
     expect(calls).toHaveLength(0)
+    expect(rpcCalls).toHaveLength(0)
 
     const result = await revokeInPersonIdentityVerification(
       'member-2',
       'Wrong member was checked.'
     )
     expect(result).toEqual({ success: true })
-    const update = calls.find(
-      (call) =>
-        call.table === 'in_person_identity_verifications' &&
-        call.updates.length > 0
-    )?.updates[0] as Record<string, unknown>
-    expect(update).toMatchObject({
-      status: 'revoked',
-      revoked_by: 'admin-session',
-    })
-    const audit = calls.find((call) => call.table === 'moderation_actions')
-      ?.inserts[0] as Record<string, unknown>
-    expect(audit.actor_id).toBe('admin-session')
-    expect(audit.reason).toBe('Wrong member was checked.')
-    expect(calls.some((call) => call.inserts.length > 0 && call.table === 'in_person_identity_verifications')).toBe(false)
+    expect(rpcCalls).toEqual([
+      {
+        fn: 'revoke_in_person_identity_verification',
+        args: {
+          target_profile_id: 'member-2',
+          reason: 'Wrong member was checked.',
+        },
+      },
+    ])
+    expect(rpcCalls[0]?.args).not.toHaveProperty('actor_id')
+    expect(revalidatePath).toHaveBeenCalledWith('/admin/users/member-2')
   })
 
   it('does not record a missing member', async () => {

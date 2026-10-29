@@ -10,8 +10,9 @@ import {
   revokeInPersonIdentity,
 } from '@/lib/identity-verification-admin'
 
-async function requireAdminActor() {
-  const supabase = await createClient()
+async function requireAdminActor(
+  supabase: Awaited<ReturnType<typeof createClient>>
+) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -54,7 +55,8 @@ export async function approveInPersonIdentityVerification(
   profileId: string,
   confirmed: boolean
 ) {
-  const actorId = await requireAdminActor()
+  const supabase = await createClient()
+  const actorId = await requireAdminActor(supabase)
   if (!actorId) {
     return { error: 'Administrator access required.' }
   }
@@ -67,10 +69,9 @@ export async function approveInPersonIdentityVerification(
   const target = await requireTargetMember(profileId)
   if (target.error) return { error: target.error }
 
-  const result = await approveInPersonIdentity(requireAdminClient(), {
-    isAdmin: true,
-    actorId,
+  const result = await approveInPersonIdentity(supabase, {
     profileId,
+    confirmed: true,
   })
   if (!result.ok) return { error: result.error }
 
@@ -82,7 +83,8 @@ export async function revokeInPersonIdentityVerification(
   profileId: string,
   reason: string
 ) {
-  const actorId = await requireAdminActor()
+  const supabase = await createClient()
+  const actorId = await requireAdminActor(supabase)
   if (!actorId) {
     return { error: 'Administrator access required.' }
   }
@@ -92,9 +94,7 @@ export async function revokeInPersonIdentityVerification(
   const target = await requireTargetMember(profileId)
   if (target.error) return { error: target.error }
 
-  const result = await revokeInPersonIdentity(requireAdminClient(), {
-    isAdmin: true,
-    actorId,
+  const result = await revokeInPersonIdentity(supabase, {
     profileId,
     reason,
   })
