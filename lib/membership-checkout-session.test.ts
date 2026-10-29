@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { STRIPE_LIVE_PRICE_IDS } from '@/lib/stripe/config'
+import { NEW_PURCHASE_STRIPE_PRICE_IDS } from '@/lib/circle-benefit-packages'
+import { PRICING_PLANS } from '@/lib/membership-pricing-copy'
 
 const { stripeState, viewerState } = vi.hoisted(() => ({
   stripeState: {
@@ -108,9 +109,10 @@ describe('retained membership checkout', () => {
     }
     expect(params.mode).toBe('subscription')
     expect(params.line_items).toEqual([
-      { price: STRIPE_LIVE_PRICE_IDS.inner_circle, quantity: 1 },
+      { price: NEW_PURCHASE_STRIPE_PRICE_IDS.inner_circle, quantity: 1 },
     ])
-    expect(params.line_items[0].price).toBe('price_1TqimnBei7W40myBUKESC7wF')
+    expect(params.line_items[0].price).toBe('price_1UVhbLBei7W40myBUHWYhB73')
+    expect(PRICING_PLANS.inner_circle.price).toBe('$15.99/month')
     expect(params.metadata.product_tier).toBe('inner_circle')
   })
 
@@ -126,9 +128,10 @@ describe('retained membership checkout', () => {
     }
     expect(params.mode).toBe('subscription')
     expect(params.line_items).toEqual([
-      { price: STRIPE_LIVE_PRICE_IDS.elite_circle, quantity: 1 },
+      { price: NEW_PURCHASE_STRIPE_PRICE_IDS.elite_circle, quantity: 1 },
     ])
-    expect(params.line_items[0].price).toBe('price_1TqimyBei7W40myBRnke6fQF')
+    expect(params.line_items[0].price).toBe('price_1UVhbmBei7W40myBlYFYFFZy')
+    expect(PRICING_PLANS.elite_circle.price).toBe('$39.99/month')
     expect(params.metadata.product_tier).toBe('elite_circle')
   })
 

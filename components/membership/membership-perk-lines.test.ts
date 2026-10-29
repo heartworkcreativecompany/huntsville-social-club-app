@@ -53,15 +53,13 @@ describe('Upgrade / pricing surfaces', () => {
 
     expect(html).not.toContain('$9.99/month')
     expect(html).not.toContain('Join Connect')
-    expect(html).toContain('$29.99/month')
-    expect(html).toContain(
-      '1 included premium event credit per billing period'
-    )
-    expect(html).toContain(
-      '2 included Circle Social credits per billing period'
-    )
-    expect(html).toContain(ELITE_CIRCLE_SOCIALS_INCLUDED_COPY)
-    expect(html).toContain('2 included premium event credits per billing period')
+    expect(html).toContain('$15.99/month')
+    expect(html).toContain('$39.99/month')
+    expect(html).toContain('No Circle Social credits.')
+    expect(html).toContain('No premium-event credits.')
+    expect(html).toContain('2 Circle Social credits per billing cycle.')
+    expect(html).toContain('1 premium-event credit per billing cycle.')
+    expect(html).not.toContain(ELITE_CIRCLE_SOCIALS_INCLUDED_COPY)
     expect(html).not.toMatch(/Free Circle Socials/)
   })
 })

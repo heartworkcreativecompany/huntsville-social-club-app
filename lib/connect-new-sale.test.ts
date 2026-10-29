@@ -16,8 +16,8 @@ describe('Connect new-sale retirement', () => {
     expect(isPurchasableMembershipTier('elite_circle')).toBe(true)
     expect(paidMembershipPlanFromQuery('connect')).toBeNull()
     expect(STRIPE_LIVE_PRICE_IDS.connect).toBe('price_1UCjKABei7W40myB2Mnqrtse')
-    expect(PRICING_PLANS.inner_circle.price).toBe('$29.99/month')
-    expect(PRICING_PLANS.elite_circle.price).toBe('$69.99/month')
+    expect(PRICING_PLANS.inner_circle.price).toBe('$15.99/month')
+    expect(PRICING_PLANS.elite_circle.price).toBe('$39.99/month')
     expect(PRICING_SUBHEADLINE).not.toMatch(/add messaging with Connect/i)
   })
 

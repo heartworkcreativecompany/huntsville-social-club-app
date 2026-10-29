@@ -137,7 +137,8 @@ describe('Upgrade bottom CTA and pricing-card actions', () => {
       'utf8'
     )
     expect(cta).not.toContain('startEntitlementCycle')
-    expect(sync).toContain('isCircleProductTier(mappedTier)')
+    expect(sync).toContain('openCircleCycleForStripePrice')
+    expect(sync).toContain('shouldOpenCycle')
   })
 
   it('ignores invalid upgrade plan query values in the upgrade page', () => {

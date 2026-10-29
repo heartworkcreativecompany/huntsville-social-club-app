@@ -1,10 +1,25 @@
 import type Stripe from 'stripe'
+import {
+  circleBenefitPackageFromPriceId,
+  grantsForBenefitPackage,
+} from '@/lib/circle-benefit-packages'
 import { scheduledCancellationHasEnded } from '@/lib/membership-billing-period'
 import {
   isPaidMembershipTier,
   tierFromStripePriceId,
   type PaidMembershipTier,
 } from '@/lib/stripe/config'
+
+/** Live price IDs first, then a mapped new-purchase price once its ID is set. */
+export function paidTierFromPriceId(
+  priceId: string | null | undefined
+): PaidMembershipTier | null {
+  const fromLive = tierFromStripePriceId(priceId)
+  if (fromLive) return fromLive
+  const packageId = circleBenefitPackageFromPriceId(priceId)
+  if (!packageId) return null
+  return grantsForBenefitPackage(packageId).tier
+}
 
 function stripePriceIdFromField(
   price: Stripe.Price | Stripe.DeletedPrice | string | null | undefined
@@ -56,7 +71,7 @@ export function resolvePaidTierForSubscription(
   subscription: Stripe.Subscription,
   fallbackTier?: string | null
 ): PaidMembershipTier | null {
-  const fromPrice = tierFromStripePriceId(primarySubscriptionPriceId(subscription))
+  const fromPrice = paidTierFromPriceId(primarySubscriptionPriceId(subscription))
   if (fromPrice) return fromPrice
 
   const fromSubscriptionMeta = paidTierFromMetadata(subscription.metadata)
@@ -83,5 +98,5 @@ export function paidTierFromActiveStoredPriceId(billing: {
 }): PaidMembershipTier | null {
   if (billing.subscription_status !== 'active') return null
   if (scheduledCancellationHasEnded(billing)) return null
-  return tierFromStripePriceId(billing.stripe_price_id)
+  return paidTierFromPriceId(billing.stripe_price_id)
 }

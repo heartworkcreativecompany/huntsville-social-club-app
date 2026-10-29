@@ -15,6 +15,10 @@ import {
 } from '@/lib/stripe/webhook-idempotency'
 import { constructVerifiedStripeEvent } from '@/lib/stripe/verify-webhook-signature'
 import { subscriptionIdFromInvoice } from '@/lib/stripe/invoice-helpers'
+import {
+  checkoutPaymentSettlesMembership,
+  entitlementOpenForInvoiceBillingReason,
+} from '@/lib/stripe/membership-fulfillment-gates'
 
 export const runtime = 'nodejs'
 
@@ -95,7 +99,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         userId,
         subscription,
         options: {
-          startEntitlementCycle: true,
+          startEntitlementCycle: checkoutPaymentSettlesMembership(
+            session.payment_status
+          ),
           eventCreated: event.created,
         },
         productTierFallback:
@@ -133,7 +139,8 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
 
     case 'invoice.paid': {
       const invoice = event.data.object as Stripe.Invoice
-      if (invoice.billing_reason !== 'subscription_cycle') return
+      const open = entitlementOpenForInvoiceBillingReason(invoice.billing_reason)
+      if (!open) return
 
       const subscriptionId = subscriptionIdFromInvoice(invoice)
       if (!subscriptionId || typeof subscriptionId !== 'string') return
@@ -146,7 +153,8 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         userId,
         subscription,
         options: {
-          renewEntitlementCycle: true,
+          startEntitlementCycle: open === 'initial',
+          renewEntitlementCycle: open === 'renewal',
           eventCreated: event.created,
         },
       })

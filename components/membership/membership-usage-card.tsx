@@ -96,6 +96,11 @@ export default function MembershipUsageCard({
           <h2 className="text-display mt-1 text-lg font-semibold">
             {display.title}
           </h2>
+          {display.benefitContextLabel ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              {display.benefitContextLabel}
+            </p>
+          ) : null}
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge variant={statusVariant}>{display.statusLabel}</Badge>

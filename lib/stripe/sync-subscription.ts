@@ -1,12 +1,11 @@
 import type Stripe from 'stripe'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import { startEntitlementCycle } from '@/lib/membership-billing-cycles'
-import { isCircleProductTier } from '@/lib/membership-tier-config'
 import {
   parseMembershipBilling,
   type MembershipBilling,
 } from '@/lib/membership-systems'
+import { openCircleCycleForStripePrice } from '@/lib/stripe/circle-fulfillment'
 import {
   buildSyncedMembershipBilling,
   rememberedPaidTier,
@@ -188,19 +187,17 @@ export async function syncStripeSubscription(
   }
 
   const accessEnded = saved.subscription_status === 'cancelled'
-  if (!accessEnded && grantsAccess && mappedTier) {
-    if (
-      (options?.startEntitlementCycle || options?.renewEntitlementCycle) &&
-      isCircleProductTier(mappedTier)
-    ) {
-      await startEntitlementCycle(supabase, {
-        userId,
-        productTier: mappedTier,
-        plan: 'monthly',
-        periodStart,
-        periodEnd,
-      })
-    }
+  const shouldOpenCycle =
+    !accessEnded &&
+    grantsAccess &&
+    (options?.startEntitlementCycle || options?.renewEntitlementCycle)
+  if (shouldOpenCycle) {
+    await openCircleCycleForStripePrice(supabase, {
+      userId,
+      priceId,
+      periodStart,
+      periodEnd,
+    })
   }
 
   await runCompatibilitySubscriptionLifecycle(supabase, {

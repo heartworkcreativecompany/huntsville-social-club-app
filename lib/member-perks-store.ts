@@ -9,10 +9,10 @@ import {
   FREE_MEMBER_PREMIUM_CREDITS_COPY,
   innerCircleSocialRemainingHeadline,
   innerIncludedSummary,
+  PENDING_CIRCLE_ENTITLEMENT_COPY,
+  UNAVAILABLE_CIRCLE_ENTITLEMENT_COPY,
+  UNMETERED_PREMIUM_EVENTS_COPY,
 } from '@/lib/membership-pricing-copy'
-import {
-  ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
-} from '@/lib/membership-tier-config'
 import {
   freeMemberPerksSnapshot,
   normalizeMemberPerksSnapshot,
@@ -193,25 +193,43 @@ export function dashboardPerkLinesFromSnapshot(
   snapshot: MembershipPerksSnapshot
 ): string[] {
   const normalized = normalizeMemberPerksSnapshot(snapshot)
+  if (normalized.benefitFulfillment === 'pending') {
+    return [PENDING_CIRCLE_ENTITLEMENT_COPY]
+  }
+  if (normalized.benefitFulfillment === 'unavailable') {
+    return [UNAVAILABLE_CIRCLE_ENTITLEMENT_COPY]
+  }
   if (!normalized.hasPaidMembership) {
     return [FREE_MEMBER_PREMIUM_CREDITS_COPY]
   }
   if (normalized.productTier === 'elite_circle') {
     return [
-      elitePremiumRemainingHeadline(
-        normalized.premiumCreditsRemaining,
-        normalized.creditsGranted ?? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-      ),
+      normalized.creditsGranted == null
+        ? UNMETERED_PREMIUM_EVENTS_COPY
+        : elitePremiumRemainingHeadline(
+            normalized.premiumCreditsRemaining,
+            normalized.creditsGranted
+          ),
       ...membershipPerkLinesFromSnapshot(normalized).slice(1),
     ]
   }
   if (normalized.productTier === 'inner_circle') {
-    const lines = [innerIncludedSummary(normalized.premiumCreditsRemaining)]
+    const lines = [
+      normalized.creditsGranted == null
+        ? UNMETERED_PREMIUM_EVENTS_COPY
+        : innerIncludedSummary(
+            normalized.premiumCreditsRemaining,
+            normalized.creditsGranted
+          ),
+    ]
     if (normalized.circleSocialCreditsRemaining != null) {
       lines.push(
-        innerCircleSocialRemainingHeadline(
-          normalized.circleSocialCreditsRemaining
-        )
+        normalized.circleSocialCreditsGranted === 0
+          ? 'Circle Socials are paid per event on this membership.'
+          : innerCircleSocialRemainingHeadline(
+              normalized.circleSocialCreditsRemaining,
+              normalized.circleSocialCreditsGranted ?? undefined
+            )
       )
     }
     return lines

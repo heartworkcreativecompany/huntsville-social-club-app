@@ -1,6 +1,10 @@
 import type { EventAccessType, ProductTier } from '@/lib/membership-tier-config'
 import {
   ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
+  PENDING_CIRCLE_ENTITLEMENT_COPY,
+  UNAVAILABLE_CIRCLE_ENTITLEMENT_COPY,
+  UNMETERED_PREMIUM_EVENTS_COPY,
+  elitePremiumRemainingHeadline,
   innerCircleSocialRemainingHeadline,
   innerIncludedRemainingHeadline,
 } from '@/lib/membership-pricing-copy'
@@ -240,33 +244,72 @@ export type MembershipPerksSnapshot = {
   circleSocialCreditsRemaining?: number | null
   circleSocialCreditsGranted?: number | null
   guestInvitesRemaining: number
+  /** Stored grant. 0 means this cycle includes no guest invitations. */
+  guestInvitesGranted?: number | null
   /** Active entitlement cycle start (ISO), when known. */
   periodStart?: string | null
   /** Active entitlement cycle end (ISO), when known. */
   periodEnd?: string | null
+  /**
+   * pending and unavailable must not be rendered as legacy credit balances.
+   * Omitted snapshots keep the stored-number lines.
+   */
+  benefitFulfillment?: 'issued' | 'pending' | 'known_package' | 'unavailable'
 }
 
 export function membershipPerkLinesFromSnapshot(
   snapshot: MembershipPerksSnapshot
 ): string[] {
+  if (snapshot.benefitFulfillment === 'pending') {
+    return [PENDING_CIRCLE_ENTITLEMENT_COPY]
+  }
+  if (snapshot.benefitFulfillment === 'unavailable') {
+    return [UNAVAILABLE_CIRCLE_ENTITLEMENT_COPY]
+  }
   if (!snapshot.hasPaidMembership) return []
 
   if (snapshot.productTier === 'elite_circle') {
+    const unmeteredPremium = snapshot.creditsGranted == null
     const granted =
       snapshot.creditsGranted ?? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-    return [
-      `You have ${snapshot.premiumCreditsRemaining} of ${granted} premium credits and ${snapshot.guestInvitesRemaining} guest invite(s) remaining this billing period.`,
-      ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
-    ]
+    const premiumLine = unmeteredPremium
+      ? snapshot.guestInvitesGranted === 0 && snapshot.guestInvitesRemaining === 0
+        ? UNMETERED_PREMIUM_EVENTS_COPY
+        : `${UNMETERED_PREMIUM_EVENTS_COPY} You have ${snapshot.guestInvitesRemaining} guest invite(s) remaining this billing period.`
+      : snapshot.guestInvitesGranted === 0 && snapshot.guestInvitesRemaining === 0
+        ? elitePremiumRemainingHeadline(snapshot.premiumCreditsRemaining, granted)
+        : `You have ${snapshot.premiumCreditsRemaining} of ${granted} premium credits and ${snapshot.guestInvitesRemaining} guest invite(s) remaining this billing period.`
+    const socialLine =
+      snapshot.circleSocialCreditsRemaining == null
+        ? ELITE_CIRCLE_SOCIALS_INCLUDED_COPY
+        : snapshot.circleSocialCreditsGranted === 0
+          ? 'Circle Socials are paid per event on this membership.'
+          : innerCircleSocialRemainingHeadline(
+              snapshot.circleSocialCreditsRemaining,
+              snapshot.circleSocialCreditsGranted ?? undefined
+            )
+    return [premiumLine, socialLine]
   }
 
   if (snapshot.productTier === 'inner_circle') {
     const lines = [
-      innerIncludedRemainingHeadline(snapshot.premiumCreditsRemaining),
+      snapshot.creditsGranted == null
+        ? UNMETERED_PREMIUM_EVENTS_COPY
+        : snapshot.creditsGranted <= 0
+          ? 'Premium events are paid per event on this membership.'
+          : innerIncludedRemainingHeadline(
+              snapshot.premiumCreditsRemaining,
+              snapshot.creditsGranted
+            ),
     ]
     if (snapshot.circleSocialCreditsRemaining != null) {
       lines.push(
-        innerCircleSocialRemainingHeadline(snapshot.circleSocialCreditsRemaining)
+        snapshot.circleSocialCreditsGranted === 0
+          ? 'Circle Socials are paid per event on this membership.'
+          : innerCircleSocialRemainingHeadline(
+              snapshot.circleSocialCreditsRemaining,
+              snapshot.circleSocialCreditsGranted ?? undefined
+            )
       )
     }
     return lines
@@ -294,9 +337,11 @@ export function premiumCreditsSummary(input: {
   }
 
   const remaining = premiumCreditsRemaining ?? 0
-  const granted =
-    input.creditsGranted ??
-    (productTier === 'elite_circle' ? 2 : 1)
+  if (input.creditsGranted == null) {
+    return UNMETERED_PREMIUM_EVENTS_COPY
+  }
+
+  const granted = input.creditsGranted
 
   if (productTier === 'elite_circle') {
     return [

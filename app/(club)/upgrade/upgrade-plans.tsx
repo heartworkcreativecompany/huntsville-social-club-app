@@ -4,12 +4,7 @@ import { useState, useTransition } from 'react'
 import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import { buttonPrimaryClassName } from '@/lib/event-labels'
-import {
-  ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD,
-  ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
-  INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD,
-  INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD,
-} from '@/lib/membership-tier-config'
+import { PRICING_PLANS } from '@/lib/membership-pricing-copy'
 import {
   upgradeToEliteCircle,
   upgradeToInnerCircle,
@@ -34,8 +29,8 @@ export default function UpgradePlans() {
 
       setMessage(
         tier === 'inner'
-          ? `Welcome to Inner Circle — your billing period includes ${INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credit and ${INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} Circle Social credits.`
-          : `Welcome to Elite Circle — ${ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium credits and ${ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite are now active.`
+          ? 'Welcome to Inner Circle. This membership includes no Circle Social credits, premium-event credits, or guest invitations.'
+          : 'Welcome to Elite Circle. This membership includes 1 premium-event credit and 2 Circle Social credits per billing cycle, and no guest invitations.'
       )
     })
   }
@@ -45,26 +40,22 @@ export default function UpgradePlans() {
       <PageHeader
         eyebrow="Membership"
         title="Upgrade your membership"
-        description="Inner Circle and Elite Circle add curated matches, Circle Social credits, and premium event credits. Messaging requires approval and accepted identity on every plan."
+        description="Inner Circle adds compatibility recommendations. Elite Circle adds Circle Social credits, a premium-event credit, priority RSVP, and Business Directory application eligibility. Messaging requires approval and accepted identity on every plan."
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="border-accent/30">
           <p className="eyebrow">Inner Circle</p>
-          <h2 className="text-display mt-1 text-2xl font-semibold">Inner Circle</h2>
+          <h2 className="text-display mt-1 text-2xl font-semibold">
+            Inner Circle
+          </h2>
+          <p className="mt-2 text-sm font-medium text-foreground">
+            {PRICING_PLANS.inner_circle.price}
+          </p>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-            <li>Inner Circle badge</li>
-            <li>Messaging after approval and identity verification</li>
-            <li>
-              {INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} included premium event
-              credit per billing period
-            </li>
-            <li>
-              {INNER_CIRCLE_CIRCLE_SOCIAL_CREDITS_PER_PERIOD} included Circle
-              Social credits per billing period
-            </li>
-            <li>Create standard events (admin approval required)</li>
-            <li>Unused credits expire each cycle — no rollover</li>
+            {PRICING_PLANS.inner_circle.bullets.map((bullet) => (
+              <li key={bullet}>{bullet}</li>
+            ))}
           </ul>
           <button
             type="button"
@@ -79,19 +70,13 @@ export default function UpgradePlans() {
         <Card className="border-accent/40 bg-gradient-to-br from-accent-soft/50 to-surface">
           <p className="eyebrow">Elite Circle</p>
           <h2 className="text-display mt-1 text-2xl font-semibold">Elite Circle</h2>
+          <p className="mt-2 text-sm font-medium text-foreground">
+            {PRICING_PLANS.elite_circle.price}
+          </p>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-            <li>Everything in Inner Circle</li>
-            <li>
-              {ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD} premium event credits per
-              billing period
-            </li>
-            <li>All Circle Socials are included in your membership.</li>
-            <li>
-              {ELITE_CIRCLE_GUEST_INVITES_PER_PERIOD} guest invite per billing
-              period
-            </li>
-            <li>Priority RSVP for premium events and Circle Socials</li>
-            <li>Eligible to apply for a Business Directory listing</li>
+            {PRICING_PLANS.elite_circle.bullets.map((bullet) => (
+              <li key={bullet}>{bullet}</li>
+            ))}
           </ul>
           <button
             type="button"
@@ -111,8 +96,9 @@ export default function UpgradePlans() {
       ) : null}
 
       <p className="mt-8 text-xs text-muted">
-        Stripe Checkout grants access after webhook confirmation. Upgrading
-        resets your billing period and grants a fresh credit/guest allotment.
+        Stripe Checkout grants access after webhook confirmation. A new purchase
+        uses the current membership offer. An existing subscription keeps its
+        current price and issued benefits until that subscription is changed.
       </p>
     </>
   )

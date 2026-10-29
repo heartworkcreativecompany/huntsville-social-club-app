@@ -1476,6 +1476,18 @@ export interface Database {
         }
         Returns: Json
       }
+      replace_membership_entitlement_cycle: {
+        Args: {
+          p_user_id: string
+          p_product_tier: string
+          p_period_start: string
+          p_period_end: string
+          p_credits_granted: number
+          p_guest_invites_granted: number
+          p_circle_social_credits_granted: number | null
+        }
+        Returns: Json
+      }
       withdraw_email_marketing: {
         Args: Record<string, never>
         Returns: undefined

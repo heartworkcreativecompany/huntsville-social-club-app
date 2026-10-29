@@ -10,6 +10,10 @@ import {
   returnGuestInvite,
 } from '@/lib/membership-billing-cycles'
 import { buildMemberEntitlementsWithOverride } from '@/lib/load-member-entitlements'
+import {
+  PENDING_CIRCLE_ENTITLEMENT_COPY,
+  UNAVAILABLE_CIRCLE_ENTITLEMENT_COPY,
+} from '@/lib/membership-pricing-copy'
 import { membershipPerksSnapshotFromEntitlements } from '@/lib/member-perks-snapshot'
 import type { MembershipPerksSnapshot } from '@/lib/event-rsvp-window'
 import { getViewer } from '@/lib/viewer'
@@ -32,7 +36,9 @@ async function loadGuestInvitePerksSnapshot(
 /**
  * Schema assumptions:
  * - membership_entitlement_cycles.guest_invites_granted / guest_invites_used
- *   reset each billing period via startEntitlementCycle (Elite gets 1).
+ *   reset each billing period via startEntitlementCycle.
+ *   Legacy Elite cycles include 1 guest invitation. New-package cycles include 0.
+ *   An already-issued invitation stays on the stored cycle until it is used or the cycle ends.
  * - event_attendees.guest_name + guest_invite_consumed store the spent invite
  *   on the Elite member's RSVP row (no separate guest user account).
  * - Eligible events: published premium_event only.
@@ -69,6 +75,12 @@ export async function addPremiumEventGuestInvite(input: {
 
   if (entitlements.productTier !== 'elite_circle') {
     return { error: 'Guest invites are available to Elite Circle members only.' }
+  }
+  if (entitlements.benefitFulfillment === 'pending') {
+    return { error: PENDING_CIRCLE_ENTITLEMENT_COPY }
+  }
+  if (entitlements.benefitFulfillment === 'unavailable') {
+    return { error: UNAVAILABLE_CIRCLE_ENTITLEMENT_COPY }
   }
   if (entitlements.guestInvitesRemaining <= 0 || !entitlements.activeCycle?.id) {
     return { error: 'No guest invites remaining this billing period.' }

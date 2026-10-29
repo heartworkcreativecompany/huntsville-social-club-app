@@ -319,7 +319,13 @@ describe('Connect membership tier', () => {
       join(repoRoot, 'lib/stripe/sync-subscription.ts'),
       'utf8'
     )
-    expect(syncSource).toContain('isCircleProductTier(mappedTier)')
+    expect(syncSource).toContain('openCircleCycleForStripePrice')
+    const fulfillment = readFileSync(
+      join(repoRoot, 'lib/stripe/circle-fulfillment.ts'),
+      'utf8'
+    )
+    expect(fulfillment).toContain('not_circle')
+    expect(fulfillment).toContain('UnmappedMembershipPriceError')
   })
 
   it('6. Direct messaging permits Connect ↔ Inner/Elite and blocks Member ↔ Connect', () => {

@@ -4,16 +4,18 @@ Paid memberships use **Stripe Checkout** (subscription mode), **webhooks** for a
 
 ### Membership → Stripe mapping (live mode)
 
-| App tier | Stripe product | Live price ID | Amount |
-|----------|----------------|---------------|--------|
-| Member | _(none — free)_ | — | Free |
-| Inner Circle | `prod_UqPcL4boAOiMZT` | `price_1TqimnBei7W40myBUKESC7wF` | $29.99/mo |
-| Elite Circle | `prod_UqPciS4ul6FhvF` | `price_1TqimyBei7W40myBRnke6fQF` | $69.99/mo |
-| Event sponsorship | `prod_UvwN6jDxbT9O28` | `price_1Tw4UjBei7W40myBOG1mkxQ5` | $499 one-time |
+| App tier | Stripe product | Price role | Live price ID | Amount |
+|----------|----------------|------------|---------------|--------|
+| Member | _(none — free)_ | — | — | Free |
+| Inner Circle | `prod_UqPcL4boAOiMZT` | New checkout | `price_1UVhbLBei7W40myBUHWYhB73` | $15.99/mo |
+| Inner Circle | `prod_UqPcL4boAOiMZT` | Existing subscribers | `price_1TqimnBei7W40myBUKESC7wF` | $29.99/mo |
+| Elite Circle | `prod_UqPciS4ul6FhvF` | New checkout | `price_1UVhbmBei7W40myBlYFYFFZy` | $39.99/mo |
+| Elite Circle | `prod_UqPciS4ul6FhvF` | Existing subscribers | `price_1TqimyBei7W40myBRnke6fQF` | $69.99/mo |
+| Event sponsorship | `prod_UvwN6jDxbT9O28` | — | `price_1Tw4UjBei7W40myBOG1mkxQ5` | $499 one-time |
 
-Canonical live price IDs are defined in `lib/stripe/config.ts` as `STRIPE_LIVE_PRICE_IDS`.  
-**Checkout only requires `STRIPE_SECRET_KEY`.** Missing `STRIPE_PRICE_ID_*` env vars must not block billing — production uses the live IDs from `config.ts`.  
-On Vercel production (`VERCEL_ENV=production`), checkout always uses those live IDs (env overrides are ignored).
+New checkout price IDs live in `NEW_PURCHASE_STRIPE_PRICE_IDS` with `NEW_PURCHASE_OFFERS_ACTIVE`. Existing-subscriber price IDs stay in `STRIPE_LIVE_PRICE_IDS` and still map to the legacy benefit packages.  
+**Checkout only requires `STRIPE_SECRET_KEY`.** Missing `STRIPE_PRICE_ID_*` env vars must not block billing.  
+On Vercel production (`VERCEL_ENV=production`), `stripePriceIdForTier` ignores env overrides. New Inner and Elite checkout then uses the new-purchase price IDs. A renewal of a legacy price still opens the legacy package.
 
 ### Environment variables
 
@@ -24,8 +26,8 @@ Copy `.env.example` to `.env.local` and set:
 | `STRIPE_SECRET_KEY` | Server-side Stripe API key (`sk_live_…` in production) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Client publishable key (`pk_live_…` in production) |
 | `STRIPE_WEBHOOK_SECRET` | Webhook signing secret from Stripe CLI or Dashboard |
-| `STRIPE_PRICE_ID_INNER_CIRCLE` | Override for local **test** mode only |
-| `STRIPE_PRICE_ID_ELITE_CIRCLE` | Override for local **test** mode only |
+| `STRIPE_PRICE_ID_INNER_CIRCLE` | Ignored for new Inner checkout while new offers are active. Outside deployed production, it can still override the existing-subscriber price when new offers are inactive. |
+| `STRIPE_PRICE_ID_ELITE_CIRCLE` | Ignored for new Elite checkout while new offers are active. Outside deployed production, it can still override the existing-subscriber price when new offers are inactive. |
 | `STRIPE_PRICE_ID_EVENT_SPONSORSHIP` | Override for local **test** mode only |
 | `NEXT_PUBLIC_APP_URL` | **Required in Vercel Production.** Canonical origin for Checkout success/cancel and Portal return URLs (e.g. `https://huntsville-social-club-app.vercel.app`). Never a per-deployment `*.vercel.app` hash URL. |
 | `STRIPE_CHECKOUT_TRIAL_DAYS` | Optional default trial length for new checkouts |
@@ -34,8 +36,10 @@ Copy `.env.example` to `.env.local` and set:
 
 ### Stripe Dashboard setup
 
-1. In **live mode**, create products **Inner Circle** and **Elite Circle** with recurring **monthly** prices ($29.99 and $69.99).
-2. Confirm the live Price IDs match `STRIPE_LIVE_PRICE_IDS` in `lib/stripe/config.ts` (update that file if you recreate products).
+The Inner Circle and Elite Circle products, the existing-subscriber prices, and the new checkout prices are already live. Do not recreate those products or prices.
+
+1. Existing subscribers stay on the recurring monthly prices of $29.99 (Inner Circle) and $69.99 (Elite Circle).
+2. Confirm the existing-subscriber Price IDs match `STRIPE_LIVE_PRICE_IDS` in `lib/stripe/config.ts`. Confirm the new checkout Price IDs match `NEW_PURCHASE_STRIPE_PRICE_IDS` in `lib/circle-benefit-packages.ts`.
 3. Optional: create a one-time **Event Sponsorship** price ($499). Confirm the live Price ID matches `STRIPE_LIVE_PRICE_IDS.event_sponsorship`.
 4. Enable the **Customer Portal** (Settings → Billing → Customer portal).
 5. Create **Coupons / Promotion codes** for beta testers as needed.

@@ -25,6 +25,7 @@ import {
   type PaidMembershipTier,
 } from '@/lib/stripe/config'
 import { getOrCreateStripeCustomer } from '@/lib/stripe/customer'
+import { activeCheckoutPriceIdForTier } from '@/lib/circle-benefit-packages'
 
 function subscriptionBlocksNewCheckout(billing: ReturnType<typeof parseMembershipBilling>) {
   return stripeSubscriptionBlocksNewCheckout(billing)
@@ -82,7 +83,7 @@ export async function createMembershipCheckoutSession(tierInput: string) {
           ? `unknown_prefix:${publishableKey.slice(0, 3)}_`
           : 'missing'
 
-    const priceId = stripePriceIdForTier(tier)
+    const priceId = activeCheckoutPriceIdForTier(tier, stripePriceIdForTier(tier))
 
     // Temporary diagnostics — remove after checkout is verified.
     // Log before any Stripe / URL helper work so Vercel still captures key/price context

@@ -106,11 +106,7 @@ export default function EventGuestInviteControls({
   }
 
   if (guestInvitesRemaining <= 0) {
-    return (
-      <p className="mt-4 text-sm text-muted-foreground">
-        You have used your guest invite for this billing period.
-      </p>
-    )
+    return null
   }
 
   return (
@@ -119,8 +115,7 @@ export default function EventGuestInviteControls({
         Add a guest ({guestInvitesRemaining} invite remaining)
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Elite Circle includes 1 guest invite per billing period for premium
-        events.
+        This billing period includes a guest invite for a premium event.
       </p>
       <label className="mt-3 grid gap-1 text-sm">
         <span className="text-muted-foreground">Guest full name</span>

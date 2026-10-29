@@ -9,6 +9,11 @@ import {
   isRemoteEventCoverImage,
 } from '@/lib/event-images'
 import { formatEventScheduleInChicago } from '@/lib/event-time'
+import { isFriendshipMatchingEnabled } from '@/lib/friendship/eligibility'
+import {
+  DATING_AND_FRIENDSHIP_RECOMMENDATIONS_COPY,
+  DATING_RECOMMENDATIONS_COPY,
+} from '@/lib/membership-pricing-copy'
 import {
   loadUpcomingPublicEvents,
   publicEventPriceLabel,
@@ -165,6 +170,16 @@ export default async function PublicHomeContent({
 }) {
   const upcoming = await loadUpcomingPublicEvents()
   const events = upcoming.error ? [] : upcoming.events
+  const friendshipMatchingEnabled = isFriendshipMatchingEnabled()
+  const membershipTiers = HOME_MEMBERSHIP_TIERS.map((tier) => ({
+    ...tier,
+    summary: friendshipMatchingEnabled
+      ? tier.summary.replaceAll(
+          DATING_RECOMMENDATIONS_COPY,
+          DATING_AND_FRIENDSHIP_RECOMMENDATIONS_COPY
+        )
+      : tier.summary,
+  }))
   return (
     <>
       <section
@@ -368,7 +383,7 @@ export default async function PublicHomeContent({
           {MEMBERSHIP_VALUE_BODY}
         </p>
         <ul className="mt-10 grid gap-4 sm:grid-cols-2">
-          {HOME_MEMBERSHIP_TIERS.map((tier) => (
+          {membershipTiers.map((tier) => (
             <li
               key={tier.name}
               className="rounded-xl border border-border bg-surface p-6 shadow-sm"
