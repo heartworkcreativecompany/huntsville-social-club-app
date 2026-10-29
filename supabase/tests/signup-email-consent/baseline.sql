@@ -1,8 +1,10 @@
 -- Representative baseline for signup email consent.
 --
 -- This is not production and it is not the historical migration chain.
--- Apply this file, then only
--- supabase/migrations/20261007180000_signup_email_consent.sql.
+-- Apply this file, then
+-- supabase/migrations/20261007180000_signup_email_consent.sql,
+-- supabase/migrations/20261008030000_signup_names.sql, and
+-- supabase/migrations/20261029120000_account_email_marketing_preference.sql.
 -- The command is `npm run test:integration:signup-consent`.
 --
 -- The baseline matches the objects that migration reads or replaces:

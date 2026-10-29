@@ -1492,6 +1492,14 @@ export interface Database {
         Args: Record<string, never>
         Returns: undefined
       }
+      set_own_email_marketing_preference: {
+        Args: { opt_in: boolean }
+        Returns: string
+      }
+      commit_email_marketing_opt_in: {
+        Args: { target_id: string; checked_at: string }
+        Returns: string
+      }
       apply_resend_contact_unsubscribe: {
         Args: { target_email: string; provider_event_id: string }
         Returns: string

@@ -214,6 +214,7 @@ async function main() {
   ])
   await psqlFile('supabase/migrations/20261007180000_signup_email_consent.sql')
   await psqlFile('supabase/migrations/20261008030000_signup_names.sql')
+  await psqlFile('supabase/migrations/20261029120000_account_email_marketing_preference.sql')
   await docker([
     'exec',
     dbContainer,

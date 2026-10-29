@@ -1,12 +1,9 @@
 'use client'
 
 import { useId, useState, useTransition } from 'react'
-import Link from 'next/link'
 import Card from '@/components/ui/card'
-import {
-  buttonPrimaryClassName,
-  inputClassName,
-} from '@/lib/event-labels'
+import IdentityVerificationEntryLink from '@/components/profile/identity-verification-entry-link'
+import { buttonPrimaryClassName, inputClassName } from '@/lib/event-labels'
 import {
   MAX_MEMBER_MESSAGE_LENGTH,
   validateMemberMessageBody,
@@ -70,12 +67,7 @@ export default function MemberProfileMessageForm({
         </p>
         {mode === 'identity_required' ? (
           <div className="mt-5">
-            <Link
-              href="/application/status"
-              className={`${buttonPrimaryClassName} inline-flex w-full justify-center sm:w-auto`}
-            >
-              Review identity verification
-            </Link>
+            <IdentityVerificationEntryLink className={`${buttonPrimaryClassName} inline-flex w-full justify-center sm:w-auto`} />
           </div>
         ) : null}
       </Card>

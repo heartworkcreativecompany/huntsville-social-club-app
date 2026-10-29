@@ -9,6 +9,7 @@ import {
   IDENTITY_REQUIRED_BEFORE_MESSAGING,
   type AcceptedIdentityStatus,
 } from '@/lib/identity-verification'
+import { ACCOUNT_IDENTITY_VERIFICATION_HREF } from '@/lib/account-identity-verification'
 import {
   MAX_MEMBER_MESSAGE_LENGTH,
   validateMemberMessageBody,
@@ -47,11 +48,18 @@ export default function CuratedMatchIntroButton({
 
   if (identityStatus !== 'verified') {
     return (
-      <p className="text-sm text-muted-foreground">
-        {identityStatus === 'unavailable'
-          ? IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE
-          : IDENTITY_REQUIRED_BEFORE_MESSAGING}
-      </p>
+      <div className="grid gap-2">
+        <p className="text-sm text-muted-foreground">
+          {identityStatus === 'unavailable'
+            ? IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE
+            : IDENTITY_REQUIRED_BEFORE_MESSAGING}
+        </p>
+        {identityStatus === 'unverified' ? (
+          <Link href={ACCOUNT_IDENTITY_VERIFICATION_HREF} className="text-sm font-medium text-accent underline">
+            Verify my identity
+          </Link>
+        ) : null}
+      </div>
     )
   }
 

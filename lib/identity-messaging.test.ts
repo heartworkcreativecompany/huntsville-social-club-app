@@ -143,6 +143,17 @@ describe('intentional messaging authorization', () => {
     ).toBe(true)
   })
 
+  it('does not let accepted identity bypass recipient acceptance', () => {
+    expect(
+      messageDecision({
+        sender: 'verified',
+        recipient: 'unverified',
+        paid: true,
+        approved: true,
+      })
+    ).toEqual({ allowed: false, reason: IDENTITY_MUTUAL_MESSAGE })
+  })
+
   it('denies sending in an existing conversation when the sender is unverified', () => {
     expect(messageDecision({ sender: 'unverified' }).allowed).toBe(false)
   })

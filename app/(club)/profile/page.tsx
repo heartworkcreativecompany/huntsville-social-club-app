@@ -26,6 +26,8 @@ import { parseVerificationState } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
 import ProfileContactEmailCard from '@/components/profile/profile-contact-email-card'
 import EmailMarketingPreferenceCard from '@/components/profile/email-marketing-preference-card'
+import IdentityVerificationCard from '@/components/profile/identity-verification-card'
+import { accountIdentityVerificationCard } from '@/lib/account-identity-verification'
 import ProfilePhoneVerificationCard from '@/components/profile/profile-phone-verification-card'
 import ProfileForm from '@/app/(club)/members/profile-form'
 import ProfileSection from '@/components/profile/profile-section'
@@ -189,6 +191,10 @@ export default async function YourProfilePage() {
     compatibilitySummary.status === 'active' && isMessagingSuspended(profile)
   const phoneVerified =
     parseVerificationState(profile?.verification_state).phone === 'approved'
+  const identityCard = accountIdentityVerificationCard({
+    accepted: identityStatus,
+    stripeStatus: profile?.identity_verification_status,
+  })
   const hasRevisionHistory =
     parseProfileRevisionHistory(profile?.profile_revision_history).length > 0
 
@@ -346,6 +352,17 @@ export default async function YourProfilePage() {
         </section>
 
         <aside className="space-y-6">
+          <ProfileSection
+            id="identity-verification"
+            title="Identity verification"
+            summary={identityCard.statusLabel}
+          >
+            <IdentityVerificationCard
+              card={identityCard}
+              lastError={profile?.identity_verification_last_error ?? null}
+            />
+          </ProfileSection>
+
           <ProfileSection
             id="profile-strength"
             title="Profile strength"

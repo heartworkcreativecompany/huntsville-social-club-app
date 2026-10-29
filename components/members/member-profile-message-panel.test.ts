@@ -60,7 +60,9 @@ describe('MemberProfileMessageForm', () => {
     )
 
     expect(html).toContain(PROFILE_IDENTITY_REQUIRED_COPY)
-    expect(html).toContain('/application/status')
+    expect(html).toContain('/profile#identity-verification')
+    expect(html).toContain('Verify my identity')
+    expect(html).not.toContain('/application/status')
     expect(html).not.toContain('<textarea')
     expect(html).not.toContain(MEMBER_MESSAGING_UPGRADE_PATH)
   })

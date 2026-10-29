@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import IdentityVerificationEntryLink from '@/components/profile/identity-verification-entry-link'
 import MessagingSuspendedNotice from '@/components/messages/messaging-suspended-notice'
 import MessagesInbox from '@/components/messages/messages-inbox'
 import PageHeader from '@/components/ui/page-header'
@@ -61,7 +62,10 @@ export default async function MessagesPage() {
       />
 
       {identityNotice ? (
-        <p className="mb-4 text-sm text-muted-foreground">{identityNotice}</p>
+        <div className="mb-4 grid gap-3">
+          <p className="text-sm text-muted-foreground">{identityNotice}</p>
+          {identityStatus === 'unverified' ? <IdentityVerificationEntryLink /> : null}
+        </div>
       ) : null}
       {messagingSuspended ? <MessagingSuspendedNotice /> : null}
 

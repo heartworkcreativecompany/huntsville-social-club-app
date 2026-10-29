@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   markVisibleConversationRead,
@@ -15,6 +16,8 @@ import {
   shouldMarkConversationRead,
   type MessageScrollSnapshot,
 } from '@/lib/conversation-scroll'
+import { ACCOUNT_IDENTITY_VERIFICATION_HREF } from '@/lib/account-identity-verification'
+import { IDENTITY_REQUIRED_BEFORE_MESSAGING } from '@/lib/identity-verification'
 import MessageThreadControls from '@/components/messages/message-thread-controls'
 import MessageRequestControls from '@/components/messages/message-request-controls'
 import RecontactReconsiderControls from '@/components/messages/recontact-reconsider-controls'
@@ -497,7 +500,19 @@ export default function MessageThread({
           {messagingSuspended
             ? 'Messaging is suspended on your account.'
             : identitySendBlock
-              ? identitySendBlock
+              ? (
+                <span className="grid gap-2">
+                  <span>{identitySendBlock}</span>
+                  {identitySendBlock === IDENTITY_REQUIRED_BEFORE_MESSAGING ? (
+                    <Link
+                      href={ACCOUNT_IDENTITY_VERIFICATION_HREF}
+                      className="font-medium text-accent underline"
+                    >
+                      Verify my identity
+                    </Link>
+                  ) : null}
+                </span>
+              )
             : isPendingRequest && !viewerIsInitiator
               ? 'Accept or decline this request to continue.'
               : isPendingRequest
