@@ -77,6 +77,7 @@ describe('saveEmailMarketingPreference', () => {
   })
 
   it('opts the signed-in member out without a provider lookup or another member id', async () => {
+    state.locallyOn = true
     await expect(saveEmailMarketingPreference(false)).resolves.toEqual({ success: true })
     expect(lookup).not.toHaveBeenCalled()
     expect(adminRpc).not.toHaveBeenCalled()
@@ -133,8 +134,10 @@ describe('saveEmailMarketingPreference', () => {
   })
 
   it('does not report success when the authoritative save fails', async () => {
+    state.locallyOn = true
     userRpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } })
     const optedOut = await saveEmailMarketingPreference(false)
+    state.locallyOn = false
     adminRpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } })
     const optedIn = await saveEmailMarketingPreference(true)
     expect(optedOut).toEqual({ error: EMAIL_MARKETING_PREFERENCE_SAVE_ERROR })
@@ -161,6 +164,21 @@ describe('saveEmailMarketingPreference', () => {
     expect(card).not.toContain('createAdminClient')
     expect(card).not.toContain('SUPABASE_SERVICE_ROLE')
     expect(card).toContain('saveEmailMarketingPreference(checked)')
+  })
+
+  it('does not enroll again when the local opt-in is already on', async () => {
+    state.locallyOn = true
+    await expect(saveEmailMarketingPreference(true)).resolves.toEqual({ success: true })
+    expect(lookup).toHaveBeenCalledTimes(1)
+    expect(adminRpc).not.toHaveBeenCalled()
+    expect(userRpc).not.toHaveBeenCalled()
+  })
+
+  it('does not withdraw again when the local preference is already off', async () => {
+    await expect(saveEmailMarketingPreference(false)).resolves.toEqual({ success: true })
+    expect(lookup).not.toHaveBeenCalled()
+    expect(userRpc).not.toHaveBeenCalled()
+    expect(adminRpc).not.toHaveBeenCalled()
   })
 
   it('does not report success when the commit is blocked by a newer withdrawal', async () => {

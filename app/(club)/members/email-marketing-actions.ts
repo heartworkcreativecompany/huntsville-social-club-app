@@ -47,7 +47,7 @@ export async function saveEmailMarketingPreference(
         .select('email_marketing_opt_in, email_marketing_opted_out_at')
         .eq('id', user.id)
         .maybeSingle()
-      if (error || !data) return true
+      if (error || !data) return null
       return data.email_marketing_opt_in === true && data.email_marketing_opted_out_at == null
     },
     withdraw: async () => {

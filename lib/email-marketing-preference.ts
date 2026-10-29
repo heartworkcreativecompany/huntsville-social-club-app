@@ -69,6 +69,20 @@ export function displayedMarketingOptIn(input: {
 export type AccountMarketingOptInDecision = 'commit' | 'blocked_resubscription' | 'unavailable'
 
 /**
+ * The account checkbox is checked only from the local consent record.
+ * Provider subscription is not an input and is not documented consent.
+ * A missing or unreadable record stays unchecked.
+ */
+export function localEmailMarketingOptedIn(input: {
+  readable: boolean
+  emailMarketingOptIn: boolean | null | undefined
+  emailMarketingOptedOutAt: string | null | undefined
+}): boolean {
+  if (!input.readable) return false
+  return input.emailMarketingOptIn === true && input.emailMarketingOptedOutAt == null
+}
+
+/**
  * Missing and subscribed contacts can be enrolled by the existing worker.
  * Unsubscribed refuses resubscription. Any other observation, including a
  * failed lookup, does not guess that resubscription is allowed.
@@ -99,7 +113,8 @@ export async function completeAccountMarketingPreference(input: {
   optIn: boolean
   now?: () => string
   lookup: (email: string) => Promise<MarketingProviderObservation>
-  readLocallyOptedIn: () => Promise<boolean>
+  /** True, false, or null when the local record cannot be read. */
+  readLocallyOptedIn: () => Promise<boolean | null>
   withdraw: () => Promise<Extract<PreferenceWrite, { status: 'opted_out' } | { error: string }>>
   commit: (
     checkedAt: string
@@ -115,7 +130,15 @@ export async function completeAccountMarketingPreference(input: {
     return { error: EMAIL_MARKETING_PREFERENCE_SAVE_ERROR }
   }
 
+  let locallyOptedIn: boolean | null = null
+  try {
+    locallyOptedIn = await input.readLocallyOptedIn()
+  } catch {
+    locallyOptedIn = null
+  }
+
   if (input.optIn === false) {
+    if (locallyOptedIn === false) return { success: true }
     const saved = await input.withdraw()
     if ('error' in saved) return { error: EMAIL_MARKETING_PREFERENCE_SAVE_ERROR }
     return { success: true }
@@ -141,19 +164,14 @@ export async function completeAccountMarketingPreference(input: {
 
   const decision = accountMarketingOptInDecision(provider)
   if (decision === 'blocked_resubscription') {
-    let locallyOn = true
-    try {
-      locallyOn = await input.readLocallyOptedIn()
-    } catch {
-      locallyOn = true
-    }
-    if (locallyOn) {
+    if (locallyOptedIn !== false) {
       const saved = await input.withdraw()
       if ('error' in saved) return { error: EMAIL_MARKETING_PREFERENCE_SAVE_ERROR }
     }
     return { status: 'blocked_resubscription' }
   }
   if (decision !== 'commit') return { status: 'unavailable' }
+  if (locallyOptedIn === true) return { success: true }
 
   const committed = await input.commit(checkedAt)
   if ('error' in committed) return { error: EMAIL_MARKETING_PREFERENCE_SAVE_ERROR }

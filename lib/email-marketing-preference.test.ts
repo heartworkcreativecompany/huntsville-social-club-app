@@ -21,6 +21,7 @@ import {
   ACCOUNT_EMAIL_MARKETING_OPT_IN_LABEL,
   completeAccountMarketingPreference,
   displayedMarketingOptIn,
+  localEmailMarketingOptedIn,
   EMAIL_MARKETING_PREFERENCE_SAVED,
   EMAIL_MARKETING_PREFERENCE_SAVE_ERROR,
   EMAIL_MARKETING_PREFERENCE_UNAVAILABLE,
@@ -162,6 +163,57 @@ describe('email marketing preference card', () => {
   })
 })
 
+describe('local marketing checkbox', () => {
+  it('renders an existing local opt-in as checked and a local opt-out as unchecked', () => {
+    expect(
+      localEmailMarketingOptedIn({
+        readable: true,
+        emailMarketingOptIn: true,
+        emailMarketingOptedOutAt: null,
+      })
+    ).toBe(true)
+    const checked = renderToStaticMarkup(
+      createElement(EmailMarketingPreferenceCard, { optedIn: true })
+    )
+    expect(checked).toContain('checked')
+
+    expect(
+      localEmailMarketingOptedIn({
+        readable: true,
+        emailMarketingOptIn: false,
+        emailMarketingOptedOutAt: '2026-01-01T00:00:00.000Z',
+      })
+    ).toBe(false)
+    expect(
+      localEmailMarketingOptedIn({
+        readable: true,
+        emailMarketingOptIn: true,
+        emailMarketingOptedOutAt: '2026-01-01T00:00:00.000Z',
+      })
+    ).toBe(false)
+    const unchecked = renderToStaticMarkup(
+      createElement(EmailMarketingPreferenceCard, { optedIn: false })
+    )
+    expect(unchecked).not.toContain('checked')
+  })
+
+  it('does not treat a subscribed provider as local consent', () => {
+    const providerSubscribed = 'subscribed' as const
+    expect(providerSubscribed).toBe('subscribed')
+    expect(
+      localEmailMarketingOptedIn({
+        readable: true,
+        emailMarketingOptIn: false,
+        emailMarketingOptedOutAt: null,
+      })
+    ).toBe(false)
+    const page = readFileSync('app/(club)/profile/page.tsx', 'utf8')
+    expect(page).toContain('localEmailMarketingOptedIn')
+    expect(page).toContain('email_marketing_opt_in, email_marketing_opted_out_at')
+    expect(page).not.toContain('lookupMarketingProviderContact')
+  })
+})
+
 describe('account marketing opt-in decision', () => {
   const ports = () => {
     const calls: string[] = []
@@ -290,6 +342,123 @@ describe('account marketing opt-in decision', () => {
     })
     expect(raced).toEqual({ status: 'blocked_resubscription' })
     expect(raced).not.toHaveProperty('success')
+  })
+
+  it('does not claim a local opt-in when the provider is subscribed and the local record is off', async () => {
+    const seen: string[] = []
+    const result = await completeAccountMarketingPreference({
+      signedIn: true,
+      email: 'person@example.com',
+      optIn: true,
+      lookup: async () => {
+        seen.push('lookup')
+        return 'subscribed'
+      },
+      readLocallyOptedIn: async () => false,
+      withdraw: async () => {
+        seen.push('withdraw')
+        return { status: 'opted_out' }
+      },
+      commit: async () => {
+        seen.push('commit')
+        return { status: 'opted_in' }
+      },
+    })
+    expect(result).toEqual({ success: true })
+    expect(seen).toEqual(['lookup', 'commit'])
+  })
+
+  it('does not confirm an unchanged checked preference when the provider lookup fails', async () => {
+    const seen: string[] = []
+    const result = await completeAccountMarketingPreference({
+      signedIn: true,
+      email: 'person@example.com',
+      optIn: true,
+      lookup: async () => {
+        seen.push('lookup')
+        throw new Error('provider down')
+      },
+      readLocallyOptedIn: async () => true,
+      withdraw: async () => {
+        seen.push('withdraw')
+        return { status: 'opted_out' }
+      },
+      commit: async () => {
+        seen.push('commit')
+        return { status: 'opted_in' }
+      },
+    })
+    expect(result).toEqual({ status: 'unavailable' })
+    expect(result).not.toHaveProperty('success')
+    expect(seen).toEqual(['lookup'])
+  })
+
+  it('leaves an unchanged local opt-in without another enrollment and an unchanged opt-out without a withdrawal', async () => {
+    const unchangedOn: string[] = []
+    const keptOn = await completeAccountMarketingPreference({
+      signedIn: true,
+      email: 'person@example.com',
+      optIn: true,
+      lookup: async () => {
+        unchangedOn.push('lookup')
+        return 'subscribed'
+      },
+      readLocallyOptedIn: async () => true,
+      withdraw: async () => {
+        unchangedOn.push('withdraw')
+        return { status: 'opted_out' }
+      },
+      commit: async () => {
+        unchangedOn.push('commit')
+        return { status: 'opted_in' }
+      },
+    })
+    expect(keptOn).toEqual({ success: true })
+    expect(unchangedOn).toEqual(['lookup'])
+
+    const missing: string[] = []
+    const keptMissing = await completeAccountMarketingPreference({
+      signedIn: true,
+      email: 'person@example.com',
+      optIn: true,
+      lookup: async () => {
+        missing.push('lookup')
+        return 'missing'
+      },
+      readLocallyOptedIn: async () => true,
+      withdraw: async () => {
+        missing.push('withdraw')
+        return { status: 'opted_out' }
+      },
+      commit: async () => {
+        missing.push('commit')
+        return { status: 'opted_in' }
+      },
+    })
+    expect(keptMissing).toEqual({ success: true })
+    expect(missing).toEqual(['lookup'])
+
+    const unchangedOff: string[] = []
+    const keptOff = await completeAccountMarketingPreference({
+      signedIn: true,
+      email: 'person@example.com',
+      optIn: false,
+      lookup: async () => {
+        unchangedOff.push('lookup')
+        return 'subscribed'
+      },
+      readLocallyOptedIn: async () => false,
+      withdraw: async () => {
+        unchangedOff.push('withdraw')
+        return { status: 'opted_out' }
+      },
+      commit: async () => {
+        unchangedOff.push('commit')
+        return { status: 'opted_in' }
+      },
+    })
+    expect(keptOff).toEqual({ success: true })
+    expect(unchangedOff).toEqual([])
   })
 
   it('does not show success when the withdrawal or commit fails', async () => {

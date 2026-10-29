@@ -26,6 +26,7 @@ import { parseVerificationState } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
 import ProfileContactEmailCard from '@/components/profile/profile-contact-email-card'
 import EmailMarketingPreferenceCard from '@/components/profile/email-marketing-preference-card'
+import { localEmailMarketingOptedIn } from '@/lib/email-marketing-preference'
 import IdentityVerificationCard from '@/components/profile/identity-verification-card'
 import { accountIdentityVerificationCard } from '@/lib/account-identity-verification'
 import ProfilePhoneVerificationCard from '@/components/profile/profile-phone-verification-card'
@@ -68,11 +69,11 @@ export default async function YourProfilePage() {
     .select('email_marketing_opt_in, email_marketing_opted_out_at')
     .eq('id', viewer.userId)
     .maybeSingle()
-  const marketingReady = !marketingResult.error
-  const marketingOptedIn =
-    marketingReady &&
-    marketingResult.data?.email_marketing_opt_in === true &&
-    !marketingResult.data?.email_marketing_opted_out_at
+  const marketingOptedIn = localEmailMarketingOptedIn({
+    readable: !marketingResult.error,
+    emailMarketingOptIn: marketingResult.data?.email_marketing_opt_in,
+    emailMarketingOptedOutAt: marketingResult.data?.email_marketing_opted_out_at,
+  })
   const liveDraft = mergeProfileIntoDraft(profile)
   const profilePreview = publicProfileDetailsFromDraft(liveDraft, {
     connectionsOpenTo: profile?.connections_open_to,

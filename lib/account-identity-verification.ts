@@ -1,6 +1,5 @@
 import {
   IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE,
-  IDENTITY_REQUIRED_BEFORE_MESSAGING,
   type AcceptedIdentityStatus,
 } from '@/lib/identity-verification'
 
@@ -20,8 +19,17 @@ export type AccountIdentityVerificationCard = {
   createsSession: boolean
 }
 
-const MESSAGING_REQUIREMENT =
-  'Identity verification is not required for membership approval. Accepted identity is required before you can send messages.'
+export const ACCOUNT_IDENTITY_VERIFIED_DETAIL =
+  'Your identity is verified. Both members must have verified identities before a message request can be sent. A conversation starts once the request is accepted.' as const
+
+export const ACCOUNT_IDENTITY_NOT_STARTED_DETAIL =
+  'Verify your identity to request messages with other verified members. You don’t need to complete this step to have your membership approved.' as const
+
+export const ACCOUNT_IDENTITY_RETRY_DETAIL =
+  'Identity verification is not required for membership approval. Both members must have verified identities before a message request can be sent. Retry verification to continue.' as const
+
+export const ACCOUNT_IDENTITY_CANCELED_DETAIL =
+  'Identity verification is not required for membership approval. Both members must have verified identities before a message request can be sent. You can start verification again.' as const
 
 /**
  * Account-page identity card.
@@ -36,8 +44,7 @@ export function accountIdentityVerificationCard(input: {
   if (input.accepted === 'verified') {
     return {
       statusLabel: 'Identity verified',
-      detail:
-        'Your identity is verified for messaging. The recipient must also have accepted identity, and your other messaging rules still apply.',
+      detail: ACCOUNT_IDENTITY_VERIFIED_DETAIL,
       action: null,
       actionLabel: null,
       createsSession: false,
@@ -70,7 +77,7 @@ export function accountIdentityVerificationCard(input: {
   if (stripeStatus === 'requires_input') {
     return {
       statusLabel: 'Needs retry',
-      detail: `${MESSAGING_REQUIREMENT} ${IDENTITY_REQUIRED_BEFORE_MESSAGING}`,
+      detail: ACCOUNT_IDENTITY_RETRY_DETAIL,
       action: 'retry',
       actionLabel: 'Retry verification',
       createsSession: true,
@@ -80,7 +87,7 @@ export function accountIdentityVerificationCard(input: {
   if (stripeStatus === 'canceled') {
     return {
       statusLabel: 'Canceled',
-      detail: `${MESSAGING_REQUIREMENT} You can start verification again.`,
+      detail: ACCOUNT_IDENTITY_CANCELED_DETAIL,
       action: 'start',
       actionLabel: ACCOUNT_IDENTITY_VERIFICATION_LINK_LABEL,
       createsSession: true,
@@ -89,7 +96,7 @@ export function accountIdentityVerificationCard(input: {
 
   return {
     statusLabel: 'Not started',
-    detail: `${MESSAGING_REQUIREMENT} ${IDENTITY_REQUIRED_BEFORE_MESSAGING}`,
+    detail: ACCOUNT_IDENTITY_NOT_STARTED_DETAIL,
     action: 'start',
     actionLabel: ACCOUNT_IDENTITY_VERIFICATION_LINK_LABEL,
     createsSession: true,

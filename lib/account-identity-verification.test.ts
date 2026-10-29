@@ -9,10 +9,15 @@ vi.mock('next/navigation', () => ({
 
 import IdentityVerificationCard from '@/components/profile/identity-verification-card'
 import {
+  ACCOUNT_IDENTITY_CANCELED_DETAIL,
+  ACCOUNT_IDENTITY_NOT_STARTED_DETAIL,
+  ACCOUNT_IDENTITY_RETRY_DETAIL,
   ACCOUNT_IDENTITY_VERIFICATION_HREF,
   ACCOUNT_IDENTITY_VERIFICATION_LINK_LABEL,
+  ACCOUNT_IDENTITY_VERIFIED_DETAIL,
   accountIdentityVerificationCard,
 } from '@/lib/account-identity-verification'
+import { isMessagingSuspended } from '@/lib/messaging-suspension'
 import { acceptedIdentityStatus } from '@/lib/identity-verification'
 import {
   IDENTITY_MUTUAL_MESSAGE,
@@ -40,8 +45,8 @@ describe('account identity verification card', () => {
     expect(accepted).toBe('unverified')
     expect(card.actionLabel).toBe(ACCOUNT_IDENTITY_VERIFICATION_LINK_LABEL)
     expect(card.createsSession).toBe(true)
-    expect(html).toContain(IDENTITY_REQUIRED_BEFORE_MESSAGING)
-    expect(html).toContain('not required for membership approval')
+    expect(card.detail).toBe(ACCOUNT_IDENTITY_NOT_STARTED_DETAIL)
+    expect(html).toContain(ACCOUNT_IDENTITY_NOT_STARTED_DETAIL)
     expect(html).toContain(ACCOUNT_IDENTITY_VERIFICATION_LINK_LABEL)
     expect(html).toContain('data-creates-session="true"')
   })
@@ -120,16 +125,24 @@ describe('account identity verification card', () => {
       actionLabel: 'Retry verification',
       createsSession: true,
     })
+    expect(retry.detail).toBe(ACCOUNT_IDENTITY_RETRY_DETAIL)
     expect(retryHtml).toContain('Needs retry')
+    expect(retryHtml).toContain(ACCOUNT_IDENTITY_RETRY_DETAIL)
     expect(retryHtml).toContain('Retry verification')
+    expect(retryHtml).toContain('not required for membership approval')
     expect(retryHtml).toContain('The document was unreadable.')
+    expect(retryHtml).not.toMatch(/approval was lost|not approved|reapply/i)
     expect(retryHtml).toContain('data-creates-session="true"')
     const canceledHtml = renderToStaticMarkup(
       createElement(IdentityVerificationCard, { card: canceled })
     )
     expect(canceled.action).toBe('start')
     expect(canceled.createsSession).toBe(true)
+    expect(canceled.detail).toBe(ACCOUNT_IDENTITY_CANCELED_DETAIL)
     expect(canceledHtml).toContain('Canceled')
+    expect(canceledHtml).toContain(ACCOUNT_IDENTITY_CANCELED_DETAIL)
+    expect(canceledHtml).toContain('not required for membership approval')
+    expect(canceledHtml).not.toMatch(/approval was lost|not approved|reapply/i)
     expect(canceledHtml).toContain(ACCOUNT_IDENTITY_VERIFICATION_LINK_LABEL)
   })
 
@@ -152,6 +165,7 @@ describe('account identity verification card', () => {
     )
     for (const html of [stripeHtml, inPersonHtml]) {
       expect(html).toContain('Identity verified')
+      expect(html).toContain(ACCOUNT_IDENTITY_VERIFIED_DETAIL)
       expect(html).not.toContain(ACCOUNT_IDENTITY_VERIFICATION_LINK_LABEL)
       expect(html).not.toContain('data-creates-session="true"')
     }
@@ -198,6 +212,31 @@ describe('messaging entry point', () => {
     }
   })
 
+  it('keeps the verified detail from granting send access to a suspended account', () => {
+    const card = accountIdentityVerificationCard({
+      accepted: 'verified',
+      stripeStatus: 'verified',
+    })
+    const html = renderToStaticMarkup(
+      createElement(IdentityVerificationCard, { card })
+    )
+    expect(card.statusLabel).toBe('Identity verified')
+    expect(card.detail).toBe(ACCOUNT_IDENTITY_VERIFIED_DETAIL)
+    expect(card.detail).not.toMatch(/you can request/i)
+    expect(card.action).toBeNull()
+    expect(card.createsSession).toBe(false)
+    expect(html).toContain(ACCOUNT_IDENTITY_VERIFIED_DETAIL)
+    expect(
+      isMessagingSuspended({ messaging_suspended_at: '2026-10-29T18:00:00.000Z' })
+    ).toBe(true)
+    const messaging = readFileSync('lib/require-messaging.ts', 'utf8')
+    expect(messaging).toContain('isMessagingSuspended(viewer.profile)')
+    expect(messaging).toContain('MESSAGING_SUSPENDED_SEND_ERROR')
+    expect(readFileSync('lib/account-identity-verification.ts', 'utf8')).not.toContain(
+      'messaging_suspended'
+    )
+  })
+
   it('does not let accepted identity bypass the recipient rule', () => {
     const sender = acceptedIdentityStatus({
       stripeStatus: 'verified',
@@ -211,5 +250,30 @@ describe('messaging entry point', () => {
     expect(sender).toBe('verified')
     expect(recipient).toBe('unverified')
     expect(IDENTITY_MUTUAL_MESSAGE).not.toBe(IDENTITY_REQUIRED_BEFORE_MESSAGING)
+  })
+
+  it('keeps entry-point wording and authorization separate from the account card', () => {
+    const entryPoints = [
+      'app/(club)/messages/page.tsx',
+      'app/(club)/messages/[conversationId]/page.tsx',
+      'components/messages/message-thread.tsx',
+      'components/matches/curated-match-intro-button.tsx',
+      'lib/require-messaging.ts',
+    ]
+    for (const path of entryPoints) {
+      const source = readFileSync(path, 'utf8')
+      expect(source).toContain('IDENTITY_REQUIRED_BEFORE_MESSAGING')
+      expect(source).not.toContain(ACCOUNT_IDENTITY_VERIFIED_DETAIL)
+      expect(source).not.toContain(ACCOUNT_IDENTITY_NOT_STARTED_DETAIL)
+    }
+    const profileForm = readFileSync(
+      'components/members/member-profile-message-form.tsx',
+      'utf8'
+    )
+    expect(profileForm).toContain('PROFILE_IDENTITY_REQUIRED_COPY')
+    expect(profileForm).not.toContain(ACCOUNT_IDENTITY_NOT_STARTED_DETAIL)
+    expect(readFileSync('lib/require-messaging.ts', 'utf8')).toContain(
+      'assertCanStartMessageRequest'
+    )
   })
 })
