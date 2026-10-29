@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireAdminClient } from '@/lib/supabase/require-admin-client'
 import {
   approveInPersonIdentity,
+  revocationReasonError,
   revokeInPersonIdentity,
 } from '@/lib/identity-verification-admin'
 
@@ -26,8 +27,20 @@ async function requireAdminActor() {
   return user.id
 }
 
+async function requireTargetMember(profileId: string) {
+  const { data, error } = await requireAdminClient()
+    .from('profiles')
+    .select('id')
+    .eq('id', profileId)
+    .maybeSingle()
+
+  if (error || !data) return { error: 'Member not found.' }
+  return { ok: true as const }
+}
+
 function revalidateIdentitySurfaces(profileId: string) {
   revalidatePath(`/admin/applications/${profileId}`)
+  revalidatePath(`/admin/users/${profileId}`)
   revalidatePath('/application/status')
   revalidatePath('/messages')
   revalidatePath('/profile')
@@ -39,18 +52,25 @@ function revalidateIdentitySurfaces(profileId: string) {
 
 export async function approveInPersonIdentityVerification(
   profileId: string,
-  note?: string
+  confirmed: boolean
 ) {
   const actorId = await requireAdminActor()
   if (!actorId) {
     return { error: 'Administrator access required.' }
   }
+  if (confirmed !== true) {
+    return {
+      error: 'Confirm the in-person identity check before recording it.',
+    }
+  }
+
+  const target = await requireTargetMember(profileId)
+  if (target.error) return { error: target.error }
 
   const result = await approveInPersonIdentity(requireAdminClient(), {
     isAdmin: true,
     actorId,
     profileId,
-    note,
   })
   if (!result.ok) return { error: result.error }
 
@@ -58,16 +78,25 @@ export async function approveInPersonIdentityVerification(
   return { success: true as const, alreadyVerified: result.alreadyVerified }
 }
 
-export async function revokeInPersonIdentityVerification(profileId: string) {
+export async function revokeInPersonIdentityVerification(
+  profileId: string,
+  reason: string
+) {
   const actorId = await requireAdminActor()
   if (!actorId) {
     return { error: 'Administrator access required.' }
   }
+  const reasonError = revocationReasonError(reason)
+  if (reasonError) return { error: reasonError }
+
+  const target = await requireTargetMember(profileId)
+  if (target.error) return { error: target.error }
 
   const result = await revokeInPersonIdentity(requireAdminClient(), {
     isAdmin: true,
     actorId,
     profileId,
+    reason,
   })
   if (!result.ok) return { error: result.error }
 

@@ -23,7 +23,10 @@ import RefreshIdentityStatusButton from '@/components/admin/refresh-identity-sta
 import AdminBillingStatus from '@/components/admin/admin-billing-status'
 import AdminLocalityReview from '@/components/admin/admin-locality-review'
 import AdminMemberVouches from '@/components/admin/admin-member-vouches'
-import { loadActiveInPersonIdentity } from '@/lib/identity-verification-admin'
+import {
+  acceptedIdentityForAdmin,
+  loadInPersonIdentityAdminState,
+} from '@/lib/identity-verification-admin'
 import { loadAdminVouchesForMember } from '@/lib/load-member-vouches'
 import {
   identityVerificationDisplayLabel,
@@ -89,10 +92,15 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
   const locality = parseLocalityConfirmation(applicant.locality_confirmation)
   const billing = parseMembershipBilling(applicant.membership_billing)
   const memberVouches = await loadAdminVouchesForMember(applicant.id)
-  const inPersonIdentity = await loadActiveInPersonIdentity(
+  const inPersonIdentity = await loadInPersonIdentityAdminState(
     supabase,
     applicant.id
   )
+  const acceptedIdentity = acceptedIdentityForAdmin({
+    stripeStatus: applicant.identity_verification_status,
+    lookupOk: inPersonIdentity.lookupOk,
+    active: Boolean(inPersonIdentity.active),
+  })
   const legalName = [draft.profile.firstName, draft.profile.lastName]
     .filter(Boolean)
     .join(' ')
@@ -379,7 +387,11 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
             <RefreshIdentityStatusButton applicantId={applicant.id} />
             <AdminInPersonIdentityVerification
               profileId={applicant.id}
-              active={inPersonIdentity}
+              accepted={acceptedIdentity}
+              stripeStatus={applicant.identity_verification_status}
+              lookupOk={inPersonIdentity.lookupOk}
+              active={inPersonIdentity.active}
+              history={inPersonIdentity.history}
             />
             <div className="mt-4">
               <AdminApprovalGates

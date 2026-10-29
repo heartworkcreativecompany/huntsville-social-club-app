@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
+  acceptedIdentityStatus,
   legacyInPersonInsert,
   refuseLegacyIdentityGateUpdate,
   resolveIdentityVerification,
 } from '@/lib/identity-verification'
+import { isMemberPubliclyVerified } from '@/lib/membership-systems'
 
 const MIGRATION = readFileSync(
   'supabase/migrations/20261027200000_in_person_identity_verification.sql',
@@ -123,6 +125,74 @@ describe('legacy in-person recognition', () => {
         '2026-10-27T18:00:00.000Z'
       )
     ).toBeNull()
+  })
+})
+
+describe('accepted identity resolver', () => {
+  it('accepts an active in-person record', () => {
+    expect(
+      acceptedIdentityStatus({
+        stripeStatus: 'not_started',
+        inPersonLookup: {
+          ok: true,
+          record: { status: 'verified', revokedAt: null },
+        },
+      })
+    ).toBe('verified')
+  })
+
+  it('removes eligibility when in-person is revoked and Stripe is not verified', () => {
+    expect(
+      acceptedIdentityStatus({
+        stripeStatus: 'requires_input',
+        inPersonLookup: {
+          ok: true,
+          record: { status: 'revoked', revokedAt: '2026-10-02T00:00:00.000Z' },
+        },
+      })
+    ).toBe('unverified')
+  })
+
+  it('keeps Stripe accepted after in-person revocation', () => {
+    expect(
+      acceptedIdentityStatus({
+        stripeStatus: 'verified',
+        inPersonLookup: {
+          ok: true,
+          record: { status: 'revoked', revokedAt: '2026-10-02T00:00:00.000Z' },
+        },
+      })
+    ).toBe('verified')
+  })
+
+  it('does not grant the public verified badge from identity alone', () => {
+    expect(isMemberPubliclyVerified({ email: 'incomplete' }, 'verified')).toBe(
+      false
+    )
+    expect(
+      isMemberPubliclyVerified(
+        {
+          email: 'approved',
+          phone: 'approved',
+          profile_reviewed: 'approved',
+          photo_reviewed: 'approved',
+          locality: 'approved',
+        },
+        'verified'
+      )
+    ).toBe(true)
+    expect(
+      isMemberPubliclyVerified(
+        {
+          email: 'approved',
+          phone: 'approved',
+          profile_reviewed: 'approved',
+          photo_reviewed: 'approved',
+          locality: 'approved',
+        },
+        'unverified'
+      )
+    ).toBe(false)
   })
 })
 
