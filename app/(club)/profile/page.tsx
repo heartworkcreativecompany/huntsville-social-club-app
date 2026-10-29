@@ -26,7 +26,7 @@ import { parseVerificationState } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
 import ProfileContactEmailCard from '@/components/profile/profile-contact-email-card'
 import EmailMarketingPreferenceCard from '@/components/profile/email-marketing-preference-card'
-import { localEmailMarketingOptedIn } from '@/lib/email-marketing-preference'
+import { accountMarketingPreferenceView } from '@/lib/email-marketing-preference'
 import IdentityVerificationCard from '@/components/profile/identity-verification-card'
 import { accountIdentityVerificationCard } from '@/lib/account-identity-verification'
 import ProfilePhoneVerificationCard from '@/components/profile/profile-phone-verification-card'
@@ -69,8 +69,8 @@ export default async function YourProfilePage() {
     .select('email_marketing_opt_in, email_marketing_opted_out_at')
     .eq('id', viewer.userId)
     .maybeSingle()
-  const marketingOptedIn = localEmailMarketingOptedIn({
-    readable: !marketingResult.error,
+  const marketingPreference = accountMarketingPreferenceView({
+    readFailed: Boolean(marketingResult.error),
     emailMarketingOptIn: marketingResult.data?.email_marketing_opt_in,
     emailMarketingOptedOutAt: marketingResult.data?.email_marketing_opted_out_at,
   })
@@ -280,13 +280,13 @@ export default async function YourProfilePage() {
             </ProfileSection>
           ) : null}
 
-          {marketingReady ? (
+          {marketingPreference.available ? (
             <ProfileSection
               id="email-preferences"
               title="Email preferences"
-              summary={marketingOptedIn ? 'Opted in' : 'Not opted in'}
+              summary={marketingPreference.optedIn ? 'Opted in' : 'Not opted in'}
             >
-            <EmailMarketingPreferenceCard optedIn={marketingOptedIn} />
+            <EmailMarketingPreferenceCard optedIn={marketingPreference.optedIn} />
             </ProfileSection>
           ) : null}
 

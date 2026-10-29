@@ -82,6 +82,31 @@ export function localEmailMarketingOptedIn(input: {
   return input.emailMarketingOptIn === true && input.emailMarketingOptedOutAt == null
 }
 
+export type AccountMarketingPreferenceView =
+  | { available: false }
+  | { available: true; optedIn: boolean }
+
+/**
+ * A failed consent read hides the preference controls.
+ * It is not rendered as a confirmed opt-out, so the member cannot save
+ * from an unavailable record.
+ */
+export function accountMarketingPreferenceView(input: {
+  readFailed: boolean
+  emailMarketingOptIn: boolean | null | undefined
+  emailMarketingOptedOutAt: string | null | undefined
+}): AccountMarketingPreferenceView {
+  if (input.readFailed) return { available: false }
+  return {
+    available: true,
+    optedIn: localEmailMarketingOptedIn({
+      readable: true,
+      emailMarketingOptIn: input.emailMarketingOptIn,
+      emailMarketingOptedOutAt: input.emailMarketingOptedOutAt,
+    }),
+  }
+}
+
 /**
  * Missing and subscribed contacts can be enrolled by the existing worker.
  * Unsubscribed refuses resubscription. Any other observation, including a

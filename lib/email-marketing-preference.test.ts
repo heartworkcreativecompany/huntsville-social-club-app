@@ -21,6 +21,7 @@ import {
   ACCOUNT_EMAIL_MARKETING_OPT_IN_LABEL,
   completeAccountMarketingPreference,
   displayedMarketingOptIn,
+  accountMarketingPreferenceView,
   localEmailMarketingOptedIn,
   EMAIL_MARKETING_PREFERENCE_SAVED,
   EMAIL_MARKETING_PREFERENCE_SAVE_ERROR,
@@ -208,9 +209,45 @@ describe('local marketing checkbox', () => {
       })
     ).toBe(false)
     const page = readFileSync('app/(club)/profile/page.tsx', 'utf8')
-    expect(page).toContain('localEmailMarketingOptedIn')
+    expect(page).toContain('accountMarketingPreferenceView')
     expect(page).toContain('email_marketing_opt_in, email_marketing_opted_out_at')
     expect(page).not.toContain('lookupMarketingProviderContact')
+    expect(page).not.toContain('marketingReady')
+  })
+
+  it('hides preference controls when the consent read fails instead of showing an opt-out', () => {
+    const failed = accountMarketingPreferenceView({
+      readFailed: true,
+      emailMarketingOptIn: false,
+      emailMarketingOptedOutAt: null,
+    })
+    expect(failed).toEqual({ available: false })
+    expect(failed).not.toEqual({ available: true, optedIn: false })
+    expect(failed.available).toBe(false)
+
+    const optedIn = accountMarketingPreferenceView({
+      readFailed: false,
+      emailMarketingOptIn: true,
+      emailMarketingOptedOutAt: null,
+    })
+    expect(optedIn).toEqual({ available: true, optedIn: true })
+    const optedOut = accountMarketingPreferenceView({
+      readFailed: false,
+      emailMarketingOptIn: false,
+      emailMarketingOptedOutAt: '2026-01-01T00:00:00.000Z',
+    })
+    expect(optedOut).toEqual({ available: true, optedIn: false })
+    if (!optedOut.available) throw new Error('expected a readable opt-out')
+    const unchecked = renderToStaticMarkup(
+      createElement(EmailMarketingPreferenceCard, { optedIn: optedOut.optedIn })
+    )
+    expect(unchecked).toContain('Save email preference')
+    expect(unchecked).not.toContain('checked')
+
+    const page = readFileSync('app/(club)/profile/page.tsx', 'utf8')
+    expect(page).toContain('marketingPreference.available')
+    expect(page).toContain('optedIn={marketingPreference.optedIn}')
+    expect(page).toContain('readFailed: Boolean(marketingResult.error)')
   })
 })
 
