@@ -1,6 +1,9 @@
 -- Record and revoke in-person identity in one transaction with the moderation audit.
 -- An audit failure raises and rolls the verification change back.
--- The acting admin is auth.uid(). The functions do not accept an actor id.
+-- The acting admin is the authenticated request JWT subject, using the same
+-- claim order as auth.uid() and auth.role(). The functions do not accept an
+-- actor id and do not call auth.*, because this migration role cannot grant
+-- schema auth.
 -- Timestamps are database clocks. This does not write Stripe status,
 -- membership approval, subscription, or suspension.
 --
@@ -8,18 +11,29 @@
 -- in_person_identity_verifications. The existing service_role grant on that
 -- table is unchanged. service_role is not granted these functions.
 --
+-- PUBLIC already has USAGE on schema public, so the writer is not granted it
+-- again. CREATE on schema public is granted only for the function-ownership
+-- statements below and is revoked before this file finishes. The outer
+-- migration transaction must stay open across those statements.
+--
 -- The function, its policies, its revoke, and its grant are one migration.
--- Supabase applies a migration file in a single transaction, so a failure
--- cannot leave EXECUTE granted to PUBLIC.
+-- A failure cannot leave EXECUTE granted to PUBLIC or CREATE granted to the
+-- writer.
 
 do $role$
 begin
   if not exists (
     select 1 from pg_catalog.pg_roles where rolname = 'in_person_identity_writer'
   ) then
-    create role in_person_identity_writer nologin;
+    create role in_person_identity_writer
+      nologin
+      nocreaterole
+      nocreatedb;
   else
-    alter role in_person_identity_writer nologin;
+    alter role in_person_identity_writer
+      nologin
+      nocreaterole
+      nocreatedb;
   end if;
 end
 $role$;
@@ -38,37 +52,31 @@ begin
 end
 $revoke_members$;
 
-grant usage on schema public to in_person_identity_writer;
-grant usage on schema auth to in_person_identity_writer;
+do $assert_public_usage$
+begin
+  if not pg_catalog.has_schema_privilege(
+    'in_person_identity_writer',
+    'public',
+    'USAGE'
+  ) then
+    raise exception 'in_person_identity_writer lacks effective USAGE on schema public';
+  end if;
+  if not pg_catalog.has_language_privilege(
+    'in_person_identity_writer',
+    'plpgsql',
+    'USAGE'
+  ) then
+    raise exception 'in_person_identity_writer lacks effective USAGE on language plpgsql';
+  end if;
+end
+$assert_public_usage$;
+
 grant select, insert, update
   on table public.in_person_identity_verifications
   to in_person_identity_writer;
 grant insert on table public.moderation_actions to in_person_identity_writer;
 grant select on table public.profiles to in_person_identity_writer;
 grant execute on function public.is_admin(uuid) to in_person_identity_writer;
-
-do $auth_exec$
-begin
-  if exists (
-    select 1
-    from pg_catalog.pg_proc as proc
-    join pg_catalog.pg_namespace as ns on ns.oid = proc.pronamespace
-    where ns.nspname = 'auth'
-      and proc.proname = 'uid'
-  ) then
-    grant execute on function auth.uid() to in_person_identity_writer;
-  end if;
-  if exists (
-    select 1
-    from pg_catalog.pg_proc as proc
-    join pg_catalog.pg_namespace as ns on ns.oid = proc.pronamespace
-    where ns.nspname = 'auth'
-      and proc.proname = 'role'
-  ) then
-    grant execute on function auth.role() to in_person_identity_writer;
-  end if;
-end
-$auth_exec$;
 
 drop policy if exists in_person_identity_writer_reads_profiles on public.profiles;
 create policy in_person_identity_writer_reads_profiles
@@ -116,6 +124,15 @@ create policy in_person_identity_writer_inserts_audits
     and source_type = 'in_person_identity_verification'
   );
 
+do $grant_runner$
+begin
+  execute format('grant in_person_identity_writer to %I', current_user);
+end
+$grant_runner$;
+
+grant create on schema public to in_person_identity_writer;
+set local role in_person_identity_writer;
+
 create or replace function public.record_in_person_identity_verification(
   target_profile_id uuid,
   confirmed boolean
@@ -126,11 +143,19 @@ set search_path = ''
 as $function$
 declare
   actor uuid;
+  session_role text;
   existing_id uuid;
   inserted_id uuid;
 begin
-  actor := auth.uid();
-  if actor is null or coalesce(auth.role(), ''::text) is distinct from 'authenticated' then
+  actor := coalesce(
+    nullif(pg_catalog.current_setting('request.jwt.claim.sub', true), ''::text),
+    (nullif(pg_catalog.current_setting('request.jwt.claims', true), ''::text)::jsonb ->> 'sub')
+  )::uuid;
+  session_role := coalesce(
+    nullif(pg_catalog.current_setting('request.jwt.claim.role', true), ''::text),
+    (nullif(pg_catalog.current_setting('request.jwt.claims', true), ''::text)::jsonb ->> 'role')
+  );
+  if actor is null or session_role is distinct from 'authenticated' then
     raise exception 'authentication required'
       using errcode = '42501';
   end if;
@@ -226,12 +251,20 @@ set search_path = ''
 as $function$
 declare
   actor uuid;
+  session_role text;
   existing_id uuid;
   updated_id uuid;
   clean_reason text;
 begin
-  actor := auth.uid();
-  if actor is null or coalesce(auth.role(), ''::text) is distinct from 'authenticated' then
+  actor := coalesce(
+    nullif(pg_catalog.current_setting('request.jwt.claim.sub', true), ''::text),
+    (nullif(pg_catalog.current_setting('request.jwt.claims', true), ''::text)::jsonb ->> 'sub')
+  )::uuid;
+  session_role := coalesce(
+    nullif(pg_catalog.current_setting('request.jwt.claim.role', true), ''::text),
+    (nullif(pg_catalog.current_setting('request.jwt.claims', true), ''::text)::jsonb ->> 'role')
+  );
+  if actor is null or session_role is distinct from 'authenticated' then
     raise exception 'authentication required'
       using errcode = '42501';
   end if;
@@ -315,20 +348,6 @@ begin
 end;
 $function$;
 
-grant in_person_identity_writer to postgres;
-do $grant_owner$
-begin
-  if current_user is distinct from 'postgres' then
-    execute format('grant in_person_identity_writer to %I', current_user);
-  end if;
-end
-$grant_owner$;
-
-alter function public.record_in_person_identity_verification(uuid, boolean)
-  owner to in_person_identity_writer;
-alter function public.revoke_in_person_identity_verification(uuid, text)
-  owner to in_person_identity_writer;
-
 revoke all on function public.record_in_person_identity_verification(uuid, boolean)
   from public, anon, authenticated, service_role;
 revoke all on function public.revoke_in_person_identity_verification(uuid, text)
@@ -339,7 +358,79 @@ grant execute on function public.revoke_in_person_identity_verification(uuid, te
   to authenticated;
 
 comment on function public.record_in_person_identity_verification(uuid, boolean) is
-  'Admin records in-person identity and its moderation audit in one transaction. Actor is auth.uid().';
+  'Admin records in-person identity and its moderation audit in one transaction. Actor is the authenticated JWT subject.';
 
 comment on function public.revoke_in_person_identity_verification(uuid, text) is
-  'Admin revokes the active in-person identity and writes the audit reason in one transaction. Actor is auth.uid().';
+  'Admin revokes the active in-person identity and writes the audit reason in one transaction. Actor is the authenticated JWT subject.';
+
+reset role;
+revoke create on schema public from in_person_identity_writer;
+
+do $assert_writer_scope$
+begin
+  if pg_catalog.has_schema_privilege(
+    'in_person_identity_writer',
+    'public',
+    'CREATE'
+  ) then
+    raise exception 'in_person_identity_writer must not keep CREATE on schema public';
+  end if;
+  if exists (
+    select 1
+    from pg_catalog.pg_namespace as namespace
+    cross join lateral pg_catalog.aclexplode(namespace.nspacl) as acl
+    join pg_catalog.pg_roles as grantee on grantee.oid = acl.grantee
+    where namespace.nspname = 'auth'
+      and grantee.rolname = 'in_person_identity_writer'
+  ) then
+    raise exception 'in_person_identity_writer must not receive an auth schema grant';
+  end if;
+  if exists (
+    select 1
+    from pg_catalog.pg_roles
+    where rolname = 'in_person_identity_writer'
+      and (
+        rolsuper
+        or rolcreaterole
+        or rolcreatedb
+        or rolcanlogin
+        or rolbypassrls
+        or rolreplication
+      )
+  ) then
+    raise exception 'in_person_identity_writer has elevated role attributes';
+  end if;
+  if exists (
+    select 1
+    from pg_catalog.pg_auth_members as membership
+    join pg_catalog.pg_roles as member_role on member_role.oid = membership.member
+    join pg_catalog.pg_roles as granted_role on granted_role.oid = membership.roleid
+    where member_role.rolname = 'in_person_identity_writer'
+      and granted_role.rolname in (
+        'anon',
+        'authenticated',
+        'service_role',
+        'postgres',
+        'pg_database_owner',
+        'supabase_admin',
+        'supabase_auth_admin'
+      )
+  ) then
+    raise exception 'in_person_identity_writer has a forbidden role membership';
+  end if;
+  if exists (
+    select 1
+    from pg_catalog.pg_proc as proc
+    join pg_catalog.pg_namespace as namespace on namespace.oid = proc.pronamespace
+    join pg_catalog.pg_roles as owner_role on owner_role.oid = proc.proowner
+    where namespace.nspname = 'public'
+      and proc.proname in (
+        'record_in_person_identity_verification',
+        'revoke_in_person_identity_verification'
+      )
+      and owner_role.rolname is distinct from 'in_person_identity_writer'
+  ) then
+    raise exception 'in-person identity functions must be owned by in_person_identity_writer';
+  end if;
+end
+$assert_writer_scope$;

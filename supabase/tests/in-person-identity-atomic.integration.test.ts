@@ -27,15 +27,47 @@ const FAIL_RECORD_MEMBER = '88888888-8888-4888-8888-888888888888'
 const FAIL_REVOKE_MEMBER = '99999999-9999-4999-8999-999999999999'
 const PLAIN_MEMBER = '12121212-1212-4121-8121-121212121212'
 
+const CLAIMS_MEMBER = '10101010-1010-4010-8010-101010101010'
+const MIGRATION_ROLE = 'hsc_migration_admin'
+
 const PRELUDE = `
+create role hsc_migration_admin
+  login
+  nosuperuser
+  createrole
+  createdb
+  bypassrls
+  inherit;
+create role hsc_auth_owner nologin nosuperuser nobypassrls;
+
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin nosuperuser nobypassrls;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin nosuperuser nobypassrls;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin nosuperuser nobypassrls;
+  end if;
+end
+$$;
+
 create schema if not exists auth;
+alter schema auth owner to hsc_auth_owner;
+revoke all on schema auth from public;
+grant usage on schema auth to hsc_migration_admin, anon, authenticated, service_role;
 
 create or replace function auth.uid()
 returns uuid
 language sql
 stable
 as $$
-  select nullif(current_setting('app.current_user_id', true), '')::uuid
+  select coalesce(
+    nullif(current_setting('request.jwt.claim.sub', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
+  )::uuid
 $$;
 
 create or replace function auth.role()
@@ -43,26 +75,16 @@ returns text
 language sql
 stable
 as $$
-  select nullif(current_setting('request.jwt.claim.role', true), '')
+  select coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
+  )::text
 $$;
 
-do $$
-begin
-  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
-    create role authenticated nologin;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'anon') then
-    create role anon nologin;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'service_role') then
-    create role service_role nologin;
-  end if;
-end
-$$;
-
-grant usage on schema auth to authenticated, anon, service_role, public;
-grant execute on function auth.uid() to authenticated, anon, service_role, public;
-grant execute on function auth.role() to authenticated, anon, service_role, public;
+alter function auth.uid() owner to hsc_auth_owner;
+alter function auth.role() owner to hsc_auth_owner;
+grant execute on function auth.uid() to public;
+grant execute on function auth.role() to public;
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -124,8 +146,6 @@ create table public.moderation_actions (
 );
 
 alter table public.moderation_actions enable row level security;
-
-grant usage on schema public to authenticated, anon, service_role;
 `
 
 const TERMINATE_SQL = `
@@ -190,11 +210,11 @@ async function asRole<T>(
     await client.query(`select set_config('request.jwt.claim.role', $1, true)`, [
       role,
     ])
-    if (userId) {
-      await client.query(`select set_config('app.current_user_id', $1, true)`, [
-        userId,
-      ])
-    }
+    await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
+      userId ?? '',
+    ])
+    await client.query(`select set_config('request.jwt.claims', ''::text, true)`)
+    await client.query(`select set_config('app.current_user_id', ''::text, true)`)
     await client.query(`set local role ${role}`)
     const result = await fn(client)
     await client.query('commit')
@@ -237,6 +257,9 @@ describe('atomic in-person identity database functions', () => {
     await withMaintenance(target, async (client) => {
       await client.query(TERMINATE_SQL)
       await client.query(DROP_SQL)
+      await client.query('drop role if exists hsc_migration_admin')
+      await client.query('drop role if exists in_person_identity_writer')
+      await client.query('drop role if exists hsc_auth_owner')
       await client.query(CREATE_SQL)
     })
     owner = new Client({ connectionString: testDatabaseUrl })
@@ -246,18 +269,60 @@ describe('atomic in-person identity database functions', () => {
       throw new Error('Refusing in-person identity SQL: connected to the wrong database.')
     }
     await owner.query(PRELUDE)
+    await withMaintenance(target, async (client) => {
+      await client.query(
+        'alter database hsc_in_person_identity_test owner to hsc_migration_admin'
+      )
+    })
+    await owner.query(`
+      alter schema public owner to pg_database_owner;
+      revoke all on schema public from public;
+      revoke all on schema public from hsc_migration_admin;
+      grant usage on schema public to public;
+      grant usage, create on schema public to pg_database_owner;
+      grant usage on schema public to hsc_migration_admin;
+    `)
     await owner.query(
       readFileSync(
         'supabase/migrations/20261027200000_in_person_identity_verification.sql',
         'utf8'
       )
     )
-    await owner.query(
-      readFileSync(
-        'supabase/migrations/20261029190000_in_person_identity_atomic_audit.sql',
-        'utf8'
+    await owner.query(`
+      alter table public.profiles owner to hsc_migration_admin;
+      alter table public.moderation_actions owner to hsc_migration_admin;
+      alter table public.in_person_identity_verifications owner to hsc_migration_admin;
+      alter function public.is_admin(uuid) owner to hsc_migration_admin;
+      alter function public.set_updated_at() owner to hsc_migration_admin;
+      alter function public.profile_has_accepted_identity(uuid) owner to hsc_migration_admin;
+    `)
+    const migrationUrl = new URL(testDatabaseUrl)
+    migrationUrl.username = MIGRATION_ROLE
+    migrationUrl.password = ''
+    const migration = new Client({ connectionString: migrationUrl.toString() })
+    await migration.connect()
+    try {
+      const who = await migration.query<{ name: string; is_super: boolean }>(`
+        select current_user as name,
+               (select rolsuper from pg_roles where rolname = current_user) as is_super
+      `)
+      if (who.rows[0]?.name !== MIGRATION_ROLE || who.rows[0]?.is_super !== false) {
+        throw new Error('Refusing to apply the in-person migration as a superuser.')
+      }
+      await migration.query('begin')
+      await migration.query(
+        readFileSync(
+          'supabase/migrations/20261029190000_in_person_identity_atomic_audit.sql',
+          'utf8'
+        )
       )
-    )
+      await migration.query('commit')
+    } catch (error) {
+      await migration.query('rollback').catch(() => undefined)
+      throw error
+    } finally {
+      await migration.end()
+    }
     await owner.query('alter role service_role bypassrls')
     await insertProfile(ADMIN, 'admin')
     await insertProfile(ADMIN_2, 'admin')
@@ -268,6 +333,7 @@ describe('atomic in-person identity database functions', () => {
     await insertProfile(REVOKE_MEMBER, 'member')
     await insertProfile(FAIL_RECORD_MEMBER, 'member')
     await insertProfile(FAIL_REVOKE_MEMBER, 'member')
+    await insertProfile(CLAIMS_MEMBER, 'member')
   })
 
   afterAll(async () => {
@@ -277,6 +343,9 @@ describe('atomic in-person identity database functions', () => {
     await withMaintenance(target, async (client) => {
       await client.query(TERMINATE_SQL)
       await client.query(DROP_SQL)
+      await client.query('drop role if exists hsc_migration_admin')
+      await client.query('drop role if exists in_person_identity_writer')
+      await client.query('drop role if exists hsc_auth_owner')
     })
   })
 
@@ -316,7 +385,7 @@ describe('atomic in-person identity database functions', () => {
     for (const row of functions.rows) {
       expect(row.proconfig).toContain('search_path=""')
       expect(String(row.definition)).not.toMatch(/when unique_violation|when others/i)
-      expect(String(row.args)).not.toMatch(/actor/i)
+      expect(String(row.definition)).not.toMatch(/auth\.uid\(|auth\.role\(/)
     }
 
     const privileges = await query(`
@@ -344,6 +413,149 @@ describe('atomic in-person identity database functions', () => {
       anon_insert: false,
       service_insert: true,
     })
+  })
+
+  it('keeps the writer role inside the migration role’s privileges', async () => {
+    const migrationRole = await query(
+      `select rolsuper, rolcreaterole, rolbypassrls
+       from pg_roles
+       where rolname = $1`,
+      [MIGRATION_ROLE]
+    )
+    expect(migrationRole.rows[0]).toEqual({
+      rolsuper: false,
+      rolcreaterole: true,
+      rolbypassrls: true,
+    })
+
+    const writer = await query(`
+      select rolcanlogin, rolsuper, rolcreaterole, rolcreatedb, rolbypassrls, rolreplication
+      from pg_roles
+      where rolname = 'in_person_identity_writer'
+    `)
+    expect(writer.rows[0]).toEqual({
+      rolcanlogin: false,
+      rolsuper: false,
+      rolcreaterole: false,
+      rolcreatedb: false,
+      rolbypassrls: false,
+      rolreplication: false,
+    })
+
+    const scope = await query(`
+      select
+        has_schema_privilege('in_person_identity_writer', 'public', 'USAGE') as public_usage,
+        has_schema_privilege('in_person_identity_writer', 'public', 'CREATE') as public_create,
+        has_schema_privilege('in_person_identity_writer', 'auth', 'USAGE') as auth_usage,
+        exists (
+          select 1
+          from pg_namespace namespace
+          cross join lateral aclexplode(namespace.nspacl) acl
+          join pg_roles grantee on grantee.oid = acl.grantee
+          where namespace.nspname = 'auth'
+            and grantee.rolname = 'in_person_identity_writer'
+        ) as auth_acl,
+        exists (
+          select 1
+          from pg_auth_members membership
+          join pg_roles member_role on member_role.oid = membership.member
+          join pg_roles granted_role on granted_role.oid = membership.roleid
+          where member_role.rolname = 'in_person_identity_writer'
+            and granted_role.rolname in (
+              'anon', 'authenticated', 'service_role', 'postgres',
+              'pg_database_owner', 'hsc_migration_admin'
+            )
+        ) as forbidden_membership,
+        exists (
+          select 1
+          from pg_auth_members membership
+          join pg_roles member_role on member_role.oid = membership.member
+          join pg_roles granted_role on granted_role.oid = membership.roleid
+          where granted_role.rolname = 'in_person_identity_writer'
+            and member_role.rolname = 'hsc_migration_admin'
+        ) as runner_can_assume_writer
+    `)
+    expect(scope.rows[0]).toEqual({
+      public_usage: true,
+      public_create: false,
+      auth_usage: false,
+      auth_acl: false,
+      forbidden_membership: false,
+      runner_can_assume_writer: true,
+    })
+
+    const directGrants = await query(`
+      select c.relname as table_name, acl.privilege_type
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      cross join lateral aclexplode(c.relacl) acl
+      join pg_roles grantee on grantee.oid = acl.grantee
+      where n.nspname = 'public'
+        and grantee.rolname = 'in_person_identity_writer'
+        and c.relname in (
+          'in_person_identity_verifications',
+          'moderation_actions',
+          'profiles'
+        )
+      order by c.relname, acl.privilege_type
+    `)
+    expect(directGrants.rows).toEqual([
+      { table_name: 'in_person_identity_verifications', privilege_type: 'INSERT' },
+      { table_name: 'in_person_identity_verifications', privilege_type: 'SELECT' },
+      { table_name: 'in_person_identity_verifications', privilege_type: 'UPDATE' },
+      { table_name: 'moderation_actions', privilege_type: 'INSERT' },
+      { table_name: 'profiles', privilege_type: 'SELECT' },
+    ])
+
+    const policies = await query(`
+      select tablename, policyname, cmd, roles, qual, with_check
+      from pg_policies
+      where policyname like 'in_person_identity_writer%'
+      order by policyname
+    `)
+    expect(policies.rows).toEqual([
+      expect.objectContaining({
+        policyname: 'in_person_identity_writer_inserts_audits',
+        tablename: 'moderation_actions',
+        cmd: 'INSERT',
+        qual: null,
+      }),
+      expect.objectContaining({
+        policyname: 'in_person_identity_writer_inserts_verifications',
+        tablename: 'in_person_identity_verifications',
+        cmd: 'INSERT',
+        qual: null,
+        with_check: 'true',
+      }),
+      expect.objectContaining({
+        policyname: 'in_person_identity_writer_reads_profiles',
+        tablename: 'profiles',
+        cmd: 'SELECT',
+        qual: 'true',
+        with_check: null,
+      }),
+      expect.objectContaining({
+        policyname: 'in_person_identity_writer_reads_verifications',
+        tablename: 'in_person_identity_verifications',
+        cmd: 'SELECT',
+        qual: 'true',
+        with_check: null,
+      }),
+      expect.objectContaining({
+        policyname: 'in_person_identity_writer_updates_verifications',
+        tablename: 'in_person_identity_verifications',
+        cmd: 'UPDATE',
+        qual: 'true',
+        with_check: 'true',
+      }),
+    ])
+    const auditPolicy = policies.rows.find(
+      (row) => row.policyname === 'in_person_identity_writer_inserts_audits'
+    )
+    expect(String(auditPolicy?.with_check)).toContain('in_person_identity_verified')
+    expect(String(auditPolicy?.with_check)).toContain('in_person_identity_revoked')
+    expect(String(auditPolicy?.with_check)).toContain('in_person_identity_verification')
+    expect(String(auditPolicy?.roles)).toContain('in_person_identity_writer')
   })
 
   it('records and revokes for an admin, preserving history and the original actor', async () => {
@@ -688,6 +900,68 @@ describe('atomic in-person identity database functions', () => {
       'First admin revocation.',
       'Second admin revocation.',
     ]).toContain(audits.rows[0].reason)
+  })
+
+  it('reads the same request claims as auth.uid and ignores a caller-supplied actor id', async () => {
+    const claimsOnly = new Client({ connectionString: testDatabaseUrl })
+    await claimsOnly.connect()
+    try {
+      await claimsOnly.query('begin')
+      await claimsOnly.query(
+        `select set_config('request.jwt.claim.sub', ''::text, true),
+                set_config('request.jwt.claim.role', ''::text, true),
+                set_config('request.jwt.claims', $1, true),
+                set_config('app.current_user_id', $2, true)`,
+        [
+          JSON.stringify({ sub: ADMIN, role: 'authenticated' }),
+          PLAIN_MEMBER,
+        ]
+      )
+      await claimsOnly.query('set local role authenticated')
+      const recorded = await claimsOnly.query(
+        `select public.record_in_person_identity_verification($1, true) as result`,
+        [CLAIMS_MEMBER]
+      )
+      const compared = await claimsOnly.query(
+        `select auth.uid() as auth_uid, auth.role() as auth_role`
+      )
+      await claimsOnly.query('commit')
+      expect(compared.rows[0]).toEqual({
+        auth_uid: ADMIN,
+        auth_role: 'authenticated',
+      })
+      const stored = await query(
+        `select approved_by from public.in_person_identity_verifications
+         where id = $1`,
+        [recorded.rows[0].result.id]
+      )
+      expect(stored.rows[0].approved_by).toBe(ADMIN)
+    } finally {
+      await claimsOnly.end()
+    }
+
+    const spoofed = new Client({ connectionString: testDatabaseUrl })
+    await spoofed.connect()
+    try {
+      await spoofed.query('begin')
+      await spoofed.query(
+        `select set_config('request.jwt.claim.sub', ''::text, true),
+                set_config('request.jwt.claim.role', 'authenticated', true),
+                set_config('request.jwt.claims', ''::text, true),
+                set_config('app.current_user_id', $1, true)`,
+        [ADMIN]
+      )
+      await spoofed.query('set local role authenticated')
+      await expect(
+        spoofed.query(
+          `select public.record_in_person_identity_verification($1, true)`,
+          [PLAIN_MEMBER]
+        )
+      ).rejects.toThrow(/authentication required/)
+      await spoofed.query('rollback')
+    } finally {
+      await spoofed.end()
+    }
   })
 
   it('keeps Stripe acceptance after in-person revocation and ignores a spoofed target', async () => {
