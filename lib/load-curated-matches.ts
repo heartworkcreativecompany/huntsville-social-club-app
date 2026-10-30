@@ -7,7 +7,9 @@ import {
   deriveMatchExplanations,
   listSharedInterestLabels,
 } from '@/lib/compatibility/match-explanation'
+import { visibleMatchingCandidateIds } from '@/lib/matching-identity'
 import { memberDisplayName } from '@/lib/members-discovery'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { photosFromApplicationDraft, primaryMemberPhoto } from '@/lib/member-photos'
 
 export type CuratedMatchIntroStatus =
@@ -66,9 +68,26 @@ export async function loadCuratedMatchRecommendations(
     return { items: [], error: error.message }
   }
 
-  const recommendationIds = (rows ?? []).map((row) => row.id)
   const recommendedIds = [
     ...new Set((rows ?? []).map((row) => row.recommended_user_id)),
+  ]
+  const visibility = await visibleMatchingCandidateIds(
+    createAdminClient(),
+    userId,
+    recommendedIds
+  )
+  if (!visibility.ok) {
+    return {
+      items: [],
+      error: 'Identity verification could not be confirmed.',
+    }
+  }
+  const visibleRows = (rows ?? []).filter((row) =>
+    visibility.visibleIds.has(row.recommended_user_id)
+  )
+  const recommendationIds = visibleRows.map((row) => row.id)
+  const visibleRecommendedIds = [
+    ...new Set(visibleRows.map((row) => row.recommended_user_id)),
   ]
 
   const profileById = new Map<
@@ -83,13 +102,13 @@ export async function loadCuratedMatchRecommendations(
     }
   >()
 
-  if (recommendedIds.length > 0) {
+  if (visibleRecommendedIds.length > 0) {
     const { data: profiles } = await supabase
       .from(MEMBER_PROFILES_VIEW)
       .select(
         'id, full_name, location_area, membership_intent, application_draft, discovery_interests'
       )
-      .in('id', recommendedIds)
+      .in('id', visibleRecommendedIds)
 
     for (const profile of profiles ?? []) {
       profileById.set(profile.id, profile)
@@ -122,7 +141,7 @@ export async function loadCuratedMatchRecommendations(
     }
   }
 
-  const items: CuratedMatchListItem[] = (rows ?? []).map((row) => {
+  const items: CuratedMatchListItem[] = visibleRows.map((row) => {
     const profile = profileById.get(row.recommended_user_id)
     const photos = photosFromApplicationDraft(profile?.application_draft)
     const scoreBreakdown = parseScoreBreakdown(row.score_breakdown)

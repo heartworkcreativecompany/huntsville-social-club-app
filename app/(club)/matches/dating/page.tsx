@@ -16,7 +16,7 @@ import {
   loadCuratedMatchRecommendations,
   sortCuratedMatchItems,
 } from '@/lib/load-curated-matches'
-import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
+import { loadMatchingIdentityPresentation } from '@/lib/matching-identity'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
@@ -65,7 +65,11 @@ export default async function DatingMatchesPage() {
   const { entitlements } = await loadMemberEntitlementsForViewer()
   const healed = await healStaleSubscriptionInactivePause(viewer, entitlements)
   const gatedViewer = healed ? (await getViewer()) ?? viewer : viewer
-  const context = compatibilityContextForViewer(gatedViewer, entitlements)
+  const identity = await loadMatchingIdentityPresentation(
+    createAdminClient(),
+    gatedViewer.userId
+  )
+  const context = compatibilityContextForViewer(gatedViewer, entitlements, identity)
 
   if (shouldHideCuratedMatchingSurfaces(entitlements)) {
     redirect('/dashboard')
@@ -147,11 +151,6 @@ export default async function DatingMatchesPage() {
     archivedRecommendationCount: inboxCounts.archived,
     messagingSuspended: isMessagingSuspended(gatedViewer.profile),
   })
-  const identityStatus = await loadAcceptedIdentityStatus(
-    createAdminClient(),
-    gatedViewer.userId
-  )
-
   return (
     <>
       <PageHeader
@@ -188,7 +187,7 @@ export default async function DatingMatchesPage() {
 
       <CuratedMatchesList
         items={sortedItems}
-        identityStatus={identityStatus}
+        identityStatus={identity.status}
         showDevSeed={isDevRecommendationSeedAllowed()}
         availability={availability}
       />

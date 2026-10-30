@@ -1,3 +1,5 @@
+import { acceptedIdentityAllowsMatching } from '@/lib/matching-identity'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 import type { SlimMembershipAccessOverride } from '@/lib/membership-access-override'
 import {
   buildMemberEntitlements,
@@ -31,6 +33,11 @@ export type MessagingEntitlementInput = {
   activeCycle?: EntitlementCycle | null
   accessOverride?: SlimMembershipAccessOverride | null
   now?: Date
+  /**
+   * Accepted identity for matching participation. Omitted means the lookup
+   * was not confirmed, which fails closed.
+   */
+  acceptedIdentity?: AcceptedIdentityStatus | null
 }
 
 export function hasMessagingEntitlement(input: MessagingEntitlementInput): boolean {
@@ -87,6 +94,10 @@ export function isCompatibilityEligible(
   }
 
   if (profile.wants_curated_matches === false) {
+    return false
+  }
+
+  if (!acceptedIdentityAllowsMatching(entitlementInput.acceptedIdentity)) {
     return false
   }
 

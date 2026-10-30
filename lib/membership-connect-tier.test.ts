@@ -476,12 +476,14 @@ describe('Connect membership tier', () => {
     const datingProfile = datingPoolProfile({
       membership_billing: connectBilling,
       activeCycle: futureCycle,
+      acceptedIdentity: 'verified',
     })
     expect(
       isCompatibilityEligible(datingProfile, {
         billing: connectBilling,
         applicationApproved: true,
         activeCycle: futureCycle,
+        acceptedIdentity: 'verified',
       })
     ).toBe(true)
     expect(isEligibleRecipient(datingProfile)).toBe(true)
@@ -491,6 +493,7 @@ describe('Connect membership tier', () => {
         billing: connectBilling,
         applicationApproved: true,
         activeCycle: futureCycle,
+        acceptedIdentity: 'verified',
       })
     ).toBe(true)
     expect(
@@ -500,6 +503,7 @@ describe('Connect membership tier', () => {
           billing: connectBilling,
           applicationApproved: true,
           activeCycle: futureCycle,
+          acceptedIdentity: 'verified',
         },
         submittedFriendshipRow()
       )
@@ -512,6 +516,7 @@ describe('Connect membership tier', () => {
         membership_billing: connectBilling,
         questionnaire: submittedFriendshipRow(),
         activeCycle: futureCycle,
+        acceptedIdentity: 'verified',
       })
     ).toBe(true)
 

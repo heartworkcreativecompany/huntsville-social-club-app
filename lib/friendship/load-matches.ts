@@ -8,6 +8,8 @@ import { friendshipFitLabel } from '@/lib/friendship/labels'
 import { reasonsAreMemberSafe } from '@/lib/friendship/match-explanation'
 import { toPublicFriendshipMatch, type PublicFriendshipMatch } from '@/lib/friendship/privacy'
 import { isFriendshipMatchingEnabled } from '@/lib/friendship/eligibility'
+import { visibleMatchingCandidateIds } from '@/lib/matching-identity'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export type FriendshipMatchListItem = PublicFriendshipMatch & {
   primaryPhoto: ApplicationPhoto | null
@@ -52,6 +54,23 @@ export async function loadFriendshipMatchRecommendations(
   const recommendedIds = [
     ...new Set((rows ?? []).map((row) => row.recommended_user_id)),
   ]
+  const visibility = await visibleMatchingCandidateIds(
+    createAdminClient(),
+    userId,
+    recommendedIds
+  )
+  if (!visibility.ok) {
+    return {
+      items: [],
+      error: 'Identity verification could not be confirmed.',
+    }
+  }
+  const visibleRows = (rows ?? []).filter((row) =>
+    visibility.visibleIds.has(row.recommended_user_id)
+  )
+  const visibleRecommendedIds = [
+    ...new Set(visibleRows.map((row) => row.recommended_user_id)),
+  ]
 
   const profileById = new Map<
     string,
@@ -63,11 +82,11 @@ export async function loadFriendshipMatchRecommendations(
     }
   >()
 
-  if (recommendedIds.length > 0) {
+  if (visibleRecommendedIds.length > 0) {
     const { data: profiles } = await supabase
       .from(MEMBER_PROFILES_VIEW)
       .select('id, full_name, location_area, application_draft')
-      .in('id', recommendedIds)
+      .in('id', visibleRecommendedIds)
 
     for (const profile of profiles ?? []) {
       profileById.set(profile.id, profile)
@@ -76,7 +95,7 @@ export async function loadFriendshipMatchRecommendations(
 
   const items: FriendshipMatchListItem[] = []
 
-  for (const row of rows ?? []) {
+  for (const row of visibleRows) {
     const label = friendshipFitLabel(Number(row.compatibility_score))
     if (!label) {
       continue

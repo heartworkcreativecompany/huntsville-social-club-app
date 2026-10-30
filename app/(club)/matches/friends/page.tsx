@@ -13,6 +13,8 @@ import { friendshipContextForViewer } from '@/lib/friendship/viewer-context'
 import { loadFriendshipMatchRecommendations } from '@/lib/friendship/load-matches'
 import { resolveFriendshipMatchesView } from '@/lib/friendship/matching-flag'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
+import { loadMatchingIdentityPresentation } from '@/lib/matching-identity'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export default async function MatchedFriendsPage() {
   const viewer = await getViewer()
@@ -31,7 +33,16 @@ export default async function MatchedFriendsPage() {
   }
   const supabase = await createClient()
   const questionnaire = await loadOwnFriendshipQuestionnaire(supabase, viewer.userId)
-  const { access } = friendshipContextForViewer(viewer, entitlements, questionnaire)
+  const identity = await loadMatchingIdentityPresentation(
+    createAdminClient(),
+    viewer.userId
+  )
+  const { access } = friendshipContextForViewer(
+    viewer,
+    entitlements,
+    questionnaire,
+    identity
+  )
   const view = resolveFriendshipMatchesView({
     canViewMatches: access.canViewMatches,
   })

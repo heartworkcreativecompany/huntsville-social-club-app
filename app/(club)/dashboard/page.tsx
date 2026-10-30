@@ -27,7 +27,7 @@ import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements
 import { loadMemberNotifications } from '@/lib/load-member-notifications'
 import { loadUpcomingEventsPreview } from '@/lib/load-upcoming-events'
 import { loadRecentMessagePreviews } from '@/lib/member-messages'
-import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
+import { loadMatchingIdentityPresentation } from '@/lib/matching-identity'
 import { computeProfileCompletion } from '@/lib/profile-completion'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -51,11 +51,16 @@ export default async function DashboardPage() {
   ])
 
   const showConnectMatchesTeaser = shouldHideCuratedMatchingSurfaces(entitlements)
-  const datingContext = compatibilityContextForViewer(viewer, entitlements)
+  const identity = await loadMatchingIdentityPresentation(
+    createAdminClient(),
+    viewer.userId
+  )
+  const datingContext = compatibilityContextForViewer(viewer, entitlements, identity)
   const friendshipContext = friendshipContextForViewer(
     viewer,
     entitlements,
-    friendshipQuestionnaire
+    friendshipQuestionnaire,
+    identity
   )
   const canLoadDatingRecommendations = canAccessMatchesInbox(datingContext.summary)
   const friendsView = resolveFriendshipMatchesView({
@@ -64,14 +69,10 @@ export default async function DashboardPage() {
   const canLoadFriendshipRecommendations = friendsView.loadRecommendations
 
   const liveDraft = mergeProfileIntoDraft(viewer.profile)
-  const identityStatus = await loadAcceptedIdentityStatus(
-    createAdminClient(),
-    viewer.userId
-  )
   const completion = computeProfileCompletion(
     viewer.profile,
     liveDraft,
-    identityStatus
+    identity.status
   )
   const actionNeededCards = buildDashboardActionNeeded({
     datingStatus: datingContext.summary.status,

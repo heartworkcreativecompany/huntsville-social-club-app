@@ -49,6 +49,7 @@ const poolProfile = {
   membership_billing: innerCircleBilling,
   messaging_suspended_at: null,
   questionnaire: submittedFriendshipRow(),
+  acceptedIdentity: 'verified' as const,
 }
 
 describe('FRIENDSHIP_MATCHING_ENABLED', () => {

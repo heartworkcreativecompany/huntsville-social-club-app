@@ -12,6 +12,10 @@ import {
   loadPassedFriendshipCandidateIds,
   type FriendshipPoolProfile,
 } from '@/lib/friendship/candidate-pool'
+import {
+  loadMatchingIdentityMap,
+  partitionMatchingPublication,
+} from '@/lib/matching-identity'
 
 export const FRIENDSHIP_RECOMMENDATIONS_PER_BATCH = 4
 
@@ -113,8 +117,42 @@ export async function refreshFriendshipRecommendationsForUser(
     blockedUserIds,
     passedUserIds,
   })
-  const selected = ranked.slice(0, FRIENDSHIP_RECOMMENDATIONS_PER_BATCH)
+  const rankedSelection = ranked.slice(0, FRIENDSHIP_RECOMMENDATIONS_PER_BATCH)
   const now = new Date().toISOString()
+  const { data: existingBeforeWrite } = await supabase
+    .from('friendship_match_recommendations')
+    .select('id, recommended_user_id, status')
+    .eq('user_id', userId)
+  const identity = await loadMatchingIdentityMap(supabase, [
+    userId,
+    ...rankedSelection.map((candidate) => candidate.candidateId),
+    ...(existingBeforeWrite ?? []).map((row) => row.recommended_user_id),
+  ])
+  if (!identity.ok) {
+    throw new Error('Identity verification could not be confirmed.')
+  }
+  const publication = partitionMatchingPublication({
+    recipientId: userId,
+    candidateIds: [
+      ...rankedSelection.map((candidate) => candidate.candidateId),
+      ...(existingBeforeWrite ?? []).map((row) => row.recommended_user_id),
+    ],
+    statuses: identity.statuses,
+  })
+  if (!publication.ok || identity.statuses.get(userId) !== 'verified') {
+    return {
+      userId,
+      outcome: 'skipped',
+      created: 0,
+      batchId: null,
+      skipReason: 'Member is not eligible for friendship recommendations.',
+    }
+  }
+  const publishIds = new Set(publication.publishIds)
+  const heldIds = new Set(publication.heldIds)
+  const selected = rankedSelection.filter((candidate) =>
+    publishIds.has(candidate.candidateId)
+  )
 
   const { data: batch, error: batchError } = await supabase
     .from('friendship_match_batches')
@@ -144,6 +182,9 @@ export async function refreshFriendshipRecommendationsForUser(
 
   for (const row of existing ?? []) {
     if (row.status === 'passed') {
+      continue
+    }
+    if (heldIds.has(row.recommended_user_id)) {
       continue
     }
     if (!selectedIds.has(row.recommended_user_id)) {

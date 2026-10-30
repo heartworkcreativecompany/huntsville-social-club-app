@@ -3,6 +3,12 @@
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import { isDevRecommendationSeedAllowed, seedDevCuratedRecommendationsForUser } from '@/lib/compatibility/seed-dev-recommendations'
 import { sendMessageRequest } from '@/app/(club)/messages/actions'
+import {
+  MATCHING_IDENTITY_REQUIRED_DETAIL,
+  MATCHING_IDENTITY_UNAVAILABLE_DETAIL,
+  loadMatchingIdentityMap,
+} from '@/lib/matching-identity'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -84,6 +90,20 @@ export async function requestCuratedMatchIntro(
     return { error: 'This recommendation is no longer available.' }
   }
 
+  const identity = await loadMatchingIdentityMap(createAdminClient(), [
+    gate.userId,
+    recommendation.recommended_user_id,
+  ])
+  if (!identity.ok) {
+    return { error: MATCHING_IDENTITY_UNAVAILABLE_DETAIL }
+  }
+  if (
+    identity.statuses.get(gate.userId) !== 'verified' ||
+    identity.statuses.get(recommendation.recommended_user_id) !== 'verified'
+  ) {
+    return { error: MATCHING_IDENTITY_REQUIRED_DETAIL }
+  }
+
   const result = await sendMessageRequest({
     targetMemberId: recommendation.recommended_user_id,
     body,
@@ -153,6 +173,14 @@ export async function passCuratedRecommendation(recommendationId: string) {
       error:
         'You cannot pass a recommendation while a message request is pending or active.',
     }
+  }
+
+  const identity = await loadMatchingIdentityMap(createAdminClient(), [gate.userId])
+  if (!identity.ok) {
+    return { error: MATCHING_IDENTITY_UNAVAILABLE_DETAIL }
+  }
+  if (identity.statuses.get(gate.userId) !== 'verified') {
+    return { error: MATCHING_IDENTITY_REQUIRED_DETAIL }
   }
 
   const now = new Date().toISOString()

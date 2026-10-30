@@ -13,6 +13,8 @@ import {
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
 import { includesFriendsIntent } from '@/lib/member-public-intent'
 import { isFriendshipMatchingEnabled } from '@/lib/friendship/eligibility'
+import { loadMatchingIdentityMap } from '@/lib/matching-identity'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 import { isFriendshipQuestionnaireSubmitted } from '@/lib/friendship/questionnaire'
 import type { FriendshipQuestionnaireRow } from '@/lib/friendship/types'
 
@@ -24,6 +26,7 @@ export type FriendshipPoolProfile = {
   membership_billing: unknown
   messaging_suspended_at: string | null
   questionnaire: FriendshipQuestionnaireRow
+  acceptedIdentity?: AcceptedIdentityStatus | null
 }
 
 const POOL_SELECT =
@@ -108,6 +111,7 @@ export function isFriendshipMatchPoolCandidate(input: {
   } | null
   accessOverride?: SlimMembershipAccessOverride | null
   activeCycle?: EntitlementCycle | null
+  acceptedIdentity?: AcceptedIdentityStatus | null
 }): boolean {
   if (!isFriendshipMatchingEnabled()) {
     return false
@@ -132,11 +136,16 @@ export function isFriendshipMatchPoolCandidate(input: {
   ) {
     return false
   }
-  return isFriendshipQuestionnaireSubmitted({
-    answers: input.questionnaire?.answers,
-    status: input.questionnaire?.status,
-    completed_at: input.questionnaire?.completed_at,
-  })
+  if (
+    !isFriendshipQuestionnaireSubmitted({
+      answers: input.questionnaire?.answers,
+      status: input.questionnaire?.status,
+      completed_at: input.questionnaire?.completed_at,
+    })
+  ) {
+    return false
+  }
+  return input.acceptedIdentity === 'verified'
 }
 
 export async function loadFriendshipMatchPool(
@@ -190,10 +199,21 @@ export async function loadFriendshipMatchPool(
     supabase,
     (profiles ?? []).map((profile) => profile.id)
   )
+  const identity = await loadMatchingIdentityMap(
+    supabase,
+    (profiles ?? []).map((profile) => profile.id)
+  )
+  if (!identity.ok) {
+    return {
+      profiles: [],
+      error: 'Identity verification could not be confirmed.',
+    }
+  }
   const pool: FriendshipPoolProfile[] = []
 
   for (const profile of profiles ?? []) {
     const questionnaire = questionnaireByUser.get(profile.id)
+    const acceptedIdentity = identity.statuses.get(profile.id) ?? 'unavailable'
     if (
       !questionnaire ||
       !isFriendshipMatchPoolCandidate({
@@ -205,6 +225,7 @@ export async function loadFriendshipMatchPool(
         questionnaire,
         accessOverride: overridesByUser.get(profile.id) ?? null,
         activeCycle: cyclesByUser.get(profile.id) ?? null,
+        acceptedIdentity,
       })
     ) {
       continue
@@ -218,6 +239,7 @@ export async function loadFriendshipMatchPool(
       membership_billing: profile.membership_billing,
       messaging_suspended_at: profile.messaging_suspended_at,
       questionnaire,
+      acceptedIdentity,
     })
   }
 

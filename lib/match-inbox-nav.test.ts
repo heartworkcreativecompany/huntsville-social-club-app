@@ -218,8 +218,13 @@ describe('canonical page gates versus nav', () => {
       signedIn: true,
       approved: true,
       friendsIntent: true,
-      entitlementInput: { billing: innerCircleBilling, applicationApproved: true },
+      entitlementInput: {
+        billing: innerCircleBilling,
+        applicationApproved: true,
+        acceptedIdentity: 'verified',
+      },
       questionnaire: null,
+      acceptedIdentity: 'verified',
     })
     expect(incomplete.status).toBe('questionnaire_needed')
     expect(incomplete.ctaHref).toBe('/friendship')
@@ -246,8 +251,13 @@ describe('canonical page gates versus nav', () => {
       signedIn: true,
       approved: true,
       friendsIntent: true,
-      entitlementInput: { billing: innerCircleBilling, applicationApproved: true },
+      entitlementInput: {
+        billing: innerCircleBilling,
+        applicationApproved: true,
+        acceptedIdentity: 'verified',
+      },
       questionnaire: submittedFriendshipRow(),
+      acceptedIdentity: 'verified',
     })
     expect(complete.canViewMatches).toBe(true)
     expect(
@@ -317,8 +327,10 @@ describe('canonical page gates versus nav', () => {
           startsAt: '2026-01-01T00:00:00.000Z',
           expiresAt: null,
         },
+        acceptedIdentity: 'verified',
       },
       questionnaire: submittedFriendshipRow(),
+      acceptedIdentity: 'verified',
     })
     expect(access.status).toBe('active')
     expect(

@@ -1,5 +1,6 @@
 import type { FRIENDSHIP_QUESTIONNAIRE_VERSION } from '@/lib/friendship/questionnaire-config'
 import type { MessagingEntitlementInput } from '@/lib/compatibility/eligibility'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 
 export type FriendshipOrdinalAnswer = 1 | 2 | 3 | 4 | 5
 
@@ -110,6 +111,9 @@ export type FriendshipAccessStatus =
   | 'no_curated_matching'
   | 'questionnaire_needed'
   | 'questionnaire_in_progress'
+  | 'identity_required'
+  | 'identity_pending'
+  | 'identity_unavailable'
   | 'matching_unavailable'
   | 'active'
 
@@ -119,6 +123,9 @@ export type FriendshipAccessInput = {
   friendsIntent: boolean
   entitlementInput: MessagingEntitlementInput
   questionnaire: FriendshipQuestionnaireRow | null
+  acceptedIdentity?: AcceptedIdentityStatus | null
+  stripeStatus?: string | null
+  messagingSuspended?: boolean
 }
 
 export type FriendshipFitLabel =

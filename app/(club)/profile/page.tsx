@@ -20,7 +20,7 @@ import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
 import MemberPublicDetails from '@/components/members/member-public-details'
 import { buildDirectoryMember } from '@/lib/members-discovery'
 import { photosFromApplicationDraft } from '@/lib/member-photos'
-import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
+import { loadMatchingIdentityPresentation } from '@/lib/matching-identity'
 import { computeProfileCompletion } from '@/lib/profile-completion'
 import { parseVerificationState } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
@@ -78,10 +78,11 @@ export default async function YourProfilePage() {
   const profilePreview = publicProfileDetailsFromDraft(liveDraft, {
     connectionsOpenTo: profile?.connections_open_to,
   })
-  const identityStatus = await loadAcceptedIdentityStatus(
+  const identity = await loadMatchingIdentityPresentation(
     createAdminClient(),
     viewer.userId
   )
+  const identityStatus = identity.status
   const completion = computeProfileCompletion(profile, liveDraft, identityStatus)
 
   const revisionStatus = profileRevisionStatusFromDb(
@@ -144,7 +145,8 @@ export default async function YourProfilePage() {
   }
   const { summary: compatibilitySummary } = compatibilityContextForViewer(
     viewer,
-    entitlements
+    entitlements,
+    identity
   )
   if (currentMember) {
     const [withBadges] = await attachPublicRecognitionBadges(supabase, [
@@ -159,7 +161,8 @@ export default async function YourProfilePage() {
   const { access: friendshipAccess } = friendshipContextForViewer(
     viewer,
     entitlements,
-    friendshipQuestionnaire
+    friendshipQuestionnaire,
+    identity
   )
 
   let matchAvailabilityHeadline = compatibilitySummary.headline

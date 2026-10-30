@@ -85,6 +85,7 @@ function baseProfile(
     messaging_suspended_at: null,
     last_match_generation_at: null,
     last_match_review_at: null,
+    acceptedIdentity: 'verified',
     ...overrides,
   }
 }

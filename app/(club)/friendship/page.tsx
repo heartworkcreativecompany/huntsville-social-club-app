@@ -4,6 +4,8 @@ import FriendshipQuestionnaireForm from '@/app/(club)/friendship/friendship-ques
 import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
 import { createClient } from '@/lib/supabase/server'
+import { loadMatchingIdentityPresentation } from '@/lib/matching-identity'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getViewer } from '@/lib/viewer'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements'
@@ -31,7 +33,16 @@ export default async function FriendshipQuestionnairePage() {
   }
   const supabase = await createClient()
   const questionnaire = await loadOwnFriendshipQuestionnaire(supabase, viewer.userId)
-  const { access } = friendshipContextForViewer(viewer, entitlements, questionnaire)
+  const identity = await loadMatchingIdentityPresentation(
+    createAdminClient(),
+    viewer.userId
+  )
+  const { access } = friendshipContextForViewer(
+    viewer,
+    entitlements,
+    questionnaire,
+    identity
+  )
 
   if (!access.canViewSection && access.status === 'no_friends') {
     redirect('/profile')
@@ -64,7 +75,12 @@ export default async function FriendshipQuestionnairePage() {
       <Card className="mb-6">
         <h2 className="text-display text-lg font-semibold">{access.headline}</h2>
         <p className="mt-2 text-sm text-muted-foreground">{access.detail}</p>
-        {access.ctaHref && access.ctaLabel && !access.canViewForm ? (
+        {access.ctaHref &&
+        access.ctaLabel &&
+        (!access.canViewForm ||
+          access.status === 'identity_required' ||
+          access.status === 'identity_pending' ||
+          access.status === 'identity_unavailable') ? (
           <Link
             href={access.ctaHref}
             className="mt-4 inline-flex text-sm font-medium text-accent underline"

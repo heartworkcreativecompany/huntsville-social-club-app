@@ -236,12 +236,16 @@ describe('status and eligibility synchronization', () => {
 
     expect(isCompatibilityQuestionnaireEffectivelyComplete(profile)).toBe(true)
     expect(
-      canGenerateMatches(profile, { billing: innerCircleBilling })
+      canGenerateMatches(profile, {
+        billing: innerCircleBilling,
+        acceptedIdentity: 'verified',
+      })
     ).toBe(true)
     expect(
       summarizeCompatibilityProfileStatus({
         profile,
-        entitlementInput: { billing: innerCircleBilling },
+        entitlementInput: { billing: innerCircleBilling, acceptedIdentity: 'verified' },
+        acceptedIdentity: 'verified',
       })
     ).toMatchObject({
       status: 'active',
@@ -268,7 +272,8 @@ describe('status and eligibility synchronization', () => {
     expect(
       summarizeCompatibilityProfileStatus({
         profile,
-        entitlementInput: { billing: innerCircleBilling },
+        entitlementInput: { billing: innerCircleBilling, acceptedIdentity: 'verified' },
+        acceptedIdentity: 'verified',
       }).status
     ).toBe('questionnaire_in_progress')
   })
