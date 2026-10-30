@@ -8,8 +8,10 @@
 -- or viewed is checked again.
 --
 -- The member SELECT policies below replace only the owner-only read policies.
--- Dating keeps its existing admin SELECT policy. Friendship has no
--- authenticated admin SELECT policy, and this file does not add one.
+-- Dating keeps its existing admin SELECT policy and its existing member
+-- lifecycle UPDATE policy. This file does not grant any new member update
+-- and does not make a hidden row visible. Friendship has no authenticated
+-- admin or update policy, and this file does not add one.
 -- service_role bypasses row security and is stopped by the trigger instead.
 --
 -- matching_identity_reader owns the functions. It is nologin, cannot bypass
@@ -27,14 +29,23 @@ begin
     create role matching_identity_reader
       nologin
       nocreaterole
-      nocreatedb
-      nobypassrls;
+      nocreatedb;
+  elsif exists (
+    select 1
+    from pg_catalog.pg_roles
+    where rolname = 'matching_identity_reader'
+      and (
+        rolsuper
+        or rolbypassrls
+        or rolreplication
+      )
+  ) then
+    raise exception 'matching_identity_reader has unexpected attributes';
   else
     alter role matching_identity_reader
       nologin
       nocreaterole
-      nocreatedb
-      nobypassrls;
+      nocreatedb;
   end if;
 end
 $role$;

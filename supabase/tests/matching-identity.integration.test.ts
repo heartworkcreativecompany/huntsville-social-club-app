@@ -125,8 +125,11 @@ grant all on public.in_person_identity_verifications to service_role;
 
 create table public.curated_match_recommendations (
   id uuid primary key default gen_random_uuid(),
+  batch_id uuid,
   user_id uuid not null,
   recommended_user_id uuid not null,
+  compatibility_score numeric,
+  lifecycle_updated_at timestamptz,
   status text not null
     check (status = any (array[
       'pending', 'viewed', 'accepted', 'passed', 'declined', 'expired'
@@ -147,6 +150,12 @@ create policy "Members read own curated match recommendations"
   for select
   to authenticated
   using (user_id = (select auth.uid()));
+create policy "Members update own recommendation lifecycle"
+  on public.curated_match_recommendations
+  for update
+  to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
 create policy "Admins read all curated match recommendations"
   on public.curated_match_recommendations
   for select
@@ -250,9 +259,35 @@ beforeAll(async () => {
   )
   await maintenanceOwner.end()
 
+  const migrationSql = readFileSync(
+    'supabase/migrations/20261030183000_matching_accepted_identity.sql',
+    'utf8'
+  )
+  if (migrationSql.includes('nobypassrls') || migrationSql.includes('nosuperuser')) {
+    throw new Error('Migration still sets a role attribute the hosted migration role cannot set.')
+  }
   const migrationUrl = new URL(databaseUrl)
   migrationUrl.username = MIGRATION_ROLE
   migrationUrl.password = ''
+
+  await query('create role matching_identity_reader nologin bypassrls')
+  const rejected = new Client({ connectionString: migrationUrl.toString() })
+  await rejected.connect()
+  try {
+    await rejected.query('begin')
+    await expect(rejected.query(migrationSql)).rejects.toThrow(/unexpected attributes/)
+    await rejected.query('rollback')
+  } finally {
+    await rejected.end()
+  }
+  const unrepaired = await query(
+    `select rolbypassrls from pg_roles where rolname = 'matching_identity_reader'`
+  )
+  if (unrepaired.rows[0]?.rolbypassrls !== true) {
+    throw new Error('Migration changed BYPASSRLS on an existing reader role.')
+  }
+  await query('drop role matching_identity_reader')
+
   const migration = new Client({ connectionString: migrationUrl.toString() })
   await migration.connect()
   try {
@@ -264,12 +299,7 @@ beforeAll(async () => {
       throw new Error('Refusing to apply the matching migration as a superuser.')
     }
     await migration.query('begin')
-    await migration.query(
-      readFileSync(
-        'supabase/migrations/20261030183000_matching_accepted_identity.sql',
-        'utf8'
-      )
-    )
+    await migration.query(migrationSql)
     await migration.query('commit')
   } catch (error) {
     await migration.query('rollback').catch(() => undefined)
@@ -407,6 +437,10 @@ describe('migration role compatibility', () => {
         policy.polcmd,
         policy.polpermissive,
         pg_get_expr(policy.polqual, policy.polrelid) as expression,
+        case
+          when policy.polwithcheck is null then null
+          else pg_get_expr(policy.polwithcheck, policy.polrelid)
+        end as with_check,
         array(
           select granted.rolname
           from pg_roles as granted
@@ -447,6 +481,15 @@ describe('migration role compatibility', () => {
       }),
       expect.objectContaining({
         table_name: 'curated_match_recommendations',
+        polname: 'Members update own recommendation lifecycle',
+        polcmd: 'w',
+        polpermissive: true,
+        expression: '(user_id = ( SELECT auth.uid() AS uid))',
+        with_check: '(user_id = ( SELECT auth.uid() AS uid))',
+        roles: 'authenticated',
+      }),
+      expect.objectContaining({
+        table_name: 'curated_match_recommendations',
         polname: 'matching_identity_reader_reads_curated_recommendations',
         polcmd: 'r',
         polpermissive: true,
@@ -471,7 +514,25 @@ describe('migration role compatibility', () => {
         roles: 'matching_identity_reader',
       }),
     ])
-    expect(normalized.map((row) => row.expression).join('\n')).not.toContain('user_id')
+    const memberReads = normalized.filter((row) =>
+      String(row.polname).startsWith('Members read')
+    )
+    expect(memberReads.map((row) => row.expression).join('\n')).not.toContain('user_id')
+    const columns = await query(
+      `select
+         has_column_privilege('authenticated', 'public.curated_match_recommendations', 'user_id', 'UPDATE') as user_id,
+         has_column_privilege('authenticated', 'public.curated_match_recommendations', 'recommended_user_id', 'UPDATE') as candidate,
+         has_column_privilege('authenticated', 'public.curated_match_recommendations', 'batch_id', 'UPDATE') as batch_id,
+         has_column_privilege('authenticated', 'public.curated_match_recommendations', 'status', 'UPDATE') as status,
+         has_column_privilege('authenticated', 'public.curated_match_recommendations', 'compatibility_score', 'UPDATE') as score`
+    )
+    expect(columns.rows[0]).toEqual({
+      user_id: true,
+      candidate: true,
+      batch_id: true,
+      status: true,
+      score: true,
+    })
 
     const triggers = await query(`
       select pg_get_triggerdef(pg_trigger.oid) as definition
@@ -766,17 +827,205 @@ describe('runtime trigger and row security', () => {
       )
     ).rejects.toThrow()
 
-    const unchanged = await asRole('authenticated', VIEWER, (client) =>
+    const hiddenUpdate = await asRole('authenticated', VIEWER, (client) =>
       client.query(
         `update public.curated_match_recommendations set status = 'viewed' where id = $1`,
         [visibleId]
       )
     )
-    expect(unchanged.rowCount).toBe(0)
+    expect(hiddenUpdate.rowCount).toBe(0)
     const stillPending = await query(
       `select status from public.curated_match_recommendations where id = $1`,
       [visibleId]
     )
     expect(stillPending.rows[0].status).toBe('pending')
+  })
+
+  it('keeps the dating lifecycle update and blocks republication', async () => {
+    await query(
+      `update public.profiles set identity_verification_status = 'verified' where id = $1`,
+      [CANDIDATE]
+    )
+    const created = await asRole('service_role', null, (client) =>
+      client.query<{ id: string }>(
+        `insert into public.curated_match_recommendations
+           (batch_id, user_id, recommended_user_id, compatibility_score, status)
+         values ($1, $2, $3, 80, 'viewed') returning id::text`,
+        ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', VIEWER, CANDIDATE]
+      )
+    )
+    const id = created.rows[0].id
+
+    const passed = await asRole('authenticated', VIEWER, (client) =>
+      client.query(
+        `update public.curated_match_recommendations
+         set status = 'passed', lifecycle_updated_at = now()
+         where id = $1`,
+        [id]
+      )
+    )
+    expect(passed.rowCount).toBe(1)
+
+    const stranger = await asRole('authenticated', OTHER, (client) =>
+      client.query(
+        `update public.curated_match_recommendations set status = 'expired' where id = $1`,
+        [id]
+      )
+    )
+    expect(stranger.rowCount).toBe(0)
+
+    await query(
+      `update public.profiles set identity_verification_status = 'not_started' where id = $1`,
+      [CANDIDATE]
+    )
+    const hidden = await asRole('authenticated', VIEWER, (client) =>
+      client.query(`select id from public.curated_match_recommendations where id = $1`, [id])
+    )
+    expect(hidden.rows).toHaveLength(0)
+
+    const hiddenPass = await asRole('authenticated', VIEWER, (client) =>
+      client.query(
+        `update public.curated_match_recommendations
+         set status = 'expired', lifecycle_updated_at = now()
+         where id = $1 and status = 'passed'`,
+        [id]
+      )
+    )
+    expect(hiddenPass.rowCount).toBe(0)
+    const stillPassed = await query(
+      `select status from public.curated_match_recommendations where id = $1`,
+      [id]
+    )
+    expect(stillPassed.rows[0].status).toBe('passed')
+
+    const hiddenRepublication = await asRole('authenticated', VIEWER, (client) =>
+      client.query(
+        `update public.curated_match_recommendations set status = 'pending' where id = $1`,
+        [id]
+      )
+    )
+    expect(hiddenRepublication.rowCount).toBe(0)
+    await expect(
+      asRole('service_role', null, (client) =>
+        client.query(
+          `update public.curated_match_recommendations set status = 'viewed' where id = $1`,
+          [id]
+        )
+      )
+    ).rejects.toThrow(/accepted identity is required/)
+
+    await asRole('service_role', null, (client) =>
+      client.query(
+        `update public.curated_match_recommendations set status = 'expired' where id = $1`,
+        [id]
+      )
+    )
+    const closed = await query(
+      `select status, recommended_user_id::text as candidate
+       from public.curated_match_recommendations where id = $1`,
+      [id]
+    )
+    expect(closed.rows[0]).toEqual({ status: 'expired', candidate: CANDIDATE })
+
+    await query(
+      `update public.profiles set identity_verification_status = 'verified' where id = $1`,
+      [CANDIDATE]
+    )
+    const active = await asRole('service_role', null, (client) =>
+      client.query<{ id: string }>(
+        `insert into public.curated_match_recommendations
+           (batch_id, user_id, recommended_user_id, compatibility_score, status)
+         values ($1, $2, $3, 70, 'pending') returning id::text`,
+        ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', VIEWER, CANDIDATE]
+      )
+    )
+    const activeId = active.rows[0].id
+    await expect(
+      asRole('authenticated', VIEWER, (client) =>
+        client.query(
+          `update public.curated_match_recommendations
+           set recommended_user_id = $2
+           where id = $1`,
+          [activeId, UNVERIFIED]
+        )
+      )
+    ).rejects.toThrow(/accepted identity is required/)
+    const kept = await query(
+      `select recommended_user_id::text as candidate, status
+       from public.curated_match_recommendations where id = $1`,
+      [activeId]
+    )
+    expect(kept.rows[0]).toEqual({ candidate: CANDIDATE, status: 'pending' })
+
+    const broadened = await asRole('authenticated', VIEWER, (client) =>
+      client.query(
+        `update public.curated_match_recommendations
+         set batch_id = $2, compatibility_score = 11
+         where id = $1`,
+        [activeId, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb']
+      )
+    )
+    expect(broadened.rowCount).toBe(1)
+
+    await expect(
+      asRole('authenticated', VIEWER, (client) =>
+        client.query(
+          `update public.curated_match_recommendations set user_id = $2 where id = $1`,
+          [activeId, UNVERIFIED]
+        )
+      )
+    ).rejects.toThrow(/accepted identity is required/)
+    await expect(
+      asRole('authenticated', VIEWER, (client) =>
+        client.query(
+          `update public.curated_match_recommendations set user_id = $2 where id = $1`,
+          [activeId, CANDIDATE]
+        )
+      )
+    ).rejects.toThrow(/row-level security/)
+    const ownerKept = await query(
+      `select user_id::text as owner, batch_id::text as batch
+       from public.curated_match_recommendations where id = $1`,
+      [activeId]
+    )
+    expect(ownerKept.rows[0]).toEqual({
+      owner: VIEWER,
+      batch: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    })
+
+    await asRole('service_role', null, (client) =>
+      client.query(
+        `update public.curated_match_recommendations set status = 'passed' where id = $1`,
+        [activeId]
+      )
+    )
+    const reassigned = await asRole('authenticated', VIEWER, (client) =>
+      client.query(
+        `update public.curated_match_recommendations
+         set recommended_user_id = $2
+         where id = $1 and status = 'passed'`,
+        [activeId, UNVERIFIED]
+      )
+    )
+    expect(reassigned.rowCount).toBe(1)
+    const notRepublished = await query(
+      `select status, recommended_user_id::text as candidate
+       from public.curated_match_recommendations where id = $1`,
+      [activeId]
+    )
+    expect(notRepublished.rows[0]).toEqual({
+      status: 'passed',
+      candidate: UNVERIFIED,
+    })
+
+    const friendship = await asRole('authenticated', VIEWER, (client) =>
+      client.query(
+        `update public.friendship_match_recommendations
+         set status = 'expired'
+         where user_id = $1`,
+        [VIEWER]
+      )
+    )
+    expect(friendship.rowCount).toBe(0)
   })
 })
