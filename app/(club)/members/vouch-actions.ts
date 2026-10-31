@@ -168,6 +168,7 @@ export async function updateMemberVouchEndorsement(input: {
     .update({
       note: note || null,
       status: 'pending',
+      moderation_reason: null,
       moderated_at: null,
       moderated_by: null,
       updated_at: new Date().toISOString(),
