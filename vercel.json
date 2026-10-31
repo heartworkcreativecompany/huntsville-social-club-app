@@ -12,5 +12,12 @@
       "path": "/api/cron/signup-contact-sync",
       "schedule": "* * * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/connect",
+      "destination": "/",
+      "permanent": true
+    }
   ]
 }
