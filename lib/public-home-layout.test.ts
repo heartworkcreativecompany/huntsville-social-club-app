@@ -15,9 +15,14 @@ describe('public homepage layout scale', () => {
     expect(source).toContain('mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3')
   })
 
-  it('steps the hero type instead of applying text-7xl from the tablet breakpoint', () => {
-    expect(source).toContain('lg:text-6xl xl:text-7xl')
-    expect(source).toContain('[@media(max-height:820px)]:xl:text-6xl')
+  it('enlarges the desktop hero without jumping to text-7xl on tablet', () => {
+    expect(source).toContain('text-4xl leading-[1.05] font-semibold text-balance sm:text-5xl lg:text-7xl xl:text-[5.25rem]')
+    expect(source).toContain('lg:max-w-3xl lg:text-xl xl:mt-4 xl:text-2xl xl:leading-snug')
     expect(source).not.toContain('md:text-7xl')
+    expect(source).not.toContain('[@media(max-height:820px)]:xl:text-6xl')
+    expect(source).toContain('relative z-10 flex flex-col md:min-h-[92svh]')
+    expect(source).toContain('px-5 pt-8 pb-14')
+    expect(source).toContain('md:flex-1 md:justify-end')
+    expect(source).not.toContain('min-h-[100svh] flex-col')
   })
 })

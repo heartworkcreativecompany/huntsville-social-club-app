@@ -204,32 +204,32 @@ export default async function PublicHomeContent({
         />
         <div className="grain absolute inset-0" aria-hidden />
 
-        <div className="relative z-10 flex min-h-[100svh] flex-col md:min-h-[92svh] [@media(max-height:820px)]:md:min-h-[100svh]">
+        <div className="relative z-10 flex flex-col md:min-h-[92svh] [@media(max-height:820px)]:md:min-h-[100svh]">
           <PublicHomeHeader loginHref={loginHref} signupHref={signupHref} />
-          <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col justify-end px-5 pt-8 pb-16 text-white sm:px-6 md:px-10 md:pt-10 md:pb-24 [@media(max-height:820px)]:md:pb-14">
-            <span className="hero-eyebrow">
+          <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-col px-5 pt-8 pb-14 text-white sm:px-6 md:flex-1 md:justify-end md:px-10 md:pt-8 md:pb-16 [@media(max-height:820px)]:md:pt-4 [@media(max-height:820px)]:md:pb-6">
+            <span className="hero-eyebrow lg:!text-[0.8125rem] lg:!tracking-[0.22em]">
               <span className="hero-eyebrow-line" aria-hidden />
               {HOME_HERO_EYEBROW}
             </span>
             <h1
               id="home-hero-heading"
-              className="font-brand mt-4 max-w-4xl text-4xl leading-[1.1] font-semibold text-balance sm:text-5xl lg:text-6xl xl:text-7xl [@media(max-height:820px)]:xl:text-6xl"
+              className="font-brand mt-4 max-w-none text-4xl leading-[1.05] font-semibold text-balance sm:text-5xl lg:text-7xl xl:text-[5.25rem] xl:leading-[1.02]"
             >
               {HOME_HERO_HEADLINE}
             </h1>
-            <p className="mt-5 max-w-xl text-left text-base leading-relaxed text-white/85 sm:text-lg lg:max-w-2xl lg:text-xl">
+            <p className="mt-4 max-w-xl text-left text-base leading-relaxed text-white/85 sm:mt-5 sm:max-w-2xl sm:text-lg lg:max-w-3xl lg:text-xl xl:mt-4 xl:text-2xl xl:leading-snug">
               {HOME_HERO_BODY}
             </p>
-            <div className="mt-8 max-w-xl lg:mt-9">
+            <div className="mt-6 max-w-3xl lg:mt-6">
               <ApplyMembershipCta
                 href={signupHref}
                 label={APPLY_FOR_MEMBERSHIP_CTA}
-                className="w-fit lg:px-7 lg:text-base"
+                className="w-fit lg:px-8 lg:py-4 lg:text-lg"
               />
-              <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/80 lg:text-base">
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/80 sm:text-base lg:text-lg">
                 {HOME_HERO_SUPPORT_LINE_PRIMARY}
               </p>
-              <p className="mt-1 max-w-xl text-sm leading-relaxed text-white/65 lg:text-base">
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/65 sm:text-base lg:text-lg">
                 {HOME_HERO_SUPPORT_LINE_SECONDARY}
               </p>
             </div>
