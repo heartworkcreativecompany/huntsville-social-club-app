@@ -16,6 +16,7 @@ import {
   directoryHref,
   type DirectoryQueryState,
 } from '@/lib/member-directory-query'
+import { DirectoryScrollRestore } from './directory-profile-link'
 import MemberDirectorySection from './member-directory-section'
 
 type MemberDirectoryBrowserProps = {
@@ -84,7 +85,9 @@ export default function MemberDirectoryBrowser({
   }
 
   return (
-    <MemberDirectorySection
+    <>
+      <DirectoryScrollRestore />
+      <MemberDirectorySection
       members={members}
       matchCount={matchCount}
       eligibleCount={eligibleCount}
@@ -127,5 +130,6 @@ export default function MemberDirectoryBrowser({
         navigate({ search: searchRef.current, browse, page: 1 })
       }}
     />
+    </>
   )
 }

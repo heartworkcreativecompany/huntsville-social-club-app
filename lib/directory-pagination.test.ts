@@ -216,7 +216,9 @@ describe('directory pagination', () => {
     expect(html).toContain('Previous')
     expect(html).toContain('Next')
     expect(html).not.toContain('disabled')
-    expect(html).toContain('sm:grid-cols-2 lg:grid-cols-3')
+    expect(html).toContain('minmax(min(100%,max(9rem,calc((100%-0.75rem)/2))),1fr)')
+    expect(html).toContain('lg:grid-cols-3')
+    expect(html).toContain('href="/members/member-01?page=2"')
 
     const firstPage = renderToStaticMarkup(
       createElement(MemberDirectorySection, {

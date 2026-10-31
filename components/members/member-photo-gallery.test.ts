@@ -80,7 +80,7 @@ describe('profile gallery photo frame', () => {
 
     expect(MEMBER_DIRECTORY_CARD_PHOTO_ASPECT_CLASS).toBe('aspect-[4/5]')
     expect(cardHtml).toContain(
-      'relative aspect-[4/5] overflow-hidden rounded-lg bg-surface-elevated'
+      'relative w-full overflow-hidden rounded-lg bg-surface-elevated aspect-[4/5]'
     )
     expect(cardHtml).toContain(
       '!aspect-auto h-full min-h-0 w-full rounded-none border-0'

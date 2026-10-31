@@ -19,7 +19,7 @@ import MemberDirectoryPagination from './member-directory-pagination'
 import MemberDiscoveryCard from './member-discovery-card'
 
 export const MEMBER_DIRECTORY_GRID_CLASS =
-  'mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3'
+  'mt-6 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,max(9rem,calc((100%-0.75rem)/2))),1fr))] lg:grid-cols-3 lg:gap-5'
 
 type MemberDirectorySectionProps = {
   members: DirectoryMember[]
@@ -104,8 +104,11 @@ export default function MemberDirectorySection({
       ) : (
         <ul className={MEMBER_DIRECTORY_GRID_CLASS} aria-busy={isPending}>
           {members.map((member) => (
-            <li key={member.id}>
-              <MemberDiscoveryCard member={member} />
+            <li key={member.id} className="min-w-0">
+              <MemberDiscoveryCard
+                member={member}
+                directory={{ search, browse: browseState, page }}
+              />
             </li>
           ))}
         </ul>

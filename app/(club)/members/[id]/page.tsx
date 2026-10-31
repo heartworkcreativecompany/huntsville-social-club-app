@@ -16,14 +16,21 @@ import {
   resolveProfileMessageRecipientId,
 } from '@/lib/member-profile-messaging'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { directoryBackHref } from '@/lib/directory-return'
+import type { MemberDirectorySearchParams } from '@/lib/member-directory-query'
 import { getViewer } from '@/lib/viewer'
 
 type PageProps = {
   params: Promise<{ id: string }>
+  searchParams: Promise<MemberDirectorySearchParams>
 }
 
-export default async function MemberDetailPage({ params }: PageProps) {
+export default async function MemberDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params
+  const directoryHref = directoryBackHref(await searchParams)
   const viewer = await getViewer()
 
   if (!viewer) {
@@ -44,7 +51,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
     return (
       <>
         <Link
-          href="/members"
+          href={directoryHref}
           className="mb-6 inline-block text-sm text-muted-foreground hover:text-foreground"
         >
           ← Back to members
@@ -69,7 +76,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
     return (
       <>
         <Link
-          href="/members"
+          href={directoryHref}
           className="mb-6 inline-block text-sm text-muted-foreground hover:text-foreground"
         >
           ← Back to members
@@ -109,7 +116,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
     <>
       <MemberProfileViewTracker memberId={member.id} />
       <Link
-        href="/members"
+        href={directoryHref}
         className="mb-6 inline-block text-sm text-muted-foreground hover:text-foreground"
       >
         ← Back to members

@@ -204,32 +204,32 @@ export default async function PublicHomeContent({
         />
         <div className="grain absolute inset-0" aria-hidden />
 
-        <div className="relative z-10 flex min-h-[100svh] flex-col md:min-h-[92vh]">
+        <div className="relative z-10 flex min-h-[100svh] flex-col md:min-h-[92svh] [@media(max-height:820px)]:md:min-h-[100svh]">
           <PublicHomeHeader loginHref={loginHref} signupHref={signupHref} />
-          <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col justify-end px-5 pt-6 pb-16 text-white sm:px-6 md:px-10 md:pt-8 md:pb-28">
+          <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col justify-end px-5 pt-8 pb-16 text-white sm:px-6 md:px-10 md:pt-10 md:pb-24 [@media(max-height:820px)]:md:pb-14">
             <span className="hero-eyebrow">
               <span className="hero-eyebrow-line" aria-hidden />
               {HOME_HERO_EYEBROW}
             </span>
             <h1
               id="home-hero-heading"
-              className="font-brand mt-5 max-w-3xl text-4xl leading-[1.08] font-semibold text-balance sm:text-5xl md:text-7xl"
+              className="font-brand mt-4 max-w-4xl text-4xl leading-[1.1] font-semibold text-balance sm:text-5xl lg:text-6xl xl:text-7xl [@media(max-height:820px)]:xl:text-6xl"
             >
               {HOME_HERO_HEADLINE}
             </h1>
-            <p className="mt-6 max-w-xl text-left text-lg leading-relaxed text-white/85 md:text-xl">
+            <p className="mt-5 max-w-xl text-left text-base leading-relaxed text-white/85 sm:text-lg lg:max-w-2xl lg:text-xl">
               {HOME_HERO_BODY}
             </p>
-            <div className="mt-9 max-w-xl">
+            <div className="mt-8 max-w-xl lg:mt-9">
               <ApplyMembershipCta
                 href={signupHref}
                 label={APPLY_FOR_MEMBERSHIP_CTA}
-                className="w-fit"
+                className="w-fit lg:px-7 lg:text-base"
               />
-              <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/80">
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/80 lg:text-base">
                 {HOME_HERO_SUPPORT_LINE_PRIMARY}
               </p>
-              <p className="mt-1 max-w-xl text-sm leading-relaxed text-white/65">
+              <p className="mt-1 max-w-xl text-sm leading-relaxed text-white/65 lg:text-base">
                 {HOME_HERO_SUPPORT_LINE_SECONDARY}
               </p>
             </div>
@@ -243,11 +243,11 @@ export default async function PublicHomeContent({
       >
         <h2
           id="why-exists-heading"
-          className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl"
+          className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl lg:text-5xl"
         >
           {WHY_EXISTS_HEADLINE}
         </h2>
-        <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+        <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg lg:text-xl">
           {WHY_EXISTS_INTRO}
         </p>
         <ul className="mt-10 grid gap-6 lg:grid-cols-3">
@@ -291,7 +291,7 @@ export default async function PublicHomeContent({
           </p>
           <h2
             id="who-it-is-for-heading"
-            className="font-brand mt-5 max-w-3xl text-3xl font-semibold sm:text-4xl"
+            className="font-brand mt-5 max-w-3xl text-3xl font-semibold sm:text-4xl lg:text-5xl"
           >
             {WHO_IT_IS_FOR_HEADLINE}
           </h2>
@@ -313,7 +313,7 @@ export default async function PublicHomeContent({
                   <span className="sr-only">Statement </span>
                   {String(index + 1).padStart(2, '0')}
                 </p>
-                <p className="mt-3 text-base leading-relaxed text-foreground sm:text-[1.05rem]">
+                <p className="mt-3 text-base leading-relaxed text-foreground sm:text-[1.05rem] lg:text-lg">
                   {item}
                 </p>
               </li>
@@ -337,7 +337,7 @@ export default async function PublicHomeContent({
           </p>
           <h2
             id="how-membership-works-heading"
-            className="font-brand mt-5 text-3xl font-semibold sm:text-4xl"
+            className="font-brand mt-5 text-3xl font-semibold sm:text-4xl lg:text-5xl"
           >
             {HOW_MEMBERSHIP_WORKS_HEADLINE}
           </h2>
@@ -355,7 +355,7 @@ export default async function PublicHomeContent({
                 >
                   {index + 1}
                 </span>
-                <p className="pt-1.5 text-base leading-relaxed text-foreground md:max-w-[16rem] md:pt-0">
+                <p className="pt-1.5 text-base leading-relaxed text-foreground md:max-w-[16rem] md:pt-0 lg:max-w-none lg:text-lg">
                   <span className="sr-only">Step {index + 1}. </span>
                   {step}
                 </p>
@@ -364,7 +364,7 @@ export default async function PublicHomeContent({
             </ol>
           </div>
           <div className="mt-10">
-            <ApplyMembershipCta href={signupHref} className="w-fit" />
+            <ApplyMembershipCta href={signupHref} className="w-fit lg:px-7 lg:text-base" />
           </div>
         </div>
       </section>
@@ -375,32 +375,34 @@ export default async function PublicHomeContent({
       >
         <h2
           id="membership-value-heading"
-          className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl"
+          className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl lg:text-5xl"
         >
           {MEMBERSHIP_VALUE_HEADLINE}
         </h2>
-        <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+        <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg lg:text-xl">
           {MEMBERSHIP_VALUE_BODY}
         </p>
-        <ul className="mt-10 grid gap-4 sm:grid-cols-2">
+        <ul className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {membershipTiers.map((tier) => (
             <li
               key={tier.name}
-              className="rounded-xl border border-border bg-surface p-6 shadow-sm"
+              className="flex h-full flex-col rounded-xl border border-border bg-surface p-6 shadow-sm"
             >
               <p className="text-xs font-medium tracking-[0.2em] text-accent uppercase">
                 {tier.optionalPaid ? 'Optional paid' : 'Free to start'}
               </p>
-              <h3 className="text-display mt-3 text-xl font-semibold">{tier.name}</h3>
-              <p className="mt-1 text-sm text-foreground">{tier.price}</p>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              <h3 className="text-display mt-3 text-xl font-semibold lg:text-2xl">
+                {tier.name}
+              </h3>
+              <p className="mt-1 text-sm text-foreground lg:text-base">{tier.price}</p>
+              <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground lg:text-base">
                 {tier.summary}
               </p>
             </li>
           ))}
         </ul>
         <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto" />
+          <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto lg:px-7 lg:text-base" />
           <Link
             href={PUBLIC_PRICING_PATH}
             className="inline-flex min-h-11 items-center justify-center text-sm font-medium text-accent underline decoration-accent/40 underline-offset-4 hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
@@ -417,15 +419,15 @@ export default async function PublicHomeContent({
         <div className="rounded-2xl border border-accent/35 bg-accent-soft/30 px-6 py-12 text-center sm:px-10 sm:py-16">
           <h2
             id="final-cta-heading"
-            className="font-brand text-3xl font-semibold sm:text-4xl"
+            className="font-brand text-3xl font-semibold text-balance sm:text-4xl lg:text-5xl"
           >
             {FINAL_CTA_HEADLINE}
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg lg:text-xl">
             {FINAL_CTA_BODY}
           </p>
           <div className="mt-8 flex justify-center">
-            <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto" />
+            <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto lg:px-7 lg:text-base" />
           </div>
           <p className="mt-4 text-sm text-muted-foreground">{FINAL_CTA_REASSURANCE}</p>
         </div>
