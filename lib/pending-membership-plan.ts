@@ -5,7 +5,10 @@ import {
   paidPlanFromSafeNext,
   upgradePathForPlan,
 } from '@/lib/membership-plan-links'
-import type { PaidMembershipTier } from '@/lib/stripe/config'
+import {
+  isPurchasableMembershipTier,
+  type PaidMembershipTier,
+} from '@/lib/stripe/config'
 
 export const PENDING_MEMBERSHIP_PLAN_COOKIE = 'hsc_pending_membership_plan'
 export const PENDING_MEMBERSHIP_PLAN_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
@@ -98,8 +101,14 @@ export function resolveMembershipContinuation(input: {
   cookiePlan: PaidMembershipTier | null
   requestedPlan?: string | null
 }): { path: string; clearCookie: boolean } {
-  const plan =
-    paidMembershipPlanFromQuery(input.requestedPlan) ?? input.cookiePlan
+  const requested = paidMembershipPlanFromQuery(input.requestedPlan)
+  const cookie =
+    input.cookiePlan && isPurchasableMembershipTier(input.cookiePlan)
+      ? input.cookiePlan
+      : null
+  const plan = requested ?? cookie
+  const droppedConnect =
+    input.requestedPlan === 'connect' || input.cookiePlan === 'connect'
 
   if (!input.signedIn) {
     return {
@@ -113,6 +122,9 @@ export function resolveMembershipContinuation(input: {
   }
 
   if (!plan) {
+    if (input.approved && droppedConnect) {
+      return { path: '/upgrade', clearCookie: true }
+    }
     return { path: '/dashboard', clearCookie: false }
   }
 

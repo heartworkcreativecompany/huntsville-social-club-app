@@ -51,19 +51,15 @@ export function normalizeMemberPerksSnapshot(
     hasPaidMembership: true,
     premiumCreditsRemaining: Math.max(0, snapshot.premiumCreditsRemaining),
     creditsGranted:
-      snapshot.creditsGranted ??
-      (snapshot.productTier === 'elite_circle'
-        ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
-        : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD),
-    circleSocialCreditsRemaining:
-      snapshot.productTier === 'inner_circle'
-        ? snapshot.circleSocialCreditsRemaining ?? null
-        : null,
-    circleSocialCreditsGranted:
-      snapshot.productTier === 'inner_circle'
-        ? snapshot.circleSocialCreditsGranted ?? null
-        : null,
+      snapshot.creditsGranted === undefined
+        ? snapshot.productTier === 'elite_circle'
+          ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+          : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+        : snapshot.creditsGranted,
+    circleSocialCreditsRemaining: snapshot.circleSocialCreditsRemaining ?? null,
+    circleSocialCreditsGranted: snapshot.circleSocialCreditsGranted ?? null,
     guestInvitesRemaining: Math.max(0, snapshot.guestInvitesRemaining),
+    guestInvitesGranted: snapshot.guestInvitesGranted ?? null,
   }
 }
 
@@ -71,31 +67,50 @@ export function membershipPerksSnapshotFromEntitlements(
   entitlements: Pick<
     MemberEntitlements,
     | 'productTier'
+    | 'billingProductTier'
     | 'premiumCreditsRemaining'
     | 'circleSocialCreditsRemaining'
     | 'guestInvitesRemaining'
     | 'activeCycle'
     | 'subscriptionActive'
+    | 'benefitFulfillment'
   >
 ): MembershipPerksSnapshot {
-  if (!isPaidPerksTier(entitlements.productTier)) {
+  const planTier = entitlements.billingProductTier
+  if (!isPaidPerksTier(planTier)) {
     return freeMemberPerksSnapshot('member')
   }
 
   const grantedDefault =
-    entitlements.productTier === 'elite_circle'
+    planTier === 'elite_circle'
       ? ELITE_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
       : INNER_CIRCLE_PREMIUM_CREDITS_PER_PERIOD
+  const unissued =
+    entitlements.benefitFulfillment === 'pending' ||
+    entitlements.benefitFulfillment === 'unavailable'
 
   return normalizeMemberPerksSnapshot({
-    productTier: entitlements.productTier,
+    productTier: planTier,
     hasPaidMembership: true,
-    premiumCreditsRemaining: entitlements.premiumCreditsRemaining ?? 0,
-    creditsGranted: entitlements.activeCycle?.credits_granted ?? grantedDefault,
-    circleSocialCreditsRemaining: entitlements.circleSocialCreditsRemaining,
-    circleSocialCreditsGranted:
-      entitlements.activeCycle?.circle_social_credits_granted ?? null,
-    guestInvitesRemaining: entitlements.guestInvitesRemaining,
+    benefitFulfillment: entitlements.benefitFulfillment,
+    premiumCreditsRemaining: unissued
+      ? 0
+      : (entitlements.premiumCreditsRemaining ?? 0),
+    creditsGranted: unissued
+      ? 0
+      : entitlements.activeCycle
+        ? entitlements.activeCycle.credits_granted
+        : grantedDefault,
+    circleSocialCreditsRemaining: unissued
+      ? 0
+      : entitlements.circleSocialCreditsRemaining,
+    circleSocialCreditsGranted: unissued
+      ? 0
+      : (entitlements.activeCycle?.circle_social_credits_granted ?? null),
+    guestInvitesRemaining: unissued ? 0 : entitlements.guestInvitesRemaining,
+    guestInvitesGranted: unissued
+      ? 0
+      : (entitlements.activeCycle?.guest_invites_granted ?? null),
     periodStart: entitlements.activeCycle?.period_start ?? null,
     periodEnd: entitlements.activeCycle?.period_end ?? null,
   })

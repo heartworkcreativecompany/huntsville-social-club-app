@@ -154,6 +154,7 @@ describe('isCompatibilityEligible', () => {
     expect(
       isCompatibilityEligible(baseProfile(), {
         billing: innerCircleBilling,
+        acceptedIdentity: 'verified',
       })
     ).toBe(true)
   })
@@ -190,7 +191,7 @@ describe('canGenerateMatches', () => {
           compatibility_questionnaire: completeQuestionnaire,
           compatibility_completed_at: '2026-01-01T00:00:00.000Z',
         }),
-        { billing: innerCircleBilling }
+        { billing: innerCircleBilling, acceptedIdentity: 'verified' }
       )
     ).toBe(true)
   })

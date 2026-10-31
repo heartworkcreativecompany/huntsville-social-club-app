@@ -1,6 +1,10 @@
 'use server'
 
 import { BRAND_ASSETS } from '@/lib/brand-assets'
+import {
+  buildCuratedIntroApprovedEmail,
+  type CuratedIntroEmailAudience,
+} from '@/lib/curated-intro-email'
 import { appOrigin, SUPPORT_EMAIL } from '@/lib/site'
 
 type EmailPayload = {
@@ -10,7 +14,46 @@ type EmailPayload = {
   text: string
 }
 
+function emailCaptureDirectory(): string | null {
+  const captureDir = process.env.EMAIL_CAPTURE_DIR?.trim()
+  if (!captureDir) return null
+  // Production delivery must not be replaced by a local capture directory.
+  if (
+    process.env.NODE_ENV === 'production' ||
+    process.env.VERCEL_ENV === 'production'
+  ) {
+    return null
+  }
+  return captureDir
+}
+
+let emailCaptureSequence = 0
+
 async function sendEmail(payload: EmailPayload) {
+  const captureDir = emailCaptureDirectory()
+  if (captureDir) {
+    const { mkdir, writeFile } = await import('node:fs/promises')
+    const { join } = await import('node:path')
+    await mkdir(captureDir, { recursive: true })
+    const slug = payload.subject
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 48)
+    const stamp = `${Date.now()}-${emailCaptureSequence++}-${slug || 'email'}`
+    await writeFile(join(captureDir, `${stamp}.html`), payload.html, 'utf8')
+    await writeFile(
+      join(captureDir, `${stamp}.json`),
+      JSON.stringify(
+        { to: payload.to, subject: payload.subject, text: payload.text },
+        null,
+        2
+      ),
+      'utf8'
+    )
+    return { captured: true as const }
+  }
+
   const apiKey = process.env.RESEND_API_KEY
   const from =
     process.env.EMAIL_FROM ??
@@ -198,27 +241,39 @@ export async function sendProfileRevisionRejectedEmail(
   })
 }
 
+export async function sendCuratedIntroApprovedEmail(input: {
+  to: string
+  otherMemberName: string
+  conversationId: string
+  audience: CuratedIntroEmailAudience
+  recipientEntitled: boolean
+}) {
+  const content = buildCuratedIntroApprovedEmail({
+    entitled: input.recipientEntitled,
+    audience: input.audience,
+    otherMemberName: input.otherMemberName,
+    conversationId: input.conversationId,
+    origin: appOrigin(),
+  })
+  const { html, text } = emailShell(content.title, content.bodyHtml, content.cta)
+
+  return sendEmail({
+    to: input.to,
+    subject: content.subject,
+    html,
+    text,
+  })
+}
+
 export async function sendCuratedIntroMatchedEmail(input: {
   to: string
   otherMemberName: string
   conversationId: string
+  recipientEntitled: boolean
 }) {
-  const origin = appOrigin()
-  const { html, text } = emailShell(
-    'Your curated intro was approved',
-    `<p>Great news — we approved your intro to <strong>${input.otherMemberName}</strong>.</p>
-     <p>Open your messages to say hello and continue the conversation privately.</p>`,
-    {
-      label: 'Open conversation',
-      href: `${origin}/messages/${input.conversationId}`,
-    }
-  )
-
-  return sendEmail({
-    to: input.to,
-    subject: 'Curated intro approved',
-    html,
-    text,
+  return sendCuratedIntroApprovedEmail({
+    ...input,
+    audience: 'requester',
   })
 }
 
@@ -226,23 +281,11 @@ export async function sendCuratedIntroMatchedTargetEmail(input: {
   to: string
   otherMemberName: string
   conversationId: string
+  recipientEntitled: boolean
 }) {
-  const origin = appOrigin()
-  const { html, text } = emailShell(
-    'You have a new curated intro',
-    `<p><strong>${input.otherMemberName}</strong> requested an intro through our curated matches program, and we approved the connection.</p>
-     <p>A private conversation is ready in your inbox. You can read and reply there for this curated intro without upgrading your membership.</p>`,
-    {
-      label: 'Open conversation',
-      href: `${origin}/messages/${input.conversationId}`,
-    }
-  )
-
-  return sendEmail({
-    to: input.to,
-    subject: 'New curated intro in your inbox',
-    html,
-    text,
+  return sendCuratedIntroApprovedEmail({
+    ...input,
+    audience: 'target',
   })
 }
 
@@ -281,7 +324,7 @@ export async function sendCuratedMatchesDeliveredEmail(input: {
     'New curated matches',
     `<p>Hi ${input.memberName},</p>
      <p>You have <strong>${matchLabel}</strong> waiting in your matches inbox.</p>
-     <p>Review the profiles, request an intro when someone feels right, or pass if it is not a fit.</p>`,
+     <p>Review the profiles, send a message request when someone feels right, or pass if it is not a fit. A conversation opens only if they accept.</p>`,
     { label: 'View matches', href: `${origin}/matches/dating` }
   )
 

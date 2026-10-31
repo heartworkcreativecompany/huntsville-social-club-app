@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { validateMemberMessageBody } from '@/lib/member-message-limits'
+import { assertMembersMayExchange } from '@/lib/messaging-participants'
 import {
   isConversationInitiator,
   isConversationRecipient,
@@ -272,6 +273,20 @@ export async function retryMessageRequestAfterRecontact(
   }
 
   const { conversation } = loaded
+  const otherMemberId =
+    conversation.participant_a === input.requesterId
+      ? conversation.participant_b
+      : conversation.participant_a
+  const participants = await assertMembersMayExchange(
+    supabase,
+    input.requesterId,
+    otherMemberId,
+    { requireOtherIdentity: true }
+  )
+  if (!participants.ok) {
+    return participants
+  }
+
   if (
     !canSenderRetryAfterRecontact({
       conversation,

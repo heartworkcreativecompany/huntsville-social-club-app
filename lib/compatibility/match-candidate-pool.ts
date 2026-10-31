@@ -13,7 +13,9 @@ import {
 import type { CompatibilityProfileFields } from '@/lib/compatibility/types'
 import type { ScorableMemberProfile } from '@/lib/compatibility/scoring'
 import type { EntitlementCycle } from '@/lib/membership-entitlements'
+import { loadMatchingIdentityMap } from '@/lib/matching-identity'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 
 export type MatchPoolProfile = CompatibilityProfileFields &
   ScorableMemberProfile & {
@@ -23,6 +25,7 @@ export type MatchPoolProfile = CompatibilityProfileFields &
     last_match_review_at: string | null
     accessOverride?: SlimMembershipAccessOverride | null
     activeCycle?: EntitlementCycle | null
+    acceptedIdentity?: AcceptedIdentityStatus | null
   }
 
 const MATCH_POOL_SELECT =
@@ -36,6 +39,7 @@ export function matchPoolEntitlementInput(
     | 'application_status'
     | 'accessOverride'
     | 'activeCycle'
+    | 'acceptedIdentity'
   >,
   accessOverride?: SlimMembershipAccessOverride | null
 ): MessagingEntitlementInput {
@@ -45,6 +49,7 @@ export function matchPoolEntitlementInput(
     applicationApproved: profile.application_status === 'approved',
     accessOverride: accessOverride ?? profile.accessOverride ?? null,
     activeCycle: profile.activeCycle ?? null,
+    acceptedIdentity: profile.acceptedIdentity,
   }
 }
 
@@ -113,11 +118,23 @@ export async function loadMatchPoolProfiles(
     supabase,
     profiles.map((profile) => profile.id)
   )
+  const identity = await loadMatchingIdentityMap(
+    supabase,
+    profiles.map((profile) => profile.id)
+  )
+  if (!identity.ok) {
+    return {
+      profiles: [],
+      error: 'Identity verification could not be confirmed.',
+    }
+  }
+
   return {
     profiles: profiles.map((profile) => ({
       ...profile,
       accessOverride: overrides.get(profile.id) ?? null,
       activeCycle: cycles.get(profile.id) ?? null,
+      acceptedIdentity: identity.statuses.get(profile.id) ?? 'unavailable',
     })),
     error: null,
   }
@@ -147,10 +164,14 @@ export async function loadMatchPoolProfileForUser(
     [profile.id]
   )
   const cycles = await loadActiveEntitlementCyclesByUserIds(supabase, [profile.id])
+  const identity = await loadMatchingIdentityMap(supabase, [profile.id])
   return {
     ...profile,
     accessOverride: overrides.get(profile.id) ?? null,
     activeCycle: cycles.get(profile.id) ?? null,
+    acceptedIdentity: identity.ok
+      ? identity.statuses.get(profile.id) ?? 'unavailable'
+      : 'unavailable',
   }
 }
 

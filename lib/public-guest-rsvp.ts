@@ -51,8 +51,8 @@ export function spotsLeftLabel(spotsLeft: number | null): string | null {
   return `Only ${spotsLeft} spots left.`
 }
 
-export function guestRsvpButtonLabel(priceLabel: string): string {
-  return `RSVP as a guest for ${priceLabel}`
+export function guestRsvpButtonLabel(_priceLabel: string): string {
+  return 'Buy a Ticket'
 }
 
 function eventHasNotStarted(startsAt: string, now: Date): boolean {

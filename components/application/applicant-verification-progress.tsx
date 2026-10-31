@@ -46,6 +46,7 @@ export default function ApplicantVerificationProgress({
   identityVerificationLastError,
   verifiedPhoneE164,
   authPhoneE164,
+  inPersonIdentityVerified = false,
   showIdentityReturnNotice = false,
 }: {
   gates: ApprovalGates
@@ -56,6 +57,7 @@ export default function ApplicantVerificationProgress({
   identityVerificationLastError?: string | null
   verifiedPhoneE164?: string | null
   authPhoneE164?: string | null
+  inPersonIdentityVerified?: boolean
   showIdentityReturnNotice?: boolean
 }) {
   const router = useRouter()
@@ -67,7 +69,8 @@ export default function ApplicantVerificationProgress({
   const phoneVerified = gates.phone_verified === 'approved'
   const identityRow = identityVerificationRowState(
     identityVerificationStatus,
-    gates.identity_verified ?? 'incomplete'
+    gates.identity_verified ?? 'incomplete',
+    inPersonIdentityVerified
   )
 
   const startIdentity = () => {
@@ -285,7 +288,7 @@ function gateDescription(key: ApprovalGateKey): string {
     case 'application_reviewed':
       return 'Membership team reviews your application.'
     case 'identity_verified':
-      return 'Required. Government ID and matching selfie.'
+      return 'Optional for membership approval. Verify with Stripe, or the membership team can record an in-person check. You do not need to do both.'
     default:
       return ''
   }

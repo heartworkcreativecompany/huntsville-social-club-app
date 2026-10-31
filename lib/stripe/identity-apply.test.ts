@@ -750,7 +750,11 @@ describe('identity status call sites', () => {
     expect(statusPage).toContain("params.identity === 'return'")
     expect(statusPage).toContain("identityStatus === 'pending'")
     expect(statusPage).toContain("identityStatus === 'processing'")
-    expect(statusPage).not.toContain('createAdminClient')
+    expect(statusPage).toContain('loadActiveInPersonIdentity(')
+    expect(statusPage).toContain('viewer.userId')
+    expect(statusPage).not.toContain(
+      'reconcileIdentityVerification(viewer.userId, createAdminClient()'
+    )
   })
 
   it('checks the stored session before creating another one', () => {

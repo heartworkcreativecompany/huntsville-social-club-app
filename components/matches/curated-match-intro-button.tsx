@@ -5,6 +5,12 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { requestCuratedMatchIntro } from '@/app/(club)/matches/actions'
 import {
+  IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE,
+  IDENTITY_REQUIRED_BEFORE_MESSAGING,
+  type AcceptedIdentityStatus,
+} from '@/lib/identity-verification'
+import { ACCOUNT_IDENTITY_VERIFICATION_HREF } from '@/lib/account-identity-verification'
+import {
   MAX_MEMBER_MESSAGE_LENGTH,
   validateMemberMessageBody,
 } from '@/lib/member-message-limits'
@@ -17,14 +23,14 @@ export default function CuratedMatchIntroButton({
   introStatus,
   recommendationStatus,
   conversationId,
-  canMessage,
+  identityStatus,
   displayState,
 }: {
   recommendationId: string
   introStatus: CuratedMatchListItem['introStatus']
   recommendationStatus: string
   conversationId: string | null
-  canMessage: boolean
+  identityStatus: AcceptedIdentityStatus
   displayState: CuratedMatchDisplayState
 }) {
   const router = useRouter()
@@ -40,11 +46,20 @@ export default function CuratedMatchIntroButton({
         ? 'intro_requested'
         : displayState
 
-  if (!canMessage && (effectiveState === 'new' || effectiveState === 'viewed')) {
+  if (identityStatus !== 'verified') {
     return (
-      <p className="text-sm text-muted-foreground">
-        Messaging and intros require an eligible paid membership.
-      </p>
+      <div className="grid gap-2">
+        <p className="text-sm text-muted-foreground">
+          {identityStatus === 'unavailable'
+            ? IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE
+            : IDENTITY_REQUIRED_BEFORE_MESSAGING}
+        </p>
+        {identityStatus === 'unverified' ? (
+          <Link href={ACCOUNT_IDENTITY_VERIFICATION_HREF} className="text-sm font-medium text-accent underline">
+            Verify my identity
+          </Link>
+        ) : null}
+      </div>
     )
   }
 

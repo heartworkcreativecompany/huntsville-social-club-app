@@ -1,15 +1,20 @@
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
+import {
+  IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE,
+  IDENTITY_REQUIRED_BEFORE_MESSAGING,
+} from '@/lib/identity-verification'
 import { MUTUAL_MESSAGING_REQUIRED_MESSAGE } from '@/lib/membership-entitlements'
 
 /**
- * Canonical in-app upgrade path for messaging entitlement.
- * Prefer `/upgrade` (authenticated plans) over marketing `/pricing`.
+ * Profile messaging follows approval and accepted identity.
+ * Paid plan state is a separate entitlement and does not open or close messaging.
  */
 export const MEMBER_MESSAGING_UPGRADE_PATH = '/upgrade' as const
 
 export const MEMBER_MESSAGING_LOCKED_COPY =
-  'Messaging is available with a paid membership.' as const
+  'Messaging requires an approved membership and verified identity.' as const
 
-export const MEMBER_MESSAGING_UPGRADE_CTA = 'Upgrade membership' as const
+export const MEMBER_MESSAGING_UPGRADE_CTA = 'Check identity verification' as const
 
 /** Neutral notice when the viewer is paid but a new request is not mutually eligible. */
 export const MEMBER_MESSAGING_MUTUAL_REQUIRED_COPY =
@@ -35,16 +40,26 @@ export function resolveProfileMessageRecipientId(routeMemberId: string): string 
 export type ProfileMessagingUiMode =
   | 'hidden'
   | 'composer'
-  | 'upgrade'
+  | 'identity_required'
+  | 'identity_unavailable'
   | 'unavailable'
 
 export function profileMessagingUiMode(input: {
   isSelf: boolean
-  senderCanMessage: boolean
-  recipientCanMessage: boolean
+  senderIdentity: AcceptedIdentityStatus
+  recipientIdentity: AcceptedIdentityStatus
 }): ProfileMessagingUiMode {
   if (input.isSelf) return 'hidden'
-  if (!input.senderCanMessage) return 'upgrade'
-  if (!input.recipientCanMessage) return 'unavailable'
+  if (
+    input.senderIdentity === 'unavailable' ||
+    input.recipientIdentity === 'unavailable'
+  ) {
+    return 'identity_unavailable'
+  }
+  if (input.senderIdentity !== 'verified') return 'identity_required'
+  if (input.recipientIdentity !== 'verified') return 'unavailable'
   return 'composer'
 }
+
+export const PROFILE_IDENTITY_REQUIRED_COPY = IDENTITY_REQUIRED_BEFORE_MESSAGING
+export const PROFILE_IDENTITY_UNAVAILABLE_COPY = IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE

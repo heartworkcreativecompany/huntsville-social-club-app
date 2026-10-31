@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import AdminInPersonIdentityVerification from '@/components/admin/admin-in-person-identity-verification'
 import AdminMemberBadgesManager from '@/components/admin/admin-member-badges-manager'
 import AdminMembershipAccessOverride from '@/components/admin/admin-membership-access-override'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
@@ -10,6 +11,10 @@ import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
 import { loadAdminMemberDetail } from '@/lib/admin/member-detail'
+import {
+  acceptedIdentityForAdmin,
+  loadInPersonIdentityAdminState,
+} from '@/lib/identity-verification-admin'
 import { requireAdminClient } from '@/lib/supabase/require-admin-client'
 import { getViewer } from '@/lib/viewer'
 
@@ -69,6 +74,15 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
   }
 
   const { overview, badges, accessOverride } = result.data
+  const inPersonIdentity = await loadInPersonIdentityAdminState(
+    requireAdminClient(),
+    overview.id
+  )
+  const acceptedIdentity = acceptedIdentityForAdmin({
+    stripeStatus: overview.identityVerificationStatus,
+    lookupOk: inPersonIdentity.lookupOk,
+    active: Boolean(inPersonIdentity.active),
+  })
   const publicBadges = badges.activeAwards.map((award) => ({
     slug: award.slug,
     publicLabel: award.publicLabel,
@@ -148,7 +162,7 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
 
           <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-muted-foreground">Identity verification</dt>
+              <dt className="text-muted-foreground">Stripe Identity</dt>
               <dd className="font-medium text-foreground">
                 {overview.identityVerificationLabel}
                 {overview.identityVerifiedAt
@@ -199,6 +213,20 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
               Profile revision queue
             </Link>
           </p>
+        </Card>
+
+        <Card>
+          <h3 className="text-display text-base font-semibold">
+            Identity verification
+          </h3>
+          <AdminInPersonIdentityVerification
+            profileId={overview.id}
+            accepted={acceptedIdentity}
+            stripeStatus={overview.identityVerificationStatus}
+            lookupOk={inPersonIdentity.lookupOk}
+            active={inPersonIdentity.active}
+            history={inPersonIdentity.history}
+          />
         </Card>
 
         <Card>

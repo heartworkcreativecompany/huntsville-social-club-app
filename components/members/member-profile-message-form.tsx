@@ -1,23 +1,20 @@
 'use client'
 
 import { useId, useState, useTransition } from 'react'
-import Link from 'next/link'
 import Card from '@/components/ui/card'
-import {
-  buttonPrimaryClassName,
-  inputClassName,
-} from '@/lib/event-labels'
+import IdentityVerificationEntryLink from '@/components/profile/identity-verification-entry-link'
+import { buttonPrimaryClassName, inputClassName } from '@/lib/event-labels'
 import {
   MAX_MEMBER_MESSAGE_LENGTH,
   validateMemberMessageBody,
 } from '@/lib/member-message-limits'
 import {
-  MEMBER_MESSAGING_LOCKED_COPY,
   MEMBER_MESSAGING_MUTUAL_REQUIRED_COPY,
-  MEMBER_MESSAGING_UPGRADE_CTA,
-  MEMBER_MESSAGING_UPGRADE_PATH,
+  PROFILE_IDENTITY_REQUIRED_COPY,
+  PROFILE_IDENTITY_UNAVAILABLE_COPY,
   profileMessagingUiMode,
 } from '@/lib/member-profile-messaging'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 
 export type ProfileMessageSendResult =
   | { error: string }
@@ -29,14 +26,14 @@ export type ProfileMessageSendResult =
  */
 export default function MemberProfileMessageForm({
   firstName,
-  senderCanMessage,
-  recipientCanMessage,
+  senderIdentity,
+  recipientIdentity,
   isSelf = false,
   onSend,
 }: {
   firstName: string
-  senderCanMessage: boolean
-  recipientCanMessage: boolean
+  senderIdentity: AcceptedIdentityStatus
+  recipientIdentity: AcceptedIdentityStatus
   isSelf?: boolean
   onSend: (body: string) => Promise<ProfileMessageSendResult>
 }) {
@@ -51,12 +48,12 @@ export default function MemberProfileMessageForm({
 
   const mode = profileMessagingUiMode({
     isSelf,
-    senderCanMessage,
-    recipientCanMessage,
+    senderIdentity,
+    recipientIdentity,
   })
   if (mode === 'hidden') return null
 
-  if (mode === 'upgrade') {
+  if (mode === 'identity_required' || mode === 'identity_unavailable') {
     return (
       <Card className="w-full border-accent/25 bg-accent-soft/20">
         <p className="eyebrow">Messaging</p>
@@ -64,16 +61,15 @@ export default function MemberProfileMessageForm({
           Message {firstName}
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          {MEMBER_MESSAGING_LOCKED_COPY}
+          {mode === 'identity_required'
+            ? PROFILE_IDENTITY_REQUIRED_COPY
+            : PROFILE_IDENTITY_UNAVAILABLE_COPY}
         </p>
-        <div className="mt-5">
-          <Link
-            href={MEMBER_MESSAGING_UPGRADE_PATH}
-            className={`${buttonPrimaryClassName} inline-flex w-full justify-center sm:w-auto`}
-          >
-            {MEMBER_MESSAGING_UPGRADE_CTA}
-          </Link>
-        </div>
+        {mode === 'identity_required' ? (
+          <div className="mt-5">
+            <IdentityVerificationEntryLink className={`${buttonPrimaryClassName} inline-flex w-full justify-center sm:w-auto`} />
+          </div>
+        ) : null}
       </Card>
     )
   }

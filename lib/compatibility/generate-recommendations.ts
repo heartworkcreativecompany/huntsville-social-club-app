@@ -25,6 +25,10 @@ import {
 } from '@/lib/compatibility/batch-empty-reason'
 import { loadPairExclusionsForGeneration } from '@/lib/curated-recommendation-lifecycle'
 import { scoreCompatibilityPair } from '@/lib/compatibility/scoring'
+import {
+  loadMatchingIdentityMap,
+  partitionMatchingPublication,
+} from '@/lib/matching-identity'
 
 export type RecommendationGenerationOutcome =
   | 'delivered'
@@ -275,7 +279,40 @@ export async function generateCuratedRecommendationsForUser(
     })
 
   const now = new Date().toISOString()
-  const selected = ranked.slice(0, RECOMMENDATIONS_PER_BATCH)
+  const rankedSelection = ranked.slice(0, RECOMMENDATIONS_PER_BATCH)
+  const identity = await loadMatchingIdentityMap(supabase, [
+    userId,
+    ...rankedSelection.map((candidate) => candidate.candidateId),
+  ])
+  if (!identity.ok) {
+    return {
+      userId,
+      outcome: 'skipped',
+      created: 0,
+      batchId: null,
+      skipReason: 'Identity verification could not be confirmed.',
+      topScore: null,
+    }
+  }
+  const publication = partitionMatchingPublication({
+    recipientId: userId,
+    candidateIds: rankedSelection.map((candidate) => candidate.candidateId),
+    statuses: identity.statuses,
+  })
+  if (!publication.ok || identity.statuses.get(userId) !== 'verified') {
+    return {
+      userId,
+      outcome: 'skipped',
+      created: 0,
+      batchId: null,
+      skipReason: 'Member is not eligible for new recommendations.',
+      topScore: null,
+    }
+  }
+  const publishIds = new Set(publication.publishIds)
+  const selected = rankedSelection.filter((candidate) =>
+    publishIds.has(candidate.candidateId)
+  )
   const generationSource = options.generationSource ?? 'scheduled'
   const manualNotificationStatus =
     generationSource === 'manual_all' || generationSource === 'manual_member'

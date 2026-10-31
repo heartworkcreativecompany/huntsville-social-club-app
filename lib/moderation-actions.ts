@@ -14,6 +14,8 @@ export type ModerationActionType =
   | 'membership_access_override_granted'
   | 'membership_access_override_updated'
   | 'membership_access_override_revoked'
+  | 'in_person_identity_verified'
+  | 'in_person_identity_revoked'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -34,6 +36,12 @@ export async function logModerationAction(
     sourceId?: string | null
     reason?: string | null
     details?: string | null
+    /**
+     * Other audits tolerate a database that has not created this table yet.
+     * In-person identity approval and revocation pass false so a missing
+     * audit table is a failure, not a successful audit.
+     */
+    tolerateMissingTable?: boolean
   }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { error } = await supabase.from('moderation_actions').insert({
@@ -47,7 +55,7 @@ export async function logModerationAction(
   })
 
   if (error) {
-    if (error.code === '42P01') {
+    if (error.code === '42P01' && input.tolerateMissingTable !== false) {
       return { ok: true }
     }
     captureOperationalError('moderation-audit', error, {

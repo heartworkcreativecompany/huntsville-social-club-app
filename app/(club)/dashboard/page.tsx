@@ -9,7 +9,6 @@ import RecentNotifications, {
   DASHBOARD_NOTIFICATION_PREVIEW_LIMIT,
 } from '@/components/dashboard/recent-notifications'
 import UpcomingEventsPreview from '@/components/dashboard/upcoming-events-preview'
-import CuratedIntroCard from '@/components/members/curated-intro-card'
 import RecentMessagesPreview from '@/components/messages/recent-messages-preview'
 import ConnectMatchesTeaser from '@/components/dashboard/connect-matches-teaser'
 import PageHeader from '@/components/ui/page-header'
@@ -28,7 +27,9 @@ import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements
 import { loadMemberNotifications } from '@/lib/load-member-notifications'
 import { loadUpcomingEventsPreview } from '@/lib/load-upcoming-events'
 import { loadRecentMessagePreviews } from '@/lib/member-messages'
+import { loadMatchingIdentityPresentation } from '@/lib/matching-identity'
 import { computeProfileCompletion } from '@/lib/profile-completion'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -49,13 +50,17 @@ export default async function DashboardPage() {
     loadOwnFriendshipQuestionnaire(supabase, viewer.userId).catch(() => null),
   ])
 
-  const canMessage = entitlements?.canMessage ?? false
   const showConnectMatchesTeaser = shouldHideCuratedMatchingSurfaces(entitlements)
-  const datingContext = compatibilityContextForViewer(viewer, entitlements)
+  const identity = await loadMatchingIdentityPresentation(
+    createAdminClient(),
+    viewer.userId
+  )
+  const datingContext = compatibilityContextForViewer(viewer, entitlements, identity)
   const friendshipContext = friendshipContextForViewer(
     viewer,
     entitlements,
-    friendshipQuestionnaire
+    friendshipQuestionnaire,
+    identity
   )
   const canLoadDatingRecommendations = canAccessMatchesInbox(datingContext.summary)
   const friendsView = resolveFriendshipMatchesView({
@@ -64,7 +69,11 @@ export default async function DashboardPage() {
   const canLoadFriendshipRecommendations = friendsView.loadRecommendations
 
   const liveDraft = mergeProfileIntoDraft(viewer.profile)
-  const completion = computeProfileCompletion(viewer.profile, liveDraft)
+  const completion = computeProfileCompletion(
+    viewer.profile,
+    liveDraft,
+    identity.status
+  )
   const actionNeededCards = buildDashboardActionNeeded({
     datingStatus: datingContext.summary.status,
     friendshipStatus: friendshipContext.access.status,
@@ -104,9 +113,7 @@ export default async function DashboardPage() {
       userId: viewer.userId,
       role: viewer.role,
     }),
-    canMessage
-      ? loadRecentMessagePreviews(supabase, viewer.userId, 3)
-      : Promise.resolve({ previews: [], error: null }),
+    loadRecentMessagePreviews(supabase, viewer.userId, 3),
     datingRecommendationsPromise,
     friendshipRecommendationsPromise,
   ])
@@ -123,7 +130,7 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Discovery"
         title="Dashboard"
-        description="Your latest updates and next steps for curated intros, member discovery, and recent conversations."
+        description="Your latest updates and next steps for recommendations, member discovery, and conversations."
         actions={<ApplicationStatusBadge status={viewer.applicationStatus} />}
       />
 
@@ -159,18 +166,12 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      {canMessage ? (
-        <div className="mb-10">
-          <RecentMessagesPreview
-            previews={messageResult.previews}
-            error={messageResult.error}
-          />
-        </div>
-      ) : null}
-
-      <section className="mb-10">
-        <CuratedIntroCard />
-      </section>
+      <div className="mb-10">
+        <RecentMessagesPreview
+          previews={messageResult.previews}
+          error={messageResult.error}
+        />
+      </div>
     </>
   )
 }

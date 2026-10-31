@@ -20,7 +20,7 @@ export default function VerificationStatusModule({
 
   return (
     <Card>
-      <p className="eyebrow">Account status</p>
+      <p className="eyebrow profile-section-title">Account status</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <ApplicationStatusBadge status={applicationStatus} />
         <MemberProfileBadges member={member} />

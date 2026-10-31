@@ -1,11 +1,10 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
-import Link from 'next/link'
 import ApplyMembershipCta from '@/components/marketing/apply-membership-cta'
 import PublicMarketingFrame, {
   publicEventDetailHref,
   publicMarketingSignupHref,
 } from '@/components/marketing/public-marketing-frame'
+import EventImageCard from '@/components/events/event-image-card'
 import EventTypeBadge from '@/components/events/event-type-badge'
 import {
   eventCoverImage,
@@ -69,30 +68,25 @@ export default async function PublicEventsPage() {
                 )
                 return (
                   <li key={event.id}>
-                    <Link
+                    <EventImageCard
                       href={publicEventDetailHref(event.id)}
-                      className="group relative block min-h-[18rem] overflow-hidden rounded-xl border border-border no-underline"
+                      imageSrc={coverSrc}
+                      imageSizes="(max-width: 640px) 100vw, 50vw"
+                      unoptimized={isRemoteEventCoverImage(coverSrc)}
                     >
-                      <Image
-                        src={coverSrc}
-                        alt=""
-                        fill
-                        sizes="(max-width: 640px) 100vw, 50vw"
-                        className="object-cover transition duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                        unoptimized={isRemoteEventCoverImage(coverSrc)}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
-                      <div className="relative flex h-full min-h-[18rem] flex-col justify-end p-5">
-                        <EventTypeBadge eventType={event.event_type} />
-                        <h2 className="font-brand mt-3 text-xl font-semibold text-white">
-                          {event.title}
-                        </h2>
-                        <p className="mt-2 text-sm leading-relaxed text-white/80">
-                          {when}
-                          {event.location ? ` · ${event.location}` : ''}
+                      <EventTypeBadge eventType={event.event_type} />
+                      <h2 className="font-brand text-xl font-semibold text-balance text-foreground">
+                        {event.title}
+                      </h2>
+                      <p className="text-sm leading-relaxed text-muted-foreground">
+                        {when}
+                      </p>
+                      {event.location ? (
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                          {event.location}
                         </p>
-                      </div>
-                    </Link>
+                      ) : null}
+                    </EventImageCard>
                   </li>
                 )
               })}

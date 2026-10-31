@@ -113,7 +113,7 @@ export function MessagingPaywall({
         {copy.body}
       </p>
       <div className="mt-5 flex flex-wrap gap-3">
-        <Link href="/upgrade" className={buttonPrimaryClassName}>
+        <Link href="/application/status" className={buttonPrimaryClassName}>
           {copy.primaryCta}
         </Link>
         <Link href={membershipsHref} className={buttonSecondaryClassName}>

@@ -55,7 +55,7 @@ export default function MemberBillingStatus({
         </div>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">
-          Upgrade to Inner Circle or Elite Circle for messaging, included standard
+          Upgrade to Inner Circle or Elite Circle for curated matches, included standard
           event registrations, and Circle Social access.
         </p>
       )}

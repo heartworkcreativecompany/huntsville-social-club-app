@@ -11,6 +11,10 @@
     "test:integration:signup-consent": "node scripts/signup-consent-integration.mjs",
     "test:watch": "vitest",
     "test:integration:application-email-lease": "APPLICATION_EMAIL_LEASE_DESTRUCTIVE_TEST=1 LEASE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:55432/hsc_application_email_lease_test vitest run --config vitest.lease-integration.config.ts",
+    "test:integration:messaging-policy": "MESSAGING_POLICY_DESTRUCTIVE_TEST=1 MESSAGING_POLICY_DATABASE_URL=postgres://postgres@127.0.0.1:55432/hsc_messaging_policy_test vitest run --config vitest.messaging-policy.config.ts",
+    "test:integration:circle-entitlements": "CIRCLE_ENTITLEMENT_DESTRUCTIVE_TEST=1 CIRCLE_ENTITLEMENT_DATABASE_URL=postgres://postgres@127.0.0.1:55433/hsc_circle_entitlement_test vitest run --config vitest.circle-entitlement.config.ts",
+    "test:integration:in-person-identity": "IN_PERSON_IDENTITY_DESTRUCTIVE_TEST=1 IN_PERSON_IDENTITY_DATABASE_URL=postgres://postgres@127.0.0.1:55434/hsc_in_person_identity_test vitest run --config vitest.in-person-identity.config.ts",
+    "test:integration:matching-identity": "MATCHING_IDENTITY_DESTRUCTIVE_TEST=1 MATCHING_IDENTITY_DATABASE_URL=postgres://postgres@127.0.0.1:55435/hsc_matching_identity_test vitest run --config vitest.matching-identity.config.ts",
     "backfill:auth-display-names": "npx --yes tsx scripts/backfill-auth-display-names.ts"
   },
   "dependencies": {

@@ -15,14 +15,15 @@ import {
 } from '@/lib/curated-match-lifecycle'
 import type { MemberMatchAvailabilitySummary } from '@/lib/compatibility/member-match-availability'
 import { buttonSecondaryClassName } from '@/lib/event-labels'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 import type { CuratedMatchListItem } from '@/lib/load-curated-matches'
 
 function MatchCard({
   item,
-  canMessage,
+  identityStatus,
 }: {
   item: CuratedMatchListItem
-  canMessage: boolean
+  identityStatus: AcceptedIdentityStatus
 }) {
   const displayState = curatedMatchDisplayState({
     introStatus: item.introStatus,
@@ -117,7 +118,7 @@ function MatchCard({
               introStatus={item.introStatus}
               recommendationStatus={item.status}
               conversationId={item.conversationId}
-              canMessage={canMessage}
+              identityStatus={identityStatus}
               displayState={displayState}
             />
             <CuratedMatchPassButton
@@ -133,12 +134,12 @@ function MatchCard({
 
 export default function CuratedMatchesList({
   items,
-  canMessage,
+  identityStatus,
   showDevSeed,
   availability,
 }: {
   items: CuratedMatchListItem[]
-  canMessage: boolean
+  identityStatus: AcceptedIdentityStatus
   showDevSeed: boolean
   availability: MemberMatchAvailabilitySummary
 }) {
@@ -187,7 +188,7 @@ export default function CuratedMatchesList({
           <ul className="mt-3 grid gap-4">
             {activeItems.map((item) => (
               <li key={item.id}>
-                <MatchCard item={item} canMessage={canMessage} />
+                <MatchCard item={item} identityStatus={identityStatus} />
               </li>
             ))}
           </ul>
@@ -207,7 +208,7 @@ export default function CuratedMatchesList({
           <ul className="mt-3 grid gap-4">
             {archivedItems.map((item) => (
               <li key={item.id}>
-                <MatchCard item={item} canMessage={canMessage} />
+                <MatchCard item={item} identityStatus={identityStatus} />
               </li>
             ))}
           </ul>

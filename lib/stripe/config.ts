@@ -11,9 +11,9 @@ let stripeClient: Stripe | null = null
 export const STRIPE_LIVE_PRICE_IDS = {
   /** Connect — $9.99/month */
   connect: 'price_1UCjKABei7W40myB2Mnqrtse',
-  /** Inner Circle — $29.99/month (prod_UqPcL4boAOiMZT) */
+  /** Existing Inner Circle subscribers — $29.99/month (prod_UqPcL4boAOiMZT). New checkout uses NEW_PURCHASE_STRIPE_PRICE_IDS. */
   inner_circle: 'price_1TqimnBei7W40myBUKESC7wF',
-  /** Elite Circle — $69.99/month (prod_UqPciS4ul6FhvF) */
+  /** Existing Elite Circle subscribers — $69.99/month (prod_UqPciS4ul6FhvF). New checkout uses NEW_PURCHASE_STRIPE_PRICE_IDS. */
   elite_circle: 'price_1TqimyBei7W40myBRnke6fQF',
   /** Event Sponsorship — $499 one-time (prod_UvwN6jDxbT9O28) */
   event_sponsorship: 'price_1Tw4UjBei7W40myBOG1mkxQ5',
@@ -67,7 +67,8 @@ export function getStripe(): Stripe {
 
 /**
  * Checkout / portal gate. Requires only a Stripe secret key.
- * Price IDs come from STRIPE_LIVE_PRICE_IDS (env overrides are optional for local test).
+ * Existing-subscriber price IDs come from STRIPE_LIVE_PRICE_IDS.
+ * New Inner and Elite checkout uses NEW_PURCHASE_STRIPE_PRICE_IDS while offers are active.
  *
  * Does NOT require:
  * - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -99,8 +100,25 @@ const PAID_TIERS: PaidMembershipTier[] = [
   'elite_circle',
 ]
 
+/** Tiers a new checkout or plan link may start. Connect remains a recognized existing plan. */
+export const PURCHASABLE_MEMBERSHIP_TIERS = [
+  'inner_circle',
+  'elite_circle',
+] as const
+
+export type PurchasableMembershipTier = (typeof PURCHASABLE_MEMBERSHIP_TIERS)[number]
+
+export const CONNECT_NEW_SALE_RETIRED_MESSAGE =
+  'Connect is no longer available for new purchase. Inner Circle and Elite Circle remain available.'
+
 export function isPaidMembershipTier(value: string): value is PaidMembershipTier {
   return PAID_TIERS.includes(value as PaidMembershipTier)
+}
+
+export function isPurchasableMembershipTier(
+  value: string
+): value is PurchasableMembershipTier {
+  return (PURCHASABLE_MEMBERSHIP_TIERS as readonly string[]).includes(value)
 }
 
 function envPriceIdForTier(tier: PaidMembershipTier): string | undefined {

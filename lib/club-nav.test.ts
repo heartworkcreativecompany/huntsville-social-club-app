@@ -169,6 +169,7 @@ describe('ClubNavMarkup', () => {
     const html = renderNav({ mobileOpen: false })
 
     expect(html).toContain('grid-cols-[44px_minmax(0,1fr)_44px]')
+    expect(html).toContain('club-header-wordmark')
     expect(html).toContain('lg:hidden')
     expect(html).toContain('h-11 w-11 min-h-11 min-w-11')
     expect(html).toContain('justify-center')
@@ -288,6 +289,20 @@ describe('ClubNav interaction wiring', () => {
     )
     expect(source).toContain("document.body.style.overflow = 'hidden'")
     expect(source).toContain('setMobileOpen(false)')
+    expect(source).toContain('[data-club-content-scroll]')
+    expect(source).toContain('contentScroll.scrollTop = previousContentTop')
+    expect(source).toContain('overflow-y-auto overscroll-contain')
+    expect(source).toContain(
+      'max-h-[calc(var(--club-frame-height,100dvh)-var(--club-header-height,4.75rem)-env(safe-area-inset-bottom))]'
+    )
+    const css = readFileSync(join(__dirname, '../app/globals.css'), 'utf8')
+    expect(css).toContain('width: 120px')
+    expect(css).toContain('height: 120px')
+    expect(css).toContain('overflow: hidden')
+    expect(css).not.toContain('height: 48px')
+    expect(css).not.toContain('object-view-box: inset')
+    expect(source).toContain('data-club-site-header')
+    expect(source).toContain('bg-surface')
     expect(source).toContain('key={pathname}')
     expect(source).toContain('onCloseMobileNav')
     expect(source).toContain('toggleRef.current?.focus()')

@@ -5,7 +5,11 @@ import MemberVouchForm from '@/components/members/member-vouch-form'
 import MemberVouchSummary from '@/components/members/member-vouch-summary'
 import type { DirectoryMember } from '@/lib/members-discovery'
 import type { ApplicationPublicProfileDetails } from '@/lib/application-profile-preview'
-import type { VouchSummary, VouchType } from '@/lib/member-vouches'
+import type {
+  PublicVouchEndorsement,
+  VouchSummary,
+  VouchType,
+} from '@/lib/member-vouches'
 
 export default function MemberProfilePresentation({
   member,
@@ -15,6 +19,7 @@ export default function MemberProfilePresentation({
   banner,
   footer,
   vouchSummary,
+  vouchEndorsements,
   viewerVouches,
   canVouch = false,
 }: {
@@ -25,7 +30,13 @@ export default function MemberProfilePresentation({
   banner?: React.ReactNode
   footer?: React.ReactNode
   vouchSummary?: VouchSummary | null
-  viewerVouches?: { id: string; vouch_type: VouchType; status: string }[]
+  vouchEndorsements?: PublicVouchEndorsement[]
+  viewerVouches?: {
+    id: string
+    vouch_type: VouchType
+    status: string
+    note?: string | null
+  }[]
   canVouch?: boolean
 }) {
   return (
@@ -45,7 +56,10 @@ export default function MemberProfilePresentation({
             <MemberPublicDetails details={details} compact omitHeaderFields />
           ) : null}
           {vouchSummary && vouchSummary.total > 0 ? (
-            <MemberVouchSummary summary={vouchSummary} />
+            <MemberVouchSummary
+              summary={vouchSummary}
+              endorsements={vouchEndorsements}
+            />
           ) : null}
           {canVouch && viewerVouches ? (
             <MemberVouchForm

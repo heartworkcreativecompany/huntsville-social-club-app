@@ -152,14 +152,13 @@ describe('public business directory page', () => {
     expect(PUBLIC_BUSINESS_LISTING_SELECT).not.toContain('owner_id')
   })
 
-  it('matches the member directory responsive grid', () => {
+  it('keeps the business grid while the member directory uses a phone two-column grid', () => {
     const memberDirectory = readFileSync(
       join(repoRoot, 'components/members/member-directory-section.tsx'),
       'utf8'
     )
-    expect(memberDirectory).toContain(
-      'mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3'
-    )
+    expect(memberDirectory).toContain('minmax(min(100%,max(9rem,calc((100%-0.75rem)/2))),1fr)')
+    expect(memberDirectory).toContain('lg:grid-cols-3')
     expect(BUSINESS_DIRECTORY_GRID_CLASS).toBe(
       'grid gap-5 sm:grid-cols-2 lg:grid-cols-3'
     )

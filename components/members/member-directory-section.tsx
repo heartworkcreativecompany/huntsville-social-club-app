@@ -1,37 +1,60 @@
 'use client'
 
-import { useMemo, useState } from 'react'
 import EmptyState from '@/components/ui/empty-state'
+import QuerySearchField from '@/components/ui/query-search-field'
+import {
+  directoryPageCount,
+  directoryResultSummary,
+} from '@/lib/directory-pagination'
 import {
   DEFAULT_DIRECTORY_BROWSE_STATE,
-  applyDirectoryBrowseModeChange,
-  browseDirectoryMembers,
-  directoryEmptyStateDescription,
-  parseDirectoryBrowseState,
-  parseDirectoryIndustryFilter,
-  parseDirectoryIntentFilter,
+  directoryNoResultsDescription,
   type DirectoryBrowseMode,
+  type DirectoryBrowseState,
   type DirectoryIntentFilterValue,
   type DirectoryMember,
 } from '@/lib/members-discovery'
 import MemberDirectoryBrowseControls from './member-directory-browse-controls'
+import MemberDirectoryPagination from './member-directory-pagination'
 import MemberDiscoveryCard from './member-discovery-card'
+
+export const MEMBER_DIRECTORY_GRID_CLASS =
+  'mt-6 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,max(9rem,calc((100%-0.75rem)/2))),1fr))] lg:grid-cols-3 lg:gap-5'
+
+type MemberDirectorySectionProps = {
+  members: DirectoryMember[]
+  matchCount?: number
+  eligibleCount?: number
+  page?: number
+  browseState?: DirectoryBrowseState
+  search?: string
+  loadError?: string | null
+  isPending?: boolean
+  onBrowseModeChange?: (mode: DirectoryBrowseMode) => void
+  onIntentFilterChange?: (value: DirectoryIntentFilterValue) => void
+  onIndustryFilterChange?: (value: string) => void
+  onSearchCommit?: (value: string) => void
+  onSearchValueChange?: (value: string) => void
+  pageHref?: (page: number) => string
+}
 
 export default function MemberDirectorySection({
   members,
-}: {
-  members: DirectoryMember[]
-}) {
-  const [browseState, setBrowseState] = useState(
-    DEFAULT_DIRECTORY_BROWSE_STATE
-  )
-
-  const visible = useMemo(
-    () => browseDirectoryMembers(members, browseState),
-    [members, browseState]
-  )
-
-  if (members.length === 0) {
+  matchCount = members.length,
+  eligibleCount = members.length,
+  page = 1,
+  browseState = DEFAULT_DIRECTORY_BROWSE_STATE,
+  search = '',
+  loadError = null,
+  isPending = false,
+  onBrowseModeChange,
+  onIntentFilterChange,
+  onIndustryFilterChange,
+  onSearchCommit,
+  onSearchValueChange,
+  pageHref = (pageNumber) => `#page-${pageNumber}`,
+}: MemberDirectorySectionProps) {
+  if (eligibleCount === 0 && !loadError) {
     return (
       <EmptyState
         title="No members to discover yet"
@@ -40,50 +63,63 @@ export default function MemberDirectorySection({
     )
   }
 
+  const pageCount = directoryPageCount(matchCount)
+  const summary = directoryResultSummary(page, matchCount)
+
   return (
     <>
-      <MemberDirectoryBrowseControls
-        state={browseState}
-        onBrowseModeChange={(mode: DirectoryBrowseMode) =>
-          setBrowseState((current) =>
-            applyDirectoryBrowseModeChange(current, mode)
-          )
-        }
-        onIntentFilterChange={(value: DirectoryIntentFilterValue) =>
-          setBrowseState((current) =>
-            parseDirectoryBrowseState({
-              ...current,
-              intentFilter: parseDirectoryIntentFilter(value),
-            })
-          )
-        }
-        onIndustryFilterChange={(value: string) =>
-          setBrowseState((current) =>
-            parseDirectoryBrowseState({
-              ...current,
-              industryFilter: parseDirectoryIndustryFilter(value),
-            })
-          )
-        }
-      />
+      <div className="grid min-w-0 gap-4">
+        <QuerySearchField
+          label="Search members"
+          placeholder="Search by name"
+          committedValue={search}
+          onCommit={onSearchCommit ?? (() => undefined)}
+          onValueChange={onSearchValueChange}
+          isPending={isPending}
+          pendingLabel="Loading members…"
+        />
+        <MemberDirectoryBrowseControls
+          state={browseState}
+          onBrowseModeChange={onBrowseModeChange ?? (() => undefined)}
+          onIntentFilterChange={onIntentFilterChange ?? (() => undefined)}
+          onIndustryFilterChange={onIndustryFilterChange ?? (() => undefined)}
+        />
+      </div>
 
       <p className="mt-4 text-xs text-muted-foreground" aria-live="polite">
-        Showing {visible.length} of {members.length} members
+        {summary}
       </p>
 
-      {visible.length === 0 ? (
-        <EmptyState
-          title="No matches"
-          description={directoryEmptyStateDescription(browseState.browseMode)}
-        />
+      {loadError ? (
+        <p className="mt-4 text-sm text-danger" role="alert">
+          Could not load directory: {loadError}
+        </p>
+      ) : matchCount === 0 ? (
+        <div className="mt-6">
+          <EmptyState
+            title="No matches"
+            description={directoryNoResultsDescription(browseState, search)}
+          />
+        </div>
       ) : (
-        <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((member) => (
-            <li key={member.id}>
-              <MemberDiscoveryCard member={member} />
+        <ul className={MEMBER_DIRECTORY_GRID_CLASS} aria-busy={isPending}>
+          {members.map((member) => (
+            <li key={member.id} className="min-w-0">
+              <MemberDiscoveryCard
+                member={member}
+                directory={{ search, browse: browseState, page }}
+              />
             </li>
           ))}
         </ul>
+      )}
+
+      {loadError ? null : (
+        <MemberDirectoryPagination
+          page={page}
+          pageCount={pageCount}
+          pageHref={pageHref}
+        />
       )}
     </>
   )

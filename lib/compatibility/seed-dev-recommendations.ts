@@ -1,3 +1,4 @@
+import { loadMatchingIdentityMap } from '@/lib/matching-identity'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { recommendationExpiresAt } from '@/lib/compatibility/recommendation-lifecycle-config'
 
@@ -69,8 +70,20 @@ export async function seedDevCuratedRecommendationsForUser(userId: string): Prom
   const existingIds = new Set(
     (existingRows ?? []).map((row) => row.recommended_user_id)
   )
+  const identity = await loadMatchingIdentityMap(admin, [
+    userId,
+    ...candidates.map((candidate) => candidate.id),
+  ])
+  if (!identity.ok || identity.statuses.get(userId) !== 'verified') {
+    return {
+      ok: false,
+      error: 'Accepted identity is required before seeding match recommendations.',
+    }
+  }
   const freshCandidates = candidates.filter(
-    (candidate) => !existingIds.has(candidate.id)
+    (candidate) =>
+      !existingIds.has(candidate.id) &&
+      identity.statuses.get(candidate.id) === 'verified'
   )
 
   if (freshCandidates.length === 0) {

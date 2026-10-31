@@ -4,7 +4,10 @@ import path from 'node:path'
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['lib/signup-email-consent.integration.test.ts'],
+    include: [
+      'lib/signup-email-consent.integration.test.ts',
+      'lib/account-email-marketing-preference.integration.test.ts',
+    ],
     fileParallelism: false,
     testTimeout: 60000,
     hookTimeout: 60000,

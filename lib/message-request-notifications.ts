@@ -1,8 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
-import { memberDisplayName } from '@/lib/members-discovery'
-import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import {
   conversationNotificationHref,
   createMemberNotification,
@@ -12,44 +9,6 @@ import type {
   CreateMessageRequestResult,
   RespondToMessageRequestResult,
 } from '@/lib/message-request-flow'
-import {
-  sendCuratedIntroMatchedEmail,
-  sendCuratedIntroMatchedTargetEmail,
-} from '@/lib/transactional-email'
-
-type ProfileRow = {
-  id: string
-  full_name: string | null
-}
-
-async function loadProfiles(
-  supabase: SupabaseClient<Database>,
-  ids: string[]
-): Promise<Map<string, ProfileRow>> {
-  const map = new Map<string, ProfileRow>()
-  if (ids.length === 0) {
-    return map
-  }
-
-  const { data } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
-    .select('id, full_name')
-    .in('id', ids)
-
-  for (const profile of data ?? []) {
-    map.set(profile.id, profile)
-  }
-
-  return map
-}
-
-function displayName(profile: ProfileRow | undefined): string {
-  if (!profile) {
-    return 'Member'
-  }
-
-  return memberDisplayName(profile)
-}
 
 export async function notifyMessageRequestReceived(
   supabase: SupabaseClient<Database>,
@@ -70,17 +29,6 @@ export async function notifyMessageRequestAccepted(
   supabase: SupabaseClient<Database>,
   result: RespondToMessageRequestResult
 ) {
-  const profiles = await loadProfiles(supabase, [
-    result.requesterId,
-    result.targetMemberId,
-  ])
-  const accountEmails = await loadProfileAccountEmails([
-    result.requesterId,
-    result.targetMemberId,
-  ])
-  const requester = profiles.get(result.requesterId)
-  const target = profiles.get(result.targetMemberId)
-
   void createMemberNotification(supabase, {
     userId: result.requesterId,
     type: 'message_request_accepted',
@@ -88,6 +36,7 @@ export async function notifyMessageRequestAccepted(
     metadata: {
       conversationId: result.conversationId,
       targetMemberId: result.targetMemberId,
+      recommendationId: result.recommendationId,
     },
   })
 
@@ -101,25 +50,6 @@ export async function notifyMessageRequestAccepted(
         targetMemberId: result.targetMemberId,
         recommendationId: result.recommendationId,
       },
-    })
-  }
-
-  const requesterEmail = accountEmails.get(result.requesterId)
-  const targetEmail = accountEmails.get(result.targetMemberId)
-
-  if (requesterEmail) {
-    void sendCuratedIntroMatchedEmail({
-      to: requesterEmail,
-      otherMemberName: displayName(target),
-      conversationId: result.conversationId,
-    })
-  }
-
-  if (targetEmail) {
-    void sendCuratedIntroMatchedTargetEmail({
-      to: targetEmail,
-      otherMemberName: displayName(requester),
-      conversationId: result.conversationId,
     })
   }
 }

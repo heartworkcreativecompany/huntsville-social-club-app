@@ -3,15 +3,35 @@
 import { revalidateCuratedMatchMemberRoutes } from '@/lib/compatibility/revalidate-curated-match-routes'
 import { isDevRecommendationSeedAllowed, seedDevCuratedRecommendationsForUser } from '@/lib/compatibility/seed-dev-recommendations'
 import { sendMessageRequest } from '@/app/(club)/messages/actions'
-import { assertMessagingAllowed } from '@/lib/require-messaging'
+import {
+  MATCHING_IDENTITY_REQUIRED_DETAIL,
+  MATCHING_IDENTITY_UNAVAILABLE_DETAIL,
+  loadMatchingIdentityMap,
+} from '@/lib/matching-identity'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { getViewer } from '@/lib/viewer'
+
+async function approvedMemberId(): Promise<
+  | { ok: true; userId: string }
+  | { ok: false; error: string }
+> {
+  const viewer = await getViewer()
+  if (!viewer) {
+    return { ok: false, error: 'You must be signed in.' }
+  }
+  if (!viewer.canAccessApp) {
+    return { ok: false, error: 'Membership approval is required.' }
+  }
+  return { ok: true, userId: viewer.userId }
+}
 
 export async function seedDevMatchRecommendations() {
   if (!isDevRecommendationSeedAllowed()) {
     return { error: 'Dev seeding is only available in local development.' }
   }
 
-  const gate = await assertMessagingAllowed()
+  const gate = await approvedMemberId()
   if (!gate.ok) {
     return { error: gate.error }
   }
@@ -41,7 +61,7 @@ export async function requestCuratedMatchIntro(
   recommendationId: string,
   body: string
 ) {
-  const gate = await assertMessagingAllowed()
+  const gate = await approvedMemberId()
   if (!gate.ok) {
     return { error: gate.error }
   }
@@ -70,6 +90,20 @@ export async function requestCuratedMatchIntro(
     return { error: 'This recommendation is no longer available.' }
   }
 
+  const identity = await loadMatchingIdentityMap(createAdminClient(), [
+    gate.userId,
+    recommendation.recommended_user_id,
+  ])
+  if (!identity.ok) {
+    return { error: MATCHING_IDENTITY_UNAVAILABLE_DETAIL }
+  }
+  if (
+    identity.statuses.get(gate.userId) !== 'verified' ||
+    identity.statuses.get(recommendation.recommended_user_id) !== 'verified'
+  ) {
+    return { error: MATCHING_IDENTITY_REQUIRED_DETAIL }
+  }
+
   const result = await sendMessageRequest({
     targetMemberId: recommendation.recommended_user_id,
     body,
@@ -93,7 +127,7 @@ export async function requestCuratedMatchIntro(
 }
 
 export async function passCuratedRecommendation(recommendationId: string) {
-  const gate = await assertMessagingAllowed()
+  const gate = await approvedMemberId()
   if (!gate.ok) {
     return { error: gate.error }
   }
@@ -139,6 +173,14 @@ export async function passCuratedRecommendation(recommendationId: string) {
       error:
         'You cannot pass a recommendation while a message request is pending or active.',
     }
+  }
+
+  const identity = await loadMatchingIdentityMap(createAdminClient(), [gate.userId])
+  if (!identity.ok) {
+    return { error: MATCHING_IDENTITY_UNAVAILABLE_DETAIL }
+  }
+  if (identity.statuses.get(gate.userId) !== 'verified') {
+    return { error: MATCHING_IDENTITY_REQUIRED_DETAIL }
   }
 
   const now = new Date().toISOString()

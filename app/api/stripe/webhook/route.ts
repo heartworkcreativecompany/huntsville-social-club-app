@@ -1,9 +1,9 @@
+import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe } from '@/lib/stripe/config'
 import {
-  downgradeMembershipFromStripe,
   resolveUserIdForSubscription,
   resolveUserIdFromStripeMetadata,
   syncStripeSubscription,
@@ -15,6 +15,10 @@ import {
 } from '@/lib/stripe/webhook-idempotency'
 import { constructVerifiedStripeEvent } from '@/lib/stripe/verify-webhook-signature'
 import { subscriptionIdFromInvoice } from '@/lib/stripe/invoice-helpers'
+import {
+  checkoutPaymentSettlesMembership,
+  entitlementOpenForInvoiceBillingReason,
+} from '@/lib/stripe/membership-fulfillment-gates'
 
 export const runtime = 'nodejs'
 
@@ -94,7 +98,12 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       await syncStripeSubscription(admin, {
         userId,
         subscription,
-        options: { startEntitlementCycle: true },
+        options: {
+          startEntitlementCycle: checkoutPaymentSettlesMembership(
+            session.payment_status
+          ),
+          eventCreated: event.created,
+        },
         productTierFallback:
           typeof session.metadata?.product_tier === 'string'
             ? session.metadata.product_tier
@@ -104,15 +113,20 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
     }
 
     case 'customer.subscription.created':
-    case 'customer.subscription.updated': {
+    case 'customer.subscription.updated':
+    case 'customer.subscription.deleted': {
       const incoming = event.data.object as Stripe.Subscription
-      const subscription = await stripe.subscriptions.retrieve(incoming.id)
+      const subscription =
+        event.type === 'customer.subscription.deleted'
+          ? incoming
+          : await stripe.subscriptions.retrieve(incoming.id)
       const userId = await resolveUserIdForSubscription(subscription)
       if (!userId) return
 
       await syncStripeSubscription(admin, {
         userId,
         subscription,
+        options: { eventCreated: event.created },
         productTierFallback:
           typeof incoming.metadata?.product_tier === 'string'
             ? incoming.metadata.product_tier
@@ -123,18 +137,10 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       return
     }
 
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object as Stripe.Subscription
-      const userId = await resolveUserIdForSubscription(subscription)
-      if (!userId) return
-
-      await downgradeMembershipFromStripe(admin, userId, subscription)
-      return
-    }
-
     case 'invoice.paid': {
       const invoice = event.data.object as Stripe.Invoice
-      if (invoice.billing_reason !== 'subscription_cycle') return
+      const open = entitlementOpenForInvoiceBillingReason(invoice.billing_reason)
+      if (!open) return
 
       const subscriptionId = subscriptionIdFromInvoice(invoice)
       if (!subscriptionId || typeof subscriptionId !== 'string') return
@@ -146,7 +152,11 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       await syncStripeSubscription(admin, {
         userId,
         subscription,
-        options: { renewEntitlementCycle: true },
+        options: {
+          startEntitlementCycle: open === 'initial',
+          renewEntitlementCycle: open === 'renewal',
+          eventCreated: event.created,
+        },
       })
       return
     }
@@ -163,6 +173,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       await syncStripeSubscription(admin, {
         userId,
         subscription,
+        options: { eventCreated: event.created },
       })
       return
     }
@@ -183,6 +194,11 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
     case 'identity.verification_session.canceled': {
       const session = event.data.object as Stripe.Identity.VerificationSession
       await applyIdentityVerificationSession(admin, session)
+      revalidatePath('/members')
+      revalidatePath('/messages')
+      revalidatePath('/profile')
+      revalidatePath('/dashboard')
+      revalidatePath('/application/status')
       return
     }
 

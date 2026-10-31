@@ -54,6 +54,7 @@ export default function ApplicationStatusPanel({
   identityVerificationLastError,
   verifiedPhoneE164,
   authPhoneE164,
+  inPersonIdentityVerified = false,
   showSubmitBanner = false,
   showIdentityReturnNotice = false,
 }: {
@@ -69,6 +70,7 @@ export default function ApplicationStatusPanel({
   identityVerificationLastError?: string | null
   verifiedPhoneE164?: string | null
   authPhoneE164?: string | null
+  inPersonIdentityVerified?: boolean
   showSubmitBanner?: boolean
   showIdentityReturnNotice?: boolean
 }) {
@@ -162,6 +164,7 @@ export default function ApplicationStatusPanel({
           identityVerificationLastError={identityVerificationLastError}
           verifiedPhoneE164={verifiedPhoneE164}
           authPhoneE164={authPhoneE164}
+          inPersonIdentityVerified={inPersonIdentityVerified}
           showIdentityReturnNotice={showIdentityReturnNotice}
         />
       ) : null}

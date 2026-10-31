@@ -93,14 +93,14 @@ describe('approved member dashboard page', () => {
     expect(source).toContain('eyebrow="Discovery"')
     expect(source).toContain('title="Dashboard"')
     expect(source).toContain(
-      'Your latest updates and next steps for curated intros, member discovery, and recent conversations.'
+      'Your latest updates and next steps for recommendations, member discovery, and conversations.'
     )
   })
 
   it('keeps Phase 1 modules and adds Phase 2 sections', () => {
     const source = dashboardPageSource()
     expect(source).toContain('RecentMessagesPreview')
-    expect(source).toContain('CuratedIntroCard')
+    expect(source).not.toContain('CuratedIntroCard')
     expect(source).toContain('loadRecentMessagePreviews')
     expect(source).toContain('ActionNeeded')
     expect(source).toContain('RecentNotifications')
@@ -133,11 +133,12 @@ describe('approved member dashboard page', () => {
     expect(application).not.toContain("href: '/home'")
   })
 
-  it('gates recent messages on entitlements.canMessage', () => {
+  it('shows approved message history without a paid messaging entitlement', () => {
     const source = dashboardPageSource()
     expect(source).toContain('loadMemberEntitlementsForViewer')
-    expect(source).toContain('entitlements?.canMessage')
-    expect(source).toContain('loadRecentMessagePreviews')
+    expect(source).not.toContain('entitlements?.canMessage')
+    expect(source).toContain('loadRecentMessagePreviews(supabase, viewer.userId, 3)')
+    expect(source).toContain('shouldHideCuratedMatchingSurfaces')
     expect(source).not.toContain('buildMemberEntitlementsWithOverride')
   })
 

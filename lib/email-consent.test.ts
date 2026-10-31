@@ -535,6 +535,10 @@ describe('signup and phone UI', () => {
     resolve(repoRoot, 'components/profile/email-marketing-preference-card.tsx'),
     'utf8'
   )
+  const preferenceCopy = readFileSync(
+    resolve(repoRoot, 'lib/email-marketing-preference.ts'),
+    'utf8'
+  )
   const vercel = readFileSync(resolve(repoRoot, 'vercel.json'), 'utf8')
 
   it('blocks submit until the essential acknowledgement is checked', () => {
@@ -549,11 +553,21 @@ describe('signup and phone UI', () => {
     expect(essential).toContain('checked={essentialAcknowledged}')
   })
 
-  it('keeps marketing optional and initially unchecked', () => {
+  it('keeps marketing optional, editable, and separate from essential email', () => {
     expect(signup).toContain('const [marketingOptIn, setMarketingOptIn] = useState(false)')
     const marketing = signup.slice(signup.indexOf('id="email-marketing-opt-in"'))
     expect(marketing).toContain('checked={marketingOptIn}')
     expect(marketing.slice(0, marketing.indexOf('</label>'))).not.toContain('required')
+    expect(withdrawal).toContain('ACCOUNT_EMAIL_MARKETING_OPT_IN_LABEL')
+    expect(withdrawal).toContain('ACCOUNT_EMAIL_MARKETING_OPT_IN_EXPLANATION')
+    expect(preferenceCopy).toContain(
+      'Email me Huntsville Social Club news, event announcements, and offers.'
+    )
+    expect(preferenceCopy).toContain(
+      'This is optional and separate from essential account, application, and membership emails.'
+    )
+    expect(withdrawal).toContain('saveEmailMarketingPreference')
+    expect(withdrawal).toContain('Save email preference')
   })
 
   it('lets phone verification be skipped and does not show SMS consent', () => {
@@ -565,13 +579,11 @@ describe('signup and phone UI', () => {
     expect(progress).toContain('Not required for membership approval.')
   })
 
-  it('shows withdrawal only while marketing is on', () => {
-    expect(withdrawal).toContain('Unsubscribe from news and offers')
-    expect(withdrawal).toContain('const subscribed = optedIn && !done')
-    expect(withdrawal).toContain('withdrawEmailMarketing')
-    expect(withdrawal).toContain(
-      'You are not opted in to Huntsville Social Club news, event announcements, and offers.'
-    )
+  it('saves the marketing preference and does not show success before the save returns', () => {
+    expect(withdrawal).toContain('emailMarketingPreferencePhase')
+    expect(withdrawal).toContain("phase === 'saving' ? 'Saving…'")
+    expect(withdrawal).toContain("phase === 'saved'")
+    expect(withdrawal).toContain('setResult(saved)')
   })
 
   it('does not schedule marketing sync or register it as a cron', () => {
@@ -618,7 +630,7 @@ describe('public verified badge', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toBe(false)
   })
 })

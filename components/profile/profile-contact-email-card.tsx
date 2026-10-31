@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/card'
 import { buttonPrimaryClassName, inputClassName } from '@/lib/event-labels'
 import { updateMemberContactEmail } from '@/app/(club)/members/contact-email-actions'
+import { revealProfileSection } from '@/components/profile/profile-section'
 
 type ProfileContactEmailCardProps = {
   contactEmail: string
@@ -19,10 +20,18 @@ export default function ProfileContactEmailCard({
   const [email, setEmail] = useState(contactEmail)
   const [visible, setVisible] = useState(showContactEmail)
   const [message, setMessage] = useState('')
+  const [messageIsError, setMessageIsError] = useState(false)
+  const messageRef = useRef<HTMLParagraphElement>(null)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (!message) return
+    revealProfileSection('contact-email', messageRef.current)
+  }, [message, messageIsError])
 
   const handleSave = () => {
     setMessage('')
+    setMessageIsError(false)
     startTransition(async () => {
       const result = await updateMemberContactEmail({
         contactEmail: email,
@@ -30,9 +39,12 @@ export default function ProfileContactEmailCard({
       })
 
       if (result.error) {
+        setMessageIsError(true)
         setMessage(result.error)
         return
       }
+
+      setMessageIsError(false)
 
       setMessage('Contact email settings saved.')
       router.refresh()
@@ -41,7 +53,9 @@ export default function ProfileContactEmailCard({
 
   return (
     <Card>
-      <h2 className="text-display text-lg font-semibold">Contact email</h2>
+      <h2 className="profile-section-title text-display text-lg font-semibold">
+        Contact email
+      </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Optional. This is separate from your account login email and is hidden
         from other members unless you turn visibility on.
@@ -90,7 +104,15 @@ export default function ProfileContactEmailCard({
         </button>
 
         {message ? (
-          <p className="text-sm text-muted-foreground">{message}</p>
+          <p
+            ref={messageRef}
+            role={messageIsError ? 'alert' : 'status'}
+            className={`text-sm ${
+              messageIsError ? 'text-danger' : 'text-muted-foreground'
+            }`}
+          >
+            {message}
+          </p>
         ) : null}
       </div>
     </Card>

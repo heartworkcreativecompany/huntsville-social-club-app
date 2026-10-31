@@ -8,6 +8,8 @@ import {
   buttonSecondaryClassName,
 } from '@/lib/event-labels'
 import {
+  DATING_AND_FRIENDSHIP_RECOMMENDATIONS_COPY,
+  DATING_RECOMMENDATIONS_COPY,
   PRICING_PLANS,
   type UpgradeModalVariant,
 } from '@/lib/membership-pricing-copy'
@@ -20,6 +22,16 @@ type PricingPlanCardsProps = {
   currentTier?: PlanKey
   selectedPlan?: Exclude<PlanKey, 'member'> | null
   hasPaidStripeSubscription?: boolean
+  /** Server-read FRIENDSHIP_MATCHING_ENABLED. Friendship stays out of the copy when this is false. */
+  friendshipMatchingEnabled?: boolean
+}
+
+function offerText(text: string, friendshipMatchingEnabled: boolean): string {
+  if (!friendshipMatchingEnabled) return text
+  return text.replaceAll(
+    DATING_RECOMMENDATIONS_COPY,
+    DATING_AND_FRIENDSHIP_RECOMMENDATIONS_COPY
+  )
 }
 
 export default function PricingPlanCards({
@@ -27,6 +39,7 @@ export default function PricingPlanCards({
   currentTier = 'member',
   selectedPlan = null,
   hasPaidStripeSubscription = false,
+  friendshipMatchingEnabled = false,
 }: PricingPlanCardsProps) {
   const renderCta = (key: PlanKey) => (
     <MembershipPlanCta
@@ -39,11 +52,11 @@ export default function PricingPlanCards({
     />
   )
 
-  const plans: PlanKey[] = ['member', 'connect', 'inner_circle', 'elite_circle']
+  const plans: PlanKey[] = ['member', 'inner_circle', 'elite_circle']
 
   return (
     <>
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {plans.map((key) => {
           const plan = PRICING_PLANS[key]
           const highlighted = key === 'inner_circle'
@@ -70,7 +83,7 @@ export default function PricingPlanCards({
                 {plan.price}
               </p>
               <p className="mt-3 text-sm text-muted-foreground">
-                {plan.description}
+                {offerText(plan.description, friendshipMatchingEnabled)}
               </p>
               <ul className="mt-5 flex-1 space-y-2 text-sm text-muted-foreground">
                 {plan.bullets.map((bullet) => (
@@ -78,7 +91,7 @@ export default function PricingPlanCards({
                     <span className="text-accent" aria-hidden>
                       ·
                     </span>
-                    <span>{bullet}</span>
+                    <span>{offerText(bullet, friendshipMatchingEnabled)}</span>
                   </li>
                 ))}
               </ul>

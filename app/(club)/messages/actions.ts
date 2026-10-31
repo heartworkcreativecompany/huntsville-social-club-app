@@ -4,9 +4,10 @@ import { revalidatePath } from 'next/cache'
 import { validateMemberMessageBody } from '@/lib/member-message-limits'
 import {
   assertConversationParticipant,
-  loadConversationBlockState,
   type ConversationReportReason,
 } from '@/lib/member-messaging-safety'
+import { assertMembersMayExchange } from '@/lib/messaging-participants'
+import { IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE } from '@/lib/identity-verification'
 import {
   conversationNotificationHref,
   createMemberNotification,
@@ -34,8 +35,11 @@ import {
   assertCanStartMessageRequest,
   assertMessagingAllowed,
 } from '@/lib/require-messaging'
+import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
+import { markConversationMessagesRead } from '@/lib/member-messages'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { getViewer } from '@/lib/viewer'
 
 function revalidateConversation(conversationId: string) {
   revalidatePath('/messages')
@@ -309,18 +313,18 @@ export async function sendMemberMessage(input: {
     return { error: participant.error }
   }
 
-  const blockState = await loadConversationBlockState(
-    supabase,
+  const adminForSend = createAdminClient()
+  if (!adminForSend) {
+    return { error: IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE }
+  }
+  const exchange = await assertMembersMayExchange(
+    adminForSend,
     gate.userId,
-    participant.otherMemberId
+    participant.otherMemberId,
+    { requireOtherIdentity: false }
   )
-
-  if (blockState.isBlocked) {
-    return {
-      error: blockState.blockedByViewer
-        ? 'You blocked this member. Unblock is not available in-app yet — contact support if this was a mistake.'
-        : 'This member is unavailable for messaging.',
-    }
+  if (!exchange.ok) {
+    return { error: exchange.error }
   }
 
   const { error } = await supabase.from('member_messages').insert({
@@ -351,6 +355,30 @@ export async function sendMemberMessage(input: {
   revalidateConversation(input.conversationId)
 
   return { success: true as const }
+}
+
+/**
+ * Mark the open thread read only when the viewer is looking at the latest
+ * messages. Callers skip this while older history is on screen.
+ * Identity RLS still rejects anyone who is not identity verified.
+ */
+export async function markVisibleConversationRead(conversationId: string) {
+  const viewer = await getViewer()
+  if (!viewer?.canAccessApp) {
+    return { ok: false as const }
+  }
+
+  const identity = await loadAcceptedIdentityStatus(
+    createAdminClient(),
+    viewer.userId
+  )
+  if (identity !== 'verified') {
+    return { ok: false as const }
+  }
+
+  const supabase = await createClient()
+  await markConversationMessagesRead(supabase, viewer.userId, conversationId)
+  return { ok: true as const }
 }
 
 export async function blockMemberInConversation(conversationId: string) {

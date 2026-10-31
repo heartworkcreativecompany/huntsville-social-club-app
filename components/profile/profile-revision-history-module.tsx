@@ -16,10 +16,12 @@ export default function ProfileRevisionHistoryModule({
 
   return (
     <Card padding="sm">
+      <div className="profile-section-title">
       <p className="eyebrow">Revision history</p>
       <h2 className="text-display mt-1 text-lg font-semibold">
         Recent profile reviews
       </h2>
+      </div>
       <ul className="mt-4 grid gap-3 text-sm">
         {history.map((entry) => (
           <HistoryItem key={`${entry.reviewedAt}-${entry.status}`} entry={entry} />

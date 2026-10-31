@@ -22,7 +22,7 @@ describe('canApproveMember', () => {
     expect(canApproveMember(gates)).toEqual({ allowed: true, blockers: [] })
   })
 
-  it('blocks approval when identity is not verified', () => {
+  it('allows approval when identity verification is incomplete', () => {
     const gates = emptyApprovalGates()
     gates.email_verified = 'approved'
     gates.identity_verified = 'incomplete'
@@ -30,9 +30,7 @@ describe('canApproveMember', () => {
     gates.application_reviewed = 'approved'
     gates.locality_confirmed = 'approved'
 
-    const check = canApproveMember(gates)
-    expect(check.allowed).toBe(false)
-    expect(check.blockers.some((item) => item.includes('Identity'))).toBe(true)
+    expect(canApproveMember(gates)).toEqual({ allowed: true, blockers: [] })
   })
 
   it('blocks approval when a required gate is pending', () => {
@@ -53,7 +51,7 @@ describe('isMemberPubliclyVerified', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toBe(true)
 
     expect(
@@ -63,7 +61,7 @@ describe('isMemberPubliclyVerified', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toBe(false)
 
     expect(
@@ -71,7 +69,7 @@ describe('isMemberPubliclyVerified', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toBe(false)
   })
 })
@@ -85,7 +83,7 @@ describe('memberVerifiedTrustBadge', () => {
         profile_reviewed: 'approved',
         photo_reviewed: 'approved',
         locality: 'approved',
-      })
+      }, 'verified')
     ).toEqual({
       key: 'verified',
       label: MEMBER_VERIFIED_BADGE_LABEL,
@@ -96,7 +94,7 @@ describe('memberVerifiedTrustBadge', () => {
       cardVerificationBadges({
         email: 'approved',
         photo_reviewed: 'approved',
-      })
+      }, 'verified')
     ).toEqual([])
   })
 })

@@ -104,7 +104,7 @@ export function curatedMatchDisplayDetail(state: CuratedMatchDisplayState): stri
     case 'declined':
       return 'This member declined your message request. You may request a recontact review from the conversation thread.'
     case 'expired':
-      return 'This recommendation expired before an intro was requested.'
+      return 'This recommendation expired before a message request was sent.'
   }
 }
 

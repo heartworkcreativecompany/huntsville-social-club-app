@@ -1,17 +1,18 @@
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
-import CuratedIntroMessagingNotice from '@/components/messages/curated-intro-messaging-notice'
+import { redirect } from 'next/navigation'
+import ConversationViewport from '@/components/messages/conversation-viewport'
 import MessageThread from '@/components/messages/message-thread'
 import MessagingSuspendedNotice from '@/components/messages/messaging-suspended-notice'
+import Card from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
-import { MessagingPaywall } from '@/components/membership/feature-paywalls'
-import { resolveMemberMessagingAccess } from '@/lib/curated-intro-messaging-access'
+import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
 import {
-  loadConversationThread,
-  markConversationMessagesRead,
-} from '@/lib/member-messages'
-import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+  IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE,
+  IDENTITY_REQUIRED_BEFORE_MESSAGING,
+} from '@/lib/identity-verification'
+import { loadConversationThread } from '@/lib/member-messages'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -31,28 +32,12 @@ export default async function ConversationPage({
     redirect('/application')
   }
 
-  const { entitlements } = await loadMemberEntitlementsForViewer()
+  const identityStatus = await loadAcceptedIdentityStatus(
+    createAdminClient(),
+    viewer.userId
+  )
   const messagingSuspended = isMessagingSuspended(viewer.profile)
   const supabase = await createClient()
-  const access = await resolveMemberMessagingAccess(supabase, {
-    userId: viewer.userId,
-    canMessage: entitlements?.canMessage ?? false,
-    messagingSuspended,
-    conversationId,
-  })
-
-  if (!access.canAccessConversation) {
-    return (
-      <>
-        <PageHeader
-          eyebrow="Inbox"
-          title="Messages"
-          description="This conversation is only available to participants in the message request."
-        />
-        <MessagingPaywall membershipsHref="/upgrade" />
-      </>
-    )
-  }
 
   const { thread, error } = await loadConversationThread(
     supabase,
@@ -65,13 +50,30 @@ export default async function ConversationPage({
   }
 
   if (!thread) {
-    notFound()
+    return (
+      <>
+        <PageHeader
+          eyebrow="Inbox"
+          title="Conversation unavailable"
+          description="You do not have access to this conversation."
+        />
+        <Card>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            This link does not open a conversation you can view.
+          </p>
+          <Link
+            href="/messages"
+            className="mt-4 inline-flex text-sm font-medium text-accent underline"
+          >
+            Back to messages
+          </Link>
+        </Card>
+      </>
+    )
   }
 
-  await markConversationMessagesRead(supabase, viewer.userId, conversationId)
-
   return (
-    <>
+    <ConversationViewport>
       <PageHeader
         eyebrow="Inbox"
         title="Messages"
@@ -87,9 +89,9 @@ export default async function ConversationPage({
       />
 
       {messagingSuspended ? <MessagingSuspendedNotice /> : null}
-      {access.introOnlyAccess ? <CuratedIntroMessagingNotice /> : null}
 
       <MessageThread
+        key={thread.conversationId}
         conversationId={thread.conversationId}
         otherUserName={thread.otherUserName}
         initialMessages={thread.messages}
@@ -97,10 +99,18 @@ export default async function ConversationPage({
         initialBlockState={thread.blockState}
         initialReportState={thread.reportState}
         messagingSuspended={messagingSuspended}
+        identitySendBlock={
+          identityStatus === 'verified'
+            ? null
+            : identityStatus === 'unavailable'
+              ? IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE
+              : IDENTITY_REQUIRED_BEFORE_MESSAGING
+        }
+        canMarkRead={identityStatus === 'verified'}
         status={thread.status}
         viewerIsInitiator={thread.viewerIsInitiator}
         recontactStatus={thread.recontactStatus}
       />
-    </>
+    </ConversationViewport>
   )
 }

@@ -55,8 +55,8 @@ export default function UpcomingEventsPreview({
                   <div className="mb-2">
                     <EventTypeBadge eventType={event.event_type} />
                   </div>
-                  <p className="text-display text-lg font-semibold">{event.title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="text-display text-lg font-semibold break-words">{event.title}</p>
+                  <p className="mt-1 text-sm break-words text-muted-foreground">
                     {formatEventDate(event.starts_at)}
                     {event.location ? ` · ${event.location}` : ''}
                   </p>

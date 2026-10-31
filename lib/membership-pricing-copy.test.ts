@@ -25,14 +25,18 @@ function allCustomerFacingCopy(): string {
 }
 
 describe('membership pricing copy — Circle Social entitlements', () => {
-  it('keeps Inner Circle at $29.99/month with 1 premium and 2 Circle Social credits', () => {
+  it('offers Inner Circle at $15.99/month with no included credits', () => {
     expect(PRICING_PLANS.inner_circle.price).toBe(INNER_CIRCLE_MONTHLY_PRICE)
-    expect(PRICING_PLANS.inner_circle.price).toBe('$29.99/month')
-    expect(PRICING_PLANS.inner_circle.bullets).toContain(
-      '1 included premium event credit per billing period'
+    expect(PRICING_PLANS.inner_circle.price).toBe('$15.99/month')
+    expect(PRICING_PLANS.elite_circle.price).toBe('$39.99/month')
+    expect(PRICING_PLANS.inner_circle.bullets).toContain('No Circle Social credits.')
+    expect(PRICING_PLANS.inner_circle.bullets).toContain('No premium-event credits.')
+    expect(PRICING_PLANS.inner_circle.bullets).toContain('No guest invitations.')
+    expect(PRICING_PLANS.elite_circle.bullets).toContain(
+      '2 Circle Social credits per billing cycle.'
     )
-    expect(PRICING_PLANS.inner_circle.bullets).toContain(
-      '2 included Circle Social credits per billing period'
+    expect(PRICING_PLANS.elite_circle.bullets).toContain(
+      '1 premium-event credit per billing cycle.'
     )
   })
 
@@ -51,17 +55,17 @@ describe('membership pricing copy — Circle Social entitlements', () => {
     expect(innerCopy).not.toMatch(/Attend Circle Socials at no additional cost/i)
   })
 
-  it('adds the exact Elite Circle Socials included sentence', () => {
-    expect(PRICING_PLANS.elite_circle.bullets).toContain(
+  it('describes the new Elite offer as metered credits without a guest invitation', () => {
+    expect(PRICING_PLANS.elite_circle.bullets).not.toContain(
       ELITE_CIRCLE_SOCIALS_INCLUDED_COPY
     )
-    expect(PRICING_PLANS.elite_circle.bullets).toContain(
-      '2 included premium event credits per billing period'
+    expect(COMPARISON_TABLE.rows.find((row) => row[0] === 'Circle Socials')?.[3]).toBe(
+      '2 credits per billing cycle'
     )
-    expect(COMPARISON_TABLE.rows.find((row) => row[0] === 'Circle Socials')?.[4]).toBe(
-      ELITE_CIRCLE_SOCIALS_INCLUDED_COPY
+    expect(COMPARISON_TABLE.rows.find((row) => row[0] === 'Guest invites')?.[3]).toBe(
+      'No'
     )
-    expect(allCustomerFacingCopy()).toContain(ELITE_CIRCLE_SOCIALS_INCLUDED_COPY)
+    expect(allCustomerFacingCopy()).not.toContain(ELITE_CIRCLE_SOCIALS_INCLUDED_COPY)
   })
 
   it('uses the exhausted Inner Circle Circle Social message', () => {

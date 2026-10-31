@@ -26,12 +26,14 @@ export default function ProfileRevisionStatusCard({
           : 'border-danger/30 bg-danger/5'
       }
     >
+      <div className="profile-section-title">
       <p className="eyebrow">{isPending ? 'Pending review' : 'Revision declined'}</p>
       <h2 className="text-display mt-1 text-lg font-semibold">
         {isPending
           ? 'Your profile changes are awaiting staff review'
           : 'Your last profile revision was not approved'}
-      </h2>
+        </h2>
+      </div>
       <p className="mt-2 text-sm text-muted-foreground">
         {isPending
           ? 'Your current public profile stays live until staff approves these edits.'

@@ -16,6 +16,9 @@ const allDatingStatuses: CompatibilityProfileStatus[] = [
   'paused_system',
   'questionnaire_needed',
   'questionnaire_in_progress',
+  'identity_required',
+  'identity_pending',
+  'identity_unavailable',
   'active',
 ]
 
@@ -27,6 +30,9 @@ const allFriendStatuses: FriendshipAccessStatus[] = [
       'no_curated_matching',
       'questionnaire_needed',
   'questionnaire_in_progress',
+  'identity_required',
+  'identity_pending',
+  'identity_unavailable',
   'matching_unavailable',
   'active',
 ]

@@ -20,14 +20,22 @@ import { mergeProfileIntoDraft } from '@/lib/application-draft-sync'
 import MemberPublicDetails from '@/components/members/member-public-details'
 import { buildDirectoryMember } from '@/lib/members-discovery'
 import { photosFromApplicationDraft } from '@/lib/member-photos'
+import { loadMatchingIdentityPresentation } from '@/lib/matching-identity'
 import { computeProfileCompletion } from '@/lib/profile-completion'
 import { parseVerificationState } from '@/lib/membership-systems'
 import { getViewer } from '@/lib/viewer'
 import ProfileContactEmailCard from '@/components/profile/profile-contact-email-card'
 import EmailMarketingPreferenceCard from '@/components/profile/email-marketing-preference-card'
+import { accountMarketingPreferenceView } from '@/lib/email-marketing-preference'
+import IdentityVerificationCard from '@/components/profile/identity-verification-card'
+import { accountIdentityVerificationCard } from '@/lib/account-identity-verification'
 import ProfilePhoneVerificationCard from '@/components/profile/profile-phone-verification-card'
 import ProfileForm from '@/app/(club)/members/profile-form'
+import ProfileSection from '@/components/profile/profile-section'
+import { applicationStatusLabel } from '@/lib/application'
+import { parseProfileRevisionHistory } from '@/lib/profile-revision-history'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { attachPublicRecognitionBadges } from '@/lib/recognition-badges/public'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
@@ -61,16 +69,21 @@ export default async function YourProfilePage() {
     .select('email_marketing_opt_in, email_marketing_opted_out_at')
     .eq('id', viewer.userId)
     .maybeSingle()
-  const marketingReady = !marketingResult.error
-  const marketingOptedIn =
-    marketingReady &&
-    marketingResult.data?.email_marketing_opt_in === true &&
-    !marketingResult.data?.email_marketing_opted_out_at
+  const marketingPreference = accountMarketingPreferenceView({
+    readFailed: Boolean(marketingResult.error),
+    emailMarketingOptIn: marketingResult.data?.email_marketing_opt_in,
+    emailMarketingOptedOutAt: marketingResult.data?.email_marketing_opted_out_at,
+  })
   const liveDraft = mergeProfileIntoDraft(profile)
   const profilePreview = publicProfileDetailsFromDraft(liveDraft, {
     connectionsOpenTo: profile?.connections_open_to,
   })
-  const completion = computeProfileCompletion(profile, liveDraft)
+  const identity = await loadMatchingIdentityPresentation(
+    createAdminClient(),
+    viewer.userId
+  )
+  const identityStatus = identity.status
+  const completion = computeProfileCompletion(profile, liveDraft, identityStatus)
 
   const revisionStatus = profileRevisionStatusFromDb(
     profile?.profile_revision_status ?? null
@@ -128,10 +141,12 @@ export default async function YourProfilePage() {
 
   if (currentMember) {
     currentMember.photos = livePhotos
+    currentMember.publicIdentity = identityStatus
   }
   const { summary: compatibilitySummary } = compatibilityContextForViewer(
     viewer,
-    entitlements
+    entitlements,
+    identity
   )
   if (currentMember) {
     const [withBadges] = await attachPublicRecognitionBadges(supabase, [
@@ -146,7 +161,8 @@ export default async function YourProfilePage() {
   const { access: friendshipAccess } = friendshipContextForViewer(
     viewer,
     entitlements,
-    friendshipQuestionnaire
+    friendshipQuestionnaire,
+    identity
   )
 
   let matchAvailabilityHeadline = compatibilitySummary.headline
@@ -177,6 +193,14 @@ export default async function YourProfilePage() {
 
   const messagingSuspendedForMatches =
     compatibilitySummary.status === 'active' && isMessagingSuspended(profile)
+  const phoneVerified =
+    parseVerificationState(profile?.verification_state).phone === 'approved'
+  const identityCard = accountIdentityVerificationCard({
+    accepted: identityStatus,
+    stripeStatus: profile?.identity_verification_status,
+  })
+  const hasRevisionHistory =
+    parseProfileRevisionHistory(profile?.profile_revision_history).length > 0
 
   return (
     <>
@@ -187,29 +211,62 @@ export default async function YourProfilePage() {
         actions={<ApplicationStatusBadge status={viewer.applicationStatus} />}
       />
 
+      {entitlements ? (
+        <div className="mb-6">
+          <MembershipUsageCard entitlements={entitlements} />
+        </div>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <section className="space-y-6">
+          {revisionStatus !== 'none' ? (
+          <ProfileSection
+            id="profile-revision"
+            title={
+              revisionStatus === 'pending'
+                ? 'Profile changes awaiting review'
+                : 'Profile revision not approved'
+            }
+            summary={
+              revisionStatus === 'pending' ? 'Pending review' : 'Not approved'
+            }
+          >
           <ProfileRevisionStatusCard
             status={revisionStatus}
             submittedAt={profile?.profile_revision_submitted_at ?? null}
             adminNotes={profile?.profile_revision_admin_notes ?? null}
             changedFields={changedFields}
           />
+          </ProfileSection>
+          ) : null}
 
           {showPendingPhotosCard && revisionDiff ? (
+            <ProfileSection
+              id="pending-photos"
+              title="Photo changes awaiting review"
+              summary="Awaiting approval"
+            >
             <ProfilePendingPhotosCard
               memberId={viewer.userId}
               livePhotos={revisionDiff.photos.live}
               pendingPhotos={revisionDiff.photos.pending}
             />
+            </ProfileSection>
           ) : null}
 
           {currentMember ? (
+            <ProfileSection
+              id="public-preview"
+              title="How members see you (live)"
+              summary="Approved profile"
+            >
             <Card>
+              <div className="profile-section-title">
               <p className="eyebrow">Public preview</p>
               <h2 className="text-display mt-1 text-lg font-semibold">
                 How members see you (live)
               </h2>
+              </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 This reflects your approved profile. Pending edits are not shown
                 here until staff approves them.
@@ -223,26 +280,57 @@ export default async function YourProfilePage() {
                 <MemberPublicDetails details={profilePreview} compact omitHeaderFields />
               </div>
             </Card>
+            </ProfileSection>
           ) : null}
 
-          {marketingReady ? (
-            <EmailMarketingPreferenceCard optedIn={marketingOptedIn} />
+          {marketingPreference.available ? (
+            <ProfileSection
+              id="email-preferences"
+              title="Email preferences"
+              summary={marketingPreference.optedIn ? 'Opted in' : 'Not opted in'}
+            >
+            <EmailMarketingPreferenceCard optedIn={marketingPreference.optedIn} />
+            </ProfileSection>
           ) : null}
 
+          <ProfileSection
+            id="contact-email"
+            title="Contact email"
+            summary={
+              profile?.show_contact_email
+                ? 'Visible on your profile'
+                : 'Hidden from members'
+            }
+          >
           <ProfileContactEmailCard
             contactEmail={profile?.contact_email ?? ''}
             showContactEmail={profile?.show_contact_email ?? false}
           />
+          </ProfileSection>
 
+          <ProfileSection
+            id="phone-verification"
+            title="Phone verification"
+            summary={phoneVerified ? 'Verified' : 'Not verified'}
+          >
           <ProfilePhoneVerificationCard
             verifiedPhoneE164={profile?.verified_phone_e164 ?? null}
-            phoneVerified={
-              parseVerificationState(profile?.verification_state).phone ===
-              'approved'
-            }
+            phoneVerified={phoneVerified}
             authPhoneE164={viewer.authPhone}
           />
+          </ProfileSection>
 
+          <ProfileSection
+            id="edit-profile"
+            title="Edit profile"
+            summary={
+              revisionStatus === 'pending'
+                ? 'Pending review'
+                : revisionStatus === 'rejected'
+                  ? 'Changes declined'
+                  : undefined
+            }
+          >
           <ProfileForm
             memberId={viewer.userId}
             displayName={formValues.displayName}
@@ -264,19 +352,42 @@ export default async function YourProfilePage() {
             revisionStatus={revisionStatus}
             pendingFieldLabels={changedFields}
           />
+          </ProfileSection>
         </section>
 
         <aside className="space-y-6">
-          {entitlements ? (
-            <MembershipUsageCard entitlements={entitlements} />
-          ) : null}
+          <ProfileSection
+            id="identity-verification"
+            title="Identity verification"
+            summary={identityCard.statusLabel}
+          >
+            <IdentityVerificationCard
+              card={identityCard}
+              lastError={profile?.identity_verification_last_error ?? null}
+            />
+          </ProfileSection>
 
+          <ProfileSection
+            id="profile-strength"
+            title="Profile strength"
+            summary={`${completion.percent}% complete`}
+          >
           <ProfileStrengthModule
             percent={completion.percent}
             items={completion.items}
           />
+          </ProfileSection>
 
           {compatibilitySummary.showCard ? (
+            <ProfileSection
+              id="curated-matches"
+              title="Curated matches"
+              summary={
+                matchAvailabilityHeadline === 'Curated matches'
+                  ? undefined
+                  : matchAvailabilityHeadline
+              }
+            >
             <CompatibilityStatusModule
               headline={matchAvailabilityHeadline}
               detail={matchAvailabilityDetail}
@@ -286,9 +397,19 @@ export default async function YourProfilePage() {
               deliveryLines={matchDeliveryLines}
               messagingSuspended={messagingSuspendedForMatches}
             />
+            </ProfileSection>
           ) : null}
 
           {friendshipAccess.canViewSection ? (
+            <ProfileSection
+              id="friendship"
+              title="Friendship compatibility"
+              summary={
+                friendshipAccess.headline === 'Friendship compatibility'
+                  ? undefined
+                  : friendshipAccess.headline
+              }
+            >
             <FriendshipStatusModule
               headline={friendshipAccess.headline}
               detail={friendshipAccess.detail}
@@ -296,19 +417,34 @@ export default async function YourProfilePage() {
               ctaHref={friendshipAccess.ctaHref}
               ctaLabel={friendshipAccess.ctaLabel}
             />
+            </ProfileSection>
           ) : null}
 
           {currentMember ? (
+            <ProfileSection
+              id="account-status"
+              title="Account status"
+              summary={applicationStatusLabel(viewer.applicationStatus)}
+            >
             <VerificationStatusModule
               applicationStatus={viewer.applicationStatus}
               member={currentMember}
               approvalGatesRaw={profile?.approval_gates}
             />
+            </ProfileSection>
           ) : null}
 
+          {hasRevisionHistory ? (
+          <ProfileSection
+            id="revision-history"
+            title="Recent profile reviews"
+            summary="Revision history"
+          >
           <ProfileRevisionHistoryModule
             historyRaw={profile?.profile_revision_history}
           />
+          </ProfileSection>
+          ) : null}
         </aside>
       </div>
     </>

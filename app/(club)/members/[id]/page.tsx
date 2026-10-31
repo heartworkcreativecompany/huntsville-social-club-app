@@ -6,25 +6,31 @@ import MemberProfilePresentation from '@/components/members/member-profile-prese
 import MemberProfileMessagePanel from '@/components/members/member-profile-message-panel'
 import { loadMemberProfile } from '@/lib/load-directory-profiles'
 import {
+  loadApprovedVouchEndorsements,
   loadViewerVouchesForMember,
   loadVouchSummaryForMember,
 } from '@/lib/load-member-vouches'
-import {
-  buildMemberEntitlementsWithOverride,
-  loadMemberEntitlementsForUserId,
-} from '@/lib/load-member-entitlements'
+import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
 import {
   memberFirstNameForMessaging,
   resolveProfileMessageRecipientId,
 } from '@/lib/member-profile-messaging'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { directoryBackHref } from '@/lib/directory-return'
+import type { MemberDirectorySearchParams } from '@/lib/member-directory-query'
 import { getViewer } from '@/lib/viewer'
 
 type PageProps = {
   params: Promise<{ id: string }>
+  searchParams: Promise<MemberDirectorySearchParams>
 }
 
-export default async function MemberDetailPage({ params }: PageProps) {
+export default async function MemberDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params
+  const directoryHref = directoryBackHref(await searchParams)
   const viewer = await getViewer()
 
   if (!viewer) {
@@ -45,7 +51,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
     return (
       <>
         <Link
-          href="/members"
+          href={directoryHref}
           className="mb-6 inline-block text-sm text-muted-foreground hover:text-foreground"
         >
           ← Back to members
@@ -70,7 +76,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
     return (
       <>
         <Link
-          href="/members"
+          href={directoryHref}
           className="mb-6 inline-block text-sm text-muted-foreground hover:text-foreground"
         >
           ← Back to members
@@ -88,20 +94,19 @@ export default async function MemberDetailPage({ params }: PageProps) {
 
   const canVouch = canBrowseDiscovery && !isSelf
   const vouchSummary = await loadVouchSummaryForMember(member.id)
+  const vouchEndorsements = await loadApprovedVouchEndorsements(member.id)
   const viewerVouches = canVouch
     ? await loadViewerVouchesForMember(viewer.userId, member.id)
     : []
 
-  const senderEntitlements = await buildMemberEntitlementsWithOverride({
-    userId: viewer.userId,
-    role: viewer.role,
-    billing: viewer.profile?.membership_billing,
-    applicationApproved: viewer.canAccessApp,
-    activeCycle: null,
-  })
-  const recipientEntitlements = await loadMemberEntitlementsForUserId(member.id)
-  const senderCanMessage = senderEntitlements.canMessage
-  const recipientCanMessage = recipientEntitlements?.canMessage ?? false
+  const senderIdentity = await loadAcceptedIdentityStatus(
+    createAdminClient(),
+    viewer.userId
+  )
+  const recipientIdentity = await loadAcceptedIdentityStatus(
+    createAdminClient(),
+    member.id
+  )
 
   const messageRecipientId = resolveProfileMessageRecipientId(member.id)
   const firstName = memberFirstNameForMessaging(member.full_name)
@@ -111,7 +116,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
     <>
       <MemberProfileViewTracker memberId={member.id} />
       <Link
-        href="/members"
+        href={directoryHref}
         className="mb-6 inline-block text-sm text-muted-foreground hover:text-foreground"
       >
         ← Back to members
@@ -123,6 +128,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
         limited={!isAdmin}
         details={profileDetails}
         vouchSummary={vouchSummary}
+        vouchEndorsements={vouchEndorsements}
         viewerVouches={viewerVouches}
         canVouch={canVouch}
         footer={
@@ -142,8 +148,8 @@ export default async function MemberDetailPage({ params }: PageProps) {
           <MemberProfileMessagePanel
             targetMemberId={messageRecipientId}
             firstName={firstName}
-            senderCanMessage={senderCanMessage}
-            recipientCanMessage={recipientCanMessage}
+            senderIdentity={senderIdentity}
+            recipientIdentity={recipientIdentity}
             isSelf={false}
           />
         </div>

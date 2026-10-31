@@ -114,12 +114,6 @@ export const HOME_MEMBERSHIP_TIERS = [
     summary: PRICING_PLANS.member.description,
   },
   {
-    name: PRICING_PLANS.connect.name,
-    price: PRICING_PLANS.connect.price,
-    optionalPaid: true,
-    summary: PRICING_PLANS.connect.description,
-  },
-  {
     name: PRICING_PLANS.inner_circle.name,
     price: PRICING_PLANS.inner_circle.price,
     optionalPaid: true,

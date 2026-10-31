@@ -11,6 +11,7 @@ type BrandLogoProps = {
   size?: keyof typeof BRAND_LOGO_HEIGHT
   href?: string
   className?: string
+  frameClassName?: string
   /** Dark canvas default — light-ink official logos. */
   surface?: BrandSurfaceTheme
   priority?: boolean
@@ -21,6 +22,7 @@ export default function BrandLogo({
   size = 'md',
   href,
   className = '',
+  frameClassName = '',
   surface = 'dark',
   priority = false,
 }: BrandLogoProps) {
@@ -40,12 +42,14 @@ export default function BrandLogo({
     return (
       <Link
         href={href}
-        className="inline-flex shrink-0 rounded-md transition hover:opacity-90"
+        className={`inline-flex shrink-0 rounded-md transition hover:opacity-90 ${frameClassName}`.trim()}
       >
         {image}
       </Link>
     )
   }
 
-  return <span className="inline-flex shrink-0">{image}</span>
+  return (
+    <span className={`inline-flex shrink-0 ${frameClassName}`.trim()}>{image}</span>
+  )
 }

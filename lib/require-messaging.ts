@@ -1,16 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
-import { isCuratedIntroConversationForMember } from '@/lib/curated-intro-messaging-access'
+import { loadAcceptedIdentityStatus } from '@/lib/identity-verification-access'
 import {
-  buildMemberEntitlementsWithOverride,
-  loadMemberEntitlementsForUserId,
-} from '@/lib/load-member-entitlements'
-import {
-  canStartMessageRequest,
-  canUseMessaging,
-  messagingUpgradeMessage,
-  MUTUAL_MESSAGING_REQUIRED_MESSAGE,
-  type MemberEntitlements,
-} from '@/lib/membership-entitlements'
+  IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE,
+  IDENTITY_MUTUAL_MESSAGE,
+  IDENTITY_REQUIRED_BEFORE_MESSAGING,
+} from '@/lib/identity-verification'
 import {
   isMessagingSuspended,
   MESSAGING_SUSPENDED_SEND_ERROR,
@@ -18,12 +11,8 @@ import {
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getViewer } from '@/lib/viewer'
 
-async function loadViewerMessagingEntitlements(): Promise<
-  | {
-      ok: true
-      userId: string
-      entitlements: MemberEntitlements
-    }
+async function loadViewerMessagingContext(): Promise<
+  | { ok: true; userId: string }
   | { ok: false; error: string }
 > {
   const viewer = await getViewer()
@@ -39,22 +28,23 @@ async function loadViewerMessagingEntitlements(): Promise<
     return { ok: false, error: MESSAGING_SUSPENDED_SEND_ERROR }
   }
 
-  const entitlements =
-    (await loadMemberEntitlementsForUserId(viewer.userId)) ??
-    (await buildMemberEntitlementsWithOverride({
-      userId: viewer.userId,
-      role: viewer.role,
-      billing: viewer.profile?.membership_billing,
-      applicationApproved: true,
-    }))
+  return { ok: true, userId: viewer.userId }
+}
 
-  return { ok: true, userId: viewer.userId, entitlements }
+async function identityErrorForSender(
+  userId: string
+): Promise<string | null> {
+  const status = await loadAcceptedIdentityStatus(createAdminClient(), userId)
+  if (status === 'unavailable') return IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE
+  if (status !== 'verified') return IDENTITY_REQUIRED_BEFORE_MESSAGING
+  return null
 }
 
 /**
- * Sender messaging gate for conversation activity (including replies).
- * Existing conversation reply permissions are unchanged — see
- * `canSendMessageInConversation` and the conversationId exception below.
+ * Personal messaging gate. Identity evidence is required.
+ * Payment, an approved curated intro, an existing conversation, and an
+ * admin or founder badge do not grant access.
+ * Admin moderation uses the admin queues, not this check.
  */
 export async function assertMessagingAllowed(options?: {
   conversationId?: string
@@ -62,49 +52,23 @@ export async function assertMessagingAllowed(options?: {
   | { ok: true; userId: string }
   | { ok: false; error: string }
 > {
-  const loaded = await loadViewerMessagingEntitlements()
+  void options?.conversationId
+  const loaded = await loadViewerMessagingContext()
   if (!loaded.ok) {
     return loaded
   }
 
-  const { userId, entitlements } = loaded
-  const supabase = await createClient()
-
-  if (!canUseMessaging(entitlements)) {
-    if (options?.conversationId) {
-      const { isMessageRequestConversationForMember } = await import(
-        '@/lib/curated-intro-messaging-access'
-      )
-      const [isIntroConversation, isRequestConversation] = await Promise.all([
-        isCuratedIntroConversationForMember(
-          supabase,
-          userId,
-          options.conversationId
-        ),
-        isMessageRequestConversationForMember(
-          supabase,
-          userId,
-          options.conversationId
-        ),
-      ])
-
-      if (isIntroConversation || isRequestConversation) {
-        return { ok: true, userId }
-      }
-    }
-
-    return {
-      ok: false,
-      error: messagingUpgradeMessage(entitlements.productTier),
-    }
+  const identityError = await identityErrorForSender(loaded.userId)
+  if (identityError) {
+    return { ok: false, error: identityError }
   }
 
-  return { ok: true, userId }
+  return { ok: true, userId: loaded.userId }
 }
 
 /**
- * New message-request gate: sender and recipient must both have paid messaging.
- * Uses a generic error that does not disclose which party failed.
+ * Intentional message requests require accepted identity for both members.
+ * Payment is not a substitute. The recipient failure uses a generic error.
  */
 export async function assertCanStartMessageRequest(input: {
   targetMemberId: string
@@ -112,41 +76,30 @@ export async function assertCanStartMessageRequest(input: {
   | { ok: true; userId: string }
   | { ok: false; error: string }
 > {
-  const loaded = await loadViewerMessagingEntitlements()
+  const loaded = await loadViewerMessagingContext()
   if (!loaded.ok) {
     return loaded
   }
 
-  const { userId, entitlements: senderEntitlements } = loaded
-
-  if (!canUseMessaging(senderEntitlements)) {
-    return {
-      ok: false,
-      error: messagingUpgradeMessage(senderEntitlements.productTier),
-    }
+  const { userId } = loaded
+  const identityError = await identityErrorForSender(userId)
+  if (identityError) {
+    return { ok: false, error: identityError }
   }
 
   if (userId === input.targetMemberId) {
-    return { ok: false, error: MUTUAL_MESSAGING_REQUIRED_MESSAGE }
+    return { ok: false, error: IDENTITY_MUTUAL_MESSAGE }
   }
 
-  const privileged = createAdminClient()
-  const client = privileged ?? (await createClient())
-  const recipientEntitlements = await loadMemberEntitlementsForUserId(
-    input.targetMemberId,
-    client
+  const recipientIdentity = await loadAcceptedIdentityStatus(
+    createAdminClient(),
+    input.targetMemberId
   )
-
-  if (
-    !recipientEntitlements ||
-    !canStartMessageRequest({
-      senderEntitlements,
-      recipientEntitlements,
-      senderId: userId,
-      recipientId: input.targetMemberId,
-    })
-  ) {
-    return { ok: false, error: MUTUAL_MESSAGING_REQUIRED_MESSAGE }
+  if (recipientIdentity === 'unavailable') {
+    return { ok: false, error: IDENTITY_LOOKUP_UNAVAILABLE_MESSAGE }
+  }
+  if (recipientIdentity !== 'verified') {
+    return { ok: false, error: IDENTITY_MUTUAL_MESSAGE }
   }
 
   return { ok: true, userId }

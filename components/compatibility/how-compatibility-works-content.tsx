@@ -8,8 +8,8 @@ export default function HowCompatibilityWorksContent() {
         <p className="mt-2">
           Huntsville Social Club recommends a small number of members at a time —
           people we think could be a strong fit based on what you have shared with
-          the club. You stay in control: review each recommendation, request an
-          intro when it feels right, or pass and move on.
+          the club. You stay in control: review each recommendation, send a
+          message request when it feels right, or pass and move on.
         </p>
       </section>
 

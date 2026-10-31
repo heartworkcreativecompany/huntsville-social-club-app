@@ -25,6 +25,7 @@ import {
   canSendPhoneVerificationCode,
   PHONE_VERIFICATION_OPTIONAL_COPY,
 } from '@/lib/sms-marketing-consent'
+import { revealProfileSection } from '@/components/profile/profile-section'
 import {
   markPhonePendingReverification,
   syncPhoneVerificationAfterOtp,
@@ -73,6 +74,7 @@ export default function ProfilePhoneVerificationCard({
   const [codeSent, setCodeSent] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const errorRef = useRef<HTMLParagraphElement>(null)
   const [cooldown, setCooldown] = useState(0)
   const [isPending, startTransition] = useTransition()
   const lastResetPhone = useRef<string | null>(verifiedPhoneE164)
@@ -91,6 +93,11 @@ export default function ProfilePhoneVerificationCard({
     }, 1000)
     return () => window.clearTimeout(timer)
   }, [cooldown])
+
+  useEffect(() => {
+    if (!error) return
+    revealProfileSection('phone-verification', errorRef.current)
+  }, [error])
 
   const clearOtpState = (nextMessage?: string) => {
     setCodeSent(false)
@@ -283,7 +290,7 @@ export default function ProfilePhoneVerificationCard({
     <>
       {!embedded ? (
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="profile-section-title">
             <h2 className="text-display text-lg font-semibold">
               Phone verification
             </h2>
@@ -366,7 +373,11 @@ export default function ProfilePhoneVerificationCard({
         </div>
 
         {error ? (
-          <p className="min-w-0 text-sm break-words text-danger" role="alert">
+          <p
+            ref={errorRef}
+            className="min-w-0 text-sm break-words text-danger"
+            role="alert"
+          >
             {error}
           </p>
         ) : null}

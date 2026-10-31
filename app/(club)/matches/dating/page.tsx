@@ -16,9 +16,11 @@ import {
   loadCuratedMatchRecommendations,
   sortCuratedMatchItems,
 } from '@/lib/load-curated-matches'
+import { loadMatchingIdentityPresentation } from '@/lib/matching-identity'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/viewer'
 
@@ -63,7 +65,11 @@ export default async function DatingMatchesPage() {
   const { entitlements } = await loadMemberEntitlementsForViewer()
   const healed = await healStaleSubscriptionInactivePause(viewer, entitlements)
   const gatedViewer = healed ? (await getViewer()) ?? viewer : viewer
-  const context = compatibilityContextForViewer(gatedViewer, entitlements)
+  const identity = await loadMatchingIdentityPresentation(
+    createAdminClient(),
+    gatedViewer.userId
+  )
+  const context = compatibilityContextForViewer(gatedViewer, entitlements, identity)
 
   if (shouldHideCuratedMatchingSurfaces(entitlements)) {
     redirect('/dashboard')
@@ -145,13 +151,12 @@ export default async function DatingMatchesPage() {
     archivedRecommendationCount: inboxCounts.archived,
     messagingSuspended: isMessagingSuspended(gatedViewer.profile),
   })
-
   return (
     <>
       <PageHeader
         eyebrow="Dating"
         title="Dating Matches"
-        description="Staff-curated recommendations based on your private compatibility questionnaire. Request an intro when a match feels right — direct messaging opens after the intro is matched."
+        description="Recommendations based on your private compatibility questionnaire. Send a message request when a match feels right, or pass. A conversation opens only if they accept."
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <Link
@@ -182,7 +187,7 @@ export default async function DatingMatchesPage() {
 
       <CuratedMatchesList
         items={sortedItems}
-        canMessage={context.canMessage}
+        identityStatus={identity.status}
         showDevSeed={isDevRecommendationSeedAllowed()}
         availability={availability}
       />

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import {
   createMemberVouch,
+  updateMemberVouchEndorsement,
   withdrawMemberVouch,
 } from '@/app/(club)/members/vouch-actions'
 import {
@@ -24,7 +25,12 @@ export default function MemberVouchForm({
   existingVouches,
 }: {
   memberId: string
-  existingVouches: { id: string; vouch_type: VouchType; status: string }[]
+  existingVouches: {
+    id: string
+    vouch_type: VouchType
+    status: string
+    note?: string | null
+  }[]
 }) {
   const [vouchType, setVouchType] = useState<VouchType>('personal')
   const [relationshipContext, setRelationshipContext] = useState<string>(
@@ -34,27 +40,32 @@ export default function MemberVouchForm({
   const [message, setMessage] = useState('')
   const [isPending, startTransition] = useTransition()
 
-  const activeTypes = new Set(
+  const blockingTypes = new Set(
     existingVouches
-      .filter((v) => v.status === 'active')
+      .filter((v) => v.status === 'pending' || v.status === 'approved')
       .map((v) => v.vouch_type)
   )
 
   const handleSubmit = () => {
     setMessage('')
     startTransition(async () => {
-      const result = await createMemberVouch({
-        voucheeId: memberId,
-        vouchType,
-        relationshipContext,
-        note,
-      })
+      const existing = existingVouches.find((vouch) => vouch.vouch_type === vouchType)
+      const result = existing
+        ? await updateMemberVouchEndorsement({ vouchId: existing.id, note })
+        : await createMemberVouch({
+            voucheeId: memberId,
+            vouchType,
+            relationshipContext,
+            note,
+          })
       if (result.error) {
         setMessage(result.error)
         return
       }
       setNote('')
-      setMessage('Vouch submitted. Thank you for strengthening the community.')
+      setMessage(
+        'Vouch submitted for review. It stays private until an admin approves it.'
+      )
     })
   }
 
@@ -80,13 +91,13 @@ export default function MemberVouchForm({
         </p>
       </div>
 
-      {existingVouches.filter((v) => v.status === 'active').length > 0 ? (
+      {existingVouches.filter((v) => v.status !== 'rejected').length > 0 ? (
         <div className="grid gap-2">
           <p className="text-xs font-medium text-muted-foreground">
-            Your active vouches
+            Your vouches
           </p>
           {existingVouches
-            .filter((v) => v.status === 'active')
+            .filter((v) => v.status !== 'rejected')
             .map((vouch) => (
               <div
                 key={vouch.id}
@@ -94,6 +105,8 @@ export default function MemberVouchForm({
               >
                 <span className="text-foreground">
                   {vouchTypeLabel(vouch.vouch_type)}
+                  {vouch.status === 'pending' ? ' · pending review' : ''}
+                  {vouch.status === 'approved' ? ' · approved' : ''}
                 </span>
                 <button
                   type="button"
@@ -119,10 +132,9 @@ export default function MemberVouchForm({
             <option
               key={option.value}
               value={option.value}
-              disabled={activeTypes.has(option.value)}
             >
               {option.label}
-              {activeTypes.has(option.value) ? ' (already vouched)' : ''}
+              {blockingTypes.has(option.value) ? ' (submitted)' : ''}
             </option>
           ))}
         </select>
@@ -150,15 +162,15 @@ export default function MemberVouchForm({
 
       <label className="grid gap-1.5">
         <span className="font-medium text-foreground">
-          Optional note for moderators
+          Written endorsement
         </span>
         <textarea
           className={`${inputClassName} resize-y`}
-          rows={2}
+          rows={3}
           maxLength={VOUCH_NOTE_MAX}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Not shown on public profiles."
+          placeholder="Shown on their profile only after an admin approves it."
         />
         <span className="text-xs text-muted-foreground">
           {note.length}/{VOUCH_NOTE_MAX}
@@ -169,9 +181,13 @@ export default function MemberVouchForm({
         type="button"
         className={buttonPrimaryClassName}
         onClick={handleSubmit}
-        disabled={isPending || activeTypes.has(vouchType)}
+        disabled={isPending}
       >
-        {isPending ? 'Submitting…' : 'Submit vouch'}
+        {isPending
+          ? 'Submitting…'
+          : blockingTypes.has(vouchType)
+            ? 'Update endorsement'
+            : 'Submit vouch'}
       </button>
 
       {message ? (

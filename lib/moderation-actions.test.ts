@@ -6,7 +6,10 @@ import { RECOGNITION_BADGE_SLUGS } from '@/lib/recognition-badges/catalog'
 
 type InsertCall = Record<string, unknown>
 
-function createInsertClient(inserts: InsertCall[], error: { message: string } | null = null) {
+function createInsertClient(
+  inserts: InsertCall[],
+  error: { message: string; code?: string } | null = null
+) {
   return {
     from(table: string) {
       expect(table).toBe('moderation_actions')
@@ -49,5 +52,36 @@ describe('moderation audit uuid fields', () => {
       expect(inserts[0]?.target_member_id).not.toBe(slug)
       expect(inserts[0]?.actor_id).not.toBe(slug)
     }
+  })
+
+  it('still treats a missing audit table as success for other moderation writes', async () => {
+    const inserts: InsertCall[] = []
+    const client = createInsertClient(inserts, {
+      code: '42P01',
+      message: 'relation "moderation_actions" does not exist',
+    })
+
+    const result = await logModerationAction(client, {
+      actorId: '22222222-2222-4222-8222-222222222222',
+      actionType: 'recognition_badge_awarded',
+    })
+
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('reports a missing audit table when the caller requires the table', async () => {
+    const inserts: InsertCall[] = []
+    const client = createInsertClient(inserts, {
+      code: '42P01',
+      message: 'relation "moderation_actions" does not exist',
+    })
+
+    const result = await logModerationAction(client, {
+      actorId: '22222222-2222-4222-8222-222222222222',
+      actionType: 'in_person_identity_verified',
+      tolerateMissingTable: false,
+    })
+
+    expect(result.ok).toBe(false)
   })
 })

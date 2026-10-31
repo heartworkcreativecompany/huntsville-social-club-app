@@ -116,13 +116,19 @@ export default async function AdminApplicationsPage() {
           href="/admin/curated-intros"
           className="text-muted-foreground underline"
         >
-          Curated intros
+          Past intro requests
         </Link>
         <Link
           href="/admin/message-reports"
           className="text-muted-foreground underline"
         >
           Message reports
+        </Link>
+        <Link
+          href="/admin/member-vouches"
+          className="text-muted-foreground underline"
+        >
+          Member vouches
         </Link>
         <Link
           href="/admin/moderation-actions"

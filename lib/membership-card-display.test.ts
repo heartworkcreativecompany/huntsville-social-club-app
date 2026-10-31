@@ -7,6 +7,7 @@ import {
 } from '@/lib/membership-entitlements'
 import { membershipCardDisplay } from '@/lib/membership-card-display'
 import {
+  CONNECT_DISCOVERY_WITHOUT_MESSAGING_COPY,
   CONNECT_MEMBERSHIP_INCLUDED_COPY,
   FREE_MEMBER_PREMIUM_CREDITS_COPY,
   ELITE_CIRCLE_SOCIALS_INCLUDED_COPY,
@@ -83,10 +84,14 @@ describe('membership card display from resolved entitlements', () => {
     })
     const card = membershipCardDisplay(entitlements)
     expect(entitlements.productTier).toBe('connect')
-    expect(entitlements.canMessage).toBe(true)
+    expect(entitlements.canMessage).toBe(false)
     expect(entitlements.canUseCuratedMatching).toBe(false)
+    expect(entitlements.premiumCreditsRemaining).toBeNull()
     expect(card.title).toBe('Connect')
     expect(card.statusLabel).toBe('Grace period')
+    expect(card.perkLines).toEqual([CONNECT_DISCOVERY_WITHOUT_MESSAGING_COPY])
+    expect(card.perkLines.join(' ')).not.toMatch(/messaging is included|direct messaging and member discovery are included/i)
+    expect(card.useCircleCreditSnapshot).toBe(false)
   })
 
   it('does not grant Connect from a stored price while status is still grace', () => {
@@ -108,8 +113,11 @@ describe('membership card display from resolved entitlements', () => {
       subscription_status: 'grace',
     })
     expect(persisted.productTier).toBe('inner_circle')
-    expect(persisted.canMessage).toBe(true)
+    expect(persisted.canMessage).toBe(false)
     expect(persisted.canUseCuratedMatching).toBe(true)
+    expect(membershipCardDisplay(persisted).perkLines.join(' ')).not.toMatch(
+      /messaging/i
+    )
 
     const stale = {
       ...emptyMembershipBilling(),
@@ -135,8 +143,12 @@ describe('membership card display from resolved entitlements', () => {
       subscription_status: 'grace',
     })
     expect(persisted.productTier).toBe('elite_circle')
-    expect(persisted.canMessage).toBe(true)
+    expect(persisted.canMessage).toBe(false)
     expect(persisted.canUseCuratedMatching).toBe(true)
+    expect(membershipCardDisplay(persisted).useCircleCreditSnapshot).toBe(true)
+    expect(membershipCardDisplay(persisted).perkLines.join(' ')).not.toMatch(
+      /messaging/i
+    )
 
     const stale = {
       ...emptyMembershipBilling(),
@@ -328,6 +340,6 @@ describe('membership card consumers', () => {
       join(repoRoot, 'lib/public-member-badges.ts'),
       'utf8'
     )
-    expect(badges).toContain('paidTierFromActiveStoredPriceId')
+    expect(badges).toContain('currentlyEntitledBillingTier')
   })
 })

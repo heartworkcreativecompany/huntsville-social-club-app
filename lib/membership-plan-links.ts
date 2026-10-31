@@ -1,6 +1,6 @@
 import { safeAuthCallbackNext } from '@/lib/auth-callback'
 import {
-  isPaidMembershipTier,
+  isPurchasableMembershipTier,
   type PaidMembershipTier,
 } from '@/lib/stripe/config'
 
@@ -19,7 +19,7 @@ export function paidMembershipPlanFromQuery(
   value: string | null | undefined
 ): PaidMembershipTier | null {
   const trimmed = value?.trim() ?? ''
-  if (!isPaidMembershipTier(trimmed)) return null
+  if (!isPurchasableMembershipTier(trimmed)) return null
   return trimmed
 }
 
@@ -94,6 +94,13 @@ export function membershipPlanCtaKind(input: {
   hasPaidStripeSubscription?: boolean
 }): MembershipPlanCtaKind {
   const hasPaidStripeSubscription = Boolean(input.hasPaidStripeSubscription)
+
+  if (input.planKey === 'connect') {
+    if (input.mode === 'member' && input.currentTier === 'connect') {
+      return 'current_plan'
+    }
+    return 'billing_unavailable'
+  }
 
   if (input.planKey === 'member') {
     if (input.mode === 'public') return 'signup'

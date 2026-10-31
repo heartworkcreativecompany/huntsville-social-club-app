@@ -2,15 +2,14 @@ import Card from '@/components/ui/card'
 import { COMPARISON_TABLE } from '@/lib/membership-pricing-copy'
 
 export default function PricingComparisonTable() {
-  const [featureCol, memberCol, connectCol, innerCol, eliteCol] =
-    COMPARISON_TABLE.columns
+  const [featureCol, memberCol, innerCol, eliteCol] = COMPARISON_TABLE.columns
 
   return (
     <section className="mt-16">
       <h2 className="text-display text-2xl font-semibold">Compare plans</h2>
       <Card padding="none" className="mt-6 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px] text-left text-sm">
+          <table className="w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-surface-elevated">
                 <th className="px-4 py-3 font-medium text-foreground">
@@ -18,9 +17,6 @@ export default function PricingComparisonTable() {
                 </th>
                 <th className="px-4 py-3 font-medium text-foreground">
                   {memberCol}
-                </th>
-                <th className="px-4 py-3 font-medium text-foreground">
-                  {connectCol}
                 </th>
                 <th className="px-4 py-3 font-medium text-accent">
                   {innerCol}
@@ -42,7 +38,6 @@ export default function PricingComparisonTable() {
                   <td className="px-4 py-3 break-words text-muted-foreground">{row[1]}</td>
                   <td className="px-4 py-3 break-words text-muted-foreground">{row[2]}</td>
                   <td className="px-4 py-3 break-words text-muted-foreground">{row[3]}</td>
-                  <td className="px-4 py-3 break-words text-muted-foreground">{row[4]}</td>
                 </tr>
               ))}
             </tbody>

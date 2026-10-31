@@ -23,6 +23,23 @@ describe('identityVerificationRowState', () => {
     )
   })
 
+  it('hides the Stripe prompt when in-person verification is already recorded', () => {
+    expect(
+      identityVerificationRowState('not_started', 'incomplete', true)
+    ).toEqual({
+      label: 'Verified',
+      tone: 'success',
+      approved: true,
+      cta: null,
+    })
+  })
+
+  it('keeps the legacy identity step from prompting Stripe again', () => {
+    expect(
+      identityVerificationRowState('not_started', 'approved', false).cta
+    ).toBeNull()
+  })
+
   it('allows retry after requires_input', () => {
     expect(
       identityVerificationRowState('requires_input', 'needs_followup').cta

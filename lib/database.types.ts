@@ -541,6 +541,54 @@ export interface Database {
         }
         Relationships: []
       }
+      in_person_identity_verifications: {
+        Row: {
+          id: string
+          profile_id: string
+          method: string
+          status: string
+          source: string
+          approved_by: string | null
+          approved_at: string | null
+          reconciled_at: string | null
+          note: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          method?: string
+          status: string
+          source: string
+          approved_by?: string | null
+          approved_at?: string | null
+          reconciled_at?: string | null
+          note?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          method?: string
+          status?: string
+          source?: string
+          approved_by?: string | null
+          approved_at?: string | null
+          reconciled_at?: string | null
+          note?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       membership_access_overrides: {
         Row: {
           id: string
@@ -1416,9 +1464,49 @@ export interface Database {
       }
     }
     Functions: {
+      profile_has_accepted_identity: {
+        Args: { check_user_id: string }
+        Returns: boolean
+      }
+      record_in_person_identity_verification: {
+        Args: { target_profile_id: string; confirmed: boolean }
+        Returns: Json
+      }
+      revoke_in_person_identity_verification: {
+        Args: { target_profile_id: string; reason: string }
+        Returns: Json
+      }
+      apply_membership_billing_sync: {
+        Args: {
+          p_user_id: string
+          p_billing: Json
+          p_event_created: number
+        }
+        Returns: Json
+      }
+      replace_membership_entitlement_cycle: {
+        Args: {
+          p_user_id: string
+          p_product_tier: string
+          p_period_start: string
+          p_period_end: string
+          p_credits_granted: number
+          p_guest_invites_granted: number
+          p_circle_social_credits_granted: number | null
+        }
+        Returns: Json
+      }
       withdraw_email_marketing: {
         Args: Record<string, never>
         Returns: undefined
+      }
+      set_own_email_marketing_preference: {
+        Args: { opt_in: boolean }
+        Returns: string
+      }
+      commit_email_marketing_opt_in: {
+        Args: { target_id: string; checked_at: string }
+        Returns: string
       }
       apply_resend_contact_unsubscribe: {
         Args: { target_email: string; provider_event_id: string }
@@ -1449,6 +1537,21 @@ export interface Database {
           application_first_name: string | null
           application_last_name: string | null
         }[]
+      }
+      claim_ensure_contact_jobs: {
+        Args: { limit_count: number; target_profile_id?: string | null }
+        Returns: {
+          id: string
+          profile_id: string
+          action: string
+          attempt_count: number
+          lease_owner: string
+          lease_expires_at: string
+        }[]
+      }
+      requeue_ensure_contact: {
+        Args: { target_profile_id: string }
+        Returns: string
       }
       claim_email_marketing_sync_jobs: {
         Args: { limit_count: number; target_profile_id?: string | null }

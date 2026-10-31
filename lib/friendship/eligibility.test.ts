@@ -17,7 +17,11 @@ import {
 } from '@/lib/friendship/test-fixtures'
 import { isCompatibilityEligible } from '@/lib/compatibility/eligibility'
 
-const paidEntitlement = { billing: innerCircleBilling, applicationApproved: true }
+const paidEntitlement = {
+  billing: innerCircleBilling,
+  applicationApproved: true,
+  acceptedIdentity: 'verified' as const,
+}
 const freeEntitlement = { billing: freeMemberBilling, applicationApproved: true }
 
 describe('friendship questionnaire access', () => {

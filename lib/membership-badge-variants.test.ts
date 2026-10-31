@@ -42,7 +42,7 @@ describe('verification badge variants', () => {
       profile_reviewed: 'approved',
       photo_reviewed: 'approved',
       locality: 'approved',
-    })
+    }, 'verified')
 
     expect(badges).toEqual([
       { key: 'verified', label: 'Verified', variant: 'trust' },

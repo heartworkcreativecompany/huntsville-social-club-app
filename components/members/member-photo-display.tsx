@@ -49,6 +49,8 @@ export function MemberPhotoFrame({
   showPrimaryBadge = false,
   isPrimary = false,
   alt = '',
+  showRetry = true,
+  imageClassName = '',
 }: {
   size?: MemberPhotoSize
   className?: string
@@ -59,6 +61,8 @@ export function MemberPhotoFrame({
   showPrimaryBadge?: boolean
   isPrimary?: boolean
   alt?: string
+  showRetry?: boolean
+  imageClassName?: string
 }) {
   return (
     <div
@@ -75,7 +79,7 @@ export function MemberPhotoFrame({
         <img
           src={url}
           alt={alt}
-          className={photoImageClass(size)}
+          className={[photoImageClass(size), imageClassName].filter(Boolean).join(' ')}
           onError={
             onRetry
               ? () => {
@@ -101,9 +105,11 @@ export function MemberPhotoFrame({
       {state === 'error' ? (
         <div className="flex h-full min-h-[3.5rem] flex-col items-center justify-center gap-1 px-1 text-center text-[10px] text-muted-foreground">
           <span>{errorMessage}</span>
-          <button type="button" className="text-accent underline" onClick={onRetry}>
-            Retry
-          </button>
+          {showRetry ? (
+            <button type="button" className="text-accent underline" onClick={onRetry}>
+              Retry
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -122,12 +128,16 @@ export default function MemberPhotoDisplay({
   size = 'thumbnail',
   className = '',
   showPrimaryBadge = false,
+  allowRetry = true,
+  imageClassName = '',
 }: {
   memberId: string
   photo: ApplicationPhoto | null
   size?: MemberPhotoSize
   className?: string
   showPrimaryBadge?: boolean
+  allowRetry?: boolean
+  imageClassName?: string
 }) {
   const [state, setState] = useState<MemberPhotoDisplayState>(
     photo ? 'loading' : 'missing'
@@ -169,9 +179,15 @@ export default function MemberPhotoDisplay({
       state={state}
       url={url}
       errorMessage={errorMessage}
-      onRetry={() => {
-        void load()
-      }}
+      onRetry={
+        allowRetry
+          ? () => {
+              void load()
+            }
+          : undefined
+      }
+      showRetry={allowRetry}
+      imageClassName={imageClassName}
       showPrimaryBadge={showPrimaryBadge}
       isPrimary={Boolean(photo?.isPrimary)}
       alt=""

@@ -3,18 +3,21 @@ import {
   type SlimMembershipAccessOverride,
 } from '@/lib/membership-access-override'
 import {
+  currentlyEntitledBillingTier,
+  memberVerifiedTrustBadge,
   membershipTierBadge,
   parseMembershipBilling,
   parsePremiumVerification,
   resolveMembershipTier,
   type DisplayBadge,
   type MembershipTierKey,
+  type PublicIdentityStatus,
+  type VerificationState,
 } from '@/lib/membership-systems'
 import {
   SEEDED_RECOGNITION_BADGES,
   type PublicRecognitionBadge,
 } from '@/lib/recognition-badges/catalog'
-import { paidTierFromActiveStoredPriceId } from '@/lib/stripe/resolve-paid-tier'
 
 export type PublicPaidTier = 'connect' | 'inner_circle' | 'elite_circle'
 
@@ -52,16 +55,7 @@ export function effectivePublicTier(input: {
   if (isStaffRole(input.role)) return null
 
   const billing = parseMembershipBilling(input.billing)
-  if (billing.tier === 'elite_circle' || billing.tier === 'premium_member') {
-    return 'elite_circle'
-  }
-  if (billing.tier === 'inner_circle') {
-    return 'inner_circle'
-  }
-  if (billing.tier === 'connect') {
-    return 'connect'
-  }
-  return paidTierFromActiveStoredPriceId(billing)
+  return currentlyEntitledBillingTier(billing, input.now ?? new Date())
 }
 
 export function resolvePublicMembershipTier(input: {
@@ -115,8 +109,17 @@ export function visiblePublicMemberBadges(input: {
   role?: string | null
   membership_tier: MembershipTierKey
   recognitionBadges?: PublicRecognitionBadge[] | null
+  verification_state?: VerificationState
+  publicIdentity?: PublicIdentityStatus
 }): DisplayBadge[] {
   const badges: DisplayBadge[] = []
+  if (input.verification_state && input.publicIdentity) {
+    const verified = memberVerifiedTrustBadge(
+      input.verification_state,
+      input.publicIdentity
+    )
+    if (verified) badges.push(verified)
+  }
   const staffLabel = publicStaffRoleLabel(input.role)
   if (staffLabel) {
     badges.push({

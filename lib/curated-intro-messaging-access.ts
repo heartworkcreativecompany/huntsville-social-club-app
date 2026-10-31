@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 
 /** Accepted curated-match conversation where this member participates. */
 export async function isCuratedIntroConversationForMember(
@@ -121,59 +122,37 @@ export type MemberMessagingAccess = {
   canAccessInbox: boolean
   canAccessConversation: boolean
   introOnlyAccess: boolean
+  /** Staff read access. Not a personal messaging entitlement. */
+  adminModeration: boolean
 }
 
 export async function resolveMemberMessagingAccess(
-  supabase: SupabaseClient<Database>,
+  _supabase: SupabaseClient<Database>,
   input: {
     userId: string
-    canMessage: boolean
+    identityStatus: AcceptedIdentityStatus
     messagingSuspended: boolean
     conversationId?: string
+    adminModeration?: boolean
   }
 ): Promise<MemberMessagingAccess> {
-  if (input.messagingSuspended || input.canMessage) {
+  void input.messagingSuspended
+  void input.identityStatus
+
+  if (input.adminModeration) {
     return {
       canAccessInbox: true,
       canAccessConversation: true,
       introOnlyAccess: false,
+      adminModeration: true,
     }
   }
 
-  const [hasIntroInbox, hasIncomingRequests, hasRequestConversations] =
-    await Promise.all([
-      memberHasMatchedCuratedIntroConversations(supabase, input.userId),
-      memberHasPendingIncomingMessageRequests(supabase, input.userId),
-      memberHasMessageRequestConversations(supabase, input.userId),
-    ])
-
-  const canAccessInbox =
-    hasIntroInbox || hasIncomingRequests || hasRequestConversations
-
-  if (input.conversationId) {
-    const [isIntroConversation, isRequestConversation] = await Promise.all([
-      isCuratedIntroConversationForMember(
-        supabase,
-        input.userId,
-        input.conversationId
-      ),
-      isMessageRequestConversationForMember(
-        supabase,
-        input.userId,
-        input.conversationId
-      ),
-    ])
-
-    return {
-      canAccessInbox,
-      canAccessConversation: isIntroConversation || isRequestConversation,
-      introOnlyAccess: isIntroConversation && !input.canMessage,
-    }
-  }
-
+  // Identity and suspension gate sending, not reading an existing thread.
   return {
-    canAccessInbox,
-    canAccessConversation: false,
-    introOnlyAccess: hasIntroInbox,
+    canAccessInbox: true,
+    canAccessConversation: true,
+    introOnlyAccess: false,
+    adminModeration: false,
   }
 }

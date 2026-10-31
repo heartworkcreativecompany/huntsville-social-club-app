@@ -14,6 +14,7 @@ import {
   resolveApplicationStatus,
   type ApplicationStatus,
 } from '@/lib/application'
+import { scheduledCancellationHasEnded } from '@/lib/membership-billing-period'
 import { paidTierFromActiveStoredPriceId } from '@/lib/stripe/resolve-paid-tier'
 
 // ---------------------------------------------------------------------------
@@ -179,24 +180,29 @@ function badgeVariantForStatus(
 /** Public verification badges for member-facing UI (single combined badge only). */
 export function publicVerificationBadges(
   state: VerificationState,
+  identity: PublicIdentityStatus,
   _options?: { maxCount?: number; includePending?: boolean }
 ): DisplayBadge[] {
-  const badge = memberVerifiedTrustBadge(state)
+  const badge = memberVerifiedTrustBadge(state, identity)
   return badge ? [badge] : []
 }
 
 /** Card-level badges — single verified badge when fully verified. */
-export function cardVerificationBadges(state: VerificationState): DisplayBadge[] {
-  return publicVerificationBadges(state)
+export function cardVerificationBadges(
+  state: VerificationState,
+  identity: PublicIdentityStatus
+): DisplayBadge[] {
+  return publicVerificationBadges(state, identity)
 }
 
 export const MEMBER_VERIFIED_BADGE_LABEL = 'Verified'
 
-/** Single public trust badge when all verification requirements are met. */
+/** Single public trust badge when profile checks and accepted identity are met. */
 export function memberVerifiedTrustBadge(
-  state: VerificationState
+  state: VerificationState,
+  identity: PublicIdentityStatus
 ): DisplayBadge | null {
-  if (!isMemberPubliclyVerified(state)) return null
+  if (!isMemberPubliclyVerified(state, identity)) return null
   return {
     key: 'verified',
     label: MEMBER_VERIFIED_BADGE_LABEL,
@@ -285,6 +291,27 @@ export const MEMBERSHIP_TIER_DEFS: MembershipTierDef[] = [
   },
 ]
 
+/**
+ * Paid tier label that is currently entitled.
+ * Ignores role, founder badges, and a stored tier whose subscription has ended.
+ */
+export function currentlyEntitledBillingTier(
+  billing: MembershipBilling,
+  now: Date = new Date()
+): 'connect' | 'inner_circle' | 'elite_circle' | null {
+  if (scheduledCancellationHasEnded(billing, now)) return null
+  const status = billing.subscription_status
+  if (status !== 'active' && status !== 'grace') {
+    return null
+  }
+  if (billing.tier === 'elite_circle' || billing.tier === 'premium_member') {
+    return 'elite_circle'
+  }
+  if (billing.tier === 'inner_circle') return 'inner_circle'
+  if (billing.tier === 'connect') return 'connect'
+  return paidTierFromActiveStoredPriceId(billing)
+}
+
 export function resolveMembershipTier(input: {
   application_status?: string | null
   role?: string | null
@@ -304,10 +331,12 @@ export function resolveMembershipTier(input: {
   if (billing.tier === 'vendor_reviewed' || premium.public_badge === 'vendor_reviewed') {
     return 'vendor_reviewed'
   }
-  if (billing.tier === 'elite_circle') return 'elite_circle'
-  if (billing.tier === 'premium_member') return 'elite_circle'
-  if (billing.tier === 'inner_circle') return 'inner_circle'
-  if (billing.tier === 'connect') return 'connect'
+
+  // Stored tier labels are historical until the subscription is currently entitled.
+  const paidTier = currentlyEntitledBillingTier(billing)
+  if (paidTier === 'elite_circle') return 'elite_circle'
+  if (paidTier === 'inner_circle') return 'inner_circle'
+  if (paidTier === 'connect') return 'connect'
 
   if (status === 'approved') return 'member'
   if (status === 'submitted' || status === 'in_review' || status === 'needs_info') {
@@ -395,17 +424,17 @@ export const APPROVAL_GATE_DEFS: ApprovalGateDef[] = [
     key: 'phone_verified',
     label: 'Phone verification',
     description:
-      'Optional. Member verifies a phone number via Supabase Auth SMS (provider configured in Supabase, commonly Twilio). Not required for membership approval — Stripe Identity covers identity and location.',
+      'Optional. Member verifies a phone number via Supabase Auth SMS (provider configured in Supabase, commonly Twilio). Not required for membership approval.',
     requiredForApproval: false,
     implemented: true,
     completedBy: 'member',
   },
   {
     key: 'identity_verified',
-    label: 'Identity & location verification',
+    label: 'Identity verification',
     description:
-      'Required. Government ID + matching selfie via Stripe Identity before membership approval. Confirms identity and location signals. Document/selfie images are not stored in our database.',
-    requiredForApproval: true,
+      'Optional for membership approval. Stripe Identity or an admin in-person check. Either one is accepted. Document images are not stored here.',
+    requiredForApproval: false,
     implemented: true,
     completedBy: 'member',
   },
@@ -655,12 +684,16 @@ export function identityVerificationDisplayLabel(
 }
 
 /**
- * Member-facing identity row state from Stripe Identity session status
- * (source of truth for this step once a session exists).
+ * Display state on the application status page.
+ * Stripe success, an active in-person record, or the legacy identity-step
+ * gate hides the Stripe call to action so a member is not asked to repeat
+ * Stripe. This display is not identity evidence. Messaging and the public
+ * badge use resolveIdentityVerification, which ignores the gate.
  */
 export function identityVerificationRowState(
   stripeStatus: string | null | undefined,
-  gateStatus: ReviewStatus
+  gateStatus: ReviewStatus,
+  inPersonVerified = false
 ): {
   label: string
   tone: 'success' | 'warning' | 'muted' | 'danger'
@@ -677,7 +710,7 @@ export function identityVerificationRowState(
       ? stripeStatus
       : 'not_started'
 
-  if (gateStatus === 'approved' || status === 'verified') {
+  if (inPersonVerified || gateStatus === 'approved' || status === 'verified') {
     return {
       label: identityVerificationDisplayLabel('verified'),
       tone: 'success',
@@ -921,6 +954,17 @@ export type MembershipBilling = {
   stripe_price_id: string | null
   trial_end: string | null
   plan_change_pending: 'upgrade' | 'downgrade' | null
+  /**
+   * Stripe cancel_at_period_end. Access continues until billing_period_end.
+   * Distinct from an immediately cancelled subscription (subscription_status cancelled).
+   */
+  cancel_at_period_end: boolean
+  /** Unix seconds of the last Stripe event applied to this billing record. */
+  stripe_event_created: number | null
+  /**
+   * Last paid plan after access ended. Display history only — never an entitlement.
+   */
+  ended_paid_tier: 'connect' | 'inner_circle' | 'elite_circle' | null
   payment_failure: {
     active: boolean
     since: string | null
@@ -947,6 +991,9 @@ export function emptyMembershipBilling(): MembershipBilling {
     stripe_price_id: null,
     trial_end: null,
     plan_change_pending: null,
+    cancel_at_period_end: false,
+    stripe_event_created: null,
+    ended_paid_tier: null,
     payment_failure: {
       active: false,
       since: null,
@@ -1025,6 +1072,18 @@ export function parseMembershipBilling(value: unknown): MembershipBilling {
     plan_change_pending:
       planChange === 'upgrade' || planChange === 'downgrade'
         ? planChange
+        : null,
+    cancel_at_period_end: raw.cancel_at_period_end === true,
+    stripe_event_created:
+      typeof raw.stripe_event_created === 'number' &&
+      Number.isFinite(raw.stripe_event_created)
+        ? raw.stripe_event_created
+        : null,
+    ended_paid_tier:
+      raw.ended_paid_tier === 'connect' ||
+      raw.ended_paid_tier === 'inner_circle' ||
+      raw.ended_paid_tier === 'elite_circle'
+        ? raw.ended_paid_tier
         : null,
     payment_failure: {
       active: Boolean(failure.active),
@@ -1221,18 +1280,44 @@ export function discoveryColumnsFromDraft(draft: ApplicationDraft) {
   }
 }
 
-export function isMemberPubliclyVerified(state: VerificationState): boolean {
-  return (
+export type PublicIdentityStatus = 'verified' | 'unverified' | 'unavailable'
+
+export type PublicVerifiedBadgeReason =
+  | 'shown'
+  | 'hidden_profile_requirements'
+  | 'hidden_identity_unverified'
+  | 'hidden_identity_unavailable'
+
+/**
+ * Public verified badge. Identity must already be resolved by
+ * resolveIdentityVerification. An unavailable lookup is not shown as
+ * unverified, and it does not display the badge.
+ */
+export function publicVerifiedBadgeReason(
+  state: VerificationState,
+  identity: PublicIdentityStatus
+): PublicVerifiedBadgeReason {
+  if (identity === 'unavailable') return 'hidden_identity_unavailable'
+  const profileChecks =
     state.email === 'approved' &&
     state.phone === 'approved' &&
     state.profile_reviewed === 'approved' &&
     state.photo_reviewed === 'approved' &&
     state.locality === 'approved'
-  )
+  if (!profileChecks) return 'hidden_profile_requirements'
+  if (identity !== 'verified') return 'hidden_identity_unverified'
+  return 'shown'
+}
+
+export function isMemberPubliclyVerified(
+  state: VerificationState,
+  identity: PublicIdentityStatus
+): boolean {
+  return publicVerifiedBadgeReason(state, identity) === 'shown'
 }
 
 export const PUBLIC_VERIFIED_BADGE_SUMMARY =
-  'Verified members have confirmed email and phone, staff-reviewed application and photos, and confirmed locality.'
+  'Verified members have confirmed email and phone, staff-reviewed application and photos, confirmed locality, and verified identity.'
 
 export function applicantStatusSummary(status: ApplicationStatus): string {
   return applicationStatusLabel(status)

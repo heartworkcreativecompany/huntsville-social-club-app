@@ -9,6 +9,8 @@ import { summarizeCompatibilityProfileStatus } from '@/lib/compatibility/profile
 import type { CompatibilityProfileFields } from '@/lib/compatibility/types'
 import type { CuratedMatchPauseReason } from '@/lib/compatibility/types'
 import type { MemberEntitlements } from '@/lib/membership-entitlements'
+import type { MatchingIdentityPresentation } from '@/lib/matching-identity'
+import { isMessagingSuspended } from '@/lib/messaging-suspension'
 import type { Viewer } from '@/lib/viewer'
 
 export function compatibilityProfileFieldsFromViewer(
@@ -78,7 +80,8 @@ export function canShowDatingMatchesNav(
 
 export function compatibilityContextForViewer(
   viewer: Viewer,
-  entitlements: MemberEntitlements | null
+  entitlements: MemberEntitlements | null,
+  identity?: MatchingIdentityPresentation | null
 ) {
   const featureEnabled = isCompatibilityFeatureEnabled()
   const profile = compatibilityProfileFieldsFromViewer(viewer)
@@ -88,7 +91,13 @@ export function compatibilityContextForViewer(
   )
   const summary = summarizeCompatibilityProfileStatus({
     profile,
-    entitlementInput,
+    entitlementInput: {
+      ...entitlementInput,
+      acceptedIdentity: identity?.status ?? 'unavailable',
+    },
+    acceptedIdentity: identity?.status ?? 'unavailable',
+    stripeStatus: identity?.stripeStatus ?? null,
+    messagingSuspended: isMessagingSuspended(viewer.profile),
   })
 
   return {

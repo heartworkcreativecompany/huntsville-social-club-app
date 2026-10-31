@@ -7,7 +7,7 @@ import type { ReactNode } from 'react'
  * 3. Member directory
  * 4. Optional admin member management
  *
- * Dashboard modules (recent messages, curated intro) live on /dashboard.
+ * Dashboard modules (recent messages, recommendations) live on /dashboard.
  * Membership usage (“Your membership”) lives on Your Profile.
  */
 export function MembersDashboardLayout({

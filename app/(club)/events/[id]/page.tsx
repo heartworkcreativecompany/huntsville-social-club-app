@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
@@ -11,6 +10,7 @@ import EventPremiumRegistrationSection from '@/components/events/event-premium-r
 import EventPriorityRsvpBubble from '@/components/events/event-priority-rsvp-bubble'
 import EventRsvpCounts from '@/components/events/event-rsvp-counts'
 import EventDescription from '@/components/events/event-description'
+import EventImageCard from '@/components/events/event-image-card'
 import EventTypeBadge from '@/components/events/event-type-badge'
 import {
   AttendeeRosterSummary,
@@ -446,30 +446,26 @@ export default async function EventDetailPage({ params }: PageProps) {
         ← Back to events
       </Link>
 
-      <div className="relative mb-8 aspect-[21/9] w-full overflow-hidden rounded-xl bg-surface-elevated">
-        <Image
-          src={coverSrc}
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover"
-          unoptimized={isRemoteEventCoverImage(coverSrc)}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-        <div className="absolute right-0 bottom-0 left-0 p-6 sm:p-8">
-          <div className="mb-3 flex flex-wrap gap-2">
-            <EventTypeBadge eventType={event.event_type} />
-          </div>
-          <h1 className="text-display text-3xl font-semibold text-white sm:text-4xl">
-            {event.title}
-          </h1>
-          <p className="mt-2 text-sm text-white/80">
-            {formatEventDate(event.starts_at)}
-            {event.location ? ` · ${event.location}` : ''}
-          </p>
-        </div>
-      </div>
+      <EventImageCard
+        imageSrc={coverSrc}
+        imageSizes="100vw"
+        unoptimized={isRemoteEventCoverImage(coverSrc)}
+        priority
+        aspectClassName="aspect-[21/9]"
+        bodyClassName="space-y-2 p-6 sm:p-8"
+        className="mb-8"
+      >
+        <EventTypeBadge eventType={event.event_type} />
+        <h1 className="text-display text-3xl font-semibold text-balance sm:text-4xl">
+          {event.title}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {formatEventDate(event.starts_at)}
+        </p>
+        {event.location ? (
+          <p className="text-sm text-muted-foreground">{event.location}</p>
+        ) : null}
+      </EventImageCard>
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <EventMetaBadges

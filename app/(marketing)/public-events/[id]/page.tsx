@@ -1,15 +1,12 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import EventDescription from '@/components/events/event-description'
+import EventImageCard from '@/components/events/event-image-card'
 import EventTypeBadge from '@/components/events/event-type-badge'
-import PublicGuestRsvpForm from '@/components/marketing/public-guest-rsvp-form'
+import PublicEventTickets from '@/components/marketing/public-event-tickets'
 import PublicMarketingFrame, {
   memberEventRsvpHref,
-  publicMarketingSignupHref,
 } from '@/components/marketing/public-marketing-frame'
-import { marketingButtonSecondaryClassName } from '@/lib/event-labels'
 import {
   eventCoverImage,
   isRemoteEventCoverImage,
@@ -91,40 +88,27 @@ export default async function PublicEventDetailPage({
   const coverSrc = eventCoverImage(event.id, event.cover_image_url)
   const when = formatEventScheduleInChicago(event.starts_at, event.ends_at)
   const price = publicEventPriceLabel(event.fee_cents)
-  const signupHref = publicMarketingSignupHref()
 
   return (
     <PublicMarketingFrame>
       <div className="mx-auto max-w-6xl px-5 pt-6 pb-16 sm:px-6 sm:pt-8 sm:pb-20 md:px-10">
-        <Link
-          href="/events"
-          className="text-sm text-muted-foreground hover:text-foreground"
+        <EventImageCard
+          imageSrc={coverSrc}
+          imageSizes="(max-width: 1152px) 100vw, 1152px"
+          unoptimized={isRemoteEventCoverImage(coverSrc)}
+          priority
+          aspectClassName="aspect-[21/9]"
+          bodyClassName="space-y-2 p-6 sm:p-8"
         >
-          All events
-        </Link>
-
-        <div className="relative mt-6 aspect-[21/9] w-full overflow-hidden rounded-xl bg-surface-elevated">
-          <Image
-            src={coverSrc}
-            alt=""
-            fill
-            priority
-            sizes="(max-width: 1152px) 100vw, 1152px"
-            className="object-cover"
-            unoptimized={isRemoteEventCoverImage(coverSrc)}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-          <div className="absolute right-0 bottom-0 left-0 p-6 sm:p-8">
-            <EventTypeBadge eventType={event.event_type} />
-            <h1 className="font-brand mt-3 text-3xl font-semibold text-white sm:text-4xl">
-              {event.title}
-            </h1>
-            <p className="mt-2 text-sm text-white/80">
-              {when}
-              {event.location ? ` · ${event.location}` : ''}
-            </p>
-          </div>
-        </div>
+          <EventTypeBadge eventType={event.event_type} />
+          <h1 className="font-brand text-3xl font-semibold text-balance text-foreground sm:text-4xl">
+            {event.title}
+          </h1>
+          <p className="text-sm text-muted-foreground">{when}</p>
+          {event.location ? (
+            <p className="text-sm text-muted-foreground">{event.location}</p>
+          ) : null}
+        </EventImageCard>
 
         <div className="mt-8 max-w-2xl">
           {checkoutNotice ? (
@@ -145,33 +129,13 @@ export default async function PublicEventDetailPage({
 
           <EventDescription text={event.description} />
 
-          <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
-            <a
-              href={memberEventRsvpHref(event.id)}
-              className={marketingButtonSecondaryClassName}
-            >
-              Members: sign in to RSVP
-            </a>
-            <Link
-              href={signupHref}
-              className="text-sm font-medium text-accent underline underline-offset-4"
-            >
-              Apply for membership
-            </Link>
-          </div>
-
-          {guestOffer.kind === 'sold_out' ? (
-            <p className="mt-6 text-sm font-medium text-foreground">Sold out</p>
-          ) : null}
-          {listing && guestOffer.kind === 'open' ? (
-            <PublicGuestRsvpForm
-              eventId={event.id}
-              priceLabel={guestOffer.priceLabel}
-              rsvpQuestion={listing.rsvpQuestion}
-              rsvpQuestionRequired={listing.rsvpQuestionRequired}
-              spotsLeft={guestOffer.spotsLeft}
-            />
-          ) : null}
+          <PublicEventTickets
+            eventId={event.id}
+            memberHref={memberEventRsvpHref(event.id)}
+            offer={guestOffer}
+            rsvpQuestion={listing?.rsvpQuestion ?? null}
+            rsvpQuestionRequired={listing?.rsvpQuestionRequired ?? false}
+          />
         </div>
       </div>
     </PublicMarketingFrame>

@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import ApplyMembershipCta from '@/components/marketing/apply-membership-cta'
+import EventImageCard from '@/components/events/event-image-card'
 import PublicHomeHeader from '@/components/marketing/public-home-header'
 import { marketingButtonPrimaryClassName } from '@/lib/event-labels'
 import {
@@ -8,6 +9,11 @@ import {
   isRemoteEventCoverImage,
 } from '@/lib/event-images'
 import { formatEventScheduleInChicago } from '@/lib/event-time'
+import { isFriendshipMatchingEnabled } from '@/lib/friendship/eligibility'
+import {
+  DATING_AND_FRIENDSHIP_RECOMMENDATIONS_COPY,
+  DATING_RECOMMENDATIONS_COPY,
+} from '@/lib/membership-pricing-copy'
 import {
   loadUpcomingPublicEvents,
   publicEventPriceLabel,
@@ -95,33 +101,24 @@ export function PublicHomeExperiences({
                 const price = publicEventPriceLabel(event.fee_cents)
                 return (
                   <li key={event.id}>
-                    <Link
+                    <EventImageCard
                       href={`${VIEW_ALL_EVENTS_HREF}/${event.id}`}
-                      className="group relative block min-h-[16rem] overflow-hidden rounded-xl border border-border no-underline"
+                      imageSrc={coverSrc}
+                      imageSizes="(max-width: 1024px) 100vw, 33vw"
+                      unoptimized={isRemoteEventCoverImage(coverSrc)}
                     >
-                      <Image
-                        src={coverSrc}
-                        alt={event.title}
-                        fill
-                        sizes="(max-width: 1024px) 100vw, 33vw"
-                        className="object-cover transition duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                        unoptimized={isRemoteEventCoverImage(coverSrc)}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
-                      <div className="relative flex h-full min-h-[16rem] flex-col justify-end p-5">
-                        <h3 className="font-brand text-lg font-semibold text-white">
-                          {event.title}
-                        </h3>
-                        <p className="mt-2 text-sm leading-relaxed text-white/80">
-                          {when}
+                      <h3 className="font-brand text-lg font-semibold text-balance text-foreground">
+                        {event.title}
+                      </h3>
+                      <p className="text-sm leading-relaxed text-muted-foreground">
+                        {when}
+                      </p>
+                      {price ? (
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                          {price}
                         </p>
-                        {price ? (
-                          <p className="mt-1 text-sm leading-relaxed text-white/80">
-                            {price}
-                          </p>
-                        ) : null}
-                      </div>
-                    </Link>
+                      ) : null}
+                    </EventImageCard>
                   </li>
                 )
               })}
@@ -140,26 +137,19 @@ export function PublicHomeExperiences({
             </p>
             <ul className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {IMPLIED_EXPERIENCES.map((item) => (
-                <li
-                  key={item.title}
-                  className="group relative min-h-[16rem] overflow-hidden rounded-xl border border-border"
-                >
-                  <Image
-                    src={item.imageSrc}
-                    alt={item.imageAlt}
-                    fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                    className="object-cover transition duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
-                  <div className="relative flex h-full min-h-[16rem] flex-col justify-end p-5">
-                    <h3 className="font-brand text-lg font-semibold text-white">
+                <li key={item.title}>
+                  <EventImageCard
+                    imageSrc={item.imageSrc}
+                    imageAlt={item.imageAlt}
+                    imageSizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                  >
+                    <h3 className="font-brand text-lg font-semibold text-balance text-foreground">
                       {item.title}
                     </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-white/80">
+                    <p className="text-sm leading-relaxed text-muted-foreground">
                       {item.description}
                     </p>
-                  </div>
+                  </EventImageCard>
                 </li>
               ))}
             </ul>
@@ -180,6 +170,16 @@ export default async function PublicHomeContent({
 }) {
   const upcoming = await loadUpcomingPublicEvents()
   const events = upcoming.error ? [] : upcoming.events
+  const friendshipMatchingEnabled = isFriendshipMatchingEnabled()
+  const membershipTiers = HOME_MEMBERSHIP_TIERS.map((tier) => ({
+    ...tier,
+    summary: friendshipMatchingEnabled
+      ? tier.summary.replaceAll(
+          DATING_RECOMMENDATIONS_COPY,
+          DATING_AND_FRIENDSHIP_RECOMMENDATIONS_COPY
+        )
+      : tier.summary,
+  }))
   return (
     <>
       <section
@@ -204,32 +204,32 @@ export default async function PublicHomeContent({
         />
         <div className="grain absolute inset-0" aria-hidden />
 
-        <div className="relative z-10 flex min-h-[100svh] flex-col md:min-h-[92vh]">
+        <div className="relative z-10 flex flex-col md:min-h-[92svh] [@media(max-height:820px)]:md:min-h-[100svh]">
           <PublicHomeHeader loginHref={loginHref} signupHref={signupHref} />
-          <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col justify-end px-5 pt-6 pb-16 text-white sm:px-6 md:px-10 md:pt-8 md:pb-28">
-            <span className="hero-eyebrow">
+          <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-col px-5 pt-8 pb-14 text-white sm:px-6 md:flex-1 md:justify-end md:px-10 md:pt-8 md:pb-16 [@media(max-height:820px)]:md:pt-4 [@media(max-height:820px)]:md:pb-6">
+            <span className="hero-eyebrow lg:!text-[0.8125rem] lg:!tracking-[0.22em]">
               <span className="hero-eyebrow-line" aria-hidden />
               {HOME_HERO_EYEBROW}
             </span>
             <h1
               id="home-hero-heading"
-              className="font-brand mt-5 max-w-3xl text-4xl leading-[1.08] font-semibold text-balance sm:text-5xl md:text-7xl"
+              className="font-brand mt-4 max-w-none text-4xl leading-[1.05] font-semibold text-balance sm:text-5xl lg:text-7xl xl:text-[5.25rem] xl:leading-[1.02]"
             >
               {HOME_HERO_HEADLINE}
             </h1>
-            <p className="mt-6 max-w-xl text-left text-lg leading-relaxed text-white/85 md:text-xl">
+            <p className="mt-4 max-w-xl text-left text-base leading-relaxed text-white/85 sm:mt-5 sm:max-w-2xl sm:text-lg lg:max-w-3xl lg:text-xl xl:mt-4 xl:text-2xl xl:leading-snug">
               {HOME_HERO_BODY}
             </p>
-            <div className="mt-9 max-w-xl">
+            <div className="mt-6 max-w-3xl lg:mt-6">
               <ApplyMembershipCta
                 href={signupHref}
                 label={APPLY_FOR_MEMBERSHIP_CTA}
-                className="w-fit"
+                className="w-fit lg:px-8 lg:py-4 lg:text-lg"
               />
-              <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/80">
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/80 sm:text-base lg:text-lg">
                 {HOME_HERO_SUPPORT_LINE_PRIMARY}
               </p>
-              <p className="mt-1 max-w-xl text-sm leading-relaxed text-white/65">
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/65 sm:text-base lg:text-lg">
                 {HOME_HERO_SUPPORT_LINE_SECONDARY}
               </p>
             </div>
@@ -243,11 +243,11 @@ export default async function PublicHomeContent({
       >
         <h2
           id="why-exists-heading"
-          className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl"
+          className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl lg:text-5xl"
         >
           {WHY_EXISTS_HEADLINE}
         </h2>
-        <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+        <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg lg:text-xl">
           {WHY_EXISTS_INTRO}
         </p>
         <ul className="mt-10 grid gap-6 lg:grid-cols-3">
@@ -291,7 +291,7 @@ export default async function PublicHomeContent({
           </p>
           <h2
             id="who-it-is-for-heading"
-            className="font-brand mt-5 max-w-3xl text-3xl font-semibold sm:text-4xl"
+            className="font-brand mt-5 max-w-3xl text-3xl font-semibold sm:text-4xl lg:text-5xl"
           >
             {WHO_IT_IS_FOR_HEADLINE}
           </h2>
@@ -313,7 +313,7 @@ export default async function PublicHomeContent({
                   <span className="sr-only">Statement </span>
                   {String(index + 1).padStart(2, '0')}
                 </p>
-                <p className="mt-3 text-base leading-relaxed text-foreground sm:text-[1.05rem]">
+                <p className="mt-3 text-base leading-relaxed text-foreground sm:text-[1.05rem] lg:text-lg">
                   {item}
                 </p>
               </li>
@@ -337,7 +337,7 @@ export default async function PublicHomeContent({
           </p>
           <h2
             id="how-membership-works-heading"
-            className="font-brand mt-5 text-3xl font-semibold sm:text-4xl"
+            className="font-brand mt-5 text-3xl font-semibold sm:text-4xl lg:text-5xl"
           >
             {HOW_MEMBERSHIP_WORKS_HEADLINE}
           </h2>
@@ -355,7 +355,7 @@ export default async function PublicHomeContent({
                 >
                   {index + 1}
                 </span>
-                <p className="pt-1.5 text-base leading-relaxed text-foreground md:max-w-[16rem] md:pt-0">
+                <p className="pt-1.5 text-base leading-relaxed text-foreground md:max-w-[16rem] md:pt-0 lg:max-w-none lg:text-lg">
                   <span className="sr-only">Step {index + 1}. </span>
                   {step}
                 </p>
@@ -364,7 +364,7 @@ export default async function PublicHomeContent({
             </ol>
           </div>
           <div className="mt-10">
-            <ApplyMembershipCta href={signupHref} className="w-fit" />
+            <ApplyMembershipCta href={signupHref} className="w-fit lg:px-7 lg:text-base" />
           </div>
         </div>
       </section>
@@ -375,32 +375,34 @@ export default async function PublicHomeContent({
       >
         <h2
           id="membership-value-heading"
-          className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl"
+          className="font-brand max-w-3xl text-3xl font-semibold sm:text-4xl lg:text-5xl"
         >
           {MEMBERSHIP_VALUE_HEADLINE}
         </h2>
-        <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+        <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg lg:text-xl">
           {MEMBERSHIP_VALUE_BODY}
         </p>
-        <ul className="mt-10 grid gap-4 sm:grid-cols-2">
-          {HOME_MEMBERSHIP_TIERS.map((tier) => (
+        <ul className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {membershipTiers.map((tier) => (
             <li
               key={tier.name}
-              className="rounded-xl border border-border bg-surface p-6 shadow-sm"
+              className="flex h-full flex-col rounded-xl border border-border bg-surface p-6 shadow-sm"
             >
               <p className="text-xs font-medium tracking-[0.2em] text-accent uppercase">
                 {tier.optionalPaid ? 'Optional paid' : 'Free to start'}
               </p>
-              <h3 className="text-display mt-3 text-xl font-semibold">{tier.name}</h3>
-              <p className="mt-1 text-sm text-foreground">{tier.price}</p>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              <h3 className="text-display mt-3 text-xl font-semibold lg:text-2xl">
+                {tier.name}
+              </h3>
+              <p className="mt-1 text-sm text-foreground lg:text-base">{tier.price}</p>
+              <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground lg:text-base">
                 {tier.summary}
               </p>
             </li>
           ))}
         </ul>
         <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto" />
+          <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto lg:px-7 lg:text-base" />
           <Link
             href={PUBLIC_PRICING_PATH}
             className="inline-flex min-h-11 items-center justify-center text-sm font-medium text-accent underline decoration-accent/40 underline-offset-4 hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
@@ -417,15 +419,15 @@ export default async function PublicHomeContent({
         <div className="rounded-2xl border border-accent/35 bg-accent-soft/30 px-6 py-12 text-center sm:px-10 sm:py-16">
           <h2
             id="final-cta-heading"
-            className="font-brand text-3xl font-semibold sm:text-4xl"
+            className="font-brand text-3xl font-semibold text-balance sm:text-4xl lg:text-5xl"
           >
             {FINAL_CTA_HEADLINE}
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg lg:text-xl">
             {FINAL_CTA_BODY}
           </p>
           <div className="mt-8 flex justify-center">
-            <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto" />
+            <ApplyMembershipCta href={signupHref} className="w-full sm:w-auto lg:px-7 lg:text-base" />
           </div>
           <p className="mt-4 text-sm text-muted-foreground">{FINAL_CTA_REASSURANCE}</p>
         </div>

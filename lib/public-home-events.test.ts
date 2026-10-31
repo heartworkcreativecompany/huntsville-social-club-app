@@ -84,7 +84,8 @@ describe('homepage upcoming events', () => {
       formatEventScheduleInChicago(listed[0].starts_at, listed[0].ends_at)
     )
     expect(html).toContain(publicEventPriceLabel(1500) ?? '')
-    expect(html).toContain('alt="Table Hop Game Night"')
+    expect(html).toContain('alt=""')
+    expect(html).not.toContain('alt="Table Hop Game Night"')
     expect(html).toContain(eventCoverImage(listed[0].id, listed[0].cover_image_url))
 
     expect(html).toContain('href="/events/event-2"')

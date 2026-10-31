@@ -43,7 +43,7 @@ export default function CompatibilityStatusModule({
   return (
     <Card padding="sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="profile-section-title">
           <p className="eyebrow">Curated matches</p>
           <h2 className="text-display mt-1 text-lg font-semibold">{headline}</h2>
         </div>

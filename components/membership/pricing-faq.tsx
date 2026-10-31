@@ -1,7 +1,15 @@
 import Card from '@/components/ui/card'
-import { PRICING_FAQ } from '@/lib/membership-pricing-copy'
+import {
+  DATING_AND_FRIENDSHIP_RECOMMENDATIONS_COPY,
+  DATING_RECOMMENDATIONS_COPY,
+  PRICING_FAQ,
+} from '@/lib/membership-pricing-copy'
 
-export default function PricingFaq() {
+export default function PricingFaq({
+  friendshipMatchingEnabled = false,
+}: {
+  friendshipMatchingEnabled?: boolean
+}) {
   return (
     <section className="mt-16">
       <h2 className="text-display text-2xl font-semibold">
@@ -12,7 +20,12 @@ export default function PricingFaq() {
           <Card key={item.question} padding="sm">
             <h3 className="font-medium text-foreground">{item.question}</h3>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              {item.answer}
+              {friendshipMatchingEnabled
+                ? item.answer.replaceAll(
+                    DATING_RECOMMENDATIONS_COPY,
+                    DATING_AND_FRIENDSHIP_RECOMMENDATIONS_COPY
+                  )
+                : item.answer}
             </p>
           </Card>
         ))}

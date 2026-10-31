@@ -319,7 +319,13 @@ describe('Connect membership tier', () => {
       join(repoRoot, 'lib/stripe/sync-subscription.ts'),
       'utf8'
     )
-    expect(syncSource).toContain('isCircleProductTier(mappedTier)')
+    expect(syncSource).toContain('openCircleCycleForStripePrice')
+    const fulfillment = readFileSync(
+      join(repoRoot, 'lib/stripe/circle-fulfillment.ts'),
+      'utf8'
+    )
+    expect(fulfillment).toContain('not_circle')
+    expect(fulfillment).toContain('UnmappedMembershipPriceError')
   })
 
   it('6. Direct messaging permits Connect ↔ Inner/Elite and blocks Member ↔ Connect', () => {
@@ -470,12 +476,14 @@ describe('Connect membership tier', () => {
     const datingProfile = datingPoolProfile({
       membership_billing: connectBilling,
       activeCycle: futureCycle,
+      acceptedIdentity: 'verified',
     })
     expect(
       isCompatibilityEligible(datingProfile, {
         billing: connectBilling,
         applicationApproved: true,
         activeCycle: futureCycle,
+        acceptedIdentity: 'verified',
       })
     ).toBe(true)
     expect(isEligibleRecipient(datingProfile)).toBe(true)
@@ -485,6 +493,7 @@ describe('Connect membership tier', () => {
         billing: connectBilling,
         applicationApproved: true,
         activeCycle: futureCycle,
+        acceptedIdentity: 'verified',
       })
     ).toBe(true)
     expect(
@@ -494,6 +503,7 @@ describe('Connect membership tier', () => {
           billing: connectBilling,
           applicationApproved: true,
           activeCycle: futureCycle,
+          acceptedIdentity: 'verified',
         },
         submittedFriendshipRow()
       )
@@ -506,6 +516,7 @@ describe('Connect membership tier', () => {
         membership_billing: connectBilling,
         questionnaire: submittedFriendshipRow(),
         activeCycle: futureCycle,
+        acceptedIdentity: 'verified',
       })
     ).toBe(true)
 

@@ -84,14 +84,20 @@ export function ClubNavMarkup({
   return (
     <header
       ref={headerRef}
-      className="relative z-50 border-b border-border bg-surface shadow-sm"
+      data-club-site-header
+      className="relative z-50 shrink-0 border-b border-border bg-surface shadow-sm"
     >
       <div
         data-club-header="mobile"
         className="mx-auto grid max-w-6xl grid-cols-[44px_minmax(0,1fr)_44px] items-center py-4 pt-[max(1rem,env(safe-area-inset-top))] pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))] lg:flex lg:items-center lg:justify-between lg:gap-3"
       >
         <div className="col-start-2 row-start-1 flex min-w-0 justify-center lg:flex-1 lg:items-center lg:justify-start lg:gap-6">
-          <BrandLogo href={logoHref} variant="wordmark" size="md" />
+          <BrandLogo
+            href={logoHref}
+            variant="wordmark"
+            size="md"
+            frameClassName="club-header-wordmark"
+          />
           <nav
             data-club-header="desktop"
             className="hidden flex-wrap gap-1 lg:flex"
@@ -137,7 +143,7 @@ export function ClubNavMarkup({
 
       <nav
         id={CLUB_MOBILE_NAV_ID}
-        className="absolute inset-x-0 top-full z-40 border-b border-border bg-surface shadow-md lg:hidden"
+        className="absolute inset-x-0 top-full z-40 max-h-[calc(var(--club-frame-height,100dvh)-var(--club-header-height,4.75rem)-env(safe-area-inset-bottom))] overflow-y-auto overscroll-contain border-b border-border bg-surface shadow-md lg:hidden"
         aria-label="Club"
         hidden={!mobileOpen}
       >
@@ -240,6 +246,14 @@ function ClubNavController({
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    const contentScroll = document.querySelector('[data-club-content-scroll]')
+    const previousContentOverflow =
+      contentScroll instanceof HTMLElement ? contentScroll.style.overflow : ''
+    const previousContentTop =
+      contentScroll instanceof HTMLElement ? contentScroll.scrollTop : 0
+    if (contentScroll instanceof HTMLElement) {
+      contentScroll.style.overflow = 'hidden'
+    }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (isMobileNavEscapeKey(event.key)) {
@@ -261,10 +275,27 @@ function ClubNavController({
 
     return () => {
       document.body.style.overflow = previousOverflow
+      if (contentScroll instanceof HTMLElement) {
+        contentScroll.style.overflow = previousContentOverflow
+        contentScroll.scrollTop = previousContentTop
+      }
       document.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('mousedown', handlePointerDown)
     }
   }, [mobileOpen])
+
+  useEffect(() => {
+    const header = headerRef.current
+    if (!header) return
+
+    const apply = () => {
+      header.style.setProperty('--club-header-height', `${header.offsetHeight}px`)
+    }
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(header)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const media = window.matchMedia(CLUB_MOBILE_NAV_MEDIA_QUERY)

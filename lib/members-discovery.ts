@@ -64,6 +64,7 @@ export type DirectoryMember = {
   discovery_industry: string | null
   public_intents: MemberPublicIntentValue[]
   verification_state: VerificationState
+  publicIdentity?: 'verified' | 'unverified' | 'unavailable'
   membership_tier: MembershipTierKey
   vendor_reviewed_badge: boolean
   recognitionBadges?: PublicRecognitionBadge[]
@@ -343,7 +344,13 @@ export function filterDirectoryMembers(
       return false
     }
 
-    if (filters.verifiedOnly && !isMemberPubliclyVerified(member.verification_state)) {
+    if (
+      filters.verifiedOnly &&
+      !isMemberPubliclyVerified(
+        member.verification_state,
+        member.publicIdentity ?? 'unavailable'
+      )
+    ) {
       return false
     }
 
@@ -411,6 +418,15 @@ export function collectInterestOptions(members: DirectoryMember[]): string[] {
 
 export type DirectorySort = 'name' | 'industry'
 
+function compareMemberNames(
+  a: Pick<DirectoryMember, 'id' | 'full_name'>,
+  b: Pick<DirectoryMember, 'id' | 'full_name'>
+): number {
+  const nameCmp = (a.full_name ?? '').localeCompare(b.full_name ?? '')
+  if (nameCmp !== 0) return nameCmp
+  return a.id.localeCompare(b.id)
+}
+
 /** Name A–Z is the directory default (matches server `.order('full_name')`). */
 export function sortDirectoryMembers(
   members: DirectoryMember[],
@@ -424,12 +440,12 @@ export function sortDirectoryMembers(
         b.discovery_industry
       )
       if (industryCmp !== 0) return industryCmp
-      return (a.full_name ?? '').localeCompare(b.full_name ?? '')
+      return compareMemberNames(a, b)
     })
     return next
   }
 
-  next.sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
+  next.sort(compareMemberNames)
   return next
 }
 
@@ -580,13 +596,50 @@ export function directoryEmptyStateDescription(
     : DIRECTORY_INTENTIONS_EMPTY_DESCRIPTION
 }
 
+/** Public directory search uses the card display name (`full_name`) only. */
+export function normalizeDirectoryNameQuery(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value
+  if (typeof raw !== 'string') return ''
+  return raw.trim()
+}
+
+export function memberMatchesDirectoryNameSearch(
+  member: Pick<DirectoryMember, 'full_name'>,
+  query: string
+): boolean {
+  const normalized = normalizeDirectoryNameQuery(query).toLowerCase()
+  if (!normalized) return true
+  return (member.full_name ?? '').toLowerCase().includes(normalized)
+}
+
+export function directoryNoResultsDescription(
+  state: DirectoryBrowseState,
+  search: string
+): string {
+  const parsed = parseDirectoryBrowseState(state)
+  const name = normalizeDirectoryNameQuery(search)
+  const filtersNarrow =
+    (parsed.browseMode === 'intentions' && parsed.intentFilter !== 'all') ||
+    (parsed.browseMode === 'industry' && parsed.industryFilter !== 'all')
+  if (name && filtersNarrow) {
+    return 'No members match that name with the current filters.'
+  }
+  if (name) return 'No members match that name.'
+  return directoryEmptyStateDescription(parsed.browseMode)
+}
+
 export function browseDirectoryMembers(
   members: DirectoryMember[],
-  state: DirectoryBrowseState
+  state: DirectoryBrowseState,
+  nameQuery = ''
 ): DirectoryMember[] {
   const parsed = parseDirectoryBrowseState(state)
+  const filtered = filterDirectoryMembers(
+    members,
+    directoryFiltersForBrowse(parsed)
+  ).filter((member) => memberMatchesDirectoryNameSearch(member, nameQuery))
   return sortDirectoryMembers(
-    filterDirectoryMembers(members, directoryFiltersForBrowse(parsed)),
+    filtered,
     directorySortForBrowse(parsed.browseMode)
   )
 }

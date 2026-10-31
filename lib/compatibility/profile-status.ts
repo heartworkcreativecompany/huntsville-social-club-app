@@ -13,6 +13,8 @@ import {
   questionnaireHasAnyAnswers,
 } from '@/lib/compatibility/questionnaire'
 import type { CompatibilityProfileFields } from '@/lib/compatibility/types'
+import { matchingIdentityGate } from '@/lib/matching-identity'
+import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 
 export type CompatibilityProfileStatus =
   | 'disabled'
@@ -23,6 +25,9 @@ export type CompatibilityProfileStatus =
   | 'paused'
   | 'questionnaire_needed'
   | 'questionnaire_in_progress'
+  | 'identity_required'
+  | 'identity_pending'
+  | 'identity_unavailable'
   | 'active'
   | 'paused_system'
 
@@ -63,6 +68,9 @@ export function summarizeCompatibilityProfileStatus(input: {
     compatibility_questionnaire?: unknown
   }
   entitlementInput: MessagingEntitlementInput
+  acceptedIdentity?: AcceptedIdentityStatus | null
+  stripeStatus?: string | null
+  messagingSuspended?: boolean
 }): CompatibilityStatusSummary {
   const { profile, entitlementInput } = input
 
@@ -95,7 +103,7 @@ export function summarizeCompatibilityProfileStatus(input: {
       detail:
         'Curated matches are for members open to dating. Add Dating under connection preferences on your profile, then submit for review.',
       showCard: true,
-      ctaHref: '/profile',
+      ctaHref: '/profile#edit-profile',
       ctaLabel: 'Edit profile',
     }
   }
@@ -146,7 +154,7 @@ export function summarizeCompatibilityProfileStatus(input: {
       showCard: true,
       ctaHref: profile.curated_matches_pause_reason === 'subscription_inactive'
         ? '/upgrade'
-        : '/profile',
+        : '/profile#edit-profile',
       ctaLabel:
         profile.curated_matches_pause_reason === 'subscription_inactive'
           ? 'View memberships'
@@ -162,6 +170,22 @@ export function summarizeCompatibilityProfileStatus(input: {
       showCard: true,
       ctaHref: '/compatibility',
       ctaLabel: 'Manage compatibility',
+    }
+  }
+
+  const identity = matchingIdentityGate({
+    status: input.acceptedIdentity ?? entitlementInput.acceptedIdentity,
+    stripeStatus: input.stripeStatus,
+    membershipConfirmedActive: !input.messagingSuspended,
+  })
+  if (identity.state !== 'allowed') {
+    return {
+      status: identity.state,
+      headline: identity.headline,
+      detail: identity.detail,
+      showCard: true,
+      ctaHref: identity.ctaHref,
+      ctaLabel: identity.ctaLabel,
     }
   }
 

@@ -10,6 +10,8 @@ import {
 } from '@/lib/compatibility/questionnaire'
 import { loadMemberEntitlementsForViewer } from '@/lib/load-member-entitlements'
 import { shouldHideCuratedMatchingSurfaces } from '@/lib/membership-entitlements'
+import { loadMatchingIdentityPresentation } from '@/lib/matching-identity'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getViewer } from '@/lib/viewer'
 
 export default async function CompatibilityPage() {
@@ -28,7 +30,11 @@ export default async function CompatibilityPage() {
   if (shouldHideCuratedMatchingSurfaces(entitlements)) {
     redirect('/dashboard')
   }
-  const { summary } = compatibilityContextForViewer(viewer, entitlements)
+  const identity = await loadMatchingIdentityPresentation(
+    createAdminClient(),
+    viewer.userId
+  )
+  const { summary } = compatibilityContextForViewer(viewer, entitlements, identity)
 
   const answers = questionnaireAnswersFromStored(
     profile?.compatibility_questionnaire
@@ -40,6 +46,9 @@ export default async function CompatibilityPage() {
   const canUseQuestionnaire =
     summary.status === 'questionnaire_needed' ||
     summary.status === 'questionnaire_in_progress' ||
+    summary.status === 'identity_required' ||
+    summary.status === 'identity_pending' ||
+    summary.status === 'identity_unavailable' ||
     summary.status === 'active'
 
   return (

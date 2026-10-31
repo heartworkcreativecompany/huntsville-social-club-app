@@ -1,4 +1,5 @@
 import { hasCuratedMatchingEntitlement, hasMessagingEntitlement } from '@/lib/compatibility/eligibility'
+import { acceptedIdentityAllowsMatching, matchingIdentityGate } from '@/lib/matching-identity'
 import { includesFriendsIntent } from '@/lib/member-public-intent'
 import {
   isFriendshipQuestionnaireSubmitted,
@@ -50,7 +51,10 @@ export function isFriendshipEligible(
   if (!isFriendsConnectionSelected(profile.connection_intents)) {
     return false
   }
-  return hasCuratedMatchingEntitlement(entitlementInput)
+  if (!hasCuratedMatchingEntitlement(entitlementInput)) {
+    return false
+  }
+  return acceptedIdentityAllowsMatching(entitlementInput.acceptedIdentity)
 }
 
 export function canGenerateFriendshipMatches(
@@ -135,7 +139,7 @@ export function evaluateFriendshipAccess(
       headline: 'Friendship compatibility',
       detail:
         'Friendship recommendations are for members open to making friends. Add Friends under connection preferences on your profile, then submit for review.',
-      ctaHref: '/profile',
+      ctaHref: '/profile#edit-profile',
       ctaLabel: 'Edit profile',
       mutationError: FRIENDSHIP_MUTATION_DENIED_NO_FRIENDS,
     }
@@ -176,23 +180,44 @@ export function evaluateFriendshipAccess(
 
   const state = resolveFriendshipQuestionnaireState(input.questionnaire)
 
-  if (state === 'complete') {
-    if (!isFriendshipMatchingEnabled()) {
-      return {
-        status: 'matching_unavailable',
-        canViewSection: true,
-        canViewForm: true,
-        canMutate: true,
-        canViewMatches: true,
-        canScore: false,
-        headline: FRIENDSHIP_MATCHING_UNAVAILABLE_HEADING,
-        detail: FRIENDSHIP_MATCHING_UNAVAILABLE_BODY,
-        ctaHref: '/matches/friends',
-        ctaLabel: 'See status',
-        mutationError: null,
-      }
+  if (state === 'complete' && !isFriendshipMatchingEnabled()) {
+    return {
+      status: 'matching_unavailable',
+      canViewSection: true,
+      canViewForm: true,
+      canMutate: true,
+      canViewMatches: true,
+      canScore: false,
+      headline: FRIENDSHIP_MATCHING_UNAVAILABLE_HEADING,
+      detail: FRIENDSHIP_MATCHING_UNAVAILABLE_BODY,
+      ctaHref: '/matches/friends',
+      ctaLabel: 'See status',
+      mutationError: null,
     }
+  }
 
+  const identity = matchingIdentityGate({
+    status: input.acceptedIdentity ?? input.entitlementInput.acceptedIdentity,
+    stripeStatus: input.stripeStatus,
+    membershipConfirmedActive: !input.messagingSuspended,
+  })
+  if (identity.state !== 'allowed') {
+    return {
+      status: identity.state,
+      canViewSection: true,
+      canViewForm: true,
+      canMutate: true,
+      canViewMatches: false,
+      canScore: false,
+      headline: identity.headline,
+      detail: identity.detail,
+      ctaHref: identity.ctaHref,
+      ctaLabel: identity.ctaLabel,
+      mutationError: null,
+    }
+  }
+
+  if (state === 'complete') {
     return {
       status: 'active',
       canViewSection: true,

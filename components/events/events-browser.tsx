@@ -38,7 +38,7 @@ const EMPTY_COPY: Record<
   circle_social: {
     title: 'No Circle Socials on the calendar',
     description:
-      'Circle Socials: Inner Circle includes 2 credits per billing period. Elite Circle includes all Circle Socials.',
+      'Included Circle Social credits follow the package on your current billing period. You can also pay the event fee.',
   },
   premium_event: {
     title: 'No premium events on the calendar',
