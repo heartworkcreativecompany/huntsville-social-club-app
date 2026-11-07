@@ -506,3 +506,38 @@ describe('ticket confirmation call sites', () => {
     expect(sql).not.toMatch(/create policy[\s\S]*event_ticket_emails/i)
   })
 })
+
+describe('confirm RPC errors', () => {
+  it('logs the postgres code and message when confirm fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const admin = {
+      rpc: async () => ({
+        data: null,
+        error: {
+          code: '42702',
+          message: 'column reference "registration_id" is ambiguous',
+        },
+      }),
+    } as unknown as SupabaseClient<Database>
+
+    const result = await confirmEventAdmission(admin, {
+      registrationKind: 'event_attendee',
+      eventId: 'event-1',
+      userId: 'user-1',
+      admissionSource: 'free',
+      amountPaidCents: 0,
+      paymentStatus: 'not_required',
+    })
+
+    expect(result).toEqual({ ok: false, error: 'confirm_failed' })
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[event_ticket_email]',
+      'confirm_failed',
+      '42702',
+      'column reference "registration_id" is ambiguous'
+    )
+    expect(sendEventTicketEmail).not.toHaveBeenCalled()
+    const logged = errorSpy.mock.calls.flat().join(' ')
+    expect(logged).not.toMatch(/@/)
+  })
+})
