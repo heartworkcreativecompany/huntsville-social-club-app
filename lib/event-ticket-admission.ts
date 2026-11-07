@@ -359,24 +359,23 @@ export function memberTicketAdmission(input: {
 }
 
 /**
- * Admission for a Going row that already consumed its credit, included seat,
- * free seat, or payment. Does not represent a new credit change.
+ * Admission for a Going row already covered by a credit, included seat, or
+ * free seat. Paid Checkout rows are confirmed only by the Stripe webhook.
  */
 export function satisfiedGoingAdmission(input: {
   eventType: string
   registrationMethod: string | null
-  paymentStatus: string | null
   creditConsumed: boolean
   creditReturned: boolean
-  amountPaidCents: number | null
-  feeCents: number | null
   creditsRemaining: number | null
 }): {
   admissionSource: AdmissionSource
-  paymentStatus: 'paid' | 'not_required'
-  amountPaidCents: number
+  paymentStatus: 'not_required'
+  amountPaidCents: 0
   creditsRemaining: number | null
 } | null {
+  if (input.registrationMethod === 'paid_per_event') return null
+
   if (
     input.creditConsumed &&
     !input.creditReturned &&
@@ -398,25 +397,6 @@ export function satisfiedGoingAdmission(input: {
       admissionSource: input.eventType === 'standard_event' ? 'free' : 'included',
       paymentStatus: 'not_required',
       amountPaidCents: 0,
-      creditsRemaining: null,
-    }
-  }
-
-  if (input.paymentStatus === 'paid') {
-    const stored =
-      typeof input.amountPaidCents === 'number' && input.amountPaidCents > 0
-        ? input.amountPaidCents
-        : null
-    const fee =
-      typeof input.feeCents === 'number' && Number.isInteger(input.feeCents) && input.feeCents > 0
-        ? input.feeCents
-        : null
-    const amountPaidCents = stored ?? fee
-    if (amountPaidCents == null) return null
-    return {
-      admissionSource: 'paid',
-      paymentStatus: 'paid',
-      amountPaidCents,
       creditsRemaining: null,
     }
   }

@@ -4,6 +4,10 @@ const consumeEventCredit = vi.hoisted(() => vi.fn())
 const sendEventTicketEmail = vi.hoisted(() => vi.fn())
 const harness = vi.hoisted(() => ({
   confirmedAt: null as string | null,
+  eventType: 'premium_event',
+  registrationMethod: 'credit',
+  paymentStatus: 'not_required' as string | null,
+  creditConsumed: true,
   updates: [] as Record<string, unknown>[],
   admin: null as { rpc: (fn: string, args: Record<string, unknown>) => Promise<unknown> } | null,
 }))
@@ -34,7 +38,7 @@ vi.mock('@/lib/supabase/server', () => ({
                         title: 'Rooftop Social',
                         starts_at: '2026-10-15T23:00:00.000Z',
                         status: 'published',
-                        event_type: 'premium_event',
+                        event_type: harness.eventType,
                         fee_cents: 2500,
                         priority_rsvp_opens_at: null,
                         general_rsvp_opens_at: null,
@@ -63,10 +67,10 @@ vi.mock('@/lib/supabase/server', () => ({
                         return {
                           data: {
                             status: 'going',
-                            registration_method: 'credit',
-                            payment_status: 'not_required',
+                            registration_method: harness.registrationMethod,
+                            payment_status: harness.paymentStatus,
                             entitlement_cycle_id: 'cycle-1',
-                            credit_consumed: true,
+                            credit_consumed: harness.creditConsumed,
                             credit_returned: false,
                             guest_name: null,
                             guest_invite_consumed: false,
@@ -137,6 +141,10 @@ describe('already Going ticket confirmation', () => {
     sendEventTicketEmail.mockReset()
     sendEventTicketEmail.mockResolvedValue({ sent: true, id: 're_ticket_1' })
     harness.confirmedAt = null
+    harness.eventType = 'premium_event'
+    harness.registrationMethod = 'credit'
+    harness.paymentStatus = 'not_required'
+    harness.creditConsumed = true
     harness.updates = []
     harness.admin = null
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -166,6 +174,58 @@ describe('already Going ticket confirmation', () => {
       outboxId: 'outbox-1',
     })
     expect(memory.snapshot().codes).toBe(1)
+  })
+
+  it.each([
+    {
+      name: 'included',
+      eventType: 'premium_event',
+      source: 'included',
+    },
+    {
+      name: 'free',
+      eventType: 'standard_event',
+      source: 'free',
+    },
+  ])('confirms an unconfirmed $name RSVP on the next Going tap', async ({ eventType, source }) => {
+    harness.eventType = eventType
+    harness.registrationMethod = 'included_unlimited'
+    harness.creditConsumed = false
+    const memory = createConfirmMailbox()
+    harness.admin = memory.admin
+
+    const result = await updateEventRsvp({ eventId: 'event-1', status: 'going' })
+
+    expect(result).toMatchObject({ success: true, usedCredit: false })
+    expect(consumeEventCredit).not.toHaveBeenCalled()
+    expect(memory.snapshot().confirmArgs).toMatchObject({
+      p_admission_source: source,
+      p_amount_paid_cents: 0,
+      p_payment_status: 'not_required',
+    })
+    expect(sendEventTicketEmail).toHaveBeenCalledTimes(1)
+    expect(sendEventTicketEmail.mock.calls[0]?.[0]).toMatchObject({
+      admissionSource: source,
+      outboxId: 'outbox-1',
+    })
+  })
+
+  it('does not confirm an unconfirmed paid RSVP on a Going tap', async () => {
+    harness.registrationMethod = 'paid_per_event'
+    harness.paymentStatus = 'paid'
+    harness.creditConsumed = false
+    harness.admin = {
+      rpc: vi.fn(async () => {
+        throw new Error('confirm should not run')
+      }),
+    }
+
+    const result = await updateEventRsvp({ eventId: 'event-1', status: 'going' })
+
+    expect(result).toMatchObject({ success: true, usedCredit: false })
+    expect(consumeEventCredit).not.toHaveBeenCalled()
+    expect(sendEventTicketEmail).not.toHaveBeenCalled()
+    expect(harness.admin.rpc).not.toHaveBeenCalled()
   })
 
   it('sends no email when the Going RSVP is already confirmed', async () => {
@@ -235,9 +295,12 @@ function createConfirmMailbox() {
               ends_at: null,
               venue: 'Lipz Lounge',
               confirmation_code: 'AB23CD45',
-              admission_source: 'premium_event_credit',
+              admission_source: confirmArgs?.p_admission_source,
               amount_paid_cents: 0,
-              credits_remaining: 1,
+              credits_remaining:
+                typeof confirmArgs?.p_credits_remaining === 'number'
+                  ? confirmArgs.p_credits_remaining
+                  : null,
             },
           },
           error: null,

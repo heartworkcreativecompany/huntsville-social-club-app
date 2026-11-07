@@ -166,17 +166,13 @@ async function confirmSatisfiedGoingTicket(input: {
   userId: string
   eventType: string
   existing: AttendeeRow
-  feeCents: number | null
   creditsRemaining: number | null
 }) {
   const admission = satisfiedGoingAdmission({
     eventType: input.eventType,
     registrationMethod: input.existing.registration_method,
-    paymentStatus: input.existing.payment_status,
     creditConsumed: input.existing.credit_consumed === true,
     creditReturned: input.existing.credit_returned === true,
-    amountPaidCents: input.existing.amount_paid_cents,
-    feeCents: input.feeCents,
     creditsRemaining: input.creditsRemaining,
   })
   if (!admission) return
@@ -740,7 +736,6 @@ export async function updateEventRsvp(input: {
       userId,
       eventType,
       existing: existingRow,
-      feeCents: eventRow.fee_cents ?? null,
       creditsRemaining:
         eventType === 'circle_social'
           ? entitlements.circleSocialCreditsRemaining
