@@ -219,4 +219,18 @@ describe('guest checkout webhook route', () => {
     expect(harness.mark).not.toHaveBeenCalled()
     expect(harness.rows[0]?.status).toBe('pending_payment')
   })
+
+  it('returns 500 and does not mark the event processed when confirmation fails', async () => {
+    ticketMail.confirmEventAdmission.mockResolvedValueOnce({
+      ok: false,
+      error: 'confirm_failed',
+    })
+
+    const response = await postWebhook()
+
+    expect(response.status).toBe(500)
+    expect(await response.json()).toMatchObject({ error: 'confirm_failed' })
+    expect(harness.mark).not.toHaveBeenCalled()
+    expect(harness.rows[0]?.status).toBe('paid')
+  })
 })

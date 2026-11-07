@@ -189,8 +189,8 @@ describe('guest event fee webhook', () => {
     expect(db.rows[0]?.status).toBe('paid')
     expect(db.rows[0]?.paid_at).toBe('2026-10-05T00:00:00.000Z')
     expect(db.updates).toHaveLength(0)
-    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
-    expect(ticketMail.retryEventTicketEmail).toHaveBeenCalledTimes(2)
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(2)
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
   })
 
   it.each(['cancelled', 'refunded'] as const)(
@@ -328,6 +328,53 @@ describe('guest event fee webhook', () => {
     expect(db.rows[0]?.status).toBe('paid')
     expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(1)
     expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
+  })
+
+  it('throws after the paid write when confirmation fails', async () => {
+    ticketMail.confirmEventAdmission.mockResolvedValueOnce({
+      ok: false,
+      error: 'confirm_failed',
+    })
+    const db = createAdmin([
+      {
+        id: REGISTRATION_ID,
+        status: 'pending_payment',
+        stripe_checkout_session_id: SESSION_ID,
+      },
+    ])
+
+    await expect(
+      applyGuestCheckoutSessionCompleted(
+        db.admin as unknown as SupabaseClient<Database>,
+        paidSession()
+      )
+    ).rejects.toThrow('confirm_failed')
+
+    expect(db.rows[0]?.status).toBe('paid')
+    expect(db.updates).toHaveLength(1)
+  })
+
+  it('keeps the paid registration when the ticket email fails after confirmation', async () => {
+    ticketMail.confirmEventAdmission.mockResolvedValueOnce({
+      ok: true,
+      alreadyConfirmed: false,
+      confirmationCode: 'AB23CD45',
+      emailSent: false,
+    })
+    const db = createAdmin([
+      {
+        id: REGISTRATION_ID,
+        status: 'pending_payment',
+        stripe_checkout_session_id: SESSION_ID,
+      },
+    ])
+
+    await applyGuestCheckoutSessionCompleted(
+      db.admin as unknown as SupabaseClient<Database>,
+      paidSession()
+    )
+
+    expect(db.rows[0]?.status).toBe('paid')
   })
 })
 

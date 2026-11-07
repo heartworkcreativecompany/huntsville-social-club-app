@@ -455,7 +455,9 @@ describe('ticket confirmation call sites', () => {
       checkout.indexOf('await confirmEventAdmission')
     )
     expect(checkout).toContain("session.payment_status === 'paid' && existing.payment_status === 'paid'")
-    expect(checkout).toContain('retryEventTicketEmail')
+    expect(checkout).toContain('session.amount_total')
+    expect(checkout).toContain("throw new Error('confirm_failed')")
+    expect(checkout).not.toContain('retryEventTicketEmail')
     const unpaid = checkout.slice(
       checkout.indexOf('markEventFeePaidFromCheckout'),
       checkout.indexOf('const eventId = session.metadata?.event_id')
@@ -468,6 +470,8 @@ describe('ticket confirmation call sites', () => {
     const expired = guest.slice(guest.indexOf('applyGuestCheckoutSessionExpired'))
     expect(expired).not.toContain('confirmEventAdmission')
     expect(expired).not.toContain('retryEventTicketEmail')
+    expect(guest).toContain("throw new Error('confirm_failed')")
+    expect(guest).not.toContain('retryEventTicketEmail')
     expect(guest.indexOf("session.payment_status !== 'paid'")).toBeLessThan(
       guest.indexOf('await confirmEventAdmission')
     )
