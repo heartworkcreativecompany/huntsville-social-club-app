@@ -94,7 +94,12 @@ function createMemory(initial: AdmissionRow) {
         outbox = claimed.outbox
         return {
           data: {
-            row: claimed.claimed ? { claim_token: outbox.claimToken } : null,
+            row: claimed.claimed
+              ? {
+                  claim_token: outbox.claimToken,
+                  registration_kind: outbox.registrationKind,
+                }
+              : null,
           },
           error: null,
         }
@@ -117,6 +122,9 @@ function createMemory(initial: AdmissionRow) {
               starts_at: '2026-10-15T23:00:00.000Z',
               ends_at: null,
               venue: 'Lipz Lounge',
+              event_id: 'event-1',
+              cover_image_url: 'https://images.example.com/rooftop.jpg',
+              first_name: 'Ada',
               confirmation_code: current.confirmationCode,
               admission_source: current.admissionSource,
               amount_paid_cents: current.amountPaidCents,
@@ -270,6 +278,11 @@ describe('ticket confirmation paths', () => {
     expect(sendEventTicketEmail.mock.calls[0]?.[0]).toMatchObject({
       admissionSource: line,
       confirmationCode: 'AB23CD45',
+      eventId: 'event-1',
+      coverImageUrl: 'https://images.example.com/rooftop.jpg',
+      firstName: 'Ada',
+      startsAt: '2026-10-15T23:00:00.000Z',
+      audience: row.kind === 'guest_event_registration' ? 'guest' : 'member',
     })
     expect(memory.snapshot().outbox?.status).toBe('sent')
     expect(memory.snapshot().codes).toBe(1)

@@ -1,6 +1,5 @@
 'use server'
 
-import { BRAND_ASSETS } from '@/lib/brand-assets'
 import {
   buildCuratedIntroApprovedEmail,
   type CuratedIntroEmailAudience,
@@ -9,7 +8,6 @@ import {
   buildEventTicketMessage,
   type EventTicketMessageInput,
 } from '@/lib/event-ticket-email-copy'
-import { formatEventScheduleInChicago } from '@/lib/event-time'
 import { appOrigin, SUPPORT_EMAIL } from '@/lib/site'
 
 type EmailPayload = {
@@ -134,7 +132,7 @@ function emailShell(
   plainText?: string
 ) {
   const origin = appOrigin()
-  const logoUrl = `${origin}${BRAND_ASSETS.wordmark.forDarkBackground}`
+  const logoUrl = `${origin}/brand/HSC-white-gold-logo.png`
   const ctaBlock = cta
     ? `<p style="margin:24px 0;"><a href="${cta.href}" style="background:#af8b5a;color:#1d1f1d;padding:12px 24px;border-radius:9999px;text-decoration:none;display:inline-block;font-family:'Montserrat',system-ui,sans-serif;font-weight:600;">${cta.label}</a></p>`
     : ''
@@ -379,37 +377,18 @@ export async function sendCuratedMatchesDeliveredEmail(input: {
 export async function sendEventTicketEmail(
   input: EventTicketMessageInput & {
     to: string
-    startsAt?: string | null
-    endsAt?: string | null
     outboxId: string
   }
 ) {
-  const schedule =
-    input.schedule ||
-    (input.startsAt
-      ? formatEventScheduleInChicago(input.startsAt, input.endsAt)
-      : '')
   const message = buildEventTicketMessage({
-    eventName: input.eventName,
-    schedule,
-    venue: input.venue,
-    attendeeName: input.attendeeName,
-    admissionSource: input.admissionSource,
-    amountPaidCents: input.amountPaidCents,
-    creditsRemaining: input.creditsRemaining,
-    confirmationCode: input.confirmationCode,
+    ...input,
+    origin: appOrigin(),
   })
-  const { html, text } = emailShell(
-    message.title,
-    message.bodyHtml,
-    undefined,
-    message.plainText
-  )
   const result = await sendEmail({
     to: input.to,
     subject: message.subject,
-    html,
-    text,
+    html: message.html,
+    text: message.plainText,
     idempotencyKey: `event-ticket/${input.outboxId}`,
   })
 

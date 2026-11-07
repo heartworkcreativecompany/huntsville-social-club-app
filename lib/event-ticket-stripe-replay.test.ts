@@ -98,7 +98,14 @@ function createReplayAdmin(initial: AdmissionRow) {
         })
         outbox = claimed.outbox
         return {
-          data: { row: claimed.claimed ? { claim_token: outbox.claimToken } : null },
+          data: {
+            row: claimed.claimed
+              ? {
+                  claim_token: outbox.claimToken,
+                  registration_kind: outbox.registrationKind,
+                }
+              : null,
+          },
           error: null,
         }
       }

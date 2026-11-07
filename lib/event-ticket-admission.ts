@@ -2,13 +2,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import {
   type AdmissionSource,
+  type TicketAudience,
   isAdmissionSource,
 } from '@/lib/event-ticket-email-copy'
 
 export type { AdmissionSource }
 import { sendEventTicketEmail } from '@/lib/transactional-email'
 import type { CreditKind, RegistrationMethod } from '@/lib/membership-tier-config'
-import { formatEventScheduleInChicago } from '@/lib/event-time'
 
 export const EVENT_TICKET_EMAIL_LEASE_SECONDS = 20
 export const EVENT_TICKET_EMAIL_TYPE = 'ticket_confirmation'
@@ -426,7 +426,10 @@ function parseConfirm(value: unknown): ConfirmAdmissionJson | null {
   }
 }
 
-async function claimOutbox(admin: AdminClient, outboxId: string) {
+async function claimOutbox(
+  admin: AdminClient,
+  outboxId: string
+): Promise<{ claimToken: string; audience: TicketAudience } | null> {
   const { data, error } = await admin.rpc('claim_event_ticket_email', {
     p_id: outboxId,
     p_lease_seconds: EVENT_TICKET_EMAIL_LEASE_SECONDS,
@@ -434,7 +437,14 @@ async function claimOutbox(admin: AdminClient, outboxId: string) {
   if (error) return null
   const row = readJson(readJson(data)?.row)
   if (!row || typeof row.claim_token !== 'string') return null
-  return { claimToken: row.claim_token }
+  const audience: TicketAudience | null =
+    row.registration_kind === 'guest_event_registration'
+      ? 'guest'
+      : row.registration_kind === 'event_attendee'
+        ? 'member'
+        : null
+  if (!audience) return null
+  return { claimToken: row.claim_token, audience }
 }
 
 async function finishOutbox(
@@ -477,6 +487,15 @@ async function loadOutboxContext(admin: AdminClient, outboxId: string, claimToke
     startsAt: typeof context.starts_at === 'string' ? context.starts_at : null,
     endsAt: typeof context.ends_at === 'string' ? context.ends_at : null,
     venue: typeof context.venue === 'string' ? context.venue : null,
+    eventId: typeof context.event_id === 'string' ? context.event_id : '',
+    coverImageUrl:
+      typeof context.cover_image_url === 'string' && context.cover_image_url.trim()
+        ? context.cover_image_url
+        : null,
+    firstName:
+      typeof context.first_name === 'string' && context.first_name.trim()
+        ? context.first_name
+        : null,
     confirmationCode: context.confirmation_code,
     admissionSource: context.admission_source,
     amountPaidCents: context.amount_paid_cents,
@@ -509,19 +528,21 @@ export async function deliverEventTicketOutbox(
 
     let delivered: Awaited<ReturnType<typeof sendEventTicketEmail>>
     try {
-      const schedule = context.startsAt
-        ? formatEventScheduleInChicago(context.startsAt, context.endsAt)
-        : ''
       delivered = await sendEventTicketEmail({
         to: context.to,
         eventName: context.eventName,
-        schedule,
         venue: context.venue ?? '',
         attendeeName: context.attendeeName,
+        firstName: context.firstName,
         admissionSource: context.admissionSource,
         amountPaidCents: context.amountPaidCents,
         creditsRemaining: context.creditsRemaining,
         confirmationCode: context.confirmationCode,
+        startsAt: context.startsAt,
+        endsAt: context.endsAt,
+        eventId: context.eventId,
+        coverImageUrl: context.coverImageUrl,
+        audience: claim.audience,
         outboxId,
       })
     } catch {
