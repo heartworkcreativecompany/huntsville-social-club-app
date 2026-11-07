@@ -94,7 +94,12 @@ function createMemory(initial: AdmissionRow) {
         outbox = claimed.outbox
         return {
           data: {
-            row: claimed.claimed ? { claim_token: outbox.claimToken } : null,
+            row: claimed.claimed
+              ? {
+                  claim_token: outbox.claimToken,
+                  registration_kind: outbox.registrationKind,
+                }
+              : null,
           },
           error: null,
         }
@@ -277,6 +282,7 @@ describe('ticket confirmation paths', () => {
       coverImageUrl: 'https://images.example.com/rooftop.jpg',
       firstName: 'Ada',
       startsAt: '2026-10-15T23:00:00.000Z',
+      audience: row.kind === 'guest_event_registration' ? 'guest' : 'member',
     })
     expect(memory.snapshot().outbox?.status).toBe('sent')
     expect(memory.snapshot().codes).toBe(1)

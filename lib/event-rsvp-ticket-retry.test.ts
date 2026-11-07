@@ -281,7 +281,10 @@ function createConfirmMailbox() {
       if (fn === 'claim_event_ticket_email') {
         if (outboxClaimed) return { data: { row: null }, error: null }
         outboxClaimed = true
-        return { data: { row: { claim_token: 'token-1' } }, error: null }
+        return {
+          data: { row: { claim_token: 'token-1', registration_kind: 'event_attendee' } },
+          error: null,
+        }
       }
       if (fn === 'load_event_ticket_email_context') {
         if (args.p_claim_token !== 'token-1') return { data: { context: null }, error: null }

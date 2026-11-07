@@ -32,6 +32,7 @@ const message = {
   eventId: 'event-1',
   coverImageUrl: 'https://images.example.com/rooftop.jpg',
   origin: ORIGIN,
+  audience: 'member' as const,
 }
 
 function built(overrides: Partial<typeof message> = {}) {
@@ -104,8 +105,9 @@ describe('event ticket email copy', () => {
       expect(email.html).not.toContain('.svg')
       expect(email.html).toContain('YOU\'RE ON THE LIST')
       expect(email.html).toContain('Hi Ada, your spot is confirmed.')
-      expect(email.html).toContain('Thursday, October 15')
+      expect(email.html).toContain('Thu, Oct 15')
       expect(email.html).toContain('6:00 PM to 8:00 PM')
+      expect(email.html).not.toContain('Fri, Oct 16')
       expect(email.html).toContain(`${ORIGIN}/events/event-1`)
       expect(email.html).toContain('calendar.google.com/calendar/render?action=TEMPLATE')
       expect(email.html).toContain('20261015T230000Z%2F20261016T010000Z')
@@ -144,6 +146,58 @@ describe('event ticket email copy', () => {
     expect(email.plainText).toContain('Rooftop <Social> & "Night"')
     expect(email.subject).toBe('You\'re on the list for Rooftop <Social> & "Night"')
     expect(`${email.subject}\n${email.html}\n${email.plainText}`).not.toMatch(/[—–]/)
+  })
+
+  it('keeps a same-day end time on the start date', () => {
+    const email = built({
+      startsAt: '2026-11-15T01:00:00.000Z',
+      endsAt: '2026-11-15T04:00:00.000Z',
+    })
+    expect(email.html).toContain('Sat, Nov 14')
+    expect(email.html).toContain('7:00 PM to 10:00 PM')
+    expect(email.html).not.toContain('Sun, Nov 15')
+    expect(email.plainText).toContain('When: Sat, Nov 14')
+    expect(email.plainText).toContain('7:00 PM to 10:00 PM')
+    expect(email.plainText).not.toContain('Sun, Nov 15')
+  })
+
+  it('includes the end date when the event ends after midnight', () => {
+    const email = built({
+      startsAt: '2026-11-15T01:00:00.000Z',
+      endsAt: '2026-11-15T07:00:00.000Z',
+    })
+    expect(email.html).toContain('Sat, Nov 14')
+    expect(email.html).toContain('7:00 PM to Sun, Nov 15, 1:00 AM')
+    expect(email.plainText).toContain('When: Sat, Nov 14')
+    expect(email.plainText).toContain('7:00 PM to Sun, Nov 15, 1:00 AM')
+    expect(`${email.html}\n${email.plainText}`).not.toMatch(/[—–]/)
+  })
+
+  it('links members to the members event page', () => {
+    const email = built({ audience: 'member', eventId: 'event-1' })
+    expect(email.html).toContain('https://members.huntsvillesocialclub.com/events/event-1')
+    expect(email.plainText).toContain(
+      'View event: https://members.huntsvillesocialclub.com/events/event-1'
+    )
+    expect(email.html).not.toContain('/public-events')
+
+    const fallback = built({ audience: 'member', eventId: ' ' })
+    expect(fallback.html).toContain('https://members.huntsvillesocialclub.com/events')
+    expect(fallback.html).not.toContain('/public-events')
+  })
+
+  it('links guests to the public event page', () => {
+    const email = built({ audience: 'guest', eventId: 'event-1' })
+    expect(email.html).toContain('https://huntsvillesocialclub.com/public-events/event-1')
+    expect(email.plainText).toContain(
+      'View event: https://huntsvillesocialclub.com/public-events/event-1'
+    )
+    expect(email.html).not.toContain('members.huntsvillesocialclub.com/events')
+
+    const fallback = built({ audience: 'guest', eventId: null })
+    expect(fallback.html).toContain('https://huntsvillesocialclub.com/public-events')
+    expect(fallback.html).not.toContain('/public-events/event-1')
+    expect(fallback.html).not.toContain('members.huntsvillesocialclub.com/events')
   })
 })
 

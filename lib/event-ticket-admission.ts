@@ -433,7 +433,14 @@ async function claimOutbox(admin: AdminClient, outboxId: string) {
   if (error) return null
   const row = readJson(readJson(data)?.row)
   if (!row || typeof row.claim_token !== 'string') return null
-  return { claimToken: row.claim_token }
+  const audience =
+    row.registration_kind === 'guest_event_registration'
+      ? 'guest'
+      : row.registration_kind === 'event_attendee'
+        ? 'member'
+        : null
+  if (!audience) return null
+  return { claimToken: row.claim_token, audience }
 }
 
 async function finishOutbox(
@@ -531,6 +538,7 @@ export async function deliverEventTicketOutbox(
         endsAt: context.endsAt,
         eventId: context.eventId,
         coverImageUrl: context.coverImageUrl,
+        audience: claim.audience,
         outboxId,
       })
     } catch {

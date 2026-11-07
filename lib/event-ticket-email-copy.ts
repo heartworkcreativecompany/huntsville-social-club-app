@@ -1,5 +1,6 @@
 import { BRAND_THEME } from '@/lib/brand-theme'
 import { EVENT_TIME_ZONE } from '@/lib/event-time'
+import { marketingOrigin, membersOrigin } from '@/lib/hostnames'
 
 export const ADMISSION_SOURCES = [
   'paid',
@@ -81,6 +82,8 @@ export function eventTicketPolicyLine(source: AdmissionSource): string {
   return FREE_OR_INCLUDED_POLICY
 }
 
+export type TicketAudience = 'member' | 'guest'
+
 export type EventTicketMessageInput = {
   eventName: string
   schedule?: string
@@ -96,6 +99,7 @@ export type EventTicketMessageInput = {
   eventId?: string | null
   coverImageUrl?: string | null
   origin?: string
+  audience: TicketAudience
 }
 
 function escapeHtml(value: string): string {
@@ -130,6 +134,7 @@ function greetingName(firstName: string | null | undefined, attendeeName: string
 }
 
 type ClockParts = {
+  year: string
   weekday: string
   month: string
   day: string
@@ -141,28 +146,39 @@ function clockParts(iso: string): ClockParts | null {
   if (Number.isNaN(instant.getTime())) return null
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: EVENT_TIME_ZONE,
-    weekday: 'long',
-    month: 'long',
+    weekday: 'short',
+    month: 'short',
     day: 'numeric',
+    year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
   }).formatToParts(instant)
   const read = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? ''
+  const year = read('year')
   const weekday = read('weekday')
   const month = read('month')
   const day = read('day')
   const hour = read('hour')
   const minute = read('minute')
   const dayPeriod = read('dayPeriod')
-  if (!weekday || !month || !day || !hour || !minute || !dayPeriod) return null
+  if (!year || !weekday || !month || !day || !hour || !minute || !dayPeriod) return null
   return {
+    year,
     weekday,
     month,
     day,
     clock: `${hour}:${minute} ${dayPeriod}`,
   }
+}
+
+function sameChicagoDay(start: ClockParts, end: ClockParts): boolean {
+  return start.year === end.year && start.month === end.month && start.day === end.day
+}
+
+function shortDate(parts: ClockParts): string {
+  return `${parts.weekday}, ${parts.month} ${parts.day}`
 }
 
 function whenLines(input: EventTicketMessageInput): { date: string; time: string } {
@@ -171,9 +187,13 @@ function whenLines(input: EventTicketMessageInput): { date: string; time: string
     return { date: plainLine(input.schedule ?? '') || 'to be announced', time: '' }
   }
   const end = input.endsAt ? clockParts(input.endsAt) : null
+  if (!end) return { date: shortDate(start), time: start.clock }
+  if (sameChicagoDay(start, end)) {
+    return { date: shortDate(start), time: `${start.clock} to ${end.clock}` }
+  }
   return {
-    date: `${start.weekday}, ${start.month} ${start.day}`,
-    time: end ? `${start.clock} to ${end.clock}` : start.clock,
+    date: shortDate(start),
+    time: `${start.clock} to ${shortDate(end)}, ${end.clock}`,
   }
 }
 
@@ -202,8 +222,17 @@ export function eventTicketCalendarUrl(input: {
   return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
-function eventPageUrl(origin: string, eventId: string | null | undefined): string {
+function eventPageUrl(
+  audience: TicketAudience,
+  eventId: string | null | undefined
+): string {
   const id = plainLine(eventId ?? '')
+  if (audience === 'guest') {
+    const origin = marketingOrigin().replace(/\/$/, '')
+    if (!id) return `${origin}/public-events`
+    return `${origin}/public-events/${encodeURIComponent(id)}`
+  }
+  const origin = membersOrigin().replace(/\/$/, '')
   if (!id) return `${origin}/events`
   return `${origin}/events/${encodeURIComponent(id)}`
 }
@@ -233,7 +262,7 @@ export function buildEventTicketMessage(input: EventTicketMessageInput): {
   const when = whenLines(input)
   const greeting = `Hi ${firstName}, your spot is confirmed. We can't wait to see you there.`
   const subject = `You're on the list for ${eventName}`
-  const viewUrl = eventPageUrl(origin, input.eventId)
+  const viewUrl = eventPageUrl(input.audience, input.eventId)
   const calendarUrl = eventTicketCalendarUrl({
     title: eventName,
     startsAt: input.startsAt,
