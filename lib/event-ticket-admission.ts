@@ -600,7 +600,12 @@ export async function confirmEventAdmission(
       p_credits_remaining: input.creditsRemaining ?? null,
     })
     if (error) {
-      logTicket('confirm_failed')
+      console.error(
+        '[event_ticket_email]',
+        'confirm_failed',
+        error.code,
+        error.message
+      )
       return { ok: false, error: 'confirm_failed' }
     }
 
