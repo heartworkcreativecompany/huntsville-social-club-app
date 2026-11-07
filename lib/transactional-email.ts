@@ -17,6 +17,7 @@ type EmailPayload = {
   subject: string
   html: string
   text: string
+  idempotencyKey?: string
 }
 
 function emailCaptureDirectory(): string | null {
@@ -79,6 +80,9 @@ async function sendEmail(payload: EmailPayload) {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
+      ...(payload.idempotencyKey
+        ? { 'Idempotency-Key': payload.idempotencyKey }
+        : {}),
     },
     body: JSON.stringify({
       from,
@@ -88,6 +92,16 @@ async function sendEmail(payload: EmailPayload) {
       text: payload.text,
     }),
   })
+
+  if (response.status === 409) {
+    const detail = await response.text()
+    if (resendErrorName(detail) === 'concurrent_idempotent_requests') {
+      console.error('[email failed] concurrent_idempotent_requests')
+      return { retryable: true as const }
+    }
+    console.error('[email failed]', detail)
+    return { error: 'Email delivery failed.' as const }
+  }
 
   if (!response.ok) {
     const detail = await response.text()
@@ -102,6 +116,15 @@ async function sendEmail(payload: EmailPayload) {
   }
 
   return { sent: true as const, id }
+}
+
+function resendErrorName(detail: string): string | null {
+  try {
+    const parsed = JSON.parse(detail) as { name?: unknown }
+    return typeof parsed.name === 'string' ? parsed.name : null
+  } catch {
+    return null
+  }
 }
 
 function emailShell(
@@ -358,6 +381,7 @@ export async function sendEventTicketEmail(
     to: string
     startsAt?: string | null
     endsAt?: string | null
+    outboxId: string
   }
 ) {
   const schedule =
@@ -366,8 +390,14 @@ export async function sendEventTicketEmail(
       ? formatEventScheduleInChicago(input.startsAt, input.endsAt)
       : '')
   const message = buildEventTicketMessage({
-    ...input,
+    eventName: input.eventName,
     schedule,
+    venue: input.venue,
+    attendeeName: input.attendeeName,
+    admissionSource: input.admissionSource,
+    amountPaidCents: input.amountPaidCents,
+    creditsRemaining: input.creditsRemaining,
+    confirmationCode: input.confirmationCode,
   })
   const { html, text } = emailShell(
     message.title,
@@ -380,6 +410,7 @@ export async function sendEventTicketEmail(
     subject: message.subject,
     html,
     text,
+    idempotencyKey: `event-ticket/${input.outboxId}`,
   })
 
   if ('sent' in result && result.sent) {
@@ -387,6 +418,9 @@ export async function sendEventTicketEmail(
   }
   if ('captured' in result && result.captured) {
     return { captured: true as const, id: 'captured' }
+  }
+  if ('retryable' in result && result.retryable) {
+    return { retryable: true as const }
   }
   if ('skipped' in result && result.skipped) {
     return { skipped: true as const }

@@ -358,6 +358,72 @@ export function memberTicketAdmission(input: {
   }
 }
 
+/**
+ * Admission for a Going row that already consumed its credit, included seat,
+ * free seat, or payment. Does not represent a new credit change.
+ */
+export function satisfiedGoingAdmission(input: {
+  eventType: string
+  registrationMethod: string | null
+  paymentStatus: string | null
+  creditConsumed: boolean
+  creditReturned: boolean
+  amountPaidCents: number | null
+  feeCents: number | null
+  creditsRemaining: number | null
+}): {
+  admissionSource: AdmissionSource
+  paymentStatus: 'paid' | 'not_required'
+  amountPaidCents: number
+  creditsRemaining: number | null
+} | null {
+  if (
+    input.creditConsumed &&
+    !input.creditReturned &&
+    input.registrationMethod === 'credit'
+  ) {
+    return {
+      admissionSource:
+        input.eventType === 'circle_social'
+          ? 'circle_social_credit'
+          : 'premium_event_credit',
+      paymentStatus: 'not_required',
+      amountPaidCents: 0,
+      creditsRemaining: input.creditsRemaining ?? 0,
+    }
+  }
+
+  if (input.registrationMethod === 'included_unlimited') {
+    return {
+      admissionSource: input.eventType === 'standard_event' ? 'free' : 'included',
+      paymentStatus: 'not_required',
+      amountPaidCents: 0,
+      creditsRemaining: null,
+    }
+  }
+
+  if (input.paymentStatus === 'paid') {
+    const stored =
+      typeof input.amountPaidCents === 'number' && input.amountPaidCents > 0
+        ? input.amountPaidCents
+        : null
+    const fee =
+      typeof input.feeCents === 'number' && Number.isInteger(input.feeCents) && input.feeCents > 0
+        ? input.feeCents
+        : null
+    const amountPaidCents = stored ?? fee
+    if (amountPaidCents == null) return null
+    return {
+      admissionSource: 'paid',
+      paymentStatus: 'paid',
+      amountPaidCents,
+      creditsRemaining: null,
+    }
+  }
+
+  return null
+}
+
 function parseConfirm(value: unknown): ConfirmAdmissionJson | null {
   const record = readJson(value)
   if (!record) return null
@@ -476,6 +542,7 @@ export async function deliverEventTicketOutbox(
         amountPaidCents: context.amountPaidCents,
         creditsRemaining: context.creditsRemaining,
         confirmationCode: context.confirmationCode,
+        outboxId,
       })
     } catch {
       const released = await finishOutbox(
@@ -494,8 +561,29 @@ export async function deliverEventTicketOutbox(
       ('sent' in delivered && delivered.sent) ||
       ('captured' in delivered && delivered.captured)
     ) {
-      await finishOutbox(admin, outboxId, claim.claimToken, true, delivered.id, null)
+      const finished = await finishOutbox(
+        admin,
+        outboxId,
+        claim.claimToken,
+        true,
+        delivered.id,
+        null
+      )
+      if (!finished) logTicket('ticket_finish_failed')
       return { emailSent: true }
+    }
+
+    if ('retryable' in delivered && delivered.retryable) {
+      const released = await finishOutbox(
+        admin,
+        outboxId,
+        claim.claimToken,
+        false,
+        null,
+        'concurrent_idempotent_requests'
+      )
+      if (!released) return { emailSent: false }
+      continue
     }
 
     const reason =

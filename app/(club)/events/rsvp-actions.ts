@@ -47,6 +47,7 @@ import {
 import {
   confirmEventAdmission,
   memberTicketAdmission,
+  satisfiedGoingAdmission,
 } from '@/lib/event-ticket-admission'
 
 export type RsvpStatus = 'going' | 'maybe' | 'not_going'
@@ -72,6 +73,8 @@ type AttendeeRow = {
   credit_returned: boolean | null
   guest_name: string | null
   guest_invite_consumed: boolean | null
+  confirmed_at: string | null
+  amount_paid_cents: number | null
 }
 
 async function requireEntitledViewer() {
@@ -158,6 +161,50 @@ async function writeOwnAttendeeRow(
   return error
 }
 
+async function confirmSatisfiedGoingTicket(input: {
+  eventId: string
+  userId: string
+  eventType: string
+  existing: AttendeeRow
+  feeCents: number | null
+  creditsRemaining: number | null
+}) {
+  const admission = satisfiedGoingAdmission({
+    eventType: input.eventType,
+    registrationMethod: input.existing.registration_method,
+    paymentStatus: input.existing.payment_status,
+    creditConsumed: input.existing.credit_consumed === true,
+    creditReturned: input.existing.credit_returned === true,
+    amountPaidCents: input.existing.amount_paid_cents,
+    feeCents: input.feeCents,
+    creditsRemaining: input.creditsRemaining,
+  })
+  if (!admission) return
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const admin = createAdminClient()
+    if (!admin) {
+      console.error('[event_ticket_email] admin_client_unavailable')
+      return
+    }
+    const confirmed = await confirmEventAdmission(admin, {
+      registrationKind: 'event_attendee',
+      eventId: input.eventId,
+      userId: input.userId,
+      admissionSource: admission.admissionSource,
+      amountPaidCents: admission.amountPaidCents,
+      paymentStatus: admission.paymentStatus,
+      creditsRemaining: admission.creditsRemaining,
+    })
+    if (!confirmed.ok) {
+      console.error('[event_ticket_email]', 'ticket_confirm_failed')
+    }
+  } catch {
+    console.error('[event_ticket_email]', 'ticket_confirm_failed')
+  }
+}
+
 export async function updateEventRsvp(input: {
   eventId: string
   status: RsvpStatus
@@ -229,7 +276,7 @@ export async function updateEventRsvp(input: {
   const { data: existing } = await supabase
     .from('event_attendees')
     .select(
-      'status, registration_method, payment_status, entitlement_cycle_id, credit_consumed, credit_returned, guest_name, guest_invite_consumed'
+      'status, registration_method, payment_status, entitlement_cycle_id, credit_consumed, credit_returned, guest_name, guest_invite_consumed, confirmed_at, amount_paid_cents'
     )
     .eq('event_id', input.eventId)
     .eq('user_id', userId)
@@ -685,6 +732,20 @@ export async function updateEventRsvp(input: {
 
   if (error) {
     return { error: error.message }
+  }
+
+  if (isGoing && wasGoing && existingRow && !existingRow.confirmed_at) {
+    await confirmSatisfiedGoingTicket({
+      eventId: input.eventId,
+      userId,
+      eventType,
+      existing: existingRow,
+      feeCents: eventRow.fee_cents ?? null,
+      creditsRemaining:
+        eventType === 'circle_social'
+          ? entitlements.circleSocialCreditsRemaining
+          : entitlements.premiumCreditsRemaining,
+    })
   }
 
   revalidatePath(`/events/${input.eventId}`)
