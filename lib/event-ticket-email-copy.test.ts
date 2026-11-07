@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   type AdmissionSource,
   buildEventTicketMessage,
+  type EventTicketMessageInput,
   eventTicketAdmissionLine,
   TICKET_EMAIL_COVER_FALLBACK_PATH,
   TICKET_EMAIL_LOGO_PATH,
@@ -17,13 +18,13 @@ const PAID_POLICY =
 const FREE_POLICY =
   'Plans changed? Please update your RSVP in the app so someone else can take your spot.'
 
-const message = {
+const message: EventTicketMessageInput = {
   eventName: 'Rooftop Social',
   schedule: 'Thu, Oct 15, 6:00 PM',
   venue: 'Lipz Lounge',
   attendeeName: 'Ada Lovelace',
   firstName: 'Ada',
-  admissionSource: 'paid' as const,
+  admissionSource: 'paid',
   amountPaidCents: 2500,
   creditsRemaining: null,
   confirmationCode: 'AB23CD45',
@@ -32,10 +33,10 @@ const message = {
   eventId: 'event-1',
   coverImageUrl: 'https://images.example.com/rooftop.jpg',
   origin: ORIGIN,
-  audience: 'member' as const,
+  audience: 'member',
 }
 
-function built(overrides: Partial<typeof message> = {}) {
+function built(overrides: Partial<EventTicketMessageInput> = {}) {
   return buildEventTicketMessage({ ...message, ...overrides })
 }
 

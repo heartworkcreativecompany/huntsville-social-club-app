@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import {
   type AdmissionSource,
+  type TicketAudience,
   isAdmissionSource,
 } from '@/lib/event-ticket-email-copy'
 
@@ -425,7 +426,10 @@ function parseConfirm(value: unknown): ConfirmAdmissionJson | null {
   }
 }
 
-async function claimOutbox(admin: AdminClient, outboxId: string) {
+async function claimOutbox(
+  admin: AdminClient,
+  outboxId: string
+): Promise<{ claimToken: string; audience: TicketAudience } | null> {
   const { data, error } = await admin.rpc('claim_event_ticket_email', {
     p_id: outboxId,
     p_lease_seconds: EVENT_TICKET_EMAIL_LEASE_SECONDS,
@@ -433,7 +437,7 @@ async function claimOutbox(admin: AdminClient, outboxId: string) {
   if (error) return null
   const row = readJson(readJson(data)?.row)
   if (!row || typeof row.claim_token !== 'string') return null
-  const audience =
+  const audience: TicketAudience | null =
     row.registration_kind === 'guest_event_registration'
       ? 'guest'
       : row.registration_kind === 'event_attendee'
