@@ -1,22 +1,41 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  type AdmissionSource,
   buildEventTicketMessage,
   eventTicketAdmissionLine,
+  TICKET_EMAIL_COVER_FALLBACK_PATH,
+  TICKET_EMAIL_LOGO_PATH,
 } from '@/lib/event-ticket-email-copy'
 import {
   sendApplicationSubmittedEmail,
   sendEventTicketEmail,
 } from '@/lib/transactional-email'
 
+const ORIGIN = 'https://members.huntsvillesocialclub.com'
+const PAID_POLICY =
+  'Plans changed? You can update your RSVP in the app. Credits and event fees are not returned.'
+const FREE_POLICY =
+  'Plans changed? Please update your RSVP in the app so someone else can take your spot.'
+
 const message = {
   eventName: 'Rooftop Social',
   schedule: 'Thu, Oct 15, 6:00 PM',
   venue: 'Lipz Lounge',
   attendeeName: 'Ada Lovelace',
+  firstName: 'Ada',
   admissionSource: 'paid' as const,
   amountPaidCents: 2500,
   creditsRemaining: null,
   confirmationCode: 'AB23CD45',
+  startsAt: '2026-10-15T23:00:00.000Z',
+  endsAt: '2026-10-16T01:00:00.000Z',
+  eventId: 'event-1',
+  coverImageUrl: 'https://images.example.com/rooftop.jpg',
+  origin: ORIGIN,
+}
+
+function built(overrides: Partial<typeof message> = {}) {
+  return buildEventTicketMessage({ ...message, ...overrides })
 }
 
 describe('event ticket email copy', () => {
@@ -56,22 +75,75 @@ describe('event ticket email copy', () => {
         creditsRemaining: null,
       })
     ).toBe('Free admission')
+  })
 
-    const built = buildEventTicketMessage(message)
-    expect(built.subject).toBe("You're on the list! Your ticket for Rooftop Social")
-    expect(built.plainText).toContain('Event: Rooftop Social')
-    expect(built.plainText).toContain('When: Thu, Oct 15, 6:00 PM')
-    expect(built.plainText).toContain('Venue: Lipz Lounge')
-    expect(built.plainText).toContain('Attendee: Ada Lovelace')
-    expect(built.plainText).toContain('Paid: $25.00')
-    expect(built.plainText).toContain('Confirmation code: AB23CD45')
-    expect(built.plainText).toContain(
-      'This email is your ticket. Show it at check-in, or give the host the name and email you registered with.'
-    )
-    expect(built.plainText).toContain(
-      'Changing your RSVP does not return credits or event fees.'
-    )
-    expect(`${built.subject}\n${built.plainText}\n${built.bodyHtml}`).not.toMatch(/[—–]/)
+  it.each([
+    ['paid', 'Paid: $25.00', 2500, null, PAID_POLICY],
+    ['circle_social_credit', 'Covered by your Circle Social credit (1 left)', 0, 1, PAID_POLICY],
+    ['premium_event_credit', 'Covered by your Premium Event credit (0 left)', 0, 0, PAID_POLICY],
+    ['included', 'Included with your membership', 0, null, FREE_POLICY],
+    ['free', 'Free admission', 0, null, FREE_POLICY],
+  ] as const)(
+    'renders the %s badge and policy',
+    (admissionSource, badge, amountPaidCents, creditsRemaining, policy) => {
+      const email = built({
+        admissionSource: admissionSource as AdmissionSource,
+        amountPaidCents,
+        creditsRemaining,
+      })
+      const combined = `${email.subject}\n${email.plainText}\n${email.html}`
+
+      expect(email.html).toContain(`>${badge}</span>`)
+      expect(email.plainText).toContain(`Admission: ${badge}`)
+      expect(email.html).toContain(policy)
+      expect(email.plainText).toContain(policy)
+      expect(email.html).not.toContain(
+        policy === PAID_POLICY ? FREE_POLICY : PAID_POLICY
+      )
+      expect(email.html).toContain(TICKET_EMAIL_LOGO_PATH)
+      expect(email.html).not.toContain('.svg')
+      expect(email.html).toContain('YOU\'RE ON THE LIST')
+      expect(email.html).toContain('Hi Ada, your spot is confirmed.')
+      expect(email.html).toContain('Thursday, October 15')
+      expect(email.html).toContain('6:00 PM to 8:00 PM')
+      expect(email.html).toContain(`${ORIGIN}/events/event-1`)
+      expect(email.html).toContain('calendar.google.com/calendar/render?action=TEMPLATE')
+      expect(email.html).toContain('20261015T230000Z%2F20261016T010000Z')
+      expect(email.plainText).toContain('Show this at check-in, or give your host the name and email you registered with.')
+      expect(email.plainText).toContain('Arrive a few minutes early so we can check you in and make introductions.')
+      expect(email.plainText).toContain('hello@huntsvillesocialclub.com')
+      expect(email.plainText).toContain('Huntsville Social Club · members.huntsvillesocialclub.com')
+      expect(combined).not.toMatch(/[—–]/)
+    }
+  )
+
+  it('uses the stored cover and falls back when the event has none', () => {
+    expect(built().html).toContain('https://images.example.com/rooftop.jpg')
+    expect(built().html).not.toContain(TICKET_EMAIL_COVER_FALLBACK_PATH)
+
+    const fallback = built({ coverImageUrl: null })
+    expect(fallback.html).toContain(`${ORIGIN}${TICKET_EMAIL_COVER_FALLBACK_PATH}`)
+    expect(fallback.html).not.toContain('https://images.example.com/rooftop.jpg')
+  })
+
+  it('escapes event and attendee text', () => {
+    const email = built({
+      eventName: 'Rooftop <Social> & "Night"',
+      venue: 'Lipz & Lounge',
+      attendeeName: 'Ada <Lovelace>',
+      firstName: 'Ada <Ann>',
+      confirmationCode: 'AB<23>',
+    })
+
+    expect(email.html).toContain('Rooftop &lt;Social&gt; &amp; &quot;Night&quot;')
+    expect(email.html).toContain('Lipz &amp; Lounge')
+    expect(email.html).toContain('Ada &lt;Lovelace&gt;')
+    expect(email.html).toContain('Hi Ada &lt;Ann&gt;, your spot is confirmed.')
+    expect(email.html).toContain('AB&lt;23&gt;')
+    expect(email.html).not.toContain('<Social>')
+    expect(email.plainText).toContain('Rooftop <Social> & "Night"')
+    expect(email.subject).toBe('You\'re on the list for Rooftop <Social> & "Night"')
+    expect(`${email.subject}\n${email.html}\n${email.plainText}`).not.toMatch(/[—–]/)
   })
 })
 
@@ -79,11 +151,14 @@ describe('sendEventTicketEmail', () => {
   const originalKey = process.env.RESEND_API_KEY
   const originalFrom = process.env.EMAIL_FROM
   const originalCapture = process.env.EMAIL_CAPTURE_DIR
+  const originalAppUrl = process.env.NEXT_PUBLIC_APP_URL
 
   afterEach(() => {
     process.env.RESEND_API_KEY = originalKey
     process.env.EMAIL_FROM = originalFrom
     process.env.EMAIL_CAPTURE_DIR = originalCapture
+    if (originalAppUrl === undefined) delete process.env.NEXT_PUBLIC_APP_URL
+    else process.env.NEXT_PUBLIC_APP_URL = originalAppUrl
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
@@ -92,6 +167,7 @@ describe('sendEventTicketEmail', () => {
     delete process.env.EMAIL_CAPTURE_DIR
     process.env.RESEND_API_KEY = 'test-key'
     process.env.EMAIL_FROM = 'Huntsville Social Club <tickets@example.com>'
+    process.env.NEXT_PUBLIC_APP_URL = ORIGIN
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({ id: 're_ticket_1' }),
@@ -113,18 +189,26 @@ describe('sendEventTicketEmail', () => {
       ]
     )[1]
     expect(init.headers['Idempotency-Key']).toBe('event-ticket/outbox-1')
-    const payload = JSON.parse(String(init.body)) as { subject: string; text: string }
-    expect(payload.subject).toBe("You're on the list! Your ticket for Rooftop Social")
+    const payload = JSON.parse(String(init.body)) as {
+      subject: string
+      text: string
+      html: string
+    }
+    expect(payload.subject).toBe("You're on the list for Rooftop Social")
     expect(payload.text).toContain('Confirmation code: AB23CD45')
     expect(payload.text).toContain(
-      'This email is your ticket. Show it at check-in, or give the host the name and email you registered with.'
+      'Show this at check-in, or give your host the name and email you registered with.'
     )
+    expect(payload.html).toContain(TICKET_EMAIL_LOGO_PATH)
+    expect(payload.html).not.toContain('.svg')
     expect(payload.text).not.toMatch(/[—–]/)
+    expect(payload.html).not.toMatch(/[—–]/)
   })
 
-  it('leaves other emails without an idempotency key', async () => {
+  it('leaves other emails without an idempotency key and uses the png logo', async () => {
     delete process.env.EMAIL_CAPTURE_DIR
     process.env.RESEND_API_KEY = 'test-key'
+    process.env.NEXT_PUBLIC_APP_URL = ORIGIN
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({ id: 're_other' }),
@@ -134,9 +218,17 @@ describe('sendEventTicketEmail', () => {
 
     await sendApplicationSubmittedEmail('ada@example.com')
 
-    const headers = (
-      fetchMock.mock.calls[0] as unknown as [string, { headers: Record<string, string> }]
-    )[1].headers
-    expect(headers['Idempotency-Key']).toBeUndefined()
+    const init = (
+      fetchMock.mock.calls[0] as unknown as [
+        string,
+        { headers: Record<string, string>; body: string },
+      ]
+    )[1]
+    expect(init.headers['Idempotency-Key']).toBeUndefined()
+    const payload = JSON.parse(String(init.body)) as { html: string; subject: string }
+    expect(payload.subject).toBe('Application submitted')
+    expect(payload.html).toContain(TICKET_EMAIL_LOGO_PATH)
+    expect(payload.html).not.toContain('.svg')
+    expect(payload.html).toContain('Your membership application has been submitted.')
   })
 })

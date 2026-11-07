@@ -8,7 +8,6 @@ import {
 export type { AdmissionSource }
 import { sendEventTicketEmail } from '@/lib/transactional-email'
 import type { CreditKind, RegistrationMethod } from '@/lib/membership-tier-config'
-import { formatEventScheduleInChicago } from '@/lib/event-time'
 
 export const EVENT_TICKET_EMAIL_LEASE_SECONDS = 20
 export const EVENT_TICKET_EMAIL_TYPE = 'ticket_confirmation'
@@ -477,6 +476,15 @@ async function loadOutboxContext(admin: AdminClient, outboxId: string, claimToke
     startsAt: typeof context.starts_at === 'string' ? context.starts_at : null,
     endsAt: typeof context.ends_at === 'string' ? context.ends_at : null,
     venue: typeof context.venue === 'string' ? context.venue : null,
+    eventId: typeof context.event_id === 'string' ? context.event_id : '',
+    coverImageUrl:
+      typeof context.cover_image_url === 'string' && context.cover_image_url.trim()
+        ? context.cover_image_url
+        : null,
+    firstName:
+      typeof context.first_name === 'string' && context.first_name.trim()
+        ? context.first_name
+        : null,
     confirmationCode: context.confirmation_code,
     admissionSource: context.admission_source,
     amountPaidCents: context.amount_paid_cents,
@@ -509,19 +517,20 @@ export async function deliverEventTicketOutbox(
 
     let delivered: Awaited<ReturnType<typeof sendEventTicketEmail>>
     try {
-      const schedule = context.startsAt
-        ? formatEventScheduleInChicago(context.startsAt, context.endsAt)
-        : ''
       delivered = await sendEventTicketEmail({
         to: context.to,
         eventName: context.eventName,
-        schedule,
         venue: context.venue ?? '',
         attendeeName: context.attendeeName,
+        firstName: context.firstName,
         admissionSource: context.admissionSource,
         amountPaidCents: context.amountPaidCents,
         creditsRemaining: context.creditsRemaining,
         confirmationCode: context.confirmationCode,
+        startsAt: context.startsAt,
+        endsAt: context.endsAt,
+        eventId: context.eventId,
+        coverImageUrl: context.coverImageUrl,
         outboxId,
       })
     } catch {
