@@ -1,6 +1,21 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const ticketMail = vi.hoisted(() => ({
+  confirmEventAdmission: vi.fn(async () => ({
+    ok: true as const,
+    alreadyConfirmed: false,
+    confirmationCode: 'AB23CD45',
+    emailSent: true,
+  })),
+  retryEventTicketEmail: vi.fn(async () => ({ emailSent: false })),
+}))
+
+vi.mock('@/lib/event-ticket-admission', () => ({
+  confirmEventAdmission: ticketMail.confirmEventAdmission,
+  retryEventTicketEmail: ticketMail.retryEventTicketEmail,
+}))
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
 import type { Database } from '@/lib/database.types'
@@ -113,6 +128,8 @@ describe('guest event fee webhook', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
+    ticketMail.confirmEventAdmission.mockClear()
+    ticketMail.retryEventTicketEmail.mockClear()
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
@@ -136,6 +153,17 @@ describe('guest event fee webhook', () => {
     })
     expect(db.rows[0]?.paid_at).toEqual(expect.any(String))
     expect(db.tables).toEqual(['guest_event_registrations', 'guest_event_registrations'])
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(1)
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledWith(
+      db.admin,
+      expect.objectContaining({
+        registrationKind: 'guest_event_registration',
+        registrationId: REGISTRATION_ID,
+        eventId: EVENT_ID,
+        admissionSource: 'paid',
+      })
+    )
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
     expect(warnSpy).not.toHaveBeenCalled()
   })
 
@@ -161,6 +189,8 @@ describe('guest event fee webhook', () => {
     expect(db.rows[0]?.status).toBe('paid')
     expect(db.rows[0]?.paid_at).toBe('2026-10-05T00:00:00.000Z')
     expect(db.updates).toHaveLength(0)
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(2)
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
   })
 
   it.each(['cancelled', 'refunded'] as const)(
@@ -206,6 +236,8 @@ describe('guest event fee webhook', () => {
       paidSession({ payment_status: 'unpaid' })
     )
     expect(pending.rows[0]?.status).toBe('expired')
+    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
 
     const paid = createAdmin([
       {
@@ -271,6 +303,8 @@ describe('guest event fee webhook', () => {
 
     expect(db.rows[0]?.status).toBe('pending_payment')
     expect(db.updates).toHaveLength(0)
+    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
     const logged = warnSpy.mock.calls.flat().join(' ')
     expect(logged).toContain(REGISTRATION_ID)
     expect(logged).not.toContain(SESSION_ID)
@@ -282,6 +316,55 @@ describe('guest event fee webhook', () => {
       {
         id: REGISTRATION_ID,
         status: 'expired',
+        stripe_checkout_session_id: SESSION_ID,
+      },
+    ])
+
+    await applyGuestCheckoutSessionCompleted(
+      db.admin as unknown as SupabaseClient<Database>,
+      paidSession()
+    )
+
+    expect(db.rows[0]?.status).toBe('paid')
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(1)
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
+  })
+
+  it('throws after the paid write when confirmation fails', async () => {
+    ticketMail.confirmEventAdmission.mockResolvedValueOnce({
+      ok: false,
+      error: 'confirm_failed',
+    })
+    const db = createAdmin([
+      {
+        id: REGISTRATION_ID,
+        status: 'pending_payment',
+        stripe_checkout_session_id: SESSION_ID,
+      },
+    ])
+
+    await expect(
+      applyGuestCheckoutSessionCompleted(
+        db.admin as unknown as SupabaseClient<Database>,
+        paidSession()
+      )
+    ).rejects.toThrow('confirm_failed')
+
+    expect(db.rows[0]?.status).toBe('paid')
+    expect(db.updates).toHaveLength(1)
+  })
+
+  it('keeps the paid registration when the ticket email fails after confirmation', async () => {
+    ticketMail.confirmEventAdmission.mockResolvedValueOnce({
+      ok: true,
+      alreadyConfirmed: false,
+      confirmationCode: 'AB23CD45',
+      emailSent: false,
+    })
+    const db = createAdmin([
+      {
+        id: REGISTRATION_ID,
+        status: 'pending_payment',
         stripe_checkout_session_id: SESSION_ID,
       },
     ])

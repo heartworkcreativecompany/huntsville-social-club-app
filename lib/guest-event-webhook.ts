@@ -2,6 +2,7 @@ import type Stripe from 'stripe'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { GUEST_EVENT_FEE_CHECKOUT_TYPE } from '@/lib/guest-event-fee'
+import { confirmEventAdmission } from '@/lib/event-ticket-admission'
 
 type AdminClient = SupabaseClient<Database>
 
@@ -61,7 +62,10 @@ export async function applyGuestCheckoutSessionCompleted(
   const row = await loadMatchingRegistration(admin, registrationId, session.id)
   if (!row) refuseGuestPayment(registrationId, 'registration_not_found')
 
-  if (row.status === 'paid') return
+  if (row.status === 'paid') {
+    await confirmPaidGuestTicket(admin, session, row.id)
+    return
+  }
 
   if (row.status === 'cancelled' || row.status === 'refunded') {
     refuseGuestPayment(row.id, row.status)
@@ -86,6 +90,29 @@ export async function applyGuestCheckoutSessionCompleted(
 
   if (error || count !== 1) {
     refuseGuestPayment(row.id, 'update_failed')
+  }
+
+  await confirmPaidGuestTicket(admin, session, row.id)
+}
+
+async function confirmPaidGuestTicket(
+  admin: AdminClient,
+  session: Stripe.Checkout.Session,
+  registrationId: string
+) {
+  const eventId = session.metadata?.event_id
+  if (!eventId) throw new Error('confirm_failed')
+
+  const confirmed = await confirmEventAdmission(admin, {
+    registrationKind: 'guest_event_registration',
+    eventId,
+    registrationId,
+    admissionSource: 'paid',
+    amountPaidCents: null,
+    creditsRemaining: null,
+  })
+  if (!confirmed.ok) {
+    throw new Error('confirm_failed')
   }
 }
 

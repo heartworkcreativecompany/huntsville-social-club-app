@@ -1,10 +1,43 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import type Stripe from 'stripe'
+
+const ticketMail = vi.hoisted(() => ({
+  confirmEventAdmission: vi.fn(async () => ({
+    ok: true as const,
+    alreadyConfirmed: false,
+    confirmationCode: 'AB23CD45',
+    emailSent: true,
+  })),
+  retryEventTicketEmail: vi.fn(async () => ({ emailSent: false })),
+}))
+
+vi.mock('@/lib/event-ticket-admission', () => ({
+  confirmEventAdmission: ticketMail.confirmEventAdmission,
+  retryEventTicketEmail: ticketMail.retryEventTicketEmail,
+}))
+
+const webhookHarness = vi.hoisted(() => ({
+  mark: vi.fn(async () => {}),
+  event: null as Stripe.Event | null,
+}))
+
+vi.mock('server-only', () => ({}))
+
+vi.mock('@/lib/stripe/verify-webhook-signature', () => ({
+  constructVerifiedStripeEvent: () => webhookHarness.event,
+}))
+
+vi.mock('@/lib/stripe/webhook-idempotency', () => ({
+  hasProcessedStripeEvent: async () => false,
+  markStripeEventProcessed: (...args: unknown[]) => webhookHarness.mark(...args),
+}))
 import {
   EVENT_FEE_CHECKOUT_TYPE,
   buildEventFeeCheckoutSessionParams,
   isEventFeeCheckoutSession,
   markEventFeePaidFromCheckout,
 } from '@/lib/stripe/event-fee-checkout'
+import { POST } from '@/app/api/stripe/webhook/route'
 
 vi.mock('@/lib/stripe/config', () => ({
   appBaseUrl: () => 'https://app.example.com',
@@ -285,6 +318,8 @@ describe('isEventFeeCheckoutSession', () => {
 
 describe('markEventFeePaidFromCheckout', () => {
   beforeEach(() => {
+    ticketMail.confirmEventAdmission.mockClear()
+    ticketMail.retryEventTicketEmail.mockClear()
     upsertState.existing = null
     upsertState.goingCount = 0
     upsertState.attendanceMax = null
@@ -321,6 +356,8 @@ describe('markEventFeePaidFromCheckout', () => {
     })
 
     expect(result).toEqual({ error: 'This event is at capacity.' })
+    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
     expect(upsertState.rpcCalls).toEqual([
       { fn: 'event_taken_seat_count', args: { p_event_id: 'evt_1' } },
     ])
@@ -362,6 +399,17 @@ describe('markEventFeePaidFromCheckout', () => {
       user_id: 'user_1',
     })
     expect(JSON.stringify(upsertState.ledger[0])).not.toContain('rsvp_answer')
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(1)
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        registrationKind: 'event_attendee',
+        admissionSource: 'paid',
+        amountPaidCents: 2500,
+        paymentStatus: 'paid',
+      })
+    )
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
   })
 
   it('attaches a previously saved pending answer on first paid confirmation', async () => {
@@ -402,6 +450,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -411,6 +460,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -437,6 +487,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -461,6 +512,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -483,6 +535,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -507,6 +560,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -536,6 +590,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -556,6 +611,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -576,6 +632,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -606,6 +663,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -641,6 +699,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -678,6 +737,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -709,6 +769,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -734,6 +795,7 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'paid',
     })
@@ -750,11 +812,195 @@ describe('markEventFeePaidFromCheckout', () => {
         type: 'event_fee',
         event_id: 'evt_1',
         user_id: 'user_1',
+        fee_cents: '2500',
       },
       payment_status: 'unpaid',
     })
 
     expect(result).toEqual({ error: 'Checkout session is not paid.' })
     expect(upsertState.inserts).toHaveLength(0)
+    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
+  })
+
+  it('confirms one paid ticket and only retries delivery when the webhook is replayed', async () => {
+    const session = {
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        checkout_type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+        fee_cents: '2500',
+      },
+      payment_intent: 'pi_test',
+      payment_status: 'paid' as const,
+    }
+
+    await markEventFeePaidFromCheckout(session)
+    upsertState.existing = { status: 'going', payment_status: 'paid' }
+    await markEventFeePaidFromCheckout(session)
+
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(2)
+    expect(ticketMail.confirmEventAdmission).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({
+        admissionSource: 'paid',
+        amountPaidCents: 2500,
+        paymentStatus: 'paid',
+      })
+    )
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
+  })
+
+  it('does not send a ticket when checkout has no collected payment', async () => {
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+        fee_cents: '2500',
+      },
+      payment_status: 'no_payment_required',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
+  })
+
+  it('throws after the paid write when confirmation fails', async () => {
+    ticketMail.confirmEventAdmission.mockResolvedValueOnce({
+      ok: false,
+      error: 'confirm_failed',
+    })
+
+    await expect(
+      markEventFeePaidFromCheckout({
+        id: 'cs_test',
+        amount_total: 3200,
+        metadata: {
+          type: 'event_fee',
+          event_id: 'evt_1',
+          user_id: 'user_1',
+          fee_cents: '2500',
+        },
+        payment_status: 'paid',
+      })
+    ).rejects.toThrow('confirm_failed')
+
+    expect(upsertState.inserts).toHaveLength(1)
+    expect(upsertState.inserts[0]).toMatchObject({
+      status: 'going',
+      payment_status: 'paid',
+    })
+  })
+
+  it('keeps the paid RSVP when the ticket email fails after confirmation', async () => {
+    ticketMail.confirmEventAdmission.mockResolvedValueOnce({
+      ok: true,
+      alreadyConfirmed: false,
+      confirmationCode: 'AB23CD45',
+      emailSent: false,
+    })
+
+    await expect(
+      markEventFeePaidFromCheckout({
+        id: 'cs_test',
+        amount_total: 3200,
+        metadata: {
+          type: 'event_fee',
+          event_id: 'evt_1',
+          user_id: 'user_1',
+          fee_cents: '2500',
+        },
+        payment_status: 'paid',
+      })
+    ).resolves.toEqual({ ok: true })
+  })
+
+  it('charges the ticket from amount_total when the metadata fee differs', async () => {
+    await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      amount_total: 3200,
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+        fee_cents: '2500',
+      },
+      payment_status: 'paid',
+    })
+
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ amountPaidCents: 3200 })
+    )
+  })
+
+  it('fails confirmation when a paid checkout has no positive amount', async () => {
+    await expect(
+      markEventFeePaidFromCheckout({
+        id: 'cs_test',
+        amount_total: 0,
+        metadata: {
+          type: 'event_fee',
+          event_id: 'evt_1',
+          user_id: 'user_1',
+          fee_cents: '2500',
+        },
+        payment_status: 'paid',
+      })
+    ).rejects.toThrow('confirm_failed')
+
+    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
+    expect(upsertState.inserts).toHaveLength(1)
+  })
+
+  it('returns 500 and does not mark the Stripe event processed when confirmation fails', async () => {
+    ticketMail.confirmEventAdmission.mockResolvedValueOnce({
+      ok: false,
+      error: 'confirm_failed',
+    })
+    webhookHarness.mark.mockClear()
+    process.env.STRIPE_WEBHOOK_SECRET = 'test-webhook-secret'
+    webhookHarness.event = {
+      id: 'evt_member_fee',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test',
+          mode: 'payment',
+          payment_status: 'paid',
+          amount_total: 3200,
+          metadata: {
+            type: 'event_fee',
+            checkout_type: 'event_fee',
+            event_id: 'evt_1',
+            user_id: 'user_1',
+            fee_cents: '2500',
+          },
+        },
+      },
+    } as Stripe.Event
+
+    const response = await POST(
+      new Request('https://example.com/api/stripe/webhook', {
+        method: 'POST',
+        headers: { 'stripe-signature': 't=1,v1=test' },
+        body: '{}',
+      })
+    )
+
+    expect(response.status).toBe(500)
+    expect(await response.json()).toMatchObject({ error: 'confirm_failed' })
+    expect(webhookHarness.mark).not.toHaveBeenCalled()
+    expect(upsertState.inserts).toHaveLength(1)
+    expect(upsertState.inserts[0]).toMatchObject({
+      status: 'going',
+      payment_status: 'paid',
+    })
   })
 })

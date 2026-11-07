@@ -13,6 +13,7 @@ import {
   deletePendingRsvpAnswer,
   loadPendingRsvpAnswer,
 } from '@/lib/event-rsvp-pending-answer'
+import { confirmEventAdmission } from '@/lib/event-ticket-admission'
 import {
   EVENT_ATTENDEE_STATUS_SELECT,
   EVENT_ATTENDEE_STATUS_SELECT_WITH_ANSWER,
@@ -227,6 +228,7 @@ function writePaidGoingAttendee(
 export async function markEventFeePaidFromCheckout(session: {
   id: string
   metadata: Record<string, string> | null
+  amount_total?: number | null
   payment_intent?: string | { id: string } | null
   payment_status?: string | null
 }): Promise<{ ok: true } | { error: string }> {
@@ -283,6 +285,9 @@ export async function markEventFeePaidFromCheckout(session: {
       existing.payment_status === 'waived' ||
       existing.payment_status === 'not_required')
   ) {
+    if (session.payment_status === 'paid' && existing.payment_status === 'paid') {
+      await confirmPaidMemberTicket(admin, session, eventId, userId)
+    }
     if (!answerColumnAvailable) {
       return { ok: true }
     }
@@ -423,5 +428,52 @@ export async function markEventFeePaidFromCheckout(session: {
     },
   })
 
+  if (session.payment_status === 'paid') {
+    await confirmPaidMemberTicket(admin, session, eventId, userId)
+  }
+
   return { ok: true }
+}
+
+async function confirmPaidMemberTicket(
+  admin: SupabaseClient<Database>,
+  session: {
+    amount_total?: number | null
+    metadata: Record<string, string> | null
+  },
+  eventId: string,
+  userId: string
+) {
+  const confirmed = await confirmEventAdmission(admin, {
+    registrationKind: 'event_attendee',
+    eventId,
+    userId,
+    admissionSource: 'paid',
+    amountPaidCents: memberPaidAmountCents(session),
+    paymentStatus: 'paid',
+    creditsRemaining: null,
+  })
+  if (!confirmed.ok) {
+    throw new Error('confirm_failed')
+  }
+}
+
+function memberPaidAmountCents(session: {
+  amount_total?: number | null
+  metadata: Record<string, string> | null
+}): number {
+  if (typeof session.amount_total === 'number') {
+    if (Number.isInteger(session.amount_total) && session.amount_total > 0) {
+      return session.amount_total
+    }
+    throw new Error('confirm_failed')
+  }
+
+  const feeCents = session.metadata?.fee_cents
+  if (feeCents && /^\d+$/.test(feeCents)) {
+    const parsed = Number(feeCents)
+    if (Number.isInteger(parsed) && parsed > 0) return parsed
+  }
+
+  throw new Error('confirm_failed')
 }

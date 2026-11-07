@@ -1,6 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type Stripe from 'stripe'
 
+const ticketMail = vi.hoisted(() => ({
+  confirmEventAdmission: vi.fn(async () => ({
+    ok: true as const,
+    alreadyConfirmed: false,
+    confirmationCode: 'AB23CD45',
+    emailSent: true,
+  })),
+  retryEventTicketEmail: vi.fn(async () => ({ emailSent: false })),
+}))
+
+vi.mock('@/lib/event-ticket-admission', () => ({
+  confirmEventAdmission: ticketMail.confirmEventAdmission,
+  retryEventTicketEmail: ticketMail.retryEventTicketEmail,
+}))
+
 const REGISTRATION_ID = '8a5f2adc-eeee-41ef-be7d-a17ea4ff7613'
 const EVENT_ID = '72df581f-d761-4f24-a583-95b6f1e0c63c'
 const SESSION_ID = 'cs_test_secret_session'
@@ -136,6 +151,8 @@ describe('guest checkout webhook route', () => {
     process.env.STRIPE_WEBHOOK_SECRET = 'test-webhook-secret'
     harness.duplicate = false
     harness.mark.mockClear()
+    ticketMail.confirmEventAdmission.mockClear()
+    ticketMail.retryEventTicketEmail.mockClear()
     harness.rows.splice(0, harness.rows.length, {
       id: REGISTRATION_ID,
       status: 'pending_payment',
@@ -158,6 +175,8 @@ describe('guest checkout webhook route', () => {
     })
     expect(harness.rows[0]?.paid_at).toEqual(expect.any(String))
     expect(harness.mark).toHaveBeenCalledTimes(1)
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(1)
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
 
     const paidAt = harness.rows[0]?.paid_at
     harness.duplicate = true
@@ -165,6 +184,7 @@ describe('guest checkout webhook route', () => {
     expect(duplicate.status).toBe(200)
     expect(await duplicate.json()).toMatchObject({ duplicate: true })
     expect(harness.mark).toHaveBeenCalledTimes(1)
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(1)
     expect(harness.rows[0]?.paid_at).toBe(paidAt)
     expect(warnSpy).not.toHaveBeenCalled()
   })
@@ -198,5 +218,19 @@ describe('guest checkout webhook route', () => {
     expect(response.status).toBe(500)
     expect(harness.mark).not.toHaveBeenCalled()
     expect(harness.rows[0]?.status).toBe('pending_payment')
+  })
+
+  it('returns 500 and does not mark the event processed when confirmation fails', async () => {
+    ticketMail.confirmEventAdmission.mockResolvedValueOnce({
+      ok: false,
+      error: 'confirm_failed',
+    })
+
+    const response = await postWebhook()
+
+    expect(response.status).toBe(500)
+    expect(await response.json()).toMatchObject({ error: 'confirm_failed' })
+    expect(harness.mark).not.toHaveBeenCalled()
+    expect(harness.rows[0]?.status).toBe('paid')
   })
 })

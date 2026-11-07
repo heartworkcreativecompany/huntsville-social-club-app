@@ -5,6 +5,11 @@ import {
   buildCuratedIntroApprovedEmail,
   type CuratedIntroEmailAudience,
 } from '@/lib/curated-intro-email'
+import {
+  buildEventTicketMessage,
+  type EventTicketMessageInput,
+} from '@/lib/event-ticket-email-copy'
+import { formatEventScheduleInChicago } from '@/lib/event-time'
 import { appOrigin, SUPPORT_EMAIL } from '@/lib/site'
 
 type EmailPayload = {
@@ -12,6 +17,7 @@ type EmailPayload = {
   subject: string
   html: string
   text: string
+  idempotencyKey?: string
 }
 
 function emailCaptureDirectory(): string | null {
@@ -74,6 +80,9 @@ async function sendEmail(payload: EmailPayload) {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
+      ...(payload.idempotencyKey
+        ? { 'Idempotency-Key': payload.idempotencyKey }
+        : {}),
     },
     body: JSON.stringify({
       from,
@@ -84,16 +93,46 @@ async function sendEmail(payload: EmailPayload) {
     }),
   })
 
+  if (response.status === 409) {
+    const detail = await response.text()
+    if (resendErrorName(detail) === 'concurrent_idempotent_requests') {
+      console.error('[email failed] concurrent_idempotent_requests')
+      return { retryable: true as const }
+    }
+    console.error('[email failed]', detail)
+    return { error: 'Email delivery failed.' as const }
+  }
+
   if (!response.ok) {
     const detail = await response.text()
     console.error('[email failed]', detail)
     return { error: 'Email delivery failed.' as const }
   }
 
-  return { sent: true as const }
+  const body = (await response.json().catch(() => null)) as { id?: unknown } | null
+  const id = body && typeof body.id === 'string' ? body.id : null
+  if (!id) {
+    return { error: 'Email delivery failed.' as const }
+  }
+
+  return { sent: true as const, id }
 }
 
-function emailShell(title: string, body: string, cta?: { label: string; href: string }) {
+function resendErrorName(detail: string): string | null {
+  try {
+    const parsed = JSON.parse(detail) as { name?: unknown }
+    return typeof parsed.name === 'string' ? parsed.name : null
+  } catch {
+    return null
+  }
+}
+
+function emailShell(
+  title: string,
+  body: string,
+  cta?: { label: string; href: string },
+  plainText?: string
+) {
   const origin = appOrigin()
   const logoUrl = `${origin}${BRAND_ASSETS.wordmark.forDarkBackground}`
   const ctaBlock = cta
@@ -111,7 +150,8 @@ function emailShell(title: string, body: string, cta?: { label: string; href: st
     </div>
   `
 
-  const text = `${title}\n\n${body.replace(/<[^>]+>/g, '')}${cta ? `\n\n${cta.label}: ${cta.href}` : ''}\n\nQuestions: ${SUPPORT_EMAIL}`
+  const textBody = plainText ?? body.replace(/<[^>]+>/g, '')
+  const text = `${title}\n\n${textBody}${cta ? `\n\n${cta.label}: ${cta.href}` : ''}\n\nQuestions: ${SUPPORT_EMAIL}`
 
   return { html, text }
 }
@@ -334,4 +374,56 @@ export async function sendCuratedMatchesDeliveredEmail(input: {
     html,
     text,
   })
+}
+
+export async function sendEventTicketEmail(
+  input: EventTicketMessageInput & {
+    to: string
+    startsAt?: string | null
+    endsAt?: string | null
+    outboxId: string
+  }
+) {
+  const schedule =
+    input.schedule ||
+    (input.startsAt
+      ? formatEventScheduleInChicago(input.startsAt, input.endsAt)
+      : '')
+  const message = buildEventTicketMessage({
+    eventName: input.eventName,
+    schedule,
+    venue: input.venue,
+    attendeeName: input.attendeeName,
+    admissionSource: input.admissionSource,
+    amountPaidCents: input.amountPaidCents,
+    creditsRemaining: input.creditsRemaining,
+    confirmationCode: input.confirmationCode,
+  })
+  const { html, text } = emailShell(
+    message.title,
+    message.bodyHtml,
+    undefined,
+    message.plainText
+  )
+  const result = await sendEmail({
+    to: input.to,
+    subject: message.subject,
+    html,
+    text,
+    idempotencyKey: `event-ticket/${input.outboxId}`,
+  })
+
+  if ('sent' in result && result.sent) {
+    return { sent: true as const, id: result.id }
+  }
+  if ('captured' in result && result.captured) {
+    return { captured: true as const, id: 'captured' }
+  }
+  if ('retryable' in result && result.retryable) {
+    return { retryable: true as const }
+  }
+  if ('skipped' in result && result.skipped) {
+    return { skipped: true as const }
+  }
+  return { error: 'error' in result ? result.error : ('Email delivery failed.' as const) }
 }
