@@ -1,4 +1,19 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+
+const ticketMail = vi.hoisted(() => ({
+  confirmEventAdmission: vi.fn(async () => ({
+    ok: true as const,
+    alreadyConfirmed: false,
+    confirmationCode: 'AB23CD45',
+    emailSent: true,
+  })),
+  retryEventTicketEmail: vi.fn(async () => ({ emailSent: false })),
+}))
+
+vi.mock('@/lib/event-ticket-admission', () => ({
+  confirmEventAdmission: ticketMail.confirmEventAdmission,
+  retryEventTicketEmail: ticketMail.retryEventTicketEmail,
+}))
 import {
   EVENT_FEE_CHECKOUT_TYPE,
   buildEventFeeCheckoutSessionParams,
@@ -285,6 +300,8 @@ describe('isEventFeeCheckoutSession', () => {
 
 describe('markEventFeePaidFromCheckout', () => {
   beforeEach(() => {
+    ticketMail.confirmEventAdmission.mockClear()
+    ticketMail.retryEventTicketEmail.mockClear()
     upsertState.existing = null
     upsertState.goingCount = 0
     upsertState.attendanceMax = null
@@ -321,6 +338,8 @@ describe('markEventFeePaidFromCheckout', () => {
     })
 
     expect(result).toEqual({ error: 'This event is at capacity.' })
+    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
     expect(upsertState.rpcCalls).toEqual([
       { fn: 'event_taken_seat_count', args: { p_event_id: 'evt_1' } },
     ])
@@ -362,6 +381,17 @@ describe('markEventFeePaidFromCheckout', () => {
       user_id: 'user_1',
     })
     expect(JSON.stringify(upsertState.ledger[0])).not.toContain('rsvp_answer')
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(1)
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        registrationKind: 'event_attendee',
+        admissionSource: 'paid',
+        amountPaidCents: 2500,
+        paymentStatus: 'paid',
+      })
+    )
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
   })
 
   it('attaches a previously saved pending answer on first paid confirmation', async () => {
@@ -756,5 +786,46 @@ describe('markEventFeePaidFromCheckout', () => {
 
     expect(result).toEqual({ error: 'Checkout session is not paid.' })
     expect(upsertState.inserts).toHaveLength(0)
+    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
+  })
+
+  it('confirms one paid ticket and only retries delivery when the webhook is replayed', async () => {
+    const session = {
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        checkout_type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+        fee_cents: '2500',
+      },
+      payment_intent: 'pi_test',
+      payment_status: 'paid' as const,
+    }
+
+    await markEventFeePaidFromCheckout(session)
+    upsertState.existing = { status: 'going', payment_status: 'paid' }
+    await markEventFeePaidFromCheckout(session)
+
+    expect(ticketMail.confirmEventAdmission).toHaveBeenCalledTimes(1)
+    expect(ticketMail.retryEventTicketEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not send a ticket when checkout has no collected payment', async () => {
+    const result = await markEventFeePaidFromCheckout({
+      id: 'cs_test',
+      metadata: {
+        type: 'event_fee',
+        event_id: 'evt_1',
+        user_id: 'user_1',
+        fee_cents: '2500',
+      },
+      payment_status: 'no_payment_required',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(ticketMail.confirmEventAdmission).not.toHaveBeenCalled()
+    expect(ticketMail.retryEventTicketEmail).not.toHaveBeenCalled()
   })
 })

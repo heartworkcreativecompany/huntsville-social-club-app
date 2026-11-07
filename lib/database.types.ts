@@ -981,6 +981,10 @@ export interface Database {
           stripe_payment_intent_id: string | null
           expires_at: string | null
           paid_at: string | null
+          confirmation_code: string | null
+          confirmed_at: string | null
+          admission_source: string | null
+          amount_paid_cents: number | null
           created_at: string
           updated_at: string
         }
@@ -997,6 +1001,10 @@ export interface Database {
           stripe_payment_intent_id?: string | null
           expires_at?: string | null
           paid_at?: string | null
+          confirmation_code?: string | null
+          confirmed_at?: string | null
+          admission_source?: string | null
+          amount_paid_cents?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1013,6 +1021,64 @@ export interface Database {
           stripe_payment_intent_id?: string | null
           expires_at?: string | null
           paid_at?: string | null
+          confirmation_code?: string | null
+          confirmed_at?: string | null
+          admission_source?: string | null
+          amount_paid_cents?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      event_ticket_emails: {
+        Row: {
+          id: string
+          registration_kind: string
+          registration_id: string
+          email_type: string
+          status: string
+          attempts: number
+          claim_token: string | null
+          lease_expires_at: string | null
+          next_attempt_at: string | null
+          resend_message_id: string | null
+          sent_at: string | null
+          last_error: string | null
+          credits_remaining: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          registration_kind: string
+          registration_id: string
+          email_type: string
+          status?: string
+          attempts?: number
+          claim_token?: string | null
+          lease_expires_at?: string | null
+          next_attempt_at?: string | null
+          resend_message_id?: string | null
+          sent_at?: string | null
+          last_error?: string | null
+          credits_remaining?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          registration_kind?: string
+          registration_id?: string
+          email_type?: string
+          status?: string
+          attempts?: number
+          claim_token?: string | null
+          lease_expires_at?: string | null
+          next_attempt_at?: string | null
+          resend_message_id?: string | null
+          sent_at?: string | null
+          last_error?: string | null
+          credits_remaining?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1215,6 +1281,7 @@ export interface Database {
       }
       event_attendees: {
         Row: {
+          id: string
           event_id: string
           user_id: string
           status: string
@@ -1230,8 +1297,13 @@ export interface Database {
           guest_name: string | null
           guest_invite_consumed: boolean
           rsvp_answer: string | null
+          confirmation_code: string | null
+          confirmed_at: string | null
+          admission_source: string | null
+          amount_paid_cents: number | null
         }
         Insert: {
+          id?: string
           event_id: string
           user_id: string
           status?: string
@@ -1247,8 +1319,13 @@ export interface Database {
           guest_name?: string | null
           guest_invite_consumed?: boolean
           rsvp_answer?: string | null
+          confirmation_code?: string | null
+          confirmed_at?: string | null
+          admission_source?: string | null
+          amount_paid_cents?: number | null
         }
         Update: {
+          id?: string
           event_id?: string
           user_id?: string
           status?: string
@@ -1264,6 +1341,10 @@ export interface Database {
           guest_name?: string | null
           guest_invite_consumed?: boolean
           rsvp_answer?: string | null
+          confirmation_code?: string | null
+          confirmed_at?: string | null
+          admission_source?: string | null
+          amount_paid_cents?: number | null
         }
         Relationships: []
       }
@@ -1586,6 +1667,37 @@ export interface Database {
           p_rsvp_answer: string | null
           p_hold_minutes: number
         }
+        Returns: Json
+      }
+      confirm_event_admission: {
+        Args: {
+          p_registration_kind: string
+          p_event_id: string
+          p_user_id: string | null
+          p_registration_id: string | null
+          p_admission_source: string
+          p_amount_paid_cents: number | null
+          p_payment_status: string | null
+          p_credits_remaining: number | null
+        }
+        Returns: Json
+      }
+      claim_event_ticket_email: {
+        Args: { p_id: string; p_lease_seconds: number }
+        Returns: Json
+      }
+      finish_event_ticket_email: {
+        Args: {
+          p_id: string
+          p_claim_token: string
+          p_succeeded: boolean
+          p_resend_message_id: string | null
+          p_last_error: string | null
+        }
+        Returns: Json
+      }
+      load_event_ticket_email_context: {
+        Args: { p_id: string; p_claim_token: string }
         Returns: Json
       }
     }

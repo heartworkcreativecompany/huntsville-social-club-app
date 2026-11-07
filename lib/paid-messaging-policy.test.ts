@@ -471,7 +471,7 @@ describe.sequential('curated intro email dispatch', () => {
         recipientEntitled: true,
         audience: 'requester',
       })
-      expect(result).toEqual({ sent: true })
+      expect(result).toEqual({ sent: true, id: 'email_1' })
       expect(fetchMock).toHaveBeenCalledOnce()
       const request = fetchMock.mock.calls[0]?.[1] as RequestInit
       const body = JSON.parse(String(request.body)) as { html: string }

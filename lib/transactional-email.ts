@@ -5,6 +5,11 @@ import {
   buildCuratedIntroApprovedEmail,
   type CuratedIntroEmailAudience,
 } from '@/lib/curated-intro-email'
+import {
+  buildEventTicketMessage,
+  type EventTicketMessageInput,
+} from '@/lib/event-ticket-email-copy'
+import { formatEventScheduleInChicago } from '@/lib/event-time'
 import { appOrigin, SUPPORT_EMAIL } from '@/lib/site'
 
 type EmailPayload = {
@@ -90,10 +95,21 @@ async function sendEmail(payload: EmailPayload) {
     return { error: 'Email delivery failed.' as const }
   }
 
-  return { sent: true as const }
+  const body = (await response.json().catch(() => null)) as { id?: unknown } | null
+  const id = body && typeof body.id === 'string' ? body.id : null
+  if (!id) {
+    return { error: 'Email delivery failed.' as const }
+  }
+
+  return { sent: true as const, id }
 }
 
-function emailShell(title: string, body: string, cta?: { label: string; href: string }) {
+function emailShell(
+  title: string,
+  body: string,
+  cta?: { label: string; href: string },
+  plainText?: string
+) {
   const origin = appOrigin()
   const logoUrl = `${origin}${BRAND_ASSETS.wordmark.forDarkBackground}`
   const ctaBlock = cta
@@ -111,7 +127,8 @@ function emailShell(title: string, body: string, cta?: { label: string; href: st
     </div>
   `
 
-  const text = `${title}\n\n${body.replace(/<[^>]+>/g, '')}${cta ? `\n\n${cta.label}: ${cta.href}` : ''}\n\nQuestions: ${SUPPORT_EMAIL}`
+  const textBody = plainText ?? body.replace(/<[^>]+>/g, '')
+  const text = `${title}\n\n${textBody}${cta ? `\n\n${cta.label}: ${cta.href}` : ''}\n\nQuestions: ${SUPPORT_EMAIL}`
 
   return { html, text }
 }
@@ -334,4 +351,45 @@ export async function sendCuratedMatchesDeliveredEmail(input: {
     html,
     text,
   })
+}
+
+export async function sendEventTicketEmail(
+  input: EventTicketMessageInput & {
+    to: string
+    startsAt?: string | null
+    endsAt?: string | null
+  }
+) {
+  const schedule =
+    input.schedule ||
+    (input.startsAt
+      ? formatEventScheduleInChicago(input.startsAt, input.endsAt)
+      : '')
+  const message = buildEventTicketMessage({
+    ...input,
+    schedule,
+  })
+  const { html, text } = emailShell(
+    message.title,
+    message.bodyHtml,
+    undefined,
+    message.plainText
+  )
+  const result = await sendEmail({
+    to: input.to,
+    subject: message.subject,
+    html,
+    text,
+  })
+
+  if ('sent' in result && result.sent) {
+    return { sent: true as const, id: result.id }
+  }
+  if ('captured' in result && result.captured) {
+    return { captured: true as const, id: 'captured' }
+  }
+  if ('skipped' in result && result.skipped) {
+    return { skipped: true as const }
+  }
+  return { error: 'error' in result ? result.error : ('Email delivery failed.' as const) }
 }

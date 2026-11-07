@@ -44,6 +44,10 @@ import {
   paidCheckoutAttendeeWrite,
   startPaidGoingAfterPersistingAnswer,
 } from '@/lib/event-rsvp-paid-checkout'
+import {
+  confirmEventAdmission,
+  memberTicketAdmission,
+} from '@/lib/event-ticket-admission'
 
 export type RsvpStatus = 'going' | 'maybe' | 'not_going'
 
@@ -554,6 +558,44 @@ export async function updateEventRsvp(input: {
         }
       }
       return { error: error.message }
+    }
+
+    const admission = memberTicketAdmission({
+      eventType,
+      method: registrationMethod,
+      creditKind: decision.creditKind ?? null,
+      creditRowsChanged:
+        registrationMethod === 'credit'
+          ? creditConsumed || circleSocialCreditConsumed
+            ? 1
+            : 0
+          : null,
+      creditsRemaining: circleSocialCreditConsumed
+        ? consumedCircleSocialRemaining
+        : creditConsumed
+          ? consumedCreditsRemaining
+          : null,
+    })
+    if (admission) {
+      try {
+        const { createAdminClient } = await import('@/lib/supabase/admin')
+        const admin = createAdminClient()
+        if (!admin) {
+          console.error('[event_ticket_email] admin_client_unavailable')
+        } else {
+          await confirmEventAdmission(admin, {
+            registrationKind: 'event_attendee',
+            eventId: input.eventId,
+            userId,
+            admissionSource: admission.admissionSource,
+            amountPaidCents: admission.amountPaidCents,
+            paymentStatus: admission.paymentStatus,
+            creditsRemaining: admission.creditsRemaining,
+          })
+        }
+      } catch {
+        console.error('[event_ticket_email] confirm_failed')
+      }
     }
 
     revalidatePath(`/events/${input.eventId}`)

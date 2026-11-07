@@ -14,6 +14,10 @@ import {
   loadPendingRsvpAnswer,
 } from '@/lib/event-rsvp-pending-answer'
 import {
+  confirmEventAdmission,
+  retryEventTicketEmail,
+} from '@/lib/event-ticket-admission'
+import {
   EVENT_ATTENDEE_STATUS_SELECT,
   EVENT_ATTENDEE_STATUS_SELECT_WITH_ANSWER,
   goingPayloadWithPendingAnswer,
@@ -283,6 +287,17 @@ export async function markEventFeePaidFromCheckout(session: {
       existing.payment_status === 'waived' ||
       existing.payment_status === 'not_required')
   ) {
+    if (session.payment_status === 'paid' && existing.payment_status === 'paid') {
+      try {
+        await retryEventTicketEmail(admin, {
+          registrationKind: 'event_attendee',
+          eventId,
+          userId,
+        })
+      } catch {
+        console.error('[event_ticket_email] confirm_failed')
+      }
+    }
     if (!answerColumnAvailable) {
       return { ok: true }
     }
@@ -423,5 +438,27 @@ export async function markEventFeePaidFromCheckout(session: {
     },
   })
 
+  if (session.payment_status === 'paid') {
+    try {
+      await confirmEventAdmission(admin, {
+        registrationKind: 'event_attendee',
+        eventId,
+        userId,
+        admissionSource: 'paid',
+        amountPaidCents: ticketAmountCents(session.metadata?.fee_cents),
+        paymentStatus: 'paid',
+        creditsRemaining: null,
+      })
+    } catch {
+      console.error('[event_ticket_email] confirm_failed')
+    }
+  }
+
   return { ok: true }
+}
+
+function ticketAmountCents(value: string | undefined): number {
+  if (!value || !/^\d+$/.test(value)) return 0
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0
 }
