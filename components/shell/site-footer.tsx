@@ -66,6 +66,19 @@ export default function SiteFooter({
                   Data Deletion
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/refund-policy"
+                  className="link-brand hover:text-foreground"
+                >
+                  Refund Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/safety" className="link-brand hover:text-foreground">
+                  Safety
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -86,8 +99,13 @@ export default function SiteFooter({
         </div>
 
         <div className="border-t border-white/10 py-4 text-center text-xs text-muted">
-          © {new Date().getFullYear()} Huntsville Social Club · By invitation
-          &amp; application
+          <p>
+            © {new Date().getFullYear()} Huntsville Social Club · By invitation
+            &amp; application
+          </p>
+          <p className="mt-2">
+            We accept Visa, Mastercard, American Express, and Discover
+          </p>
         </div>
       </footer>
     )
@@ -127,6 +145,18 @@ export default function SiteFooter({
               className="link-brand underline hover:text-foreground"
             >
               Data Deletion
+            </Link>
+            <Link
+              href="/refund-policy"
+              className="link-brand underline hover:text-foreground"
+            >
+              Refund Policy
+            </Link>
+            <Link
+              href="/safety"
+              className="link-brand underline hover:text-foreground"
+            >
+              Safety
             </Link>
           </nav>
         </div>
