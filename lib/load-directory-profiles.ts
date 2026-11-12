@@ -59,22 +59,29 @@ function finalizeMember(
 async function fetchApprovedProfiles(
   supabase: Awaited<ReturnType<typeof createClient>>,
   viewerId: string,
-  fields: string
+  fields: string,
+  hideRemoved = true
 ) {
-  return supabase
+  const query = supabase
     .from(MEMBER_PROFILES_VIEW)
     .select(fields)
     .eq('application_status', 'approved')
     .neq('id', viewerId)
-    .order('full_name', { ascending: true })
+  const filtered = hideRemoved ? query.is('removed_at', null) : query
+  return filtered.order('full_name', { ascending: true })
 }
 
 async function fetchProfileById(
   supabase: Awaited<ReturnType<typeof createClient>>,
   memberId: string,
-  fields: string
+  fields: string,
+  hideRemoved = true
 ) {
-  return supabase.from(MEMBER_PROFILES_VIEW).select(fields).eq('id', memberId).single()
+  const query = supabase
+    .from(MEMBER_PROFILES_VIEW)
+    .select(fields)
+    .eq('id', memberId)
+  return (hideRemoved ? query.is('removed_at', null) : query).single()
 }
 
 async function loadWithFieldFallback<T>(
@@ -108,9 +115,15 @@ export async function loadDirectoryProfiles(
 
   const supabase = await createClient()
 
-  const { data, error } = await loadWithFieldFallback((fields) =>
-    fetchApprovedProfiles(supabase, viewerId, fields)
+  let loaded = await loadWithFieldFallback((fields) =>
+    fetchApprovedProfiles(supabase, viewerId, fields, true)
   )
+  if (loaded.error && isMissingSchemaColumnError({ message: loaded.error })) {
+    loaded = await loadWithFieldFallback((fields) =>
+      fetchApprovedProfiles(supabase, viewerId, fields, false)
+    )
+  }
+  const { data, error } = loaded
 
   if (error || !data) {
     return { members: [], error }
@@ -165,14 +178,16 @@ function approvedDirectoryQuery(
   supabase: DirectoryClient,
   viewerId: string,
   fields: string,
-  search: string
+  search: string,
+  hideRemoved = true
 ) {
   const name = normalizeDirectoryNameQuery(search)
-  const query = supabase
+  const base = supabase
     .from(MEMBER_PROFILES_VIEW)
     .select(fields)
     .eq('application_status', 'approved')
     .neq('id', viewerId)
+  const query = hideRemoved ? base.is('removed_at', null) : base
   if (!name) return query
   return query.ilike('full_name', directoryNameIlikePattern(name))
 }
@@ -181,7 +196,8 @@ async function scanApprovedRows(
   supabase: DirectoryClient,
   viewerId: string,
   fields: string,
-  search: string
+  search: string,
+  hideRemoved = true
 ): Promise<{ data: RawProfile[]; error: string | null }> {
   const rows: RawProfile[] = []
   for (
@@ -193,7 +209,8 @@ async function scanApprovedRows(
       supabase,
       viewerId,
       fields,
-      search
+      search,
+      hideRemoved
     )
       .order('id', { ascending: true })
       .range(from, from + DIRECTORY_SCAN_PAGE_SIZE - 1)
@@ -221,15 +238,25 @@ async function scanDirectoryRoster(
     supabase,
     viewerId,
     DIRECTORY_FULL_FIELDS,
-    search
+    search,
+    true
   )
   if (!full.error) return full
   if (!isMissingSchemaColumnError({ message: full.error })) return full
+  const withoutRemoval = await scanApprovedRows(
+    supabase,
+    viewerId,
+    DIRECTORY_FULL_FIELDS,
+    search,
+    false
+  )
+  if (!withoutRemoval.error) return withoutRemoval
   return scanApprovedRows(
     supabase,
     viewerId,
     DIRECTORY_APPLICATION_FIELDS,
-    search
+    search,
+    false
   )
 }
 
@@ -241,14 +268,26 @@ async function hydrateDirectoryPage(
 ): Promise<{ members: DirectoryMember[]; error: string | null }> {
   if (pageIds.length === 0) return { members: [], error: null }
 
-  const { data, error } = await loadWithFieldFallback(async (fields) => {
+  let hydrated = await loadWithFieldFallback(async (fields) => {
     const result = await supabase
       .from(MEMBER_PROFILES_VIEW)
       .select(fields)
       .in('id', pageIds)
       .eq('application_status', 'approved')
+      .is('removed_at', null)
     return result
   })
+  if (hydrated.error && isMissingSchemaColumnError({ message: hydrated.error })) {
+    hydrated = await loadWithFieldFallback(async (fields) => {
+      const result = await supabase
+        .from(MEMBER_PROFILES_VIEW)
+        .select(fields)
+        .in('id', pageIds)
+        .eq('application_status', 'approved')
+      return result
+    })
+  }
+  const { data, error } = hydrated
 
   if (error || !data) {
     return { members: [], error: error ?? 'Could not load members' }
@@ -288,11 +327,19 @@ export async function loadDirectoryPage(
   if (!canBrowseDiscovery) return emptyDirectoryPage()
 
   const supabase = await createClient()
-  const { count, error: countError } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
-    .select('id', { count: 'exact', head: true })
-    .eq('application_status', 'approved')
-    .neq('id', viewerId)
+  const countApproved = (hideRemoved: boolean) => {
+    const query = supabase
+      .from(MEMBER_PROFILES_VIEW)
+      .select('id', { count: 'exact', head: true })
+      .eq('application_status', 'approved')
+      .neq('id', viewerId)
+    return hideRemoved ? query.is('removed_at', null) : query
+  }
+  let counted = await countApproved(true)
+  if (counted.error && isMissingSchemaColumnError(counted.error)) {
+    counted = await countApproved(false)
+  }
+  const { count, error: countError } = counted
 
   if (countError) return emptyDirectoryPage(countError.message)
 
@@ -304,9 +351,16 @@ export async function loadDirectoryPage(
   const fields = directoryBrowseNeedsEnrichedRoster(browse)
     ? null
     : DIRECTORY_INDEX_FIELDS
-  const scanned = fields
-    ? await scanApprovedRows(supabase, viewerId, fields, search)
+  let scanned = fields
+    ? await scanApprovedRows(supabase, viewerId, fields, search, true)
     : await scanDirectoryRoster(supabase, viewerId, search)
+  if (
+    fields &&
+    scanned.error &&
+    isMissingSchemaColumnError({ message: scanned.error })
+  ) {
+    scanned = await scanApprovedRows(supabase, viewerId, fields, search, false)
+  }
 
   if (scanned.error) {
     return { ...emptyDirectoryPage(scanned.error), eligibleCount }
@@ -372,9 +426,18 @@ export async function loadMemberProfile(
 }> {
   const supabase = await createClient()
 
-  const { data, error } = await loadWithFieldFallback((fields) =>
-    fetchProfileById(supabase, memberId, fields)
+  let loadedProfile = await loadWithFieldFallback((fields) =>
+    fetchProfileById(supabase, memberId, fields, true)
   )
+  if (
+    loadedProfile.error &&
+    isMissingSchemaColumnError({ message: loadedProfile.error })
+  ) {
+    loadedProfile = await loadWithFieldFallback((fields) =>
+      fetchProfileById(supabase, memberId, fields, false)
+    )
+  }
+  const { data, error } = loadedProfile
 
   if (error || !data) {
     return { member: null, profileDetails: null, error: error ?? 'Profile not found' }

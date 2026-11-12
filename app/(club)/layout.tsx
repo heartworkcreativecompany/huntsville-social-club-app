@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import InactiveAccount from '@/components/account/inactive-account'
 import ClubShell from '@/components/shell/club-shell'
 import MemberPerksHydrator from '@/components/membership/member-perks-hydrator'
 import { canShowDatingMatchesNav } from '@/lib/compatibility/viewer-context'
@@ -18,6 +19,10 @@ export default async function ClubLayout({
 
   if (!viewer) {
     redirect('/login')
+  }
+
+  if (viewer.accountRemoved) {
+    return <InactiveAccount />
   }
 
   await redirectIfPendingMembershipPlan(viewer.canAccessApp)

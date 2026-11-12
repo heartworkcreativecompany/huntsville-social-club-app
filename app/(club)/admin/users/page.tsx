@@ -20,7 +20,7 @@ import RemoveMemberButton from '@/components/admin/remove-member-button'
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>
+  searchParams: Promise<{ q?: string | string[]; status?: string | string[] }>
 }) {
   const viewer = await getViewer()
 
@@ -43,11 +43,13 @@ export default async function AdminUsersPage({
   }
 
   const supabase = requireAdminClient()
-  const search = normalizeAdminUserSearch((await searchParams).q)
+  const params = await searchParams
+  const search = normalizeAdminUserSearch(params.q)
+  const removalStatus = removalListFilter(params.status)
 
   const [{ data: users, error }, { data: statusRows, error: statusError }] =
     await Promise.all([
-      loadAdminUserRows(supabase, search),
+      loadAdminUserRows(supabase, search, removalStatus),
       loadAdminStatusRows(supabase),
     ])
 
@@ -81,6 +83,17 @@ export default async function AdminUsersPage({
       </Card>
 
       <AdminUserSearch search={search} />
+      <nav className="mb-4 flex flex-wrap gap-3 text-sm">
+        <RemovalFilterLink search={search} status="all" current={removalStatus}>
+          All
+        </RemovalFilterLink>
+        <RemovalFilterLink search={search} status="active" current={removalStatus}>
+          Active
+        </RemovalFilterLink>
+        <RemovalFilterLink search={search} status="removed" current={removalStatus}>
+          Removed
+        </RemovalFilterLink>
+      </nav>
 
       {error ? (
         <p className="text-sm text-danger">Could not load users: {error.message}</p>
@@ -112,6 +125,7 @@ export default async function AdminUsersPage({
                       }
                     />
                     <Badge variant="accent">{profile.role ?? 'member'}</Badge>
+                    {profile.removed_at ? <Badge variant="warning">Removed</Badge> : null}
                   </div>
                 </div>
 
@@ -165,13 +179,56 @@ export default async function AdminUsersPage({
 }
 
 const ADMIN_USER_FIELDS =
-  'id, email, full_name, role, created_at, application_status, membership_intent, verified_at'
+  'id, email, full_name, role, created_at, application_status, membership_intent, verified_at, removed_at'
+
+type RemovalListFilter = 'all' | 'active' | 'removed'
+
+function removalListFilter(value: string | string[] | undefined): RemovalListFilter {
+  const raw = Array.isArray(value) ? value[0] : value
+  if (raw === 'removed' || raw === 'active') return raw
+  return 'all'
+}
+
+function removalFilterHref(search: string, status: RemovalListFilter): string {
+  const params = new URLSearchParams()
+  if (search) params.set('q', search)
+  if (status !== 'all') params.set('status', status)
+  const query = params.toString()
+  return query ? `/admin/users?${query}` : '/admin/users'
+}
+
+function RemovalFilterLink({
+  search,
+  status,
+  current,
+  children,
+}: {
+  search: string
+  status: RemovalListFilter
+  current: RemovalListFilter
+  children: string
+}) {
+  const active = status === current
+  return (
+    <Link
+      href={removalFilterHref(search, status)}
+      className={active ? 'font-semibold text-foreground' : 'text-accent underline'}
+      aria-current={active ? 'page' : undefined}
+    >
+      {children}
+    </Link>
+  )
+}
 const ADMIN_USER_PAGE_SIZE = 1000
 const ADMIN_USER_ROW_CAP = 20000
 
 type AdminClient = ReturnType<typeof requireAdminClient>
 
-async function loadAdminUserRows(supabase: AdminClient, search: string) {
+async function loadAdminUserRows(
+  supabase: AdminClient,
+  search: string,
+  removalStatus: RemovalListFilter
+) {
   const rows: {
     id: string
     email: string | null
@@ -181,6 +238,7 @@ async function loadAdminUserRows(supabase: AdminClient, search: string) {
     application_status: string | null
     membership_intent: string | null
     verified_at: string | null
+    removed_at: string | null
   }[] = []
 
   for (let from = 0; from < ADMIN_USER_ROW_CAP; from += ADMIN_USER_PAGE_SIZE) {
@@ -190,6 +248,8 @@ async function loadAdminUserRows(supabase: AdminClient, search: string) {
       .order('email', { ascending: true })
       .order('id', { ascending: true })
       .range(from, from + ADMIN_USER_PAGE_SIZE - 1)
+    if (removalStatus === 'removed') query = query.not('removed_at', 'is', null)
+    if (removalStatus === 'active') query = query.is('removed_at', null)
     if (search) query = query.or(adminUserSearchOrFilter(search))
 
     const { data, error } = await query

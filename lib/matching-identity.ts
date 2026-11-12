@@ -4,6 +4,8 @@ import {
   acceptedIdentityStatus,
   type AcceptedIdentityStatus,
 } from '@/lib/identity-verification'
+import { visibleMatchCandidateIds } from '@/lib/member-removal'
+import { isMissingSchemaColumnError } from '@/lib/profile-query-fields'
 import { loadAcceptedIdentityStatuses } from '@/lib/identity-verification-access'
 
 type IdentityClient = SupabaseClient<Database>
@@ -185,14 +187,40 @@ export async function visibleMatchingCandidateIds(
   if (!acceptedIdentityAllowsMatching(identity.statuses.get(viewerId))) {
     return { ok: true, visibleIds: new Set() }
   }
+  const identityVisibleIds = new Set(
+    candidateIds.filter((candidateId) =>
+      acceptedIdentityAllowsMatching(identity.statuses.get(candidateId))
+    )
+  )
+  const removedIds = await removedCandidateIds(admin, candidateIds)
+  if (removedIds === null) return { ok: false }
   return {
     ok: true,
-    visibleIds: new Set(
-      candidateIds.filter((candidateId) =>
-        acceptedIdentityAllowsMatching(identity.statuses.get(candidateId))
-      )
+    visibleIds: visibleMatchCandidateIds(
+      candidateIds,
+      removedIds,
+      identityVisibleIds
     ),
   }
+}
+
+async function removedCandidateIds(
+  admin: IdentityClient | null | undefined,
+  candidateIds: string[]
+): Promise<Set<string> | null> {
+  const ids = [...new Set(candidateIds.filter(Boolean))]
+  if (!admin || ids.length === 0) return new Set()
+  const { data, error } = await admin
+    .from('profiles')
+    .select('id, removed_at')
+    .in('id', ids)
+  if (error) {
+    if (isMissingSchemaColumnError(error)) return new Set()
+    return null
+  }
+  return new Set(
+    (data ?? []).filter((row) => row.removed_at != null).map((row) => row.id)
+  )
 }
 
 export async function loadMatchingIdentityMap(

@@ -79,10 +79,11 @@ export type Viewer = {
   membershipStatus: MembershipStatus
   canAccessApp: boolean
   applicationSchemaReady: boolean
+  accountRemoved: boolean
 }
 
 export async function getViewer(): Promise<Viewer | null> {
-  const supabase = await createClient()
+  const supabase = await createClient({ allowRemovedAccount: true })
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -90,6 +91,7 @@ export async function getViewer(): Promise<Viewer | null> {
   if (!user) return null
 
   const { profile, schemaReady } = await loadProfileForUser(supabase, user.id)
+  const accountRemoved = await viewerAccountIsRemoved(supabase, user.id)
 
   const role = profile?.role ?? 'member'
   const applicationStatus = getApplicationStatus(profile)
@@ -106,5 +108,19 @@ export async function getViewer(): Promise<Viewer | null> {
     membershipStatus,
     canAccessApp,
     applicationSchemaReady: schemaReady,
+    accountRemoved,
   }
+}
+
+async function viewerAccountIsRemoved(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('removed_at')
+    .eq('id', userId)
+    .maybeSingle()
+  if (error || !data) return false
+  return data.removed_at != null
 }

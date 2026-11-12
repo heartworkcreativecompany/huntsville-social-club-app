@@ -1,6 +1,13 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { adminRemovalFollowUp } from '@/lib/member-removal'
+import { buildRemovalDeps } from '@/lib/member-removal-db'
+import {
+  executeMemberRestore,
+  executePermanentRemoval,
+  publicRemovalResult,
+} from '@/lib/member-removal-run'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import {
   grantMembershipAccessOverride,
@@ -156,4 +163,73 @@ export async function revokeMembershipAccessOverrideAction(input: {
 
   revalidateMemberAdminPaths(input.memberId)
   return { success: true as const, revoked: result.revoked }
+}
+
+function revalidateRemovalSurfaces(memberId: string) {
+  revalidateMemberAdminPaths(memberId)
+  revalidatePath('/members', 'layout')
+  revalidatePath('/messages', 'layout')
+  revalidatePath('/matches', 'layout')
+  revalidatePath('/events', 'layout')
+}
+
+export async function permanentlyRemoveMemberAction(input: {
+  memberId: string
+  category: string
+  internalNote: string
+  confirmationText: string
+}) {
+  const auth = await requireAdmin()
+  if (auth.error || !auth.userId) {
+    return { error: auth.error ?? 'Administrator access required.' }
+  }
+
+  const result = await executePermanentRemoval(
+    {
+      actorIsAdmin: true,
+      actorId: auth.userId,
+      targetUserId: input.memberId,
+      category: input.category,
+      internalNote: input.internalNote,
+      confirmationText: input.confirmationText,
+    },
+    buildRemovalDeps(requireAdminClient(), auth.userId)
+  )
+
+  if (!result.ok) return { error: result.error }
+
+  revalidateRemovalSurfaces(input.memberId)
+  const safe = publicRemovalResult(result)
+  return {
+    success: true as const,
+    paidTickets: safe.paidTickets,
+    followUp: adminRemovalFollowUp(safe),
+  }
+}
+
+export async function restoreRemovedMemberAction(input: {
+  memberId: string
+  note: string
+  confirmationText: string
+}) {
+  const auth = await requireAdmin()
+  if (auth.error || !auth.userId) {
+    return { error: auth.error ?? 'Administrator access required.' }
+  }
+
+  const result = await executeMemberRestore(
+    {
+      actorIsAdmin: true,
+      actorId: auth.userId,
+      targetUserId: input.memberId,
+      note: input.note,
+      confirmationText: input.confirmationText,
+    },
+    buildRemovalDeps(requireAdminClient(), auth.userId)
+  )
+
+  if (!result.ok) return { error: result.error }
+
+  revalidateRemovalSurfaces(input.memberId)
+  return { success: true as const }
 }

@@ -11,6 +11,7 @@ import {
   type EntitlementCycle,
 } from '@/lib/membership-entitlements'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
+import { isMissingSchemaColumnError } from '@/lib/profile-query-fields'
 import { includesFriendsIntent } from '@/lib/member-public-intent'
 import { isFriendshipMatchingEnabled } from '@/lib/friendship/eligibility'
 import { loadMatchingIdentityMap } from '@/lib/matching-identity'
@@ -178,11 +179,19 @@ export async function loadFriendshipMatchPool(
     return { profiles: [], error: null }
   }
 
-  const { data: profiles, error: profileError } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
-    .select(POOL_SELECT)
-    .eq('application_status', 'approved')
-    .in('id', userIds)
+  const friendshipPoolQuery = (hideRemoved: boolean) => {
+    const query = supabase
+      .from(MEMBER_PROFILES_VIEW)
+      .select(POOL_SELECT)
+      .eq('application_status', 'approved')
+      .in('id', userIds)
+    return hideRemoved ? query.is('removed_at', null) : query
+  }
+  const firstPool = await friendshipPoolQuery(true)
+  const { data: profiles, error: profileError } =
+    firstPool.error && isMissingSchemaColumnError(firstPool.error)
+      ? await friendshipPoolQuery(false)
+      : firstPool
 
   if (profileError) {
     return { profiles: [], error: profileError.message }

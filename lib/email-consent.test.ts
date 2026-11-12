@@ -91,8 +91,13 @@ describe('signup form source', () => {
   )
 
   it('keeps Auth signup and sends consent booleans without client evidence fields', () => {
-    expect(signup).toContain('await supabase.auth.signUp({')
-    expect(signup).toContain('signupEmailConsentMetadata')
+    const signupAccount = readFileSync(resolve(repoRoot, 'lib/signup-account.ts'), 'utf8')
+    const signupAction = readFileSync(resolve(repoRoot, 'app/signup/actions.ts'), 'utf8')
+    expect(signupAction).toContain('await supabase.auth.signUp(args)')
+    expect(signupAccount).toContain('signupEmailConsentMetadata')
+    expect(signupAccount.indexOf('removedBlock')).toBeLessThan(
+      signupAccount.indexOf('deps.signUp')
+    )
     expect(signup).toContain('useState(false)')
     expect(signup).not.toContain('essential_email_acknowledged_at')
     expect(signup).not.toContain('essential_email_acknowledgement_source')

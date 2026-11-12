@@ -27,6 +27,14 @@ import {
   type SubscriptionStatus,
 } from '@/lib/membership-systems'
 import { membershipStatusLabel, resolveMembershipStatus } from '@/lib/membership'
+import { loadFreeRsvpsNeedingCancellation } from '@/lib/member-removal-db'
+import {
+  adminRemovalFollowUp,
+  adminRemovalFromRecord,
+  type AuthBanState,
+  type FreeRsvpDecision,
+  type StripeCancellationState,
+} from '@/lib/member-removal'
 
 export const ADMIN_MEMBER_DETAIL_FORBIDDEN_KEYS = [
   'stripe_customer_id',
@@ -34,6 +42,8 @@ export const ADMIN_MEMBER_DETAIL_FORBIDDEN_KEYS = [
   'stripe_price_id',
   'identity_verification_session_id',
   'identity_verification_last_error',
+  'internal_note',
+  'restore_note',
 ] as const
 
 export type AdminSafeStripeSubscription = {
@@ -67,6 +77,11 @@ export type AdminMemberOverview = {
   messagingSuspensionReason: string | null
   profileRevisionStatus: string | null
   primaryPhoto: ApplicationPhoto | null
+  removed: boolean
+  removalCategory: string | null
+  stripeCancellation: StripeCancellationState | null
+  authBan: AuthBanState | null
+  removalFollowUp: string[]
 }
 
 export type AdminMemberDetailState = {
@@ -122,6 +137,11 @@ export function buildAdminMemberOverview(input: {
   profileRevisionStatus: string | null
   applicationDraft: unknown
   accessOverride: MembershipAccessOverride | null
+  removedAt?: string | null
+  removalCategory?: string | null
+  stripeCancellation?: StripeCancellationState | null
+  authBan?: AuthBanState | null
+  freeRsvpsNeedingCancellation?: FreeRsvpDecision[]
   now?: Date
 }): AdminMemberOverview {
   const billing = parseMembershipBilling(input.membershipBilling)
@@ -178,6 +198,15 @@ export function buildAdminMemberOverview(input: {
     messagingSuspensionReason: input.messagingSuspensionReason,
     profileRevisionStatus: input.profileRevisionStatus,
     primaryPhoto: primaryMemberPhoto(photos),
+    removed: Boolean(input.removedAt),
+    removalCategory: input.removalCategory ?? null,
+    stripeCancellation: input.stripeCancellation ?? null,
+    authBan: input.authBan ?? null,
+    removalFollowUp: adminRemovalFollowUp({
+      stripeCancellation: input.stripeCancellation ?? null,
+      authBan: input.authBan ?? null,
+      freeRsvpsNeedingCancellation: input.freeRsvpsNeedingCancellation,
+    }),
   })
 }
 
@@ -195,7 +224,7 @@ export async function loadAdminMemberDetail(
   const { data: member, error } = await admin
     .from('profiles')
     .select(
-      'id, email, full_name, role, application_status, membership_intent, location_area, location_city, connection_intents, connections_open_to, discovery_intent, identity_verification_status, identity_verified_at, membership_billing, messaging_suspended_at, messaging_suspension_reason, profile_revision_status, application_draft'
+      'id, email, full_name, role, application_status, membership_intent, location_area, location_city, connection_intents, connections_open_to, discovery_intent, identity_verification_status, identity_verified_at, membership_billing, messaging_suspended_at, messaging_suspension_reason, profile_revision_status, application_draft, removed_at'
     )
     .eq('id', input.memberId)
     .maybeSingle()
@@ -206,6 +235,25 @@ export async function loadAdminMemberDetail(
   if (!member) {
     return { ok: false, error: 'Member not found.' }
   }
+
+  const removalRecord = member.removed_at
+    ? await admin
+        .from('member_removal_records')
+        .select('reason_category, stripe_result, auth_result')
+        .eq('profile_id', input.memberId)
+        .order('removed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null, error: null }
+
+  if (removalRecord.error && removalRecord.error.code !== '42P01') {
+    return { ok: false, error: removalRecord.error.message }
+  }
+
+  const removal = adminRemovalFromRecord(removalRecord.data)
+  const freeRsvps = member.removed_at
+    ? await loadFreeRsvpsNeedingCancellation(admin, input.memberId)
+    : []
 
   const [badges, overrideResult] = await Promise.all([
     loadAdminMemberBadges(admin, {
@@ -248,6 +296,11 @@ export async function loadAdminMemberDetail(
         profileRevisionStatus: member.profile_revision_status,
         applicationDraft: member.application_draft,
         accessOverride: overrideResult.override,
+        removedAt: member.removed_at,
+        removalCategory: removal.category,
+        stripeCancellation: removal.stripeCancellation,
+        authBan: removal.authBan,
+        freeRsvpsNeedingCancellation: freeRsvps,
       }),
       badges: badges.data,
       accessOverride: overrideResult.override,

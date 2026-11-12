@@ -4,6 +4,8 @@ import type { RecontactStatus } from '@/lib/message-recontact-states'
 import type { Database } from '@/lib/database.types'
 import { memberDisplayName } from '@/lib/members-discovery'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import { inboxWithoutRemovedMembers } from '@/lib/member-removal'
+import { loadRemovedMemberIds } from '@/lib/member-removal-db'
 import {
   loadConversationBlockState,
   loadConversationReportState,
@@ -225,7 +227,11 @@ export async function loadRecentMessagePreviews(
     }
   })
 
-  return { previews, error: null }
+  const removedIds = await loadRemovedMemberIds(otherUserIds)
+  return {
+    previews: inboxWithoutRemovedMembers(previews, removedIds),
+    error: null,
+  }
 }
 
 export async function loadInboxPreviews(
@@ -262,6 +268,11 @@ export async function loadConversationThread(
     conversation.participant_a === userId
       ? conversation.participant_b
       : conversation.participant_a
+
+  const removedIds = await loadRemovedMemberIds([otherUserId])
+  if (removedIds.has(otherUserId)) {
+    return { thread: null, error: null }
+  }
 
   const [{ data: otherProfile }, { data: messageRows, error: messagesError }] =
     await Promise.all([

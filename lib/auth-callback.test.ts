@@ -455,7 +455,9 @@ describe('callback route hygiene', () => {
 describe('signup confirmation redirect targets', () => {
   it('keeps the default confirmation next and only uses a safe Upgrade return path', () => {
     const signup = readFileSync(join(__dirname, '../app/signup/page.tsx'), 'utf8')
-    expect(signup).toContain("authCallbackUrl(returnPath ?? '/login?confirmed=1')")
+    const signupAccount = readFileSync(join(__dirname, '../lib/signup-account.ts'), 'utf8')
+    expect(signupAccount).toContain("safeUpgradeReturnPath(input.returnPath) ?? '/login?confirmed=1'")
+    expect(signupAccount).toContain('authCallbackUrl(returnPath)')
     expect(signup).toContain('safeUpgradeReturnPath(searchParams.get(\'next\'))')
     expect(signup).not.toContain('createMembershipCheckoutSession')
   })
