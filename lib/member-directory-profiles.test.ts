@@ -1,6 +1,9 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { APPLICATION_PROMPTS } from '@/lib/application-form-content'
+import { publicProfileDetailsFromDraft } from '@/lib/profile-public-display'
+import { emptyDraft, parseApplicationDraft } from '@/lib/application'
 import {
   MEMBER_DIRECTORY_PROFILE_COLUMNS,
   prepareSafeDirectoryRow,
@@ -124,7 +127,14 @@ describe('profile privacy migration', () => {
     expect(migration).toContain('p.removed_at is null')
     expect(migration).toContain('viewer.id = (select auth.uid())')
     expect(migration).toContain("viewer.application_status = 'approved'")
+    expect(migration).toContain("viewer.role = any (array['admin'::text, 'host'::text])")
     expect(migration).toContain('viewer.removed_at is null')
+    expect(migration).toContain('security invoker')
+    expect(migration).toContain('is_approved_active_member')
+    expect(migration).toContain('public.is_approved_active_member(vouchee_id)')
+    expect(migration).toContain(
+      'drop policy if exists "Approved members read approved member photos" on storage.objects'
+    )
     expect(migration).toContain(
       'revoke all on public.member_directory_profiles from anon'
     )
@@ -153,14 +163,67 @@ describe('profile privacy migration', () => {
     expect(anonPolicies).toEqual([])
   })
 
-  it('ships a read-only check for the leak', () => {
+  it('ships a rolled-back session check for vouches, photos, hosts, and anon', () => {
     const check = readFileSync(join(root, 'scripts/profile-privacy-check.sql'), 'utf8')
     expect(check).toContain('pg_policies')
     expect(check).toContain('member_directory_profiles')
-    expect(check).toContain('set role anon')
-    expect(check.toLowerCase()).not.toContain('insert into')
-    expect(check.toLowerCase()).not.toContain('update ')
-    expect(check.toLowerCase()).not.toContain('delete ')
+    expect(check).toContain('set local role anon')
+    expect(check).toContain('insert into public.member_vouches')
+    expect(check).toContain('storage.objects')
+    expect(check).toContain("role = 'host'")
+    expect(check).toContain('rollback')
+    expect(check.toLowerCase()).not.toContain('commit;')
+  })
+})
+
+describe('public application slice', () => {
+  it('blanks internal review prompts and keeps the icebreaker fallback', () => {
+    const slice = migration.slice(
+      migration.indexOf('create or replace function public.member_public_profile'),
+      migration.indexOf('comment on function public.member_public_profile')
+    )
+    expect(slice).toContain("'bringsYouHere', ''")
+    expect(slice).toContain("'hopingToMeet', ''")
+    expect(slice).toContain("draft #>> '{prompts,icebreaker}'")
+    expect(slice).toContain("draft #>> '{prompts,intoLately}'")
+    expect(slice).toContain('security invoker')
+    expect(slice).not.toContain('security definer')
+
+    const internal = APPLICATION_PROMPTS.filter((prompt) => !prompt.profileVisible)
+    expect(internal.map((prompt) => prompt.key)).toEqual([
+      'bringsYouHere',
+      'hopingToMeet',
+    ])
+
+    const parsed = parseApplicationDraft({
+      version: 2,
+      prompts: {
+        icebreaker: '   ',
+        intoLately: 'Legacy icebreaker',
+      },
+    })
+    expect(parsed.prompts.icebreaker).toBe('Legacy icebreaker')
+    const kept = parseApplicationDraft({
+      version: 2,
+      prompts: {
+        icebreaker: 'Current icebreaker',
+        intoLately: 'Legacy icebreaker',
+      },
+    })
+    expect(kept.prompts.icebreaker).toBe('Current icebreaker')
+
+    const draft = emptyDraft()
+    draft.prompts.bringsYouHere = 'SECRET_BRINGS_YOU_HERE'
+    draft.prompts.hopingToMeet = 'SECRET_HOPING_TO_MEET'
+    draft.prompts.icebreaker = 'Legacy icebreaker'
+    draft.prompts.perfectWeekend = 'Farmers market'
+    const details = publicProfileDetailsFromDraft(draft)
+    expect(details.prompts.map((prompt) => prompt.value)).toEqual([
+      'Farmers market',
+      'Legacy icebreaker',
+    ])
+    expect(JSON.stringify(details)).not.toContain('SECRET_BRINGS_YOU_HERE')
+    expect(JSON.stringify(details)).not.toContain('SECRET_HOPING_TO_MEET')
   })
 })
 

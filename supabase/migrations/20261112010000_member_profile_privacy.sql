@@ -5,12 +5,14 @@
 
 drop policy if exists "Members can view approved profiles" on public.profiles;
 
--- Public application fields other members already see. Private answers stay out.
+-- Reshapes a draft the owner view already selected. It does not read profiles,
+-- so it runs as the caller. Authenticated needs execute because a
+-- security_invoker function inside an owner view is still called as the session user.
 create or replace function public.member_public_profile(draft jsonb)
 returns jsonb
 language sql
 stable
-security definer
+security invoker
 set search_path = public
 as $$
   select case
@@ -70,11 +72,15 @@ as $$
         'socialVibe', coalesce(draft #>> '{workAndInterests,socialVibe}', '')
       ),
       'prompts', jsonb_build_object(
-        'bringsYouHere', coalesce(draft #>> '{prompts,bringsYouHere}', ''),
-        'hopingToMeet', coalesce(draft #>> '{prompts,hopingToMeet}', ''),
+        'bringsYouHere', '',
+        'hopingToMeet', '',
         'perfectWeekend', coalesce(draft #>> '{prompts,perfectWeekend}', ''),
         'favoriteLocalActivities', coalesce(draft #>> '{prompts,favoriteLocalActivities}', ''),
-        'icebreaker', coalesce(draft #>> '{prompts,icebreaker}', ''),
+        'icebreaker', case
+          when length(trim(coalesce(draft #>> '{prompts,icebreaker}', ''))) > 0
+            then draft #>> '{prompts,icebreaker}'
+          else coalesce(draft #>> '{prompts,intoLately}', '')
+        end,
         'intoLately', '',
         'valueInCommunity', ''
       ),
@@ -107,11 +113,36 @@ as $$
 $$;
 
 comment on function public.member_public_profile(jsonb) is
-  'Public profile slice for member_directory_profiles. Not granted to anon or authenticated.';
+  'Public profile slice. Invoker: it only transforms jsonb the owner view already read. Internal review prompts are blank. Icebreaker falls back to legacy intoLately.';
 
 revoke all on function public.member_public_profile(jsonb) from public;
 revoke all on function public.member_public_profile(jsonb) from anon;
-revoke all on function public.member_public_profile(jsonb) from authenticated;
+grant execute on function public.member_public_profile(jsonb) to authenticated;
+
+-- Other-member checks cannot select public.profiles under the caller's RLS.
+create or replace function public.is_approved_active_member(member_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = member_id
+      and application_status = 'approved'
+      and removed_at is null
+  );
+$$;
+
+comment on function public.is_approved_active_member(uuid) is
+  'True when that profile is approved and not removed. Used by policies that must see another member after the broad profile select policy is dropped.';
+
+revoke all on function public.is_approved_active_member(uuid) from public;
+revoke all on function public.is_approved_active_member(uuid) from anon;
+grant execute on function public.is_approved_active_member(uuid) to authenticated;
+grant execute on function public.is_approved_active_member(uuid) to service_role;
 
 drop view if exists public.member_directory_profiles;
 
@@ -152,13 +183,59 @@ where p.application_status = 'approved'
     select 1
     from public.profiles viewer
     where viewer.id = (select auth.uid())
-      and viewer.application_status = 'approved'
       and viewer.removed_at is null
+      and (
+        viewer.application_status = 'approved'
+        or viewer.role = any (array['admin'::text, 'host'::text])
+      )
   );
 
 comment on view public.member_directory_profiles is
-  'Approved, not-removed profiles for an approved, not-removed signed-in member. Runs as the view owner so private profile columns are not selectable. search_path is pinned on member_public_profile.';
+  'Approved, not-removed profiles for an approved, host, or admin viewer who is not removed. Runs as the view owner so private profile columns are not selectable. Pending applicants get no rows.';
 
 revoke all on public.member_directory_profiles from public;
 revoke all on public.member_directory_profiles from anon;
 grant select on public.member_directory_profiles to authenticated;
+
+-- Vouchee and photo-owner checks read another profile. The voucher and the
+-- photo viewer still use their own row, which RLS still allows.
+drop policy if exists "Approved members create vouches" on public.member_vouches;
+create policy "Approved members create vouches"
+  on public.member_vouches
+  for insert
+  to authenticated
+  with check (
+    voucher_id = (select auth.uid())
+    and exists (
+      select 1
+      from public.profiles voucher
+      where voucher.id = voucher_id
+        and voucher.application_status = 'approved'
+    )
+    and public.is_approved_active_member(vouchee_id)
+  );
+
+drop policy if exists "Approved members read approved member photos" on storage.objects;
+create policy "Approved members read approved member photos"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'application-photos'
+  and exists (
+    select 1
+    from public.profiles viewer_profile
+    where viewer_profile.id = (select auth.uid())
+      and (
+        viewer_profile.application_status = 'approved'
+        or viewer_profile.role = any (array['admin'::text, 'host'::text])
+      )
+  )
+  and public.is_approved_active_member(
+    case
+      when (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        then ((storage.foldername(name))[1])::uuid
+      else null
+    end
+  )
+);
