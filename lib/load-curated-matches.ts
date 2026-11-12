@@ -2,7 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { isArchivedRecommendationStatus } from '@/lib/compatibility/recommendation-lifecycle-config'
 import type { ApplicationPhoto } from '@/lib/application'
 import type { Database } from '@/lib/database.types'
-import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import {
+  MEMBER_DIRECTORY_PROFILES,
+  prepareSafeDirectoryRow,
+} from '@/lib/member-directory-profiles'
 import {
   deriveMatchExplanations,
   listSharedInterestLabels,
@@ -98,20 +101,22 @@ export async function loadCuratedMatchRecommendations(
       location_area: string | null
       membership_intent: string | null
       application_draft: unknown
+      public_profile?: unknown
       discovery_interests: string[] | null
     }
   >()
 
   if (visibleRecommendedIds.length > 0) {
     const { data: profiles } = await supabase
-      .from(MEMBER_PROFILES_VIEW)
+      .from(MEMBER_DIRECTORY_PROFILES)
       .select(
-        'id, full_name, location_area, membership_intent, application_draft, discovery_interests'
+        'id, full_name, location_area, membership_intent, public_profile, discovery_interests'
       )
       .in('id', visibleRecommendedIds)
 
     for (const profile of profiles ?? []) {
-      profileById.set(profile.id, profile)
+      const safe = prepareSafeDirectoryRow(profile)
+      profileById.set(profile.id, safe)
     }
   }
 

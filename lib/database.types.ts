@@ -1587,6 +1587,29 @@ export interface Database {
       }
     }
     Views: {
+      member_directory_profiles: {
+        Row: {
+          id: string
+          full_name: string | null
+          role: string | null
+          created_at: string | null
+          application_status: string | null
+          membership_intent: string | null
+          verified_at: string | null
+          location_area: string | null
+          contact_email: string | null
+          show_contact_email: boolean | null
+          discovery_intent: string | null
+          discovery_interests: string[] | null
+          discovery_industry: string | null
+          connection_intents: string[] | null
+          connections_open_to: string[] | null
+          public_profile: Json | null
+          profile_checks_approved: boolean | null
+          removed_at: string | null
+        }
+        Relationships: []
+      }
       member_profiles: {
         Row: Omit<
           Database['public']['Tables']['profiles']['Row'],

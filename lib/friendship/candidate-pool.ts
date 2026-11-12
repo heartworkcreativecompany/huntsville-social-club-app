@@ -155,7 +155,12 @@ export async function loadFriendshipMatchPool(
   if (!isFriendshipMatchingEnabled()) {
     return { profiles: [], error: null }
   }
-  const { data: questionnaires, error: questionnaireError } = await supabase
+  const reader = createAdminClient()
+  if (!reader) {
+    return { profiles: [], error: 'Friendship matching is unavailable.' }
+  }
+
+  const { data: questionnaires, error: questionnaireError } = await reader
     .from('friendship_questionnaires')
     .select('user_id, version, answers, status, completed_at, updated_at')
     .eq('status', 'submitted')
@@ -180,7 +185,7 @@ export async function loadFriendshipMatchPool(
   }
 
   const friendshipPoolQuery = (hideRemoved: boolean) => {
-    const query = supabase
+    const query = reader
       .from(MEMBER_PROFILES_VIEW)
       .select(POOL_SELECT)
       .eq('application_status', 'approved')
@@ -209,7 +214,7 @@ export async function loadFriendshipMatchPool(
     (profiles ?? []).map((profile) => profile.id)
   )
   const identity = await loadMatchingIdentityMap(
-    supabase,
+    reader,
     (profiles ?? []).map((profile) => profile.id)
   )
   if (!identity.ok) {

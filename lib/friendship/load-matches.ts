@@ -1,7 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ApplicationPhoto } from '@/lib/application'
 import type { Database } from '@/lib/database.types'
-import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import {
+  MEMBER_DIRECTORY_PROFILES,
+  prepareSafeDirectoryRow,
+} from '@/lib/member-directory-profiles'
 import { memberDisplayName } from '@/lib/members-discovery'
 import { photosFromApplicationDraft, primaryMemberPhoto } from '@/lib/member-photos'
 import { friendshipFitLabel } from '@/lib/friendship/labels'
@@ -84,12 +87,12 @@ export async function loadFriendshipMatchRecommendations(
 
   if (visibleRecommendedIds.length > 0) {
     const { data: profiles } = await supabase
-      .from(MEMBER_PROFILES_VIEW)
-      .select('id, full_name, location_area, application_draft')
+      .from(MEMBER_DIRECTORY_PROFILES)
+      .select('id, full_name, location_area, public_profile')
       .in('id', visibleRecommendedIds)
 
     for (const profile of profiles ?? []) {
-      profileById.set(profile.id, profile)
+      profileById.set(profile.id, prepareSafeDirectoryRow(profile))
     }
   }
 

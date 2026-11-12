@@ -3,7 +3,7 @@ import type { ConversationStatus } from '@/lib/message-request-states'
 import type { RecontactStatus } from '@/lib/message-recontact-states'
 import type { Database } from '@/lib/database.types'
 import { memberDisplayName } from '@/lib/members-discovery'
-import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import { MEMBER_DIRECTORY_PROFILES } from '@/lib/member-directory-profiles'
 import { inboxWithoutRemovedMembers } from '@/lib/member-removal'
 import { loadRemovedMemberIds } from '@/lib/member-removal-db'
 import {
@@ -152,7 +152,7 @@ export async function loadRecentMessagePreviews(
   )
 
   const { data: profiles } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
+    .from(MEMBER_DIRECTORY_PROFILES)
     .select('id, full_name')
     .in('id', otherUserIds)
 
@@ -277,7 +277,7 @@ export async function loadConversationThread(
   const [{ data: otherProfile }, { data: messageRows, error: messagesError }] =
     await Promise.all([
       supabase
-        .from(MEMBER_PROFILES_VIEW)
+        .from(MEMBER_DIRECTORY_PROFILES)
         .select('id, full_name')
         .eq('id', otherUserId)
         .maybeSingle(),
@@ -301,7 +301,7 @@ export async function loadConversationThread(
 
   if (senderIds.length > 0) {
     const { data: senders } = await supabase
-      .from(MEMBER_PROFILES_VIEW)
+      .from(MEMBER_DIRECTORY_PROFILES)
       .select('id, full_name')
       .in('id', senderIds)
 
