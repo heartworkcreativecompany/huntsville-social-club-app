@@ -16,12 +16,12 @@ export const RSVP_QUESTION_FIELD_LABEL = 'Question'
 export const RSVP_QUESTION_REQUIRED_LABEL =
   'Require guests to answer this question to RSVP'
 export const RSVP_QUESTION_HOST_GUIDANCE =
-  'Ask only for information needed to plan this event. Do not request sensitive personal, medical, financial, government-ID, or login information. Guests’ answers are visible to the event host and Huntsville Social Club administrators.'
+  'Ask only for information needed to plan this event. Do not request sensitive personal, medical, financial, government-ID, or login information. Guests’ answers are visible to the event organizer, who has management access, and to Huntsville Social Club administrators.'
 
 export const RSVP_ANSWER_OPTIONAL_LABEL = 'Optional'
 export const RSVP_ANSWER_REQUIRED_HELP = 'Your answer is required to RSVP.'
 export const RSVP_ANSWER_PRIVACY_COPY =
-  'Your response will be shared with the event host and Huntsville Social Club administrators for this event.'
+  'Your response will be shared with the event organizer, who has management access, and with Huntsville Social Club administrators. Being listed as a host does not itself grant access to your response.'
 
 export const RSVP_QUESTION_TOO_LONG_MESSAGE = `RSVP question must be ${RSVP_QUESTION_MAX_CHARS} characters or fewer.`
 export const RSVP_ANSWER_TOO_LONG_MESSAGE = `Your answer must be ${RSVP_ANSWER_MAX_CHARS} characters or fewer.`

@@ -20,6 +20,12 @@ import {
   isMissingCoverImageColumnError,
   withNullCoverImage,
 } from '@/lib/event-cover-image-column'
+import { loadEventHostMap } from '@/lib/event-host-store'
+import {
+  additionalHostLabel,
+  primaryHostLabel,
+  visibleAdditionalHostIds,
+} from '@/lib/event-host-assignment'
 
 type ProfileRow = {
   id: string
@@ -36,21 +42,6 @@ function canViewEvent(
 
   const status = event.status ?? 'published'
   return status === 'published' || status === 'cancelled'
-}
-
-function memberLabel(profile: ProfileRow | undefined): string {
-  if (!profile) return 'Unknown member'
-  if (profile.full_name) return profile.full_name
-  return 'Member'
-}
-
-function creatorLabel(
-  ownerId: string,
-  profilesById: Record<string, ProfileRow>,
-  isMine: boolean
-): string {
-  if (isMine) return 'You'
-  return memberLabel(profilesById[ownerId])
 }
 
 type RsvpCounts = {
@@ -99,14 +90,31 @@ export default async function EventsPage() {
   const visibleEvents =
     events?.filter((event) => canViewEvent(event, user.id, userRole)) ?? []
 
-  const ownerIds = [...new Set(visibleEvents.map((event) => event.owner_id))]
+  const hostMap = await loadEventHostMap(
+    supabase,
+    visibleEvents.map((event) => ({
+      id: event.id,
+      owner_id: event.owner_id,
+    }))
+  )
+  const hostIds = hostMap.loadError
+    ? []
+    : [
+        ...new Set(
+          visibleEvents.flatMap((event) => {
+            const hosts = hostMap.byEventId[event.id]
+            if (!hosts) return []
+            return [hosts.primaryHostId, ...hosts.additionalHostIds]
+          })
+        ),
+      ]
   const profilesById: Record<string, ProfileRow> = {}
 
-  if (ownerIds.length > 0) {
+  if (hostIds.length > 0) {
     const { data: profiles } = await supabase
       .from(userRole === 'admin' ? MEMBER_PROFILES_VIEW : MEMBER_DIRECTORY_PROFILES)
       .select('id, full_name')
-      .in('id', ownerIds)
+      .in('id', hostIds)
 
     for (const profile of profiles ?? []) {
       profilesById[profile.id] = profile
@@ -142,39 +150,53 @@ export default async function EventsPage() {
     }
   }
 
-  const browserEvents: EventBrowserItem[] = visibleEvents.map((event) => ({
-    id: event.id,
-    title: event.title,
-    location: event.location,
-    starts_at: event.starts_at,
-    ends_at: event.ends_at,
-    description: event.description,
-    status: event.status ?? 'published',
-    event_type: event.event_type,
-    attendance_max: event.attendance_max ?? null,
-    cover_image_url: event.cover_image_url ?? null,
-    creatorLabel: creatorLabel(
-      event.owner_id,
-      profilesById,
-      event.owner_id === user.id
-    ),
-    counts: rsvpCountsByEvent[event.id] ?? {
-      going: 0,
-      maybe: 0,
-      not_going: 0,
-    },
-    currentUserStatus: currentUserStatusByEvent[event.id] ?? null,
-    registrationPreview: entitlements
-      ? evaluateEventRegistration({
-          entitlements,
-          eventType: (event.event_type ?? 'standard_event') as EventAccessType,
-          eventStatus: event.status,
-          isGoingRsvp: true,
-          priorityRsvpOpensAt: event.priority_rsvp_opens_at,
-          generalRsvpOpensAt: event.general_rsvp_opens_at,
-        })
-      : null,
-  }))
+  const browserEvents: EventBrowserItem[] = visibleEvents.map((event) => {
+    const hosts = hostMap.loadError ? null : hostMap.byEventId[event.id]
+    const additionalHostIds = hosts
+      ? visibleAdditionalHostIds(hosts.primaryHostId, hosts.additionalHostIds)
+      : []
+    return {
+      id: event.id,
+      title: event.title,
+      location: event.location,
+      starts_at: event.starts_at,
+      ends_at: event.ends_at,
+      description: event.description,
+      status: event.status ?? 'published',
+      event_type: event.event_type,
+      attendance_max: event.attendance_max ?? null,
+      cover_image_url: event.cover_image_url ?? null,
+      creatorLabel: hosts
+        ? primaryHostLabel({
+            hostId: hosts.primaryHostId,
+            viewerId: user.id,
+            profile: profilesById[hosts.primaryHostId],
+            style: 'card',
+          })
+        : 'Host names could not be loaded',
+      additionalHostLabel: additionalHostLabel({
+        hostIds: additionalHostIds,
+        viewerId: user.id,
+        profilesById,
+      }),
+      counts: rsvpCountsByEvent[event.id] ?? {
+        going: 0,
+        maybe: 0,
+        not_going: 0,
+      },
+      currentUserStatus: currentUserStatusByEvent[event.id] ?? null,
+      registrationPreview: entitlements
+        ? evaluateEventRegistration({
+            entitlements,
+            eventType: (event.event_type ?? 'standard_event') as EventAccessType,
+            eventStatus: event.status,
+            isGoingRsvp: true,
+            priorityRsvpOpensAt: event.priority_rsvp_opens_at,
+            generalRsvpOpensAt: event.general_rsvp_opens_at,
+          })
+        : null,
+    }
+  })
 
   return (
     <>
@@ -192,7 +214,14 @@ export default async function EventsPage() {
           description="Programming from the club will appear here as it is announced."
         />
       ) : (
-        <EventsBrowser events={browserEvents} />
+        <>
+          {hostMap.loadError ? (
+            <p className="mb-4 text-sm text-danger">
+              Could not load event hosts: {hostMap.loadError}
+            </p>
+          ) : null}
+          <EventsBrowser events={browserEvents} />
+        </>
       )}
 
       {canCreateEvents ? (
@@ -203,6 +232,14 @@ export default async function EventsPage() {
             canManageSponsors={canManageSponsors}
             availableSponsors={availableSponsors}
             canCreateStandardOnly={!isAdminCreator}
+            creator={
+              canManageSponsors
+                ? {
+                    id: viewer.userId,
+                    fullName: viewer.profile?.full_name?.trim() ?? '',
+                  }
+                : null
+            }
           />
         </section>
       ) : null}

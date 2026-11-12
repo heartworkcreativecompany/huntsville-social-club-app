@@ -25,6 +25,18 @@ import {
   isSponsorshipEligibleEventType,
   replaceEventSponsors,
 } from '@/lib/event-sponsors'
+import {
+  decideHostAssignment,
+  EVENT_HOST_SCHEMA_REQUIRED_MESSAGE,
+  isMissingEventHostSchemaError,
+  sameHostIds,
+} from '@/lib/event-host-assignment'
+import {
+  createEventWithHosts,
+  loadEventHostMap,
+  loadHostCandidates,
+  updateEventWithHosts,
+} from '@/lib/event-host-store'
 
 const EVENT_TYPES = new Set([
   'standard_event',
@@ -41,6 +53,87 @@ const EVENT_STATUSES = new Set([
 
 function isPrivilegedEventManager(role: string | null | undefined): boolean {
   return role === 'admin' || role === 'host'
+}
+
+function hostAssignmentSubmitted(input: {
+  primaryHostId?: string
+  additionalHostIds?: string[]
+}): boolean {
+  return (
+    input.primaryHostId !== undefined || input.additionalHostIds !== undefined
+  )
+}
+
+async function planAdminHostAssignment(
+  client: Awaited<ReturnType<typeof createClient>>,
+  input: {
+    ownerId: string
+    event?: { id: string; owner_id: string }
+    nextPrimaryHostId?: string
+    nextAdditionalHostIds?: string[]
+  }
+) {
+  let rawPrimaryHostId: string | null = null
+  let currentPrimaryHostId = input.ownerId
+  let currentAdditionalHostIds: string[] = []
+  let schemaReady = true
+
+  if (input.event) {
+    const loaded = await loadEventHostMap(client, [input.event])
+    if (loaded.loadError) return { error: loaded.loadError }
+    const stored = loaded.byEventId[input.event.id]
+    if (!stored) return { error: 'Could not load event hosts.' }
+    rawPrimaryHostId = stored.rawPrimaryHostId
+    currentPrimaryHostId = stored.primaryHostId
+    currentAdditionalHostIds = stored.additionalHostIds
+    schemaReady = loaded.schemaReady
+  }
+
+  if (
+    input.nextPrimaryHostId === undefined &&
+    input.nextAdditionalHostIds === undefined
+  ) {
+    return { apply: false as const }
+  }
+
+  const nextPrimaryHostId =
+    input.nextPrimaryHostId?.trim() || currentPrimaryHostId
+  const nextAdditionalHostIds =
+    input.nextAdditionalHostIds ?? currentAdditionalHostIds
+  const retainedAdditional = new Set(currentAdditionalHostIds)
+  const candidateIds = [
+    ...(nextPrimaryHostId !== currentPrimaryHostId ? [nextPrimaryHostId] : []),
+    ...nextAdditionalHostIds.filter((hostId) => !retainedAdditional.has(hostId)),
+  ]
+  const candidates = await loadHostCandidates(client, candidateIds)
+  if ('error' in candidates) return { error: candidates.error }
+
+  const decision = decideHostAssignment({
+    actorRole: 'admin',
+    currentPrimaryHostId,
+    currentAdditionalHostIds,
+    nextPrimaryHostId,
+    nextAdditionalHostIds,
+    candidates: candidates.candidates,
+  })
+  if (!decision.ok) return { error: decision.error }
+
+  const primaryChanged = decision.primaryHostId !== currentPrimaryHostId
+  const additionalChanged = !sameHostIds(
+    decision.additionalHostIds,
+    currentAdditionalHostIds
+  )
+  if (!primaryChanged && !additionalChanged) return { apply: false as const }
+  if (!schemaReady) return { error: EVENT_HOST_SCHEMA_REQUIRED_MESSAGE }
+
+  return {
+    apply: true as const,
+    primaryHostId: decision.primaryHostId,
+    rawPrimaryHostId,
+    additionalHostIds: decision.additionalHostIds,
+    primaryChanged,
+    additionalChanged,
+  }
 }
 
 function parseEventSchedule(input: {
@@ -129,6 +222,8 @@ export async function createEvent(input: {
   rsvpQuestion?: string
   rsvpQuestionRequired?: boolean
   listedPublicly?: boolean
+  primaryHostId?: string
+  additionalHostIds?: string[]
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -136,6 +231,9 @@ export async function createEvent(input: {
   }
   if (!viewer.canAccessApp || !isApprovedMember(viewer.applicationStatus, viewer.role)) {
     return { error: 'Membership approval is required.' }
+  }
+  if (hostAssignmentSubmitted(input) && viewer.role !== 'admin') {
+    return { error: 'You do not have permission to assign event hosts.' }
   }
 
   const privileged = isPrivilegedEventManager(viewer.role)
@@ -211,8 +309,21 @@ export async function createEvent(input: {
   }
 
   const sponsorshipEligible = isSponsorshipEligibleEventType(eventType)
+  const listedPublicly = resolveListedPublicly({
+    role: viewer.role,
+    requested: input.listedPublicly,
+  })
 
   const supabase = await createClient()
+  const hostPlan = hostAssignmentSubmitted(input)
+    ? await planAdminHostAssignment(supabase, {
+        ownerId: viewer.userId,
+        nextPrimaryHostId: input.primaryHostId,
+        nextAdditionalHostIds: input.additionalHostIds,
+      })
+    : { apply: false as const }
+  if ('error' in hostPlan) return { error: hostPlan.error }
+
   const insertPayload = {
     owner_id: viewer.userId,
     title,
@@ -228,10 +339,7 @@ export async function createEvent(input: {
     cover_image_url: coverImageUrl,
     rsvp_question: rsvpQuestionConfig.rsvp_question,
     rsvp_question_required: rsvpQuestionConfig.rsvp_question_required,
-    listed_publicly: resolveListedPublicly({
-      role: viewer.role,
-      requested: input.listedPublicly,
-    }),
+    listed_publicly: listedPublicly,
     ...(privileged
       ? {
           fee_cents: feeCents,
@@ -241,28 +349,65 @@ export async function createEvent(input: {
       : {}),
   }
 
-  let insertAttempt: Record<string, unknown> = insertPayload
-  let { data: newEvent, error: eventError } = await supabase
-    .from('events')
-    .insert(insertPayload)
-    .select('id')
-    .single()
+  let newEvent: { id: string } | null = null
+  let eventError: { message: string; code?: string } | null = null
 
-  for (let i = 0; i < 3 && eventError; i += 1) {
-    const stripped = stripUnknownEventWriteColumns(insertAttempt, eventError)
-    if (!stripped) break
-    insertAttempt = stripped
-    const retry = await supabase
+  if (hostPlan.apply) {
+    const created = await createEventWithHosts(supabase, {
+      title,
+      location,
+      startsAt,
+      description: persistEventDescription(input.description),
+      endsAt,
+      eventType,
+      status,
+      sponsorshipEligible,
+      attendanceMax: attendanceParsed.value,
+      coverImageUrl,
+      applyCoverImage: true,
+      rsvpQuestion: rsvpQuestionConfig.rsvp_question,
+      rsvpQuestionRequired: rsvpQuestionConfig.rsvp_question_required,
+      listedPublicly,
+      feeCents,
+      priorityRsvpOpensAt: priorityIso,
+      generalRsvpOpensAt: generalIso,
+      nextPrimaryHostId: hostPlan.primaryChanged
+        ? hostPlan.primaryHostId
+        : viewer.userId,
+      additionalHostIds: hostPlan.additionalHostIds,
+    })
+    if ('error' in created) return { error: created.error }
+    newEvent = { id: created.eventId }
+  } else {
+    let insertAttempt: Record<string, unknown> = insertPayload
+    const inserted = await supabase
       .from('events')
-      .insert(insertAttempt as typeof insertPayload)
+      .insert(insertPayload)
       .select('id')
       .single()
-    newEvent = retry.data
-    eventError = retry.error
-  }
+    newEvent = inserted.data
+    eventError = inserted.error
 
-  if (eventError) {
-    return { error: getEventWriteErrorMessage(eventError) }
+    for (let i = 0; i < 3 && eventError; i += 1) {
+      const stripped = stripUnknownEventWriteColumns(insertAttempt, eventError)
+      if (!stripped) break
+      insertAttempt = stripped
+      const retry = await supabase
+        .from('events')
+        .insert(insertAttempt as typeof insertPayload)
+        .select('id')
+        .single()
+      newEvent = retry.data
+      eventError = retry.error
+    }
+
+    if (eventError) {
+      return {
+        error: isMissingEventHostSchemaError(eventError)
+          ? EVENT_HOST_SCHEMA_REQUIRED_MESSAGE
+          : getEventWriteErrorMessage(eventError),
+      }
+    }
   }
 
   if (
@@ -331,6 +476,8 @@ export async function updateEvent(input: {
   rsvpQuestion?: string
   rsvpQuestionRequired?: boolean
   listedPublicly?: boolean
+  primaryHostId?: string
+  additionalHostIds?: string[]
 }) {
   const viewer = await getViewer()
   if (!viewer) {
@@ -353,6 +500,19 @@ export async function updateEvent(input: {
   if (!isAdmin && !isOwner) {
     return { error: 'You do not have permission to edit this event.' }
   }
+  if (hostAssignmentSubmitted(input) && !isAdmin) {
+    return { error: 'You do not have permission to assign event hosts.' }
+  }
+
+  const hostPlan = isAdmin
+    ? await planAdminHostAssignment(supabase, {
+        ownerId: existing.owner_id,
+        event: { id: existing.id, owner_id: existing.owner_id },
+        nextPrimaryHostId: input.primaryHostId,
+        nextAdditionalHostIds: input.additionalHostIds,
+      })
+    : { apply: false as const }
+  if ('error' in hostPlan) return { error: hostPlan.error }
 
   const title = input.title.trim()
   const location = input.location.trim()
@@ -431,6 +591,10 @@ export async function updateEvent(input: {
   }
 
   const sponsorshipEligible = isSponsorshipEligibleEventType(eventType)
+  const listedPublicly = resolveListedPublicly({
+    role: viewer.role,
+    requested: input.listedPublicly,
+  })
 
   const updatePayload = {
     title,
@@ -443,10 +607,7 @@ export async function updateEvent(input: {
     updated_at: new Date().toISOString(),
     rsvp_question: rsvpQuestionConfig.rsvp_question,
     rsvp_question_required: rsvpQuestionConfig.rsvp_question_required,
-    listed_publicly: resolveListedPublicly({
-      role: viewer.role,
-      requested: input.listedPublicly,
-    }),
+    listed_publicly: listedPublicly,
     ...(coverImageUrl !== undefined ? { cover_image_url: coverImageUrl } : {}),
     ...(canManageTypeAndFee
       ? {
@@ -458,25 +619,62 @@ export async function updateEvent(input: {
       : {}),
   }
 
-  let updateAttempt: Record<string, unknown> = updatePayload
-  let { error } = await supabase
-    .from('events')
-    .update(updatePayload)
-    .eq('id', input.eventId)
-
-  for (let i = 0; i < 3 && error; i += 1) {
-    const stripped = stripUnknownEventWriteColumns(updateAttempt, error)
-    if (!stripped) break
-    updateAttempt = stripped
-    const retry = await supabase
+  if (hostPlan.apply) {
+    const saved = await updateEventWithHosts(supabase, input.eventId, {
+      title,
+      location: location || null,
+      startsAt,
+      description: persistEventDescription(input.description),
+      endsAt,
+      eventType,
+      status,
+      sponsorshipEligible,
+      attendanceMax: attendanceParsed.value,
+      coverImageUrl: coverImageUrl ?? null,
+      applyCoverImage: coverImageUrl !== undefined,
+      rsvpQuestion: rsvpQuestionConfig.rsvp_question,
+      rsvpQuestionRequired: rsvpQuestionConfig.rsvp_question_required,
+      listedPublicly,
+      feeCents: typeof feePatch.fee_cents === 'number' ? feePatch.fee_cents : null,
+      priorityRsvpOpensAt:
+        typeof feePatch.priority_rsvp_opens_at === 'string'
+          ? feePatch.priority_rsvp_opens_at
+          : null,
+      generalRsvpOpensAt:
+        typeof feePatch.general_rsvp_opens_at === 'string'
+          ? feePatch.general_rsvp_opens_at
+          : null,
+      nextPrimaryHostId: hostPlan.primaryChanged
+        ? hostPlan.primaryHostId
+        : hostPlan.rawPrimaryHostId,
+      additionalHostIds: hostPlan.additionalHostIds,
+    })
+    if (saved.error) return { error: saved.error }
+  } else {
+    let updateAttempt: Record<string, unknown> = updatePayload
+    let { error } = await supabase
       .from('events')
-      .update(updateAttempt as typeof updatePayload)
+      .update(updatePayload)
       .eq('id', input.eventId)
-    error = retry.error
-  }
 
-  if (error) {
-    return { error: getEventWriteErrorMessage(error) }
+    for (let i = 0; i < 3 && error; i += 1) {
+      const stripped = stripUnknownEventWriteColumns(updateAttempt, error)
+      if (!stripped) break
+      updateAttempt = stripped
+      const retry = await supabase
+        .from('events')
+        .update(updateAttempt as typeof updatePayload)
+        .eq('id', input.eventId)
+      error = retry.error
+    }
+
+    if (error) {
+      return {
+        error: isMissingEventHostSchemaError(error)
+          ? EVENT_HOST_SCHEMA_REQUIRED_MESSAGE
+          : getEventWriteErrorMessage(error),
+      }
+    }
   }
 
   if (isAdmin && input.sponsorIds !== undefined) {

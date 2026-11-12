@@ -985,6 +985,7 @@ export interface Database {
           rsvp_question: string | null
           rsvp_question_required: boolean
           listed_publicly: boolean
+          primary_host_id: string | null
           created_at: string
           updated_at: string
         }
@@ -1008,6 +1009,7 @@ export interface Database {
           rsvp_question?: string | null
           rsvp_question_required?: boolean
           listed_publicly?: boolean
+          primary_host_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1031,8 +1033,30 @@ export interface Database {
           rsvp_question?: string | null
           rsvp_question_required?: boolean
           listed_publicly?: boolean
+          primary_host_id?: string | null
           created_at?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      event_additional_hosts: {
+        Row: {
+          event_id: string
+          profile_id: string
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          event_id: string
+          profile_id: string
+          sort_order: number
+          created_at?: string
+        }
+        Update: {
+          event_id?: string
+          profile_id?: string
+          sort_order?: number
+          created_at?: string
         }
         Relationships: []
       }
@@ -1637,6 +1661,62 @@ export interface Database {
       }
     }
     Functions: {
+      assign_event_hosts: {
+        Args: {
+          target_event_id: string
+          next_primary_host_id: string | null
+          next_additional_host_ids: string[]
+        }
+        Returns: undefined
+      }
+      create_event_with_hosts: {
+        Args: {
+          title: string
+          location: string | null
+          starts_at: string
+          description: string | null
+          ends_at: string | null
+          event_type: string
+          status: string
+          sponsorship_eligible: boolean
+          attendance_max: number | null
+          cover_image_url: string | null
+          rsvp_question: string | null
+          rsvp_question_required: boolean
+          listed_publicly: boolean
+          fee_cents: number | null
+          priority_rsvp_opens_at: string | null
+          general_rsvp_opens_at: string | null
+          next_primary_host_id: string | null
+          next_additional_host_ids: string[]
+        }
+        Returns: string
+      }
+      update_event_with_hosts: {
+        Args: {
+          target_event_id: string
+          title: string
+          location: string | null
+          starts_at: string
+          description: string | null
+          ends_at: string | null
+          attendance_max: number | null
+          cover_image_url: string | null
+          apply_cover_image: boolean
+          rsvp_question: string | null
+          rsvp_question_required: boolean
+          listed_publicly: boolean
+          event_type: string
+          status: string
+          sponsorship_eligible: boolean
+          fee_cents: number | null
+          priority_rsvp_opens_at: string | null
+          general_rsvp_opens_at: string | null
+          next_primary_host_id: string | null
+          next_additional_host_ids: string[]
+        }
+        Returns: undefined
+      }
       profile_has_accepted_identity: {
         Args: { check_user_id: string }
         Returns: boolean

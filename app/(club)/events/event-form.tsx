@@ -4,6 +4,7 @@ import { useState, useTransition, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/card'
 import EventSponsorsField from '@/components/events/event-sponsors-field'
+import EventHostAssignmentFields from '@/components/events/event-host-assignment-fields'
 import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
@@ -13,6 +14,7 @@ import { createEvent } from '@/app/(club)/events/actions'
 import { createSponsorForAdmin } from '@/app/(club)/events/sponsor-actions'
 import { uploadEventCoverImage } from '@/lib/event-image-storage'
 import type { SponsorOption } from '@/lib/event-sponsors'
+import type { AssignedHost } from '@/lib/event-host-assignment'
 import EventRsvpQuestionFields from '@/components/events/event-rsvp-question-fields'
 
 type EventFormProps = {
@@ -23,6 +25,8 @@ type EventFormProps = {
   availableSponsors?: SponsorOption[]
   /** Paid members may only create standard events pending approval. */
   canCreateStandardOnly?: boolean
+  /** Signed-in creator. A cleared primary host displays and saves as this member. */
+  creator?: AssignedHost | null
 }
 
 export default function EventForm({
@@ -30,6 +34,7 @@ export default function EventForm({
   canManageSponsors = false,
   availableSponsors: initialSponsors = [],
   canCreateStandardOnly = false,
+  creator = null,
 }: EventFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -56,6 +61,8 @@ export default function EventForm({
   const [availableSponsors, setAvailableSponsors] =
     useState<SponsorOption[]>(initialSponsors)
   const [selectedSponsorIds, setSelectedSponsorIds] = useState<string[]>([])
+  const [primaryHost, setPrimaryHost] = useState<AssignedHost | null>(null)
+  const [additionalHosts, setAdditionalHosts] = useState<AssignedHost[]>([])
   const [message, setMessage] = useState('')
 
   const onCoverImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -106,6 +113,12 @@ export default function EventForm({
             }
           : {}),
         ...(canManageSponsors ? { sponsorIds: selectedSponsorIds } : {}),
+        ...(canManageSponsors && (primaryHost || additionalHosts.length > 0)
+          ? {
+              ...(primaryHost ? { primaryHostId: primaryHost.id } : {}),
+              additionalHostIds: additionalHosts.map((host) => host.id),
+            }
+          : {}),
       })
 
       if (result.error) {
@@ -359,6 +372,18 @@ export default function EventForm({
               members. Entitlement rules are unchanged by these fields.
             </p>
           </div>
+        ) : null}
+
+        {canManageSponsors ? (
+          <EventHostAssignmentFields
+            primaryHost={primaryHost}
+            additionalHosts={additionalHosts}
+            onPrimaryHostChange={setPrimaryHost}
+            onAdditionalHostsChange={setAdditionalHosts}
+            disabled={isPending || isUploadingImage}
+            creator={creator}
+            creatorFallbackLabel="Leave this as you, or search for another hosting-enabled member."
+          />
         ) : null}
 
         {canManageSponsors ? (
