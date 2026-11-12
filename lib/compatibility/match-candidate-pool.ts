@@ -88,8 +88,13 @@ export async function loadMatchPoolProfiles(
     return { profiles: [], error: 'Compatibility matching is disabled.' }
   }
 
+  const reader = createAdminClient()
+  if (!reader) {
+    return { profiles: [], error: 'Compatibility matching is unavailable.' }
+  }
+
   const poolQuery = (hideRemoved: boolean) => {
-    const query = supabase
+    const query = reader
       .from(MEMBER_PROFILES_VIEW)
       .select(MATCH_POOL_SELECT)
       .eq('application_status', 'approved')
@@ -129,7 +134,7 @@ export async function loadMatchPoolProfiles(
     profiles.map((profile) => profile.id)
   )
   const identity = await loadMatchingIdentityMap(
-    supabase,
+    reader,
     profiles.map((profile) => profile.id)
   )
   if (!identity.ok) {
@@ -154,7 +159,10 @@ export async function loadMatchPoolProfileForUser(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<MatchPoolProfile | null> {
-  const { data, error } = await supabase
+  const reader = createAdminClient()
+  if (!reader) return null
+
+  const { data, error } = await reader
     .from(MEMBER_PROFILES_VIEW)
     .select(MATCH_POOL_SELECT)
     .eq('id', userId)
@@ -174,7 +182,7 @@ export async function loadMatchPoolProfileForUser(
     [profile.id]
   )
   const cycles = await loadActiveEntitlementCyclesByUserIds(supabase, [profile.id])
-  const identity = await loadMatchingIdentityMap(supabase, [profile.id])
+  const identity = await loadMatchingIdentityMap(reader, [profile.id])
   return {
     ...profile,
     accessOverride: overrides.get(profile.id) ?? null,

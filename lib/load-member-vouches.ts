@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { memberDisplayName } from '@/lib/members-discovery'
-import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import { MEMBER_DIRECTORY_PROFILES } from '@/lib/member-directory-profiles'
 import {
   summarizeVouches,
   type MemberVouch,
@@ -61,7 +61,7 @@ export async function loadApprovedVouchEndorsements(
 
   const authorIds = [...new Set(data.map((row) => row.voucher_id))]
   const { data: authors } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
+    .from(MEMBER_DIRECTORY_PROFILES)
     .select('id, full_name')
     .in('id', authorIds)
 

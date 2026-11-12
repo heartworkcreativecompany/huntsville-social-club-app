@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { MEMBER_DIRECTORY_PROFILES } from '@/lib/member-directory-profiles'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -75,7 +76,7 @@ export async function createMemberVouch(input: {
   }
 
   const { data: vouchee } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
+    .from(MEMBER_DIRECTORY_PROFILES)
     .select('application_status')
     .eq('id', input.voucheeId)
     .single()

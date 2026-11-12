@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
+import { MEMBER_DIRECTORY_PROFILES } from '@/lib/member-directory-profiles'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import {
   adminAttendeeLabel,
@@ -185,13 +186,14 @@ export default async function EventDetailPage({ params }: PageProps) {
     )
   }
 
+  const userRole = viewer.role
+  const profileNames = userRole === 'admin' ? MEMBER_PROFILES_VIEW : MEMBER_DIRECTORY_PROFILES
+
   const { data: creator } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
+    .from(profileNames)
     .select('id, full_name')
     .eq('id', event.owner_id)
     .single()
-
-  const userRole = viewer.role
   const canExportAttendees = canViewEventAttendeeRoster({
     viewerId: user.id,
     eventOwnerId: event.owner_id,
@@ -242,7 +244,7 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   if (attendeeUserIds.length > 0) {
     const { data: attendeeProfiles } = await supabase
-      .from(MEMBER_PROFILES_VIEW)
+      .from(profileNames)
       .select('id, full_name')
       .in('id', attendeeUserIds)
 

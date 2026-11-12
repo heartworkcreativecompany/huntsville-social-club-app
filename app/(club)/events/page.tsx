@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
+import { MEMBER_DIRECTORY_PROFILES } from '@/lib/member-directory-profiles'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { createClient } from '@/lib/supabase/server'
 import EmptyState from '@/components/ui/empty-state'
@@ -103,7 +104,7 @@ export default async function EventsPage() {
 
   if (ownerIds.length > 0) {
     const { data: profiles } = await supabase
-      .from(MEMBER_PROFILES_VIEW)
+      .from(userRole === 'admin' ? MEMBER_PROFILES_VIEW : MEMBER_DIRECTORY_PROFILES)
       .select('id, full_name')
       .in('id', ownerIds)
 

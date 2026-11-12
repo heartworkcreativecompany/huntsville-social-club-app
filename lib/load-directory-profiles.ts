@@ -27,6 +27,11 @@ import {
   isMissingSchemaColumnError,
 } from '@/lib/profile-query-fields'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import {
+  MEMBER_DIRECTORY_PROFILES,
+  MEMBER_DIRECTORY_PROFILE_FIELDS,
+  prepareSafeDirectoryRow,
+} from '@/lib/member-directory-profiles'
 import { attachPublicRecognitionBadges } from '@/lib/recognition-badges/public'
 import { attachPublicIdentityDecisions } from '@/lib/identity-verification-access'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -35,6 +40,38 @@ import type { SlimMembershipAccessOverride } from '@/lib/membership-access-overr
 
 type RawProfile = Parameters<typeof buildDirectoryMember>[0] & {
   application_draft?: unknown
+  public_profile?: unknown
+  profile_checks_approved?: boolean | null
+}
+
+function directoryRelation(isAdmin: boolean) {
+  return isAdmin ? MEMBER_PROFILES_VIEW : MEMBER_DIRECTORY_PROFILES
+}
+
+async function withPublicBadgeInputs(
+  rows: RawProfile[],
+  isAdmin: boolean
+): Promise<RawProfile[]> {
+  if (isAdmin || rows.length === 0) return rows
+  const admin = createAdminClient()
+  if (!admin) return rows
+  const { data } = await admin
+    .from('profiles')
+    .select('id, membership_billing, premium_verification')
+    .in(
+      'id',
+      rows.map((row) => row.id)
+    )
+  const byId = new Map((data ?? []).map((row) => [row.id, row]))
+  return rows.map((row) => {
+    const extra = byId.get(row.id)
+    if (!extra) return row
+    return {
+      ...row,
+      membership_billing: extra.membership_billing,
+      premium_verification: extra.premium_verification,
+    }
+  })
 }
 
 function finalizeMember(
@@ -60,11 +97,12 @@ async function fetchApprovedProfiles(
   supabase: Awaited<ReturnType<typeof createClient>>,
   viewerId: string,
   fields: string,
-  hideRemoved = true
+  hideRemoved = true,
+  isAdmin = false
 ) {
   const query = supabase
-    .from(MEMBER_PROFILES_VIEW)
-    .select(fields)
+    .from(directoryRelation(isAdmin))
+    .select(isAdmin ? fields : MEMBER_DIRECTORY_PROFILE_FIELDS)
     .eq('application_status', 'approved')
     .neq('id', viewerId)
   const filtered = hideRemoved ? query.is('removed_at', null) : query
@@ -75,11 +113,14 @@ async function fetchProfileById(
   supabase: Awaited<ReturnType<typeof createClient>>,
   memberId: string,
   fields: string,
-  hideRemoved = true
+  hideRemoved = true,
+  isAdmin = false,
+  isSelf = false
 ) {
+  const fullRow = isAdmin || isSelf
   const query = supabase
-    .from(MEMBER_PROFILES_VIEW)
-    .select(fields)
+    .from(fullRow ? MEMBER_PROFILES_VIEW : MEMBER_DIRECTORY_PROFILES)
+    .select(fullRow ? fields : MEMBER_DIRECTORY_PROFILE_FIELDS)
     .eq('id', memberId)
   return (hideRemoved ? query.is('removed_at', null) : query).single()
 }
@@ -104,6 +145,16 @@ async function loadWithFieldFallback<T>(
   return { data: legacy.data, error: null, usedLegacyFields: true }
 }
 
+async function loadSafeRows<T>(
+  load: () => Promise<{ data: T | null; error: { message: string } | null }>
+): Promise<{ data: T | null; error: string | null; usedLegacyFields: boolean }> {
+  const result = await load()
+  if (result.error) {
+    return { data: null, error: result.error.message, usedLegacyFields: false }
+  }
+  return { data: result.data, error: null, usedLegacyFields: false }
+}
+
 export async function loadDirectoryProfiles(
   viewerId: string,
   canBrowseDiscovery: boolean,
@@ -115,12 +166,20 @@ export async function loadDirectoryProfiles(
 
   const supabase = await createClient()
 
-  let loaded = await loadWithFieldFallback((fields) =>
-    fetchApprovedProfiles(supabase, viewerId, fields, true)
-  )
-  if (loaded.error && isMissingSchemaColumnError({ message: loaded.error })) {
+  let loaded = isAdmin
+    ? await loadWithFieldFallback((fields) =>
+        fetchApprovedProfiles(supabase, viewerId, fields, true, true)
+      )
+    : await loadSafeRows(() =>
+        fetchApprovedProfiles(supabase, viewerId, MEMBER_DIRECTORY_PROFILE_FIELDS, true, false)
+      )
+  if (
+    isAdmin &&
+    loaded.error &&
+    isMissingSchemaColumnError({ message: loaded.error })
+  ) {
     loaded = await loadWithFieldFallback((fields) =>
-      fetchApprovedProfiles(supabase, viewerId, fields, false)
+      fetchApprovedProfiles(supabase, viewerId, fields, false, true)
     )
   }
   const { data, error } = loaded
@@ -129,7 +188,11 @@ export async function loadDirectoryProfiles(
     return { members: [], error }
   }
 
-  const rows = (Array.isArray(data) ? data : [data]) as unknown as RawProfile[]
+  const rawRows = (Array.isArray(data) ? data : [data]) as unknown as RawProfile[]
+  const rows = await withPublicBadgeInputs(
+    isAdmin ? rawRows : rawRows.map((row) => prepareSafeDirectoryRow(row)),
+    isAdmin
+  )
   const overrides = await loadActiveMembershipAccessOverridesByUserIds(
     createAdminClient(),
     rows.map((profile) => profile.id)
@@ -179,12 +242,13 @@ function approvedDirectoryQuery(
   viewerId: string,
   fields: string,
   search: string,
-  hideRemoved = true
+  hideRemoved = true,
+  isAdmin = false
 ) {
   const name = normalizeDirectoryNameQuery(search)
   const base = supabase
-    .from(MEMBER_PROFILES_VIEW)
-    .select(fields)
+    .from(directoryRelation(isAdmin))
+    .select(isAdmin ? fields : fields === DIRECTORY_INDEX_FIELDS ? fields : MEMBER_DIRECTORY_PROFILE_FIELDS)
     .eq('application_status', 'approved')
     .neq('id', viewerId)
   const query = hideRemoved ? base.is('removed_at', null) : base
@@ -197,7 +261,8 @@ async function scanApprovedRows(
   viewerId: string,
   fields: string,
   search: string,
-  hideRemoved = true
+  hideRemoved = true,
+  isAdmin = false
 ): Promise<{ data: RawProfile[]; error: string | null }> {
   const rows: RawProfile[] = []
   for (
@@ -210,13 +275,16 @@ async function scanApprovedRows(
       viewerId,
       fields,
       search,
-      hideRemoved
+      hideRemoved,
+      isAdmin
     )
       .order('id', { ascending: true })
       .range(from, from + DIRECTORY_SCAN_PAGE_SIZE - 1)
 
     if (error) return { data: [], error: error.message }
-    const batch = (data ?? []) as unknown as RawProfile[]
+    const batch = ((data ?? []) as unknown as RawProfile[]).map((row) =>
+      isAdmin ? row : prepareSafeDirectoryRow(row)
+    )
     rows.push(...batch)
     if (batch.length < DIRECTORY_SCAN_PAGE_SIZE) {
       return { data: rows, error: null }
@@ -232,13 +300,25 @@ async function scanApprovedRows(
 async function scanDirectoryRoster(
   supabase: DirectoryClient,
   viewerId: string,
-  search: string
+  search: string,
+  isAdmin: boolean
 ): Promise<{ data: RawProfile[]; error: string | null }> {
+  if (!isAdmin) {
+    return scanApprovedRows(
+      supabase,
+      viewerId,
+      MEMBER_DIRECTORY_PROFILE_FIELDS,
+      search,
+      true,
+      false
+    )
+  }
   const full = await scanApprovedRows(
     supabase,
     viewerId,
     DIRECTORY_FULL_FIELDS,
     search,
+    true,
     true
   )
   if (!full.error) return full
@@ -248,7 +328,8 @@ async function scanDirectoryRoster(
     viewerId,
     DIRECTORY_FULL_FIELDS,
     search,
-    false
+    false,
+    true
   )
   if (!withoutRemoval.error) return withoutRemoval
   return scanApprovedRows(
@@ -256,7 +337,8 @@ async function scanDirectoryRoster(
     viewerId,
     DIRECTORY_APPLICATION_FIELDS,
     search,
-    false
+    false,
+    true
   )
 }
 
@@ -268,16 +350,30 @@ async function hydrateDirectoryPage(
 ): Promise<{ members: DirectoryMember[]; error: string | null }> {
   if (pageIds.length === 0) return { members: [], error: null }
 
-  let hydrated = await loadWithFieldFallback(async (fields) => {
-    const result = await supabase
-      .from(MEMBER_PROFILES_VIEW)
-      .select(fields)
-      .in('id', pageIds)
-      .eq('application_status', 'approved')
-      .is('removed_at', null)
-    return result
-  })
-  if (hydrated.error && isMissingSchemaColumnError({ message: hydrated.error })) {
+  let hydrated = isAdmin
+    ? await loadWithFieldFallback(async (fields) => {
+        const result = await supabase
+          .from(MEMBER_PROFILES_VIEW)
+          .select(fields)
+          .in('id', pageIds)
+          .eq('application_status', 'approved')
+          .is('removed_at', null)
+        return result
+      })
+    : await loadSafeRows(async () => {
+        const result = await supabase
+          .from(MEMBER_DIRECTORY_PROFILES)
+          .select(MEMBER_DIRECTORY_PROFILE_FIELDS)
+          .in('id', pageIds)
+          .eq('application_status', 'approved')
+          .is('removed_at', null)
+        return result
+      })
+  if (
+    isAdmin &&
+    hydrated.error &&
+    isMissingSchemaColumnError({ message: hydrated.error })
+  ) {
     hydrated = await loadWithFieldFallback(async (fields) => {
       const result = await supabase
         .from(MEMBER_PROFILES_VIEW)
@@ -293,7 +389,11 @@ async function hydrateDirectoryPage(
     return { members: [], error: error ?? 'Could not load members' }
   }
 
-  const rows = (Array.isArray(data) ? data : [data]) as unknown as RawProfile[]
+  const loadedRows = (Array.isArray(data) ? data : [data]) as unknown as RawProfile[]
+  const rows = await withPublicBadgeInputs(
+    isAdmin ? loadedRows : loadedRows.map((row) => prepareSafeDirectoryRow(row)),
+    isAdmin
+  )
   const byId = new Map(
     rows
       .filter((row) => row.id !== viewerId)
@@ -329,14 +429,14 @@ export async function loadDirectoryPage(
   const supabase = await createClient()
   const countApproved = (hideRemoved: boolean) => {
     const query = supabase
-      .from(MEMBER_PROFILES_VIEW)
+      .from(directoryRelation(isAdmin))
       .select('id', { count: 'exact', head: true })
       .eq('application_status', 'approved')
       .neq('id', viewerId)
     return hideRemoved ? query.is('removed_at', null) : query
   }
   let counted = await countApproved(true)
-  if (counted.error && isMissingSchemaColumnError(counted.error)) {
+  if (isAdmin && counted.error && isMissingSchemaColumnError(counted.error)) {
     counted = await countApproved(false)
   }
   const { count, error: countError } = counted
@@ -352,14 +452,15 @@ export async function loadDirectoryPage(
     ? null
     : DIRECTORY_INDEX_FIELDS
   let scanned = fields
-    ? await scanApprovedRows(supabase, viewerId, fields, search, true)
-    : await scanDirectoryRoster(supabase, viewerId, search)
+    ? await scanApprovedRows(supabase, viewerId, fields, search, true, isAdmin)
+    : await scanDirectoryRoster(supabase, viewerId, search, isAdmin)
   if (
+    isAdmin &&
     fields &&
     scanned.error &&
     isMissingSchemaColumnError({ message: scanned.error })
   ) {
-    scanned = await scanApprovedRows(supabase, viewerId, fields, search, false)
+    scanned = await scanApprovedRows(supabase, viewerId, fields, search, false, true)
   }
 
   if (scanned.error) {
@@ -425,16 +526,30 @@ export async function loadMemberProfile(
   error: string | null
 }> {
   const supabase = await createClient()
+  const isSelf = memberId === viewerId
+  const fullRow = isAdmin || isSelf
 
-  let loadedProfile = await loadWithFieldFallback((fields) =>
-    fetchProfileById(supabase, memberId, fields, true)
-  )
+  let loadedProfile = fullRow
+    ? await loadWithFieldFallback((fields) =>
+        fetchProfileById(supabase, memberId, fields, true, isAdmin, isSelf)
+      )
+    : await loadSafeRows(() =>
+        fetchProfileById(
+          supabase,
+          memberId,
+          MEMBER_DIRECTORY_PROFILE_FIELDS,
+          true,
+          false,
+          false
+        )
+      )
   if (
+    fullRow &&
     loadedProfile.error &&
     isMissingSchemaColumnError({ message: loadedProfile.error })
   ) {
     loadedProfile = await loadWithFieldFallback((fields) =>
-      fetchProfileById(supabase, memberId, fields, false)
+      fetchProfileById(supabase, memberId, fields, false, isAdmin, isSelf)
     )
   }
   const { data, error } = loadedProfile
@@ -443,10 +558,16 @@ export async function loadMemberProfile(
     return { member: null, profileDetails: null, error: error ?? 'Profile not found' }
   }
 
-  const profile = data as unknown as RawProfile & {
+  const loadedProfileRow = data as unknown as RawProfile & {
     application_status?: string | null
   }
-  const isSelf = memberId === viewerId
+  const [profile] = await withPublicBadgeInputs(
+    [fullRow ? loadedProfileRow : prepareSafeDirectoryRow(loadedProfileRow)],
+    isAdmin || isSelf
+  )
+  if (!profile) {
+    return { member: null, profileDetails: null, error: 'Profile not found' }
+  }
   const isApproved = profile.application_status === 'approved'
 
   if (!canBrowseDiscovery && !isSelf) {
