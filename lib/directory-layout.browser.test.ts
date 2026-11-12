@@ -1,42 +1,22 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+/**
+ * Drives headless Chrome against the local directory layout review page.
+ * A normal unit run does not start Chrome or `next dev`. Opt in with:
+ * RUN_BROWSER_TESTS=1 npx vitest run lib/directory-layout.browser.test.ts
+ * That requires Google Chrome at the macOS path below, and either an existing
+ * review server on port 3456 or permission for this file to start `next dev`.
+ */
+const runBrowserTests = process.env.RUN_BROWSER_TESTS === '1'
+
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const REVIEW_PORT = 3456
 const REVIEW_ORIGIN = `http://127.0.0.1:${REVIEW_PORT}`
 const DIRECTORY = `${REVIEW_ORIGIN}/directory-layout-review?q=Ada&browse=industry&industry=aerospace_aviation_space&page=2`
+const REVIEW_FETCH_TIMEOUT_MS = 2000
 
 let reviewServer: ChildProcess | null = null
-
-beforeAll(async () => {
-  try {
-    const existing = await fetch(DIRECTORY)
-    if (existing.status === 200) return
-  } catch {
-    // Start a review server only when one is not already listening.
-  }
-  reviewServer = spawn(
-    'npx',
-    ['next', 'dev', '--port', String(REVIEW_PORT)],
-    {
-      cwd: process.cwd(),
-      stdio: 'ignore',
-      env: {
-        ...process.env,
-        NEXT_PUBLIC_SUPABASE_URL:
-          process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321',
-        NEXT_PUBLIC_SUPABASE_ANON_KEY:
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'local-build-placeholder',
-        DIRECTORY_LAYOUT_REVIEW: '1',
-      },
-    }
-  )
-  await waitForReviewServer()
-}, 90000)
-
-afterAll(() => {
-  reviewServer?.kill()
-})
 
 type CdpMessage = {
   id?: number
@@ -48,11 +28,15 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function fetchReviewPage() {
+  return fetch(DIRECTORY, { signal: AbortSignal.timeout(REVIEW_FETCH_TIMEOUT_MS) })
+}
+
 async function waitForReviewServer() {
   const started = Date.now()
   while (Date.now() - started < 60000) {
     try {
-      const response = await fetch(DIRECTORY)
+      const response = await fetchReviewPage()
       if (response.status === 200) return
     } catch {
       // The review server is started separately for this local check.
@@ -177,7 +161,37 @@ class CdpSession extends Cdp {
   }
 }
 
-describe('directory layout browser behavior', () => {
+describe.skipIf(!runBrowserTests)('directory layout browser behavior', () => {
+  beforeAll(async () => {
+    try {
+      const existing = await fetchReviewPage()
+      if (existing.status === 200) return
+    } catch {
+      // Start a review server only when one is not already listening.
+    }
+    reviewServer = spawn(
+      'npx',
+      ['next', 'dev', '--port', String(REVIEW_PORT)],
+      {
+        cwd: process.cwd(),
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          NEXT_PUBLIC_SUPABASE_URL:
+            process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321',
+          NEXT_PUBLIC_SUPABASE_ANON_KEY:
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'local-build-placeholder',
+          DIRECTORY_LAYOUT_REVIEW: '1',
+        },
+      }
+    )
+    await waitForReviewServer()
+  }, 90000)
+
+  afterAll(() => {
+    reviewServer?.kill()
+  })
+
   it('preserves directory history, restores the card, and lays out two mobile columns', async () => {
     await waitForReviewServer()
     const chrome = startChrome(9333)
