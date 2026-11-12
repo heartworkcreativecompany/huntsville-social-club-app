@@ -7,23 +7,17 @@ import {
   EMAIL_MARKETING_OPT_IN_LABEL,
   ESSENTIAL_EMAIL_ACKNOWLEDGEMENT_LABEL,
   ESSENTIAL_EMAIL_ACKNOWLEDGEMENT_REQUIRED_MESSAGE,
-  signupEmailConsentMetadata,
 } from '@/lib/email-consent'
-import { signupNameError, signupNameMetadata } from '@/lib/signup-name'
+import { signupNameError } from '@/lib/signup-name'
 import AuthPageShell from '@/components/auth/auth-page-shell'
 import AuthStatusBanner from '@/components/auth/auth-status-banner'
-import { checkSignupEmailAllowed } from '@/app/signup/actions'
-import { createClient } from '@/lib/supabase/client'
+import { signUpAccountAction } from '@/app/signup/actions'
 import { accountCreatedSuccessMessage, isAuthEmailConfirmationRequired } from '@/lib/auth-email'
-import {
-  friendlyAuthError,
-} from '@/lib/auth-errors'
 import {
   validateEmail,
   validatePassword,
   validatePasswordConfirmation,
 } from '@/lib/auth-validation'
-import { authCallbackUrl } from '@/lib/site'
 import { safeUpgradeReturnPath, loginHrefForReturnPath } from '@/lib/membership-plan-links'
 import { trackEvent } from '@/lib/analytics'
 import {
@@ -45,7 +39,6 @@ export default function SignUpPage() {
 }
 
 function SignUpForm() {
-  const supabase = createClient()
   const searchParams = useSearchParams()
   const returnPath = safeUpgradeReturnPath(searchParams.get('next'))
   const [givenName, setGivenName] = useState('')
@@ -105,31 +98,19 @@ function SignUpForm() {
 
     setIsPending(true)
 
-    const trimmedEmail = email.trim()
-    const emailAllowed = await checkSignupEmailAllowed(trimmedEmail)
-    if (emailAllowed.error) {
-      setError(emailAllowed.error)
-      setIsPending(false)
-      return
-    }
-
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: trimmedEmail,
+    const result = await signUpAccountAction({
+      givenName,
+      familyName,
+      email,
       password,
-      options: {
-        emailRedirectTo: authCallbackUrl(returnPath ?? '/login?confirmed=1'),
-        data: {
-          ...signupNameMetadata({ givenName, familyName }),
-          ...signupEmailConsentMetadata({
-            essentialAcknowledged,
-            marketingOptIn,
-          }),
-        },
-      },
+      confirmPassword,
+      essentialAcknowledged,
+      marketingOptIn,
+      returnPath,
     })
-
+    const signUpError = result.error
     if (signUpError) {
-      setError(friendlyAuthError(signUpError.message))
+      setError(signUpError)
       setIsPending(false)
       return
     }

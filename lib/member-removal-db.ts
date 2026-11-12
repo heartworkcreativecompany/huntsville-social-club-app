@@ -6,6 +6,11 @@ import {
   applicationBlockForEmailLookup,
   AUTH_BAN_DURATION,
   isRemovalReasonCategory,
+  RESTORE_AUTH_RECORD_FAILED_MESSAGE,
+  RESTORE_CLEAR_FAILED_MESSAGE,
+  RESTORE_EMAIL_FAILED_MESSAGE,
+  RESTORE_RECORD_FAILED_MESSAGE,
+  restoreRecordAction,
 } from '@/lib/member-removal'
 import type { RemovalRunDeps } from '@/lib/member-removal-run'
 import {
@@ -17,6 +22,7 @@ import { isMissingSchemaColumnError } from '@/lib/profile-query-fields'
 import { getStripe, isStripeConfigured } from '@/lib/stripe/config'
 import {
   splitUpcomingRsvps,
+  type FreeRsvpDecision,
   type PaidTicketDecision,
   type StripeCancellationState,
 } from '@/lib/member-removal'
@@ -37,6 +43,20 @@ async function latestOpenRemovalRecordId(
     .limit(1)
     .maybeSingle()
   return data?.id ?? null
+}
+
+async function latestRemovalRecord(
+  admin: AdminClient,
+  userId: string
+): Promise<{ id: string; restored_at: string | null } | null> {
+  const { data } = await admin
+    .from('member_removal_records')
+    .select('id, restored_at')
+    .eq('profile_id', userId)
+    .order('removed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data ?? null
 }
 
 export async function cancelRemovedMemberSubscription(
@@ -202,13 +222,22 @@ export function buildRemovalDeps(
           updated_at: new Date().toISOString(),
         })
         .eq('id', userId)
-      if (error) return { ok: false, error: 'The member could not be restored.' }
+      if (error) return { ok: false, error: RESTORE_CLEAR_FAILED_MESSAGE }
       return { ok: true }
     },
     recordRestore: async (userId, patch) => {
-      const recordId = await latestOpenRemovalRecordId(admin, userId)
-      if (!recordId) {
-        return { ok: false, error: 'The member could not be restored.' }
+      const openId = await latestOpenRemovalRecordId(admin, userId)
+      const latest = openId ? null : await latestRemovalRecord(admin, userId)
+      const action = restoreRecordAction(
+        openId
+          ? { restoredAt: null }
+          : latest
+            ? { restoredAt: latest.restored_at }
+            : null
+      )
+      if (action === 'already_done') return { ok: true }
+      if (action === 'missing' || !openId) {
+        return { ok: false, error: RESTORE_RECORD_FAILED_MESSAGE }
       }
       const { error } = await admin
         .from('member_removal_records')
@@ -217,8 +246,18 @@ export function buildRemovalDeps(
           restored_by: patch.restoredBy,
           restore_note: patch.restoreNote,
         })
-        .eq('id', recordId)
-      if (error) return { ok: false, error: 'The member could not be restored.' }
+        .eq('id', openId)
+      if (error) return { ok: false, error: RESTORE_RECORD_FAILED_MESSAGE }
+      return { ok: true }
+    },
+    recordAuthResult: async (userId, authResult) => {
+      const latest = await latestRemovalRecord(admin, userId)
+      if (!latest) return { ok: false, error: RESTORE_AUTH_RECORD_FAILED_MESSAGE }
+      const { error } = await admin
+        .from('member_removal_records')
+        .update({ auth_result: authResult })
+        .eq('id', latest.id)
+      if (error) return { ok: false, error: RESTORE_AUTH_RECORD_FAILED_MESSAGE }
       return { ok: true }
     },
     saveRemovedEmail: async (input) => {
@@ -241,7 +280,7 @@ export function buildRemovalDeps(
         .from('removed_member_emails')
         .delete()
         .eq('email_normalized', emailNormalized)
-      if (error) return { ok: false, error: 'The member could not be restored.' }
+      if (error) return { ok: false, error: RESTORE_EMAIL_FAILED_MESSAGE }
       return { ok: true }
     },
     suspendMessaging: async (targetId, category) => {
@@ -347,22 +386,19 @@ export async function removedApplicationBlock(
   })
 }
 
-export async function loadPaidRefundDecisions(
-  admin: AdminClient,
-  userId: string
-): Promise<PaidTicketDecision[]> {
+async function loadUpcomingRsvpSplit(admin: AdminClient, userId: string) {
   const { data: attendees, error } = await admin
     .from('event_attendees')
     .select('id, event_id, status, payment_status, amount_paid_cents')
     .eq('user_id', userId)
     .in('status', ['going', 'maybe'])
-  if (error || !attendees?.length) return []
+  if (error || !attendees?.length) return null
   const eventIds = [...new Set(attendees.map((row) => row.event_id))]
   const { data: events, error: eventError } = await admin
     .from('events')
     .select('id, title, starts_at, fee_cents')
     .in('id', eventIds)
-  if (eventError || !events) return []
+  if (eventError || !events) return null
   const eventsById = new Map(
     events.map((event) => [
       event.id,
@@ -373,7 +409,23 @@ export async function loadPaidRefundDecisions(
       },
     ])
   )
-  return splitUpcomingRsvps(attendees, eventsById, new Date()).paidTickets
+  return splitUpcomingRsvps(attendees, eventsById, new Date())
+}
+
+export async function loadPaidRefundDecisions(
+  admin: AdminClient,
+  userId: string
+): Promise<PaidTicketDecision[]> {
+  const split = await loadUpcomingRsvpSplit(admin, userId)
+  return split?.paidTickets ?? []
+}
+
+export async function loadFreeRsvpsNeedingCancellation(
+  admin: AdminClient,
+  userId: string
+): Promise<FreeRsvpDecision[]> {
+  const split = await loadUpcomingRsvpSplit(admin, userId)
+  return split?.freeRsvps ?? []
 }
 
 export async function loadRemovedMemberIds(

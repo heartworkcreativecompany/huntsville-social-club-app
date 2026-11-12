@@ -25,13 +25,40 @@ export const STRIPE_CANCELLATION_FAILED_MESSAGE =
 export const AUTH_BAN_FAILED_MESSAGE =
   'The sign-in ban could not be applied. The member is still removed.'
 
+export const AUTH_UNBAN_FAILED_MESSAGE =
+  'The sign-in ban could not be lifted. The member cannot sign in yet.'
+
+export const FREE_RSVP_CANCELLATION_FAILED_MESSAGE =
+  'Free RSVPs need manual cancellation'
+
+export const RESTORE_RECORD_FAILED_MESSAGE =
+  'The restore record could not be saved. Try restore again.'
+
+export const RESTORE_EMAIL_FAILED_MESSAGE =
+  'The removed email could not be deleted. Try restore again.'
+
+export const RESTORE_UNBAN_FAILED_MESSAGE =
+  'The sign-in ban could not be lifted. Try restore again.'
+
+export const RESTORE_AUTH_RECORD_FAILED_MESSAGE =
+  'The sign-in result could not be saved. Try restore again.'
+
+export const RESTORE_CLEAR_FAILED_MESSAGE =
+  'The removal flag could not be cleared. Try restore again.'
+
 export const REMOVAL_CONFIRMATION = 'REMOVE'
 export const RESTORE_CONFIRMATION = 'RESTORE'
 
 export const AUTH_BAN_DURATION = '876000h'
 
 export type StripeCancellationState = 'cancelled' | 'skipped' | 'failed'
-export type AuthBanState = 'banned' | 'failed' | 'lifted'
+export type AuthBanState = 'banned' | 'failed' | 'lifted' | 'unban_failed'
+
+export type FreeRsvpDecision = {
+  eventId: string
+  eventTitle: string
+  eventStartsAt: string
+}
 
 export type StoredRemovalReason = {
   category: RemovalReasonCategory
@@ -104,7 +131,8 @@ export function parseRemovalReason(value: string | null | undefined): {
     const authBan =
       parsed.authBan === 'banned' ||
       parsed.authBan === 'failed' ||
-      parsed.authBan === 'lifted'
+      parsed.authBan === 'lifted' ||
+      parsed.authBan === 'unban_failed'
         ? parsed.authBan
         : null
     return { category, stripeCancellation, authBan }
@@ -136,7 +164,8 @@ export function adminRemovalFromRecord(
   const authBan =
     record.auth_result === 'banned' ||
     record.auth_result === 'failed' ||
-    record.auth_result === 'lifted'
+    record.auth_result === 'lifted' ||
+    record.auth_result === 'unban_failed'
       ? record.auth_result
       : null
   return {
@@ -228,6 +257,15 @@ export function validateMemberRestore(input: {
   return { ok: true }
 }
 
+/** An open record is written once. A later retry treats that write as finished. */
+export function restoreRecordAction(
+  record: { restoredAt: string | null } | null
+): 'write' | 'already_done' | 'missing' {
+  if (!record) return 'missing'
+  if (record.restoredAt) return 'already_done'
+  return 'write'
+}
+
 export function isPaidEventTicket(row: {
   payment_status: string | null
   amount_paid_cents: number | null
@@ -251,8 +289,9 @@ export function splitUpcomingRsvps<T extends {
   attendees: T[],
   eventsById: Map<string, { starts_at: string; title: string | null; fee_cents: number | null }>,
   now: Date
-): { freeIds: string[]; paidTickets: PaidTicketDecision[] } {
+): { freeIds: string[]; freeRsvps: FreeRsvpDecision[]; paidTickets: PaidTicketDecision[] } {
   const freeIds: string[] = []
+  const freeRsvps: FreeRsvpDecision[] = []
   const paidTickets: PaidTicketDecision[] = []
   for (const row of attendees) {
     if (!isOpenRsvpStatus(row.status)) continue
@@ -272,9 +311,14 @@ export function splitUpcomingRsvps<T extends {
       })
     } else {
       freeIds.push(row.id)
+      freeRsvps.push({
+        eventId: row.event_id,
+        eventTitle: event.title?.trim() || 'Event',
+        eventStartsAt: event.starts_at,
+      })
     }
   }
-  return { freeIds, paidTickets }
+  return { freeIds, freeRsvps, paidTickets }
 }
 
 export function memberFacingAttendeeRows<T extends { user_id: string }>(
@@ -326,6 +370,7 @@ export const REMOVED_ADMIN_BADGE = 'Removed'
 export function adminRemovalFollowUp(input: {
   stripeCancellation: StripeCancellationState | null
   authBan: AuthBanState | null
+  freeRsvpsNeedingCancellation?: Array<{ eventTitle: string }>
 }): string[] {
   const lines: string[] = []
   if (input.stripeCancellation === 'failed') {
@@ -333,6 +378,15 @@ export function adminRemovalFollowUp(input: {
   }
   if (input.authBan === 'failed') {
     lines.push(AUTH_BAN_FAILED_MESSAGE)
+  }
+  if (input.authBan === 'unban_failed') {
+    lines.push(AUTH_UNBAN_FAILED_MESSAGE)
+  }
+  const freeTitles = (input.freeRsvpsNeedingCancellation ?? [])
+    .map((event) => event.eventTitle)
+    .filter(Boolean)
+  if (freeTitles.length > 0) {
+    lines.push(`${FREE_RSVP_CANCELLATION_FAILED_MESSAGE}: ${freeTitles.join(', ')}.`)
   }
   return lines
 }

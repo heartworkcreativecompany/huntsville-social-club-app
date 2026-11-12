@@ -27,10 +27,12 @@ import {
   type SubscriptionStatus,
 } from '@/lib/membership-systems'
 import { membershipStatusLabel, resolveMembershipStatus } from '@/lib/membership'
+import { loadFreeRsvpsNeedingCancellation } from '@/lib/member-removal-db'
 import {
   adminRemovalFollowUp,
   adminRemovalFromRecord,
   type AuthBanState,
+  type FreeRsvpDecision,
   type StripeCancellationState,
 } from '@/lib/member-removal'
 
@@ -139,6 +141,7 @@ export function buildAdminMemberOverview(input: {
   removalCategory?: string | null
   stripeCancellation?: StripeCancellationState | null
   authBan?: AuthBanState | null
+  freeRsvpsNeedingCancellation?: FreeRsvpDecision[]
   now?: Date
 }): AdminMemberOverview {
   const billing = parseMembershipBilling(input.membershipBilling)
@@ -202,6 +205,7 @@ export function buildAdminMemberOverview(input: {
     removalFollowUp: adminRemovalFollowUp({
       stripeCancellation: input.stripeCancellation ?? null,
       authBan: input.authBan ?? null,
+      freeRsvpsNeedingCancellation: input.freeRsvpsNeedingCancellation,
     }),
   })
 }
@@ -232,20 +236,24 @@ export async function loadAdminMemberDetail(
     return { ok: false, error: 'Member not found.' }
   }
 
-  const removalRecord = await admin
-    .from('member_removal_records')
-    .select('reason_category, stripe_result, auth_result')
-    .eq('profile_id', input.memberId)
-    .is('restored_at', null)
-    .order('removed_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const removalRecord = member.removed_at
+    ? await admin
+        .from('member_removal_records')
+        .select('reason_category, stripe_result, auth_result')
+        .eq('profile_id', input.memberId)
+        .order('removed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null, error: null }
 
   if (removalRecord.error && removalRecord.error.code !== '42P01') {
     return { ok: false, error: removalRecord.error.message }
   }
 
   const removal = adminRemovalFromRecord(removalRecord.data)
+  const freeRsvps = member.removed_at
+    ? await loadFreeRsvpsNeedingCancellation(admin, input.memberId)
+    : []
 
   const [badges, overrideResult] = await Promise.all([
     loadAdminMemberBadges(admin, {
@@ -292,6 +300,7 @@ export async function loadAdminMemberDetail(
         removalCategory: removal.category,
         stripeCancellation: removal.stripeCancellation,
         authBan: removal.authBan,
+        freeRsvpsNeedingCancellation: freeRsvps,
       }),
       badges: badges.data,
       accessOverride: overrideResult.override,

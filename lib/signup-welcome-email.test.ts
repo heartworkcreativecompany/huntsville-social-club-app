@@ -35,9 +35,11 @@ const APPLICANT_STATUS_SENDERS = [
 
 describe('signup branded welcome email removal', () => {
   it('keeps Supabase Auth signup and confirmation redirect unchanged', () => {
-    expect(signup).toContain('await supabase.auth.signUp({')
-    expect(signup).toContain('email: trimmedEmail')
-    expect(signup).toContain('emailRedirectTo: authCallbackUrl(returnPath ?? \'/login?confirmed=1\')')
+    const signupAccount = readRepoFile('lib/signup-account.ts')
+    const signupAction = readRepoFile('app/signup/actions.ts')
+    expect(signupAction).toContain('await supabase.auth.signUp(args)')
+    expect(signupAccount).toContain('email: trimmedEmail')
+    expect(signupAccount).toContain('emailRedirectTo: authCallbackUrl(returnPath ?? \'/login?confirmed=1\')')
     expect(signup).toContain('accountCreatedSuccessMessage()')
     expect(signup).toContain("trackEvent('auth_account_created')")
   })

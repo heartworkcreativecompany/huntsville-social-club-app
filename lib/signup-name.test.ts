@@ -55,12 +55,13 @@ describe('signup form names', () => {
   const signup = readFileSync(resolve(repoRoot, 'app/signup/page.tsx'), 'utf8')
 
   it('collects given and family names with autocomplete and sends them beside consent', () => {
+    const signupAccount = readFileSync(resolve(repoRoot, 'lib/signup-account.ts'), 'utf8')
     expect(signup).toContain('autoComplete="given-name"')
     expect(signup).toContain('autoComplete="family-name"')
-    expect(signup).toContain('signupNameMetadata')
+    expect(signupAccount).toContain('signupNameMetadata')
     expect(signup).toContain('signupNameError(givenName, true)')
     expect(signup).toContain('signupNameError(familyName, false)')
-    expect(signup).toContain('signupEmailConsentMetadata')
+    expect(signupAccount).toContain('signupEmailConsentMetadata')
   })
 })
 

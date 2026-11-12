@@ -4,8 +4,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { buildAdminMemberOverview } from '@/lib/admin/member-detail'
 import {
   ACCOUNT_CHECK_UNAVAILABLE_MESSAGE,
+  AUTH_UNBAN_FAILED_MESSAGE,
+  FREE_RSVP_CANCELLATION_FAILED_MESSAGE,
   REMOVED_ACCOUNT_MESSAGE,
   REMOVED_APPLICATION_MESSAGE,
+  RESTORE_AUTH_RECORD_FAILED_MESSAGE,
+  RESTORE_CLEAR_FAILED_MESSAGE,
+  RESTORE_EMAIL_FAILED_MESSAGE,
+  RESTORE_RECORD_FAILED_MESSAGE,
+  RESTORE_UNBAN_FAILED_MESSAGE,
   STRIPE_CANCELLATION_FAILED_MESSAGE,
   adminAttendeeLabel,
   adminRemovalFollowUp,
@@ -15,6 +22,7 @@ import {
   memberFacingAttendeeRows,
   normalizeRemovedEmail,
   parseRemovalReason,
+  restoreRecordAction,
   visibleMatchCandidateIds,
 } from '@/lib/member-removal'
 import {
@@ -100,6 +108,7 @@ function deps(overrides: Partial<RemovalRunDeps> = {}): RemovalRunDeps {
     discardRemoval: vi.fn(async () => ({ ok: true as const })),
     clearRemoved: vi.fn(async () => ({ ok: true as const })),
     recordRestore: vi.fn(async () => ({ ok: true as const })),
+    recordAuthResult: vi.fn(async () => ({ ok: true as const })),
     saveRemovedEmail: vi.fn(async () => ({ ok: true as const })),
     deleteRemovedEmail: vi.fn(async () => ({ ok: true as const })),
     suspendMessaging: vi.fn(async () => ({ ok: true as const })),
@@ -357,12 +366,22 @@ describe('permanent member removal', () => {
       run
     )
     expect(result).toEqual({ ok: true, authBan: 'lifted' })
-    expect(run.clearRemoved).toHaveBeenCalledWith('member-1')
     expect(run.recordRestore).toHaveBeenCalledWith('member-1', {
       restoredAt: NOW.toISOString(),
       restoredBy: 'admin-1',
       restoreNote: 'Removed by mistake',
     })
+    expect(run.recordAuthResult).toHaveBeenCalledWith('member-1', 'lifted')
+    expect(run.clearRemoved).toHaveBeenCalledWith('member-1')
+    const order = [
+      vi.mocked(run.recordRestore).mock.invocationCallOrder[0],
+      vi.mocked(run.deleteRemovedEmail).mock.invocationCallOrder[0],
+      vi.mocked(run.unbanAuth).mock.invocationCallOrder[0],
+      vi.mocked(run.recordAuthResult).mock.invocationCallOrder[0],
+      vi.mocked(run.clearRemoved).mock.invocationCallOrder[0],
+      vi.mocked(run.logRestore).mock.invocationCallOrder[0],
+    ]
+    expect(order).toEqual([...order].sort((left, right) => left - right))
     expect(run.discardRemoval).not.toHaveBeenCalled()
     expect(run.deleteRemovedEmail).toHaveBeenCalledWith('person@example.com')
     expect(run.unbanAuth).toHaveBeenCalledWith('member-1')
@@ -375,6 +394,180 @@ describe('permanent member removal', () => {
     expect(run.cancelSubscription).not.toHaveBeenCalled()
     expect(run.cancelFreeRsvps).not.toHaveBeenCalled()
     expect(run.banAuth).not.toHaveBeenCalled()
+  })
+
+  it('finishes a restore retry after a failure at each step', async () => {
+    const steps = ['record', 'email', 'unban', 'auth-record', 'clear'] as const
+    const restoreInput = {
+      actorIsAdmin: true,
+      actorId: 'admin-1',
+      targetUserId: 'member-1',
+      note: 'Removed by mistake',
+      confirmationText: 'RESTORE',
+    }
+    for (const step of steps) {
+      let failedOnce = false
+      let cleared = false
+      const run = deps({
+        loadTarget: async () => ({
+          target: target({ removedAt: cleared ? null : NOW.toISOString() }),
+          error: null,
+        }),
+        recordRestore: vi.fn(async () => {
+          if (step === 'record' && !failedOnce) {
+            failedOnce = true
+            return { ok: false as const, error: RESTORE_RECORD_FAILED_MESSAGE }
+          }
+          return { ok: true as const }
+        }),
+        deleteRemovedEmail: vi.fn(async () => {
+          if (step === 'email' && !failedOnce) {
+            failedOnce = true
+            return { ok: false as const, error: RESTORE_EMAIL_FAILED_MESSAGE }
+          }
+          return { ok: true as const }
+        }),
+        unbanAuth: vi.fn(async () => {
+          if (step === 'unban' && !failedOnce) {
+            failedOnce = true
+            return 'failed' as const
+          }
+          return 'lifted' as const
+        }),
+        recordAuthResult: vi.fn(async (_userId, authResult) => {
+          if (step === 'auth-record' && authResult === 'lifted' && !failedOnce) {
+            failedOnce = true
+            return { ok: false as const, error: RESTORE_AUTH_RECORD_FAILED_MESSAGE }
+          }
+          return { ok: true as const }
+        }),
+        clearRemoved: vi.fn(async () => {
+          if (step === 'clear' && !failedOnce) {
+            failedOnce = true
+            return { ok: false as const, error: RESTORE_CLEAR_FAILED_MESSAGE }
+          }
+          cleared = true
+          return { ok: true as const }
+        }),
+      })
+
+      const first = await executeMemberRestore(restoreInput, run)
+      expect(first.ok).toBe(false)
+      if (!first.ok) expect(first.error).toMatch(/Try restore again/)
+      expect(cleared).toBe(false)
+      expect(JSON.stringify(first)).not.toMatch(/can sign in/i)
+
+      const second = await executeMemberRestore(restoreInput, run)
+      expect(second).toEqual({ ok: true, authBan: 'lifted' })
+      expect(cleared).toBe(true)
+    }
+  })
+
+  it('reports an unban failure without saying the member can sign in', async () => {
+    const run = deps({
+      loadTarget: async () => ({
+        target: target({ removedAt: NOW.toISOString() }),
+        error: null,
+      }),
+      unbanAuth: vi.fn(async () => 'failed' as const),
+    })
+    const result = await executeMemberRestore(
+      {
+        actorIsAdmin: true,
+        actorId: 'admin-1',
+        targetUserId: 'member-1',
+        note: 'Removed by mistake',
+        confirmationText: 'RESTORE',
+      },
+      run
+    )
+    expect(result).toEqual({ ok: false, error: RESTORE_UNBAN_FAILED_MESSAGE })
+    expect(run.clearRemoved).not.toHaveBeenCalled()
+    expect(run.logRestore).not.toHaveBeenCalled()
+    expect(run.recordAuthResult).toHaveBeenCalledWith('member-1', 'unban_failed')
+    const overview = buildAdminMemberOverview({
+      id: 'member-1',
+      email: 'alex@example.com',
+      fullName: 'Alex',
+      role: 'member',
+      applicationStatus: 'approved',
+      membershipIntent: null,
+      locationArea: null,
+      locationCity: null,
+      connectionIntents: null,
+      connectionsOpenTo: null,
+      discoveryIntent: null,
+      identityVerificationStatus: 'not_started',
+      identityVerifiedAt: null,
+      membershipBilling: { tier: 'member', subscription_status: 'none' },
+      messagingSuspendedAt: null,
+      messagingSuspensionReason: null,
+      profileRevisionStatus: null,
+      applicationDraft: null,
+      accessOverride: null,
+      removedAt: NOW.toISOString(),
+      authBan: 'unban_failed',
+    })
+    expect(overview.removalFollowUp).toEqual([AUTH_UNBAN_FAILED_MESSAGE])
+    expect(overview.removalFollowUp.join(' ')).not.toMatch(/can sign in/i)
+    expect(readFileSync(join(process.cwd(), 'components/admin/admin-permanent-member-removal.tsx'), 'utf8')).toContain(
+      'if (\'error\' in result && result.error)'
+    )
+  })
+
+  it('shows free RSVPs that still need cancellation after removal', async () => {
+    const run = deps({
+      cancelFreeRsvps: vi.fn(async () => ({
+        ok: false as const,
+        error: 'Free event RSVPs could not be cancelled.',
+      })),
+    })
+    const result = await executePermanentRemoval(removalInput, run)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.freeRsvpsNeedingCancellation).toEqual([
+      {
+        eventId: 'event-free',
+        eventTitle: 'Mixer',
+        eventStartsAt: '2026-12-01T18:00:00.000Z',
+      },
+    ])
+    expect(run.banAuth).toHaveBeenCalled()
+    const overview = buildAdminMemberOverview({
+      id: 'member-1',
+      email: 'alex@example.com',
+      fullName: 'Alex',
+      role: 'member',
+      applicationStatus: 'approved',
+      membershipIntent: null,
+      locationArea: null,
+      locationCity: null,
+      connectionIntents: null,
+      connectionsOpenTo: null,
+      discoveryIntent: null,
+      identityVerificationStatus: 'not_started',
+      identityVerifiedAt: null,
+      membershipBilling: { tier: 'member', subscription_status: 'none' },
+      messagingSuspendedAt: null,
+      messagingSuspensionReason: null,
+      profileRevisionStatus: null,
+      applicationDraft: null,
+      accessOverride: null,
+      removedAt: NOW.toISOString(),
+      freeRsvpsNeedingCancellation: result.freeRsvpsNeedingCancellation,
+    })
+    expect(overview.removalFollowUp).toEqual([
+      `${FREE_RSVP_CANCELLATION_FAILED_MESSAGE}: Mixer.`,
+    ])
+    expect(
+      readFileSync(join(process.cwd(), 'app/(club)/admin/users/[id]/page.tsx'), 'utf8')
+    ).toContain('followUp={overview.removalFollowUp}')
+  })
+
+  it('treats an already written restore record as finished', () => {
+    expect(restoreRecordAction(null)).toBe('missing')
+    expect(restoreRecordAction({ restoredAt: null })).toBe('write')
+    expect(restoreRecordAction({ restoredAt: NOW.toISOString() })).toBe('already_done')
   })
 
   it('keeps the internal note out of member-facing removal data', () => {

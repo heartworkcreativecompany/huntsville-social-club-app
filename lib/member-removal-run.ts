@@ -1,9 +1,11 @@
 import {
   normalizeRemovedEmail,
+  RESTORE_UNBAN_FAILED_MESSAGE,
   splitUpcomingRsvps,
   validateMemberRestore,
   validatePermanentRemoval,
   type AuthBanState,
+  type FreeRsvpDecision,
   type PaidTicketDecision,
   type RemovalReasonCategory,
   type RemovalTarget,
@@ -46,6 +48,10 @@ export type RemovalRunDeps = {
       restoredBy: string
       restoreNote: string
     }
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  recordAuthResult: (
+    userId: string,
+    authResult: AuthBanState
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   saveRemovedEmail: (input: {
     emailNormalized: string
@@ -103,6 +109,7 @@ export type RemovalRunDeps = {
 export type PermanentRemovalSuccess = {
   ok: true
   paidTickets: PaidTicketDecision[]
+  freeRsvpsNeedingCancellation: FreeRsvpDecision[]
   stripeCancellation: StripeCancellationState
   authBan: Extract<AuthBanState, 'banned' | 'failed'>
   messagingSuspended: boolean
@@ -184,8 +191,12 @@ export async function executePermanentRemoval(
     messagingSuspended = suspended.ok
   }
 
+  let freeRsvpsNeedingCancellation: FreeRsvpDecision[] = []
   if (split.freeIds.length > 0) {
-    await deps.cancelFreeRsvps(split.freeIds, removedAt)
+    const cancelled = await deps.cancelFreeRsvps(split.freeIds, removedAt)
+    if (!cancelled.ok) {
+      freeRsvpsNeedingCancellation = split.freeRsvps
+    }
   }
 
   const stripeCancellation = await deps.cancelSubscription(
@@ -206,6 +217,7 @@ export async function executePermanentRemoval(
   return {
     ok: true,
     paidTickets: split.paidTickets,
+    freeRsvpsNeedingCancellation,
     stripeCancellation,
     authBan,
     messagingSuspended,
@@ -222,7 +234,7 @@ export async function executeMemberRestore(
   },
   deps: RemovalRunDeps
 ): Promise<
-  | { ok: true; authBan: Extract<AuthBanState, 'lifted' | 'failed'> }
+  | { ok: true; authBan: 'lifted' }
   | { ok: false; error: string }
 > {
   const loaded = await deps.loadTarget(input.targetUserId)
@@ -240,16 +252,6 @@ export async function executeMemberRestore(
   const target = loaded.target
   if (!target) return { ok: false, error: 'Member not found.' }
 
-  const cleared = await deps.clearRemoved(target.id)
-  if (!cleared.ok) return cleared
-
-  const email = normalizeRemovedEmail(target.email)
-  if (email) {
-    const deleted = await deps.deleteRemovedEmail(email)
-    if (!deleted.ok) return deleted
-  }
-
-  const authBan = await deps.unbanAuth(target.id)
   const restoredAt = deps.now().toISOString()
   const recorded = await deps.recordRestore(target.id, {
     restoredAt,
@@ -258,13 +260,31 @@ export async function executeMemberRestore(
   })
   if (!recorded.ok) return recorded
 
+  const email = normalizeRemovedEmail(target.email)
+  if (email) {
+    const deleted = await deps.deleteRemovedEmail(email)
+    if (!deleted.ok) return deleted
+  }
+
+  const authBan = await deps.unbanAuth(target.id)
+  if (authBan !== 'lifted') {
+    await deps.recordAuthResult(target.id, 'unban_failed')
+    return { ok: false, error: RESTORE_UNBAN_FAILED_MESSAGE }
+  }
+
+  const recordedAuth = await deps.recordAuthResult(target.id, 'lifted')
+  if (!recordedAuth.ok) return recordedAuth
+
+  const cleared = await deps.clearRemoved(target.id)
+  if (!cleared.ok) return cleared
+
   await deps.logRestore({
     actorId: input.actorId,
     targetId: target.id,
     note: input.note.trim(),
   })
 
-  return { ok: true, authBan }
+  return { ok: true, authBan: 'lifted' }
 }
 
 export function publicRemovalResult(
@@ -273,6 +293,7 @@ export function publicRemovalResult(
   return {
     ok: true,
     paidTickets: result.paidTickets,
+    freeRsvpsNeedingCancellation: result.freeRsvpsNeedingCancellation,
     stripeCancellation: result.stripeCancellation,
     authBan: result.authBan,
     messagingSuspended: result.messagingSuspended,
