@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { buildCuratedIntroApprovedEmail } from '@/lib/curated-intro-email'
@@ -54,6 +54,15 @@ function sync(existing: MembershipBilling, input: {
 }
 
 describe('paid messaging entitlement', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(now)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('does not treat an approved curated intro as a separate messaging grant', async () => {
     const access = await resolveMemberMessagingAccess({} as never, {
       userId: 'member-1',
@@ -247,6 +256,15 @@ describe('paid messaging entitlement', () => {
 })
 
 describe('grace messaging policy', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(now)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   const graceBilling = (
     tier: 'connect' | 'inner_circle' | 'elite_circle' | 'premium_member' | 'member'
   ) => ({
