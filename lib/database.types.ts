@@ -93,8 +93,6 @@ export interface Database {
           messaging_suspension_reason: string | null
           messaging_suspended_by: string | null
           removed_at: string | null
-          removed_by: string | null
-          removal_reason: string | null
         }
         Insert: {
           id: string
@@ -175,8 +173,6 @@ export interface Database {
           messaging_suspension_reason?: string | null
           messaging_suspended_by?: string | null
           removed_at?: string | null
-          removed_by?: string | null
-          removal_reason?: string | null
         }
         Update: {
           id?: string
@@ -257,8 +253,6 @@ export interface Database {
           messaging_suspension_reason?: string | null
           messaging_suspended_by?: string | null
           removed_at?: string | null
-          removed_by?: string | null
-          removal_reason?: string | null
         }
         Relationships: []
       }
@@ -283,6 +277,48 @@ export interface Database {
           profile_id?: string | null
           removed_at?: string
           removed_by?: string | null
+        }
+        Relationships: []
+      }
+      member_removal_records: {
+        Row: {
+          id: string
+          profile_id: string
+          removed_at: string
+          removed_by: string | null
+          reason_category: string
+          internal_note: string | null
+          stripe_result: string | null
+          auth_result: string | null
+          restored_at: string | null
+          restored_by: string | null
+          restore_note: string | null
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          removed_at?: string
+          removed_by?: string | null
+          reason_category: string
+          internal_note?: string | null
+          stripe_result?: string | null
+          auth_result?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          restore_note?: string | null
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          removed_at?: string
+          removed_by?: string | null
+          reason_category?: string
+          internal_note?: string | null
+          stripe_result?: string | null
+          auth_result?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          restore_note?: string | null
         }
         Relationships: []
       }
@@ -1564,8 +1600,6 @@ export interface Database {
           | 'email_marketing_consent_source'
           | 'email_marketing_consent_version'
           | 'email_marketing_opted_out_at'
-          | 'removal_reason'
-          | 'removed_by'
         >
         Relationships: []
       }

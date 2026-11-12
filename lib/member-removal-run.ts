@@ -1,7 +1,5 @@
 import {
   normalizeRemovedEmail,
-  parseRemovalReason,
-  serializeRemovalReason,
   splitUpcomingRsvps,
   validateMemberRestore,
   validatePermanentRemoval,
@@ -22,11 +20,32 @@ export type RemovalRunDeps = {
     patch: {
       removedAt: string
       removedBy: string
-      removalReason: string
+      category: RemovalReasonCategory
+      internalNote: string
+      stripeResult: StripeCancellationState
+      authResult: AuthBanState
     }
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  recordRemovalOutcome: (
+    userId: string,
+    patch: {
+      stripeResult: StripeCancellationState
+      authResult: AuthBanState
+    }
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  discardRemoval: (
+    userId: string
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   clearRemoved: (
     userId: string
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  recordRestore: (
+    userId: string,
+    patch: {
+      restoredAt: string
+      restoredBy: string
+      restoreNote: string
+    }
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   saveRemovedEmail: (input: {
     emailNormalized: string
@@ -139,12 +158,10 @@ export async function executePermanentRemoval(
   const marked = await deps.markRemoved(target.id, {
     removedAt,
     removedBy: input.actorId,
-    removalReason: serializeRemovalReason({
-      category: guard.category,
-      note: input.internalNote,
-      stripeCancellation: 'skipped',
-      authBan: 'failed',
-    }),
+    category: guard.category,
+    internalNote: input.internalNote,
+    stripeResult: 'skipped',
+    authResult: 'failed',
   })
   if (!marked.ok) return marked
 
@@ -156,7 +173,7 @@ export async function executePermanentRemoval(
       removedBy: input.actorId,
     })
     if (!saved.ok) {
-      await deps.clearRemoved(target.id)
+      await deps.discardRemoval(target.id)
       return saved
     }
   }
@@ -175,15 +192,9 @@ export async function executePermanentRemoval(
     target.membershipBilling
   )
   const authBan = await deps.banAuth(target.id)
-  await deps.markRemoved(target.id, {
-    removedAt,
-    removedBy: input.actorId,
-    removalReason: serializeRemovalReason({
-      category: guard.category,
-      note: input.internalNote,
-      stripeCancellation,
-      authBan,
-    }),
+  await deps.recordRemovalOutcome(target.id, {
+    stripeResult: stripeCancellation,
+    authResult: authBan,
   })
 
   await deps.logRemoval({
@@ -239,6 +250,14 @@ export async function executeMemberRestore(
   }
 
   const authBan = await deps.unbanAuth(target.id)
+  const restoredAt = deps.now().toISOString()
+  const recorded = await deps.recordRestore(target.id, {
+    restoredAt,
+    restoredBy: input.actorId,
+    restoreNote: input.note.trim(),
+  })
+  if (!recorded.ok) return recorded
+
   await deps.logRestore({
     actorId: input.actorId,
     targetId: target.id,
@@ -258,8 +277,4 @@ export function publicRemovalResult(
     authBan: result.authBan,
     messagingSuspended: result.messagingSuspended,
   }
-}
-
-export function removalStatusForAdmin(removalReason: string | null) {
-  return parseRemovalReason(removalReason)
 }

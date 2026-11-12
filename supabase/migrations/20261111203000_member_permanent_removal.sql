@@ -1,28 +1,48 @@
--- Permanent member removal. Internal reason text stays off member-facing reads.
+-- Permanent member removal. Staff notes live in member_removal_records, not on profiles.
 
 alter table public.profiles
-  add column if not exists removed_at timestamptz,
-  add column if not exists removed_by uuid references public.profiles (id) on delete set null,
-  add column if not exists removal_reason text;
+  add column if not exists removed_at timestamptz;
 
 comment on column public.profiles.removed_at is
   'When set, the member is permanently removed from member-facing surfaces.';
-comment on column public.profiles.removed_by is
-  'Administrator who removed the member. Not readable by members.';
-comment on column public.profiles.removal_reason is
-  'Internal staff record. Not readable by members.';
 
 create index if not exists profiles_removed_at_idx
   on public.profiles (removed_at)
   where removed_at is not null;
 
-revoke select (removal_reason, removed_by) on public.profiles from authenticated, anon;
-revoke update (removed_at, removed_by, removal_reason) on public.profiles from authenticated, anon;
-revoke insert (removed_at, removed_by, removal_reason) on public.profiles from authenticated, anon;
-grant select (removed_at, removed_by, removal_reason),
-  update (removed_at, removed_by, removal_reason),
-  insert (removed_at, removed_by, removal_reason)
-  on public.profiles to service_role;
+create table if not exists public.member_removal_records (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  removed_at timestamptz not null default now(),
+  removed_by uuid references public.profiles (id) on delete set null,
+  reason_category text not null,
+  internal_note text,
+  stripe_result text,
+  auth_result text,
+  restored_at timestamptz,
+  restored_by uuid references public.profiles (id) on delete set null,
+  restore_note text
+);
+
+comment on table public.member_removal_records is
+  'Staff record of a permanent removal. Readable and writable by administrators and the service role only.';
+
+create index if not exists member_removal_records_profile_id_idx
+  on public.member_removal_records (profile_id, removed_at desc);
+
+alter table public.member_removal_records enable row level security;
+
+drop policy if exists "Admins manage member removal records" on public.member_removal_records;
+create policy "Admins manage member removal records"
+  on public.member_removal_records
+  for all
+  to authenticated
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+revoke all on public.member_removal_records from anon;
+grant select, insert, update, delete on public.member_removal_records to authenticated;
+grant select, insert, update, delete on public.member_removal_records to service_role;
 
 drop policy if exists "Removed profiles are hidden from other members" on public.profiles;
 create policy "Removed profiles are hidden from other members"
@@ -159,7 +179,7 @@ select
 from public.profiles;
 
 comment on view public.member_profiles is
-  'Member-facing profile reads. Omits account email, removal_reason, and removed_by. Inherits profiles RLS.';
+  'Member-facing profile reads. Omits account email. Inherits profiles RLS.';
 
 grant select on public.member_profiles to authenticated;
 grant select on public.member_profiles to service_role;

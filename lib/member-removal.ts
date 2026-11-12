@@ -113,6 +113,42 @@ export function parseRemovalReason(value: string | null | undefined): {
   }
 }
 
+export function adminRemovalFromRecord(
+  record: {
+    reason_category?: string | null
+    stripe_result?: string | null
+    auth_result?: string | null
+  } | null
+): {
+  category: RemovalReasonCategory | null
+  stripeCancellation: StripeCancellationState | null
+  authBan: AuthBanState | null
+} {
+  if (!record) {
+    return { category: null, stripeCancellation: null, authBan: null }
+  }
+  const stripeCancellation =
+    record.stripe_result === 'cancelled' ||
+    record.stripe_result === 'skipped' ||
+    record.stripe_result === 'failed'
+      ? record.stripe_result
+      : null
+  const authBan =
+    record.auth_result === 'banned' ||
+    record.auth_result === 'failed' ||
+    record.auth_result === 'lifted'
+      ? record.auth_result
+      : null
+  return {
+    category:
+      record.reason_category && isRemovalReasonCategory(record.reason_category)
+        ? record.reason_category
+        : null,
+    stripeCancellation,
+    authBan,
+  }
+}
+
 export function applicationBlockForRemovedEmail(blocked: boolean): string | null {
   return blocked ? REMOVED_APPLICATION_MESSAGE : null
 }

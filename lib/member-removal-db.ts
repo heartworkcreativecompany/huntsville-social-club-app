@@ -24,6 +24,21 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 type AdminClient = SupabaseClient<Database>
 
+async function latestOpenRemovalRecordId(
+  admin: AdminClient,
+  userId: string
+): Promise<string | null> {
+  const { data } = await admin
+    .from('member_removal_records')
+    .select('id')
+    .eq('profile_id', userId)
+    .is('restored_at', null)
+    .order('removed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data?.id ?? null
+}
+
 export async function cancelRemovedMemberSubscription(
   billing: unknown
 ): Promise<StripeCancellationState> {
@@ -118,12 +133,65 @@ export function buildRemovalDeps(
         .from('profiles')
         .update({
           removed_at: patch.removedAt,
-          removed_by: patch.removedBy,
-          removal_reason: patch.removalReason,
           updated_at: patch.removedAt,
         })
         .eq('id', userId)
       if (error) return { ok: false, error: 'The member could not be removed.' }
+
+      const { error: recordError } = await admin
+        .from('member_removal_records')
+        .insert({
+          profile_id: userId,
+          removed_at: patch.removedAt,
+          removed_by: patch.removedBy,
+          reason_category: patch.category,
+          internal_note: patch.internalNote.trim() || null,
+          stripe_result: patch.stripeResult,
+          auth_result: patch.authResult,
+        })
+      if (recordError) {
+        await admin
+          .from('profiles')
+          .update({
+            removed_at: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', userId)
+        return { ok: false, error: 'The member could not be removed.' }
+      }
+      return { ok: true }
+    },
+    recordRemovalOutcome: async (userId, patch) => {
+      const recordId = await latestOpenRemovalRecordId(admin, userId)
+      if (!recordId) return { ok: true }
+      const { error } = await admin
+        .from('member_removal_records')
+        .update({
+          stripe_result: patch.stripeResult,
+          auth_result: patch.authResult,
+        })
+        .eq('id', recordId)
+      if (error) {
+        captureOperationalError(
+          'member-removal-record',
+          new Error('Removal result could not be saved.')
+        )
+      }
+      return { ok: true }
+    },
+    discardRemoval: async (userId) => {
+      const { error } = await admin
+        .from('profiles')
+        .update({
+          removed_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+      if (error) return { ok: false, error: 'The member could not be removed.' }
+      const recordId = await latestOpenRemovalRecordId(admin, userId)
+      if (recordId) {
+        await admin.from('member_removal_records').delete().eq('id', recordId)
+      }
       return { ok: true }
     },
     clearRemoved: async (userId) => {
@@ -131,11 +199,25 @@ export function buildRemovalDeps(
         .from('profiles')
         .update({
           removed_at: null,
-          removed_by: null,
-          removal_reason: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', userId)
+      if (error) return { ok: false, error: 'The member could not be restored.' }
+      return { ok: true }
+    },
+    recordRestore: async (userId, patch) => {
+      const recordId = await latestOpenRemovalRecordId(admin, userId)
+      if (!recordId) {
+        return { ok: false, error: 'The member could not be restored.' }
+      }
+      const { error } = await admin
+        .from('member_removal_records')
+        .update({
+          restored_at: patch.restoredAt,
+          restored_by: patch.restoredBy,
+          restore_note: patch.restoreNote,
+        })
+        .eq('id', recordId)
       if (error) return { ok: false, error: 'The member could not be restored.' }
       return { ok: true }
     },

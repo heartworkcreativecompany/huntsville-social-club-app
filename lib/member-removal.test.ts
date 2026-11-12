@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { buildAdminMemberOverview } from '@/lib/admin/member-detail'
@@ -96,7 +96,10 @@ function deps(overrides: Partial<RemovalRunDeps> = {}): RemovalRunDeps {
     now: () => NOW,
     loadTarget: async () => ({ target: target(), error: null }),
     markRemoved: vi.fn(async () => ({ ok: true as const })),
+    recordRemovalOutcome: vi.fn(async () => ({ ok: true as const })),
+    discardRemoval: vi.fn(async () => ({ ok: true as const })),
     clearRemoved: vi.fn(async () => ({ ok: true as const })),
+    recordRestore: vi.fn(async () => ({ ok: true as const })),
     saveRemovedEmail: vi.fn(async () => ({ ok: true as const })),
     deleteRemovedEmail: vi.fn(async () => ({ ok: true as const })),
     suspendMessaging: vi.fn(async () => ({ ok: true as const })),
@@ -197,11 +200,21 @@ describe('permanent member removal', () => {
     expect(JSON.stringify(publicRemovalResult(result))).not.toContain(NOTE)
     expect(JSON.stringify(result)).not.toContain(NOTE)
 
-    expect(run.markRemoved).toHaveBeenCalled()
-    const marked = vi.mocked(run.markRemoved).mock.calls.at(-1)?.[1]
-    expect(marked?.removedBy).toBe('admin-1')
-    expect(marked?.removedAt).toBe(NOW.toISOString())
-    expect(marked?.removalReason).toContain('Harassment')
+    expect(run.markRemoved).toHaveBeenCalledWith('member-1', {
+      removedAt: NOW.toISOString(),
+      removedBy: 'admin-1',
+      category: 'Harassment',
+      internalNote: NOTE,
+      stripeResult: 'skipped',
+      authResult: 'failed',
+    })
+    expect(run.recordRemovalOutcome).toHaveBeenCalledWith('member-1', {
+      stripeResult: 'cancelled',
+      authResult: 'banned',
+    })
+    expect(JSON.stringify(vi.mocked(run.recordRemovalOutcome).mock.calls)).not.toContain(
+      NOTE
+    )
 
     expect(run.saveRemovedEmail).toHaveBeenCalledWith({
       emailNormalized: 'person@example.com',
@@ -235,6 +248,10 @@ describe('permanent member removal', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.stripeCancellation).toBe('failed')
+    expect(run.recordRemovalOutcome).toHaveBeenCalledWith('member-1', {
+      stripeResult: 'failed',
+      authResult: 'banned',
+    })
     expect(run.banAuth).toHaveBeenCalled()
     expect(run.saveRemovedEmail).toHaveBeenCalled()
     expect(adminRemovalFollowUp(result)).toEqual([
@@ -341,6 +358,12 @@ describe('permanent member removal', () => {
     )
     expect(result).toEqual({ ok: true, authBan: 'lifted' })
     expect(run.clearRemoved).toHaveBeenCalledWith('member-1')
+    expect(run.recordRestore).toHaveBeenCalledWith('member-1', {
+      restoredAt: NOW.toISOString(),
+      restoredBy: 'admin-1',
+      restoreNote: 'Removed by mistake',
+    })
+    expect(run.discardRemoval).not.toHaveBeenCalled()
     expect(run.deleteRemovedEmail).toHaveBeenCalledWith('person@example.com')
     expect(run.unbanAuth).toHaveBeenCalledWith('member-1')
     expect(run.logRestore).toHaveBeenCalledWith({
@@ -390,14 +413,22 @@ describe('permanent member removal', () => {
       applicationDraft: null,
       accessOverride: null,
       removedAt: NOW.toISOString(),
-      removalReason: stored,
+      removalCategory: 'Other',
+      stripeCancellation: 'failed',
+      authBan: 'banned',
     })
     expect(overview.removed).toBe(true)
     expect(overview.removalCategory).toBe('Other')
     expect(overview.removalFollowUp).toEqual([STRIPE_CANCELLATION_FAILED_MESSAGE])
     const serialized = JSON.stringify(overview)
     expect(serialized).not.toContain(NOTE)
+    expect(serialized).not.toContain('internal_note')
     expect(serialized).not.toContain('removal_reason')
+    const detail = readFileSync(join(process.cwd(), 'lib/admin/member-detail.ts'), 'utf8')
+    expect(detail).toContain(".select('reason_category, stripe_result, auth_result')")
+    expect(detail).not.toMatch(
+      /from\('member_removal_records'\)[\s\S]{0,240}internal_note/
+    )
     expect(REMOVED_ACCOUNT_MESSAGE).not.toContain('—')
     expect(REMOVED_APPLICATION_MESSAGE).not.toContain('—')
   })
@@ -424,5 +455,60 @@ describe('permanent member removal', () => {
     expect(read('supabase/migrations/20261111203000_member_permanent_removal.sql')).toContain(
       'removed_member_emails'
     )
+  })
+
+  it('keeps removal records off member-facing queries, views, and responses', () => {
+    const root = process.cwd()
+    const allowed = new Set([
+      'lib/member-removal-db.ts',
+      'lib/admin/member-detail.ts',
+      'lib/database.types.ts',
+      'lib/member-removal.test.ts',
+      'supabase/migrations/20261111203000_member_permanent_removal.sql',
+    ])
+    const hits: string[] = []
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        if (entry === 'node_modules' || entry === '.next' || entry === '.git') continue
+        const full = join(dir, entry)
+        if (statSync(full).isDirectory()) {
+          walk(full)
+          continue
+        }
+        if (!/\.(ts|tsx|sql)$/.test(entry)) continue
+        const relative = full.slice(root.length + 1)
+        if (allowed.has(relative)) continue
+        const source = readFileSync(full, 'utf8')
+        if (source.includes('member_removal_records')) hits.push(relative)
+      }
+    }
+    walk(root)
+    expect(hits).toEqual([])
+
+    const sql = readFileSync(
+      join(root, 'supabase/migrations/20261111203000_member_permanent_removal.sql'),
+      'utf8'
+    )
+    const view = sql.slice(sql.indexOf('create view public.member_profiles'))
+    expect(view).not.toContain('member_removal_records')
+    expect(view).toContain('removed_at')
+    expect(readFileSync(join(root, 'lib/member-removal-run.ts'), 'utf8')).not.toContain(
+      'member_removal_records'
+    )
+  })
+
+  it('does not use a column-level revoke for removal fields', () => {
+    const sql = readFileSync(
+      join(
+        process.cwd(),
+        'supabase/migrations/20261111203000_member_permanent_removal.sql'
+      ),
+      'utf8'
+    )
+    expect(sql.toLowerCase()).not.toContain('revoke select (')
+    expect(sql).not.toContain('add column if not exists removed_by')
+    expect(sql).not.toContain('add column if not exists removal_reason')
+    expect(sql).toContain('create table if not exists public.member_removal_records')
+    expect(sql).toContain('public.is_admin(auth.uid())')
   })
 })
