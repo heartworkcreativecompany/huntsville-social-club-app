@@ -20,6 +20,8 @@ export const MARKETING_BROWSER_ROUTES = [
   '/terms',
   '/code-of-conduct',
   '/data-deletion',
+  '/refund-policy',
+  '/safety',
 ] as const
 
 export type RootRouteAction =
