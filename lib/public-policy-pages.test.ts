@@ -138,8 +138,14 @@ describe('public dating policy pages', () => {
     expect(main).toContain('no refund within 48 hours')
     expect(main).toContain('no refund for no-shows')
     expect(main).toContain('cancels the event, you receive a full refund')
-    expect(main).toContain('Placeholder for the owner to fill in')
+    expect(main).toContain(
+      'Event sponsorships are refundable in full if cancelled at least 14 days before the event. Cancellations within 14 days of the event are not refundable. If Huntsville Social Club cancels the event, the sponsor receives a full refund or can move the sponsorship to a future event.'
+    )
     expect(main).toContain('for billing help')
+  })
+
+  it('does not leave a sponsorship placeholder on the refund policy', () => {
+    expect(pageMain(refunds)).not.toContain('[Placeholder')
   })
 
   it('links refund policy and safety from both footers and lists card brands on the public site', () => {

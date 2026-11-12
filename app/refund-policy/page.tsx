@@ -39,8 +39,10 @@ export default function RefundPolicyPage() {
         Event sponsorships
       </h2>
       <p>
-        [Placeholder for the owner to fill in: add the cancellation and refund
-        terms for event sponsorships.]
+        Event sponsorships are refundable in full if cancelled at least 14 days
+        before the event. Cancellations within 14 days of the event are not
+        refundable. If Huntsville Social Club cancels the event, the sponsor
+        receives a full refund or can move the sponsorship to a future event.
       </p>
 
       <h2 className="text-display text-lg font-semibold">
