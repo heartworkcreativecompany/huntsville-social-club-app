@@ -16,6 +16,8 @@ export type ModerationActionType =
   | 'membership_access_override_revoked'
   | 'in_person_identity_verified'
   | 'in_person_identity_revoked'
+  | 'member_removed'
+  | 'member_restored'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

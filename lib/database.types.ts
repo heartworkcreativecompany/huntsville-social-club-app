@@ -92,6 +92,9 @@ export interface Database {
           messaging_suspended_at: string | null
           messaging_suspension_reason: string | null
           messaging_suspended_by: string | null
+          removed_at: string | null
+          removed_by: string | null
+          removal_reason: string | null
         }
         Insert: {
           id: string
@@ -171,6 +174,9 @@ export interface Database {
           messaging_suspended_at?: string | null
           messaging_suspension_reason?: string | null
           messaging_suspended_by?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
+          removal_reason?: string | null
         }
         Update: {
           id?: string
@@ -250,6 +256,33 @@ export interface Database {
           messaging_suspended_at?: string | null
           messaging_suspension_reason?: string | null
           messaging_suspended_by?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
+          removal_reason?: string | null
+        }
+        Relationships: []
+      }
+      removed_member_emails: {
+        Row: {
+          id: string
+          email_normalized: string
+          profile_id: string | null
+          removed_at: string
+          removed_by: string | null
+        }
+        Insert: {
+          id?: string
+          email_normalized: string
+          profile_id?: string | null
+          removed_at?: string
+          removed_by?: string | null
+        }
+        Update: {
+          id?: string
+          email_normalized?: string
+          profile_id?: string | null
+          removed_at?: string
+          removed_by?: string | null
         }
         Relationships: []
       }
@@ -1531,6 +1564,8 @@ export interface Database {
           | 'email_marketing_consent_source'
           | 'email_marketing_consent_version'
           | 'email_marketing_opted_out_at'
+          | 'removal_reason'
+          | 'removed_by'
         >
         Relationships: []
       }

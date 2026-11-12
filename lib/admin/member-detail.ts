@@ -27,6 +27,12 @@ import {
   type SubscriptionStatus,
 } from '@/lib/membership-systems'
 import { membershipStatusLabel, resolveMembershipStatus } from '@/lib/membership'
+import {
+  adminRemovalFollowUp,
+  parseRemovalReason,
+  type AuthBanState,
+  type StripeCancellationState,
+} from '@/lib/member-removal'
 
 export const ADMIN_MEMBER_DETAIL_FORBIDDEN_KEYS = [
   'stripe_customer_id',
@@ -34,6 +40,7 @@ export const ADMIN_MEMBER_DETAIL_FORBIDDEN_KEYS = [
   'stripe_price_id',
   'identity_verification_session_id',
   'identity_verification_last_error',
+  'removal_reason',
 ] as const
 
 export type AdminSafeStripeSubscription = {
@@ -67,6 +74,11 @@ export type AdminMemberOverview = {
   messagingSuspensionReason: string | null
   profileRevisionStatus: string | null
   primaryPhoto: ApplicationPhoto | null
+  removed: boolean
+  removalCategory: string | null
+  stripeCancellation: StripeCancellationState | null
+  authBan: AuthBanState | null
+  removalFollowUp: string[]
 }
 
 export type AdminMemberDetailState = {
@@ -122,6 +134,8 @@ export function buildAdminMemberOverview(input: {
   profileRevisionStatus: string | null
   applicationDraft: unknown
   accessOverride: MembershipAccessOverride | null
+  removedAt?: string | null
+  removalReason?: string | null
   now?: Date
 }): AdminMemberOverview {
   const billing = parseMembershipBilling(input.membershipBilling)
@@ -141,6 +155,7 @@ export function buildAdminMemberOverview(input: {
     discovery_intent: input.discoveryIntent,
   })
   const photos = photosFromApplicationDraft(input.applicationDraft)
+  const removal = parseRemovalReason(input.removalReason)
 
   return stripAdminMemberDetailSecrets({
     id: input.id,
@@ -178,6 +193,14 @@ export function buildAdminMemberOverview(input: {
     messagingSuspensionReason: input.messagingSuspensionReason,
     profileRevisionStatus: input.profileRevisionStatus,
     primaryPhoto: primaryMemberPhoto(photos),
+    removed: Boolean(input.removedAt),
+    removalCategory: removal.category,
+    stripeCancellation: removal.stripeCancellation,
+    authBan: removal.authBan,
+    removalFollowUp: adminRemovalFollowUp({
+      stripeCancellation: removal.stripeCancellation,
+      authBan: removal.authBan,
+    }),
   })
 }
 
@@ -195,7 +218,7 @@ export async function loadAdminMemberDetail(
   const { data: member, error } = await admin
     .from('profiles')
     .select(
-      'id, email, full_name, role, application_status, membership_intent, location_area, location_city, connection_intents, connections_open_to, discovery_intent, identity_verification_status, identity_verified_at, membership_billing, messaging_suspended_at, messaging_suspension_reason, profile_revision_status, application_draft'
+      'id, email, full_name, role, application_status, membership_intent, location_area, location_city, connection_intents, connections_open_to, discovery_intent, identity_verification_status, identity_verified_at, membership_billing, messaging_suspended_at, messaging_suspension_reason, profile_revision_status, application_draft, removed_at, removal_reason'
     )
     .eq('id', input.memberId)
     .maybeSingle()
@@ -248,6 +271,8 @@ export async function loadAdminMemberDetail(
         profileRevisionStatus: member.profile_revision_status,
         applicationDraft: member.application_draft,
         accessOverride: overrideResult.override,
+        removedAt: member.removed_at,
+        removalReason: member.removal_reason,
       }),
       badges: badges.data,
       accessOverride: overrideResult.override,

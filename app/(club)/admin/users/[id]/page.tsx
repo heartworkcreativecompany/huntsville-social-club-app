@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import AdminInPersonIdentityVerification from '@/components/admin/admin-in-person-identity-verification'
 import AdminMemberBadgesManager from '@/components/admin/admin-member-badges-manager'
+import AdminPermanentMemberRemoval from '@/components/admin/admin-permanent-member-removal'
 import AdminMembershipAccessOverride from '@/components/admin/admin-membership-access-override'
 import ApplicationStatusBadge from '@/components/application/application-status-badge'
 import MemberPhotoDisplay from '@/components/members/member-photo-display'
@@ -11,6 +12,7 @@ import Card from '@/components/ui/card'
 import EmptyState from '@/components/ui/empty-state'
 import PageHeader from '@/components/ui/page-header'
 import { loadAdminMemberDetail } from '@/lib/admin/member-detail'
+import { loadPaidRefundDecisions } from '@/lib/member-removal-db'
 import {
   acceptedIdentityForAdmin,
   loadInPersonIdentityAdminState,
@@ -74,6 +76,9 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
   }
 
   const { overview, badges, accessOverride } = result.data
+  const paidTickets = overview.removed
+    ? await loadPaidRefundDecisions(requireAdminClient(), overview.id)
+    : []
   const inPersonIdentity = await loadInPersonIdentityAdminState(
     requireAdminClient(),
     overview.id
@@ -121,6 +126,7 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
                 </h2>
                 <ApplicationStatusBadge status={overview.applicationStatus} />
                 <Badge variant="accent">{overview.role}</Badge>
+                {overview.removed ? <Badge variant="warning">Removed</Badge> : null}
                 {overview.publicProfileStatus === 'public' ? (
                   <Badge variant="success">Public profile</Badge>
                 ) : (
@@ -234,8 +240,8 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
             Stripe subscription (read-only)
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Billing remains Stripe/coupon-driven. This page never edits
-            subscription, payment, or coupon state.
+            Billing status is shown here. Permanent removal cancels an active
+            membership subscription immediately, with no proration and no refund.
           </p>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
             <div>
@@ -269,6 +275,17 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
           memberId={overview.id}
           memberName={overview.fullName}
           override={accessOverride}
+        />
+
+        <AdminPermanentMemberRemoval
+          memberId={overview.id}
+          memberName={overview.fullName}
+          isSelf={viewer.userId === overview.id}
+          isAdminTarget={overview.role === 'admin'}
+          removed={overview.removed}
+          removalCategory={overview.removalCategory}
+          followUp={overview.removalFollowUp}
+          paidTickets={paidTickets}
         />
 
         <AdminMemberBadgesManager state={badges} embedded />

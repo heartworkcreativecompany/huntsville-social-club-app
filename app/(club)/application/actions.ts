@@ -25,6 +25,8 @@ import {
 import { runCompatibilityConnectionsLifecycle } from '@/lib/compatibility/sync-server'
 import { syncAuthDisplayNameBestEffort } from '@/lib/sync-auth-display-name'
 import { loadSignupNames } from '@/lib/load-signup-names'
+import { removedApplicationBlock } from '@/lib/member-removal-db'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function saveApplicationDraft(draft: ApplicationDraft) {
   const supabase = await createClient()
@@ -94,6 +96,11 @@ export async function submitApplication() {
 
   if (!user) {
     return { error: 'You must be signed in.' }
+  }
+
+  const removedBlock = await removedApplicationBlock(createAdminClient(), user.email)
+  if (removedBlock) {
+    return { error: removedBlock }
   }
 
   const { data: profile } = await supabase

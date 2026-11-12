@@ -12,6 +12,7 @@ import {
 import { signupNameError, signupNameMetadata } from '@/lib/signup-name'
 import AuthPageShell from '@/components/auth/auth-page-shell'
 import AuthStatusBanner from '@/components/auth/auth-status-banner'
+import { checkSignupEmailAllowed } from '@/app/signup/actions'
 import { createClient } from '@/lib/supabase/client'
 import { accountCreatedSuccessMessage, isAuthEmailConfirmationRequired } from '@/lib/auth-email'
 import {
@@ -105,6 +106,12 @@ function SignUpForm() {
     setIsPending(true)
 
     const trimmedEmail = email.trim()
+    const emailAllowed = await checkSignupEmailAllowed(trimmedEmail)
+    if (emailAllowed.error) {
+      setError(emailAllowed.error)
+      setIsPending(false)
+      return
+    }
 
     const { error: signUpError } = await supabase.auth.signUp({
       email: trimmedEmail,

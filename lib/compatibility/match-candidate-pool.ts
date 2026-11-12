@@ -15,6 +15,7 @@ import type { ScorableMemberProfile } from '@/lib/compatibility/scoring'
 import type { EntitlementCycle } from '@/lib/membership-entitlements'
 import { loadMatchingIdentityMap } from '@/lib/matching-identity'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
+import { isMissingSchemaColumnError } from '@/lib/profile-query-fields'
 import type { AcceptedIdentityStatus } from '@/lib/identity-verification'
 
 export type MatchPoolProfile = CompatibilityProfileFields &
@@ -87,17 +88,26 @@ export async function loadMatchPoolProfiles(
     return { profiles: [], error: 'Compatibility matching is disabled.' }
   }
 
-  const { data, error } = await supabase
-    .from(MEMBER_PROFILES_VIEW)
-    .select(MATCH_POOL_SELECT)
-    .eq('application_status', 'approved')
-    .contains('connection_intents', ['dating'])
-    .not('compatibility_completed_at', 'is', null)
-    .eq('wants_curated_matches', true)
-    .is('curated_matches_paused_at', null)
-    .not('age', 'is', null)
-    .not('preferred_match_age_min', 'is', null)
-    .not('preferred_match_age_max', 'is', null)
+  const poolQuery = (hideRemoved: boolean) => {
+    const query = supabase
+      .from(MEMBER_PROFILES_VIEW)
+      .select(MATCH_POOL_SELECT)
+      .eq('application_status', 'approved')
+      .contains('connection_intents', ['dating'])
+      .not('compatibility_completed_at', 'is', null)
+      .eq('wants_curated_matches', true)
+      .is('curated_matches_paused_at', null)
+      .not('age', 'is', null)
+      .not('preferred_match_age_min', 'is', null)
+      .not('preferred_match_age_max', 'is', null)
+    return hideRemoved ? query.is('removed_at', null) : query
+  }
+
+  const first = await poolQuery(true)
+  const { data, error } =
+    first.error && isMissingSchemaColumnError(first.error)
+      ? await poolQuery(false)
+      : first
 
   if (error) {
     if (error.code === '42P01') {

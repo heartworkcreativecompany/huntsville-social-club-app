@@ -8,6 +8,8 @@ export const MODERATION_ACTION_TYPES: ModerationActionType[] = [
   'admin_member_block',
   'recognition_badge_awarded',
   'recognition_badge_revoked',
+  'member_removed',
+  'member_restored',
 ]
 
 export function moderationActionLabel(actionType: string): string {
@@ -26,6 +28,10 @@ export function moderationActionLabel(actionType: string): string {
       return 'Recognition badge awarded'
     case 'recognition_badge_revoked':
       return 'Recognition badge revoked'
+    case 'member_removed':
+      return 'Member removed'
+    case 'member_restored':
+      return 'Member restored'
     default:
       return actionType
   }

@@ -2,6 +2,11 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { loadProfileAccountEmails } from '@/lib/load-profile-account-emails'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
+import {
+  adminAttendeeLabel,
+  memberFacingAttendeeRows,
+} from '@/lib/member-removal'
+import { loadRemovedMemberIds } from '@/lib/member-removal-db'
 import { createClient } from '@/lib/supabase/server'
 import EventLivePerksBubble from '@/components/events/event-live-perks-bubble'
 import EventGuestInviteControls from '@/components/events/event-guest-invite-controls'
@@ -226,6 +231,12 @@ export default async function EventDetailPage({ params }: PageProps) {
   const attendeeUserIds = [
     ...new Set((attendeeRows ?? []).map((row) => row.user_id)),
   ]
+  const removedAttendeeIds = await loadRemovedMemberIds(attendeeUserIds)
+  const rosterRows = memberFacingAttendeeRows(
+    attendeeRows ?? [],
+    removedAttendeeIds,
+    userRole === 'admin'
+  )
 
   const attendeeProfilesById: Record<string, ProfileRow> = {}
 
@@ -351,12 +362,9 @@ export default async function EventDetailPage({ params }: PageProps) {
     (entitlements?.productTier === 'inner_circle' ||
       entitlements?.productTier === 'elite_circle')
 
-  const goingRows =
-    attendeeRows?.filter((row) => isConfirmedGoingAttendee(row)) ?? []
-  const maybeRows =
-    attendeeRows?.filter((row) => row.status === 'maybe') ?? []
-  const notGoingRows =
-    attendeeRows?.filter((row) => row.status === 'not_going') ?? []
+  const goingRows = rosterRows.filter((row) => isConfirmedGoingAttendee(row))
+  const maybeRows = rosterRows.filter((row) => row.status === 'maybe')
+  const notGoingRows = rosterRows.filter((row) => row.status === 'not_going')
 
   const eventDateLabel = formatEventDate(event.starts_at)
   const exportFilename = `${event.title
@@ -370,13 +378,19 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   const configuredRsvpQuestion = event.rsvp_question?.trim() ?? ''
 
-  const exportRows: AttendeeExportRow[] = (attendeeRows ?? []).map((row): AttendeeExportRow => {
+  const exportRows: AttendeeExportRow[] = (attendeeRows ?? []).map((row): AttendeeExportRow | null => {
+    if (userRole !== 'admin' && removedAttendeeIds.has(row.user_id)) return null
     const profile = attendeeProfilesById[row.user_id]
     return {
       eventTitle: event.title,
       eventDate: eventDateLabel,
       attendeeType: 'Member',
-      attendeeName: profile?.full_name ?? '',
+      attendeeName: adminAttendeeLabel(
+        profile?.full_name ?? '',
+        row.user_id,
+        removedAttendeeIds,
+        userRole === 'admin'
+      ),
       attendeeEmail: attendeeAccountEmails.get(row.user_id) ?? '',
       rsvpStatus: row.status.replace('_', ' '),
       rsvpAnswer: canExportAttendees
@@ -386,7 +400,7 @@ export default async function EventDetailPage({ params }: PageProps) {
         ? new Date(row.created_at).toLocaleString()
         : '',
     }
-  }).concat(
+  }).filter((row): row is AttendeeExportRow => row !== null).concat(
     paidGuestExportRows({
       guests: paidGuests,
       eventTitle: event.title,
@@ -412,7 +426,12 @@ export default async function EventDetailPage({ params }: PageProps) {
                 key={`${title}-${row.user_id}`}
                 className="text-sm text-foreground"
               >
-                {memberLabel(attendeeProfilesById[row.user_id])}
+                {adminAttendeeLabel(
+                  memberLabel(attendeeProfilesById[row.user_id]),
+                  row.user_id,
+                  removedAttendeeIds,
+                  userRole === 'admin'
+                )}
                 {row.guest_name ? (
                   <span className="text-muted-foreground">
                     {' '}

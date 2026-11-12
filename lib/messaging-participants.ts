@@ -8,6 +8,7 @@ import {
 } from '@/lib/identity-verification'
 import { MEMBER_PROFILES_VIEW } from '@/lib/member-profiles-view'
 import { isMessagingSuspended } from '@/lib/messaging-suspension'
+import { isMissingSchemaColumnError } from '@/lib/profile-query-fields'
 
 /**
  * Shared authorization for service-role message writes.
@@ -32,6 +33,18 @@ export async function assertMembersMayExchange(
 
   if ((profiles ?? []).length !== 2) {
     return { ok: false, error: 'Member profile not found.' }
+  }
+
+  const removed = await supabase
+    .from(MEMBER_PROFILES_VIEW)
+    .select('id, removed_at')
+    .in('id', [senderId, otherMemberId])
+  if (removed.error && !isMissingSchemaColumnError(removed.error)) {
+    return { ok: false, error: 'Messaging is unavailable.' }
+  }
+  const removedRows = Array.isArray(removed.data) ? removed.data : []
+  if (removedRows.some((row) => row.removed_at != null)) {
+    return { ok: false, error: 'This member is unavailable for messaging.' }
   }
 
   for (const profile of profiles ?? []) {
