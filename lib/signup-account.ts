@@ -8,6 +8,7 @@ import {
   ESSENTIAL_EMAIL_ACKNOWLEDGEMENT_REQUIRED_MESSAGE,
   signupEmailConsentMetadata,
 } from '@/lib/email-consent'
+import { safeUpgradeReturnPath } from '@/lib/membership-plan-links'
 import { signupNameError, signupNameMetadata } from '@/lib/signup-name'
 import { authCallbackUrl } from '@/lib/site'
 
@@ -66,7 +67,7 @@ export async function signUpAccount(
   }
 
   const trimmedEmail = input.email.trim()
-  const returnPath = input.returnPath
+  const returnPath = safeUpgradeReturnPath(input.returnPath) ?? '/login?confirmed=1'
   const blocked = await deps.removedBlock(trimmedEmail)
   if (blocked) return { error: blocked }
 
@@ -74,7 +75,7 @@ export async function signUpAccount(
     email: trimmedEmail,
     password: input.password,
     options: {
-      emailRedirectTo: authCallbackUrl(returnPath ?? '/login?confirmed=1'),
+      emailRedirectTo: authCallbackUrl(returnPath),
       data: {
         ...signupNameMetadata({
           givenName: input.givenName,

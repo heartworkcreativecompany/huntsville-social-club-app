@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { REMOVED_APPLICATION_MESSAGE } from '@/lib/member-removal'
 import { signUpAccount, type SignUpAccountInput } from '@/lib/signup-account'
+import { authCallbackUrl } from '@/lib/site'
 
 const input = {
   givenName: 'Ada',
@@ -60,5 +63,39 @@ describe('server signup removed-email block', () => {
     expect(result.error).toBeUndefined()
     expect(run.signUp).toHaveBeenCalledOnce()
     expect(run.signUp.mock.calls[0]?.[0].email).toBe('new.person@example.com')
+  })
+
+  it('uses only a safe upgrade return path in the confirmation link', async () => {
+    const redirectFor = async (returnPath: string) => {
+      const run = deps([])
+      const result = await signUpAccount(
+        { ...input, email: 'new.person@example.com', returnPath },
+        run
+      )
+      expect(result.error).toBeUndefined()
+      return run.signUp.mock.calls[0]?.[0].options.emailRedirectTo
+    }
+
+    expect(await redirectFor('https://evil.example')).toBe(
+      authCallbackUrl('/login?confirmed=1')
+    )
+    expect(await redirectFor('//evil.example')).toBe(
+      authCallbackUrl('/login?confirmed=1')
+    )
+    expect(await redirectFor('/upgrade?plan=inner_circle')).toBe(
+      authCallbackUrl('/upgrade?plan=inner_circle')
+    )
+  })
+
+  it('signs up through the cookie-based server client, not the anonymous client', () => {
+    const action = readFileSync(join(process.cwd(), 'app/signup/actions.ts'), 'utf8')
+    expect(action).toContain("from '@/lib/supabase/server'")
+    expect(action).toContain('await createClient()')
+    expect(action).toContain('await supabase.auth.signUp(args)')
+    expect(action).not.toContain('createAnonymousClient')
+    expect(action).not.toContain('@/lib/supabase/anonymous')
+    expect(action.indexOf('removedApplicationBlock')).toBeLessThan(
+      action.indexOf('auth.signUp')
+    )
   })
 })
