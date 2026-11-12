@@ -132,6 +132,8 @@ describe('profile privacy migration', () => {
     expect(migration).toContain('security invoker')
     expect(migration).toContain('is_approved_active_member')
     expect(migration).toContain('public.is_approved_active_member(vouchee_id)')
+    expect(migration).toContain('voucher.removed_at is null')
+    expect(migration).toContain('viewer_profile.removed_at is null')
     expect(migration).toContain(
       'drop policy if exists "Approved members read approved member photos" on storage.objects'
     )
@@ -171,6 +173,9 @@ describe('profile privacy migration', () => {
     expect(check).toContain('insert into public.member_vouches')
     expect(check).toContain('storage.objects')
     expect(check).toContain("role = 'host'")
+    expect(check).toContain('set removed_at = now()')
+    expect(check).toContain('removed viewer vouch was allowed')
+    expect(check).toContain('removed viewer photo read was allowed')
     expect(check).toContain('rollback')
     expect(check.toLowerCase()).not.toContain('commit;')
   })

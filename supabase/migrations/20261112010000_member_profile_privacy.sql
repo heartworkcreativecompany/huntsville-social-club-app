@@ -197,8 +197,10 @@ revoke all on public.member_directory_profiles from public;
 revoke all on public.member_directory_profiles from anon;
 grant select on public.member_directory_profiles to authenticated;
 
--- Vouchee and photo-owner checks read another profile. The voucher and the
--- photo viewer still use their own row, which RLS still allows.
+-- Vouchee and photo-owner checks read another profile through the helper.
+-- The voucher and the photo viewer still use their own row, which RLS still
+-- allows, and that row must not be removed. A removed host or admin is denied
+-- the same way as a removed approved member.
 drop policy if exists "Approved members create vouches" on public.member_vouches;
 create policy "Approved members create vouches"
   on public.member_vouches
@@ -211,6 +213,7 @@ create policy "Approved members create vouches"
       from public.profiles voucher
       where voucher.id = voucher_id
         and voucher.application_status = 'approved'
+        and voucher.removed_at is null
     )
     and public.is_approved_active_member(vouchee_id)
   );
@@ -226,6 +229,7 @@ using (
     select 1
     from public.profiles viewer_profile
     where viewer_profile.id = (select auth.uid())
+      and viewer_profile.removed_at is null
       and (
         viewer_profile.application_status = 'approved'
         or viewer_profile.role = any (array['admin'::text, 'host'::text])

@@ -190,6 +190,61 @@ limit 5;
 
 reset role;
 
+-- Same session identity, now removed. The update rolls back with this transaction.
+update public.profiles
+set removed_at = now()
+where id = current_setting('profile_privacy.member_a')::uuid;
+
+select set_config(
+  'request.jwt.claims',
+  json_build_object(
+    'sub', current_setting('profile_privacy.member_a'),
+    'role', 'authenticated'
+  )::text,
+  true
+);
+set local role authenticated;
+
+-- A removed viewer cannot vouch for another approved member.
+do $probe$
+begin
+  insert into public.member_vouches (
+    voucher_id,
+    vouchee_id,
+    vouch_type,
+    relationship_context
+  )
+  values (
+    current_setting('profile_privacy.member_a')::uuid,
+    current_setting('profile_privacy.member_b')::uuid,
+    'professional',
+    'Should be denied'
+  );
+  raise exception 'removed viewer vouch was allowed';
+exception
+  when insufficient_privilege then
+    null;
+end
+$probe$;
+
+-- A removed viewer cannot select another member's photo object.
+do $probe$
+declare
+  visible integer;
+begin
+  select count(*)
+  into visible
+  from storage.objects
+  where bucket_id = 'application-photos'
+    and name = current_setting('profile_privacy.member_b') || '/privacy-probe.jpg';
+  if visible <> 0 then
+    raise exception 'removed viewer photo read was allowed';
+  end if;
+end
+$probe$;
+
+reset role;
+
 -- Anon gets nothing.
 set local role anon;
 select id from public.profiles limit 1;
