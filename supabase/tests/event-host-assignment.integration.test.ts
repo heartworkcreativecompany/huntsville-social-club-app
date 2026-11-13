@@ -70,6 +70,8 @@ describe('event host assignment database', () => {
       language sql stable as $$
         select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
       $$;
+      drop table if exists public.event_sponsorships;
+      drop table if exists public.business_listings;
       drop table if exists public.event_additional_hosts;
       drop table if exists public.events;
       drop table if exists public.profiles;
@@ -243,6 +245,121 @@ describe('event host assignment database', () => {
       'create or replace function public.restore_proven_public_event_listings()'
     )
     await db.query(listingRepair)
+
+    await db.query(`
+      create table public.business_listings (
+        id uuid primary key default gen_random_uuid(),
+        owner_id uuid not null references public.profiles (id) on delete cascade,
+        business_name text not null,
+        description text not null default '',
+        industry text not null default '',
+        category text not null default '',
+        website_url text,
+        contact_email text,
+        phone text,
+        city text,
+        club_offer text not null default '',
+        header_image_url text,
+        status text not null default 'pending'
+          check (status in ('pending', 'approved', 'rejected', 'archived')),
+        admin_notes text,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        submitted_at timestamptz,
+        reviewed_at timestamptz
+      );
+      alter table public.business_listings enable row level security;
+      create policy "Approved listings are readable by authenticated"
+        on public.business_listings for select to authenticated
+        using (
+          status = 'approved'
+          or owner_id = auth.uid()
+          or exists (
+            select 1 from public.profiles p
+            where p.id = auth.uid() and p.role = 'admin'
+          )
+        );
+      create policy "Owners can insert business listings"
+        on public.business_listings for insert to authenticated
+        with check (owner_id = auth.uid());
+      create policy "Owners and admins can update business listings"
+        on public.business_listings for update to authenticated
+        using (
+          owner_id = auth.uid()
+          or exists (
+            select 1 from public.profiles p
+            where p.id = auth.uid() and p.role = 'admin'
+          )
+        );
+
+      create table public.event_sponsorships (
+        id uuid primary key default gen_random_uuid(),
+        event_id uuid not null references public.events (id) on delete cascade,
+        sponsor_user_id uuid references public.profiles (id) on delete set null,
+        sponsor_id uuid,
+        business_name text not null default '',
+        contact_email text,
+        status text not null default 'pending_payment'
+          check (status in (
+            'pending_payment', 'paid', 'approved', 'claimed', 'cancelled', 'refunded'
+          )),
+        amount_cents integer not null default 49900,
+        ticket_count integer not null default 4,
+        stripe_checkout_session_id text,
+        stripe_payment_intent_id text,
+        logo_url text,
+        notes text,
+        sort_order integer not null default 0,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        paid_at timestamptz,
+        approved_at timestamptz
+      );
+      alter table public.event_sponsorships enable row level security;
+      create policy "Members can read sponsorships for published events"
+        on public.event_sponsorships for select to authenticated
+        using (
+          exists (
+            select 1 from public.events e
+            where e.id = event_sponsorships.event_id and e.status = 'published'
+          )
+          or sponsor_user_id = auth.uid()
+          or exists (
+            select 1 from public.profiles p
+            where p.id = auth.uid() and p.role in ('admin', 'host')
+          )
+        );
+      create policy "Members can insert own sponsorships"
+        on public.event_sponsorships for insert to authenticated
+        with check (sponsor_user_id = auth.uid());
+      create policy "Sponsors and admins can update sponsorships"
+        on public.event_sponsorships for update to authenticated
+        using (
+          sponsor_user_id = auth.uid()
+          or exists (
+            select 1 from public.profiles p
+            where p.id = auth.uid() and p.role = 'admin'
+          )
+        );
+      grant select, insert, update on public.business_listings to authenticated, service_role;
+      grant select, insert, update on public.event_sponsorships to authenticated, service_role;
+      create policy "Review tests can read own profile"
+        on public.profiles for select to authenticated
+        using (
+          id = (select auth.uid())
+          or public.is_admin((select auth.uid()))
+        );
+    `)
+
+    const reviewGuards = readFileSync(
+      join(
+        process.cwd(),
+        'supabase/migrations/20261113060000_listing_and_sponsorship_review_guards.sql'
+      ),
+      'utf8'
+    )
+    expect(reviewGuards).not.toMatch(/auth\.uid\(\)\s+is\s+null/i)
+    await db.query(reviewGuards)
   })
 
   beforeEach(async () => {
@@ -1456,5 +1573,628 @@ describe('event host assignment database', () => {
       [commonGrounds]
     )
     expect(hosts.rows).toEqual([{ profile_id: HOST }])
+  })
+
+  it('keeps listing review with admins and content edits with owners', async () => {
+    async function submitListing(ownerId: string, name: string) {
+      await asUser(ownerId)
+      const created = await db.query(
+        `insert into public.business_listings (
+           owner_id, business_name, description, submitted_at
+         ) values ($1, $2, 'Owner description', now())
+         returning id, status, admin_notes, reviewed_at`,
+        [ownerId, name]
+      )
+      return created.rows[0]
+    }
+
+    const hostListing = await submitListing(HOST, 'Host business')
+    const memberListing = await submitListing(MEMBER, 'Member business')
+    expect(hostListing).toMatchObject({ status: 'pending', admin_notes: null, reviewed_at: null })
+    expect(memberListing.status).toBe('pending')
+
+    for (const ownerId of [HOST, MEMBER]) {
+      await asUser(ownerId)
+      await expect(
+        db.query(
+          `insert into public.business_listings (owner_id, business_name, status)
+           values ($1, 'Forged listing', 'approved')`,
+          [ownerId]
+        )
+      ).rejects.toThrow(/submitted as pending/i)
+      await expect(
+        db.query(
+          `insert into public.business_listings (owner_id, business_name, admin_notes, reviewed_at)
+           values ($1, 'Forged notes', 'approved privately', now())`,
+          [ownerId]
+        )
+      ).rejects.toThrow(/review metadata/i)
+    }
+
+    await asUser(HOST)
+    const edited = await db.query(
+      `update public.business_listings
+       set business_name = 'Host business revised', club_offer = 'Coffee'
+       where id = $1
+       returning business_name, status, club_offer`,
+      [hostListing.id]
+    )
+    expect(edited.rows[0]).toMatchObject({
+      business_name: 'Host business revised',
+      status: 'pending',
+      club_offer: 'Coffee',
+    })
+    await expect(
+      db.query(`update public.business_listings set status = 'approved' where id = $1`, [
+        hostListing.id,
+      ])
+    ).rejects.toThrow(/review decision/i)
+    await expect(
+      db.query(`update public.business_listings set status = 'rejected' where id = $1`, [
+        hostListing.id,
+      ])
+    ).rejects.toThrow(/review decision/i)
+    await expect(
+      db.query(
+        `update public.business_listings set admin_notes = 'forged', reviewed_at = now() where id = $1`,
+        [hostListing.id]
+      )
+    ).rejects.toThrow(/review decision/i)
+
+    await asUser(MEMBER)
+    const memberEdited = await db.query(
+      `update public.business_listings
+       set description = 'Member revised description'
+       where id = $1
+       returning description, status`,
+      [memberListing.id]
+    )
+    expect(memberEdited.rows[0]).toMatchObject({
+      description: 'Member revised description',
+      status: 'pending',
+    })
+    await expect(
+      db.query(`update public.business_listings set status = 'approved' where id = $1`, [
+        memberListing.id,
+      ])
+    ).rejects.toThrow(/review decision/i)
+    const cross = await db.query(
+      `update public.business_listings set status = 'approved' where id = $1`,
+      [hostListing.id]
+    )
+    expect(cross.rowCount).toBe(0)
+
+    await asUser(ADMIN)
+    const reviewed = await db.query(
+      `update public.business_listings
+       set status = 'approved', admin_notes = 'Visible in the directory', reviewed_at = now()
+       where id = $1
+       returning status, admin_notes`,
+      [hostListing.id]
+    )
+    expect(reviewed.rows[0]).toMatchObject({
+      status: 'approved',
+      admin_notes: 'Visible in the directory',
+    })
+
+    await asUser(HOST)
+    await expect(
+      db.query(`update public.business_listings set status = 'pending' where id = $1`, [
+        hostListing.id,
+      ])
+    ).rejects.toThrow(/review decision/i)
+    await resetSession()
+    await expect(
+      db.query(`update public.business_listings set status = 'approved' where id = $1`, [
+        memberListing.id,
+      ])
+    ).rejects.toThrow(/review decision/i)
+    const after = await db.query(
+      `select id, status from public.business_listings where id in ($1, $2) order by business_name`,
+      [hostListing.id, memberListing.id]
+    )
+    expect(after.rows).toEqual([
+      { id: hostListing.id, status: 'approved' },
+      { id: memberListing.id, status: 'pending' },
+    ])
+  })
+
+  it('keeps sponsorship review and payment fields with their writers', async () => {
+    await asUser(HOST)
+    const event = await db.query(
+      `insert into public.events (owner_id, title, status)
+       values ($1, 'Sponsorable event', 'published')
+       returning id`,
+      [HOST]
+    )
+    const reserved = await db.query(
+      `insert into public.event_sponsorships (
+         event_id, sponsor_user_id, business_name, status, amount_cents, ticket_count
+       ) values ($1, $2, 'Host sponsor', 'pending_payment', 49900, 4)
+       returning id, status, paid_at, approved_at`,
+      [event.rows[0].id, HOST]
+    )
+    expect(reserved.rows[0]).toMatchObject({
+      status: 'pending_payment',
+      paid_at: null,
+      approved_at: null,
+    })
+    const sponsorshipId = reserved.rows[0].id
+
+    await expect(
+      db.query(
+        `insert into public.event_sponsorships (event_id, sponsor_user_id, status)
+         values ($1, $2, 'approved')`,
+        [event.rows[0].id, HOST]
+      )
+    ).rejects.toThrow(/pending payment/i)
+    await expect(
+      db.query(
+        `insert into public.event_sponsorships (
+           event_id, sponsor_user_id, amount_cents, ticket_count
+         ) values ($1, $2, 100, 4)`,
+        [event.rows[0].id, HOST]
+      )
+    ).rejects.toThrow(/price and ticket count/i)
+
+    const checkout = await db.query(
+      `update public.event_sponsorships
+       set stripe_checkout_session_id = 'cs_test', business_name = 'Host sponsor revised'
+       where id = $1
+       returning status, business_name, stripe_checkout_session_id`,
+      [sponsorshipId]
+    )
+    expect(checkout.rows[0]).toMatchObject({
+      status: 'pending_payment',
+      business_name: 'Host sponsor revised',
+      stripe_checkout_session_id: 'cs_test',
+    })
+    await expect(
+      db.query(`update public.event_sponsorships set status = 'approved' where id = $1`, [
+        sponsorshipId,
+      ])
+    ).rejects.toThrow(/sponsorship decision/i)
+    await expect(
+      db.query(`update public.event_sponsorships set status = 'paid', paid_at = now() where id = $1`, [
+        sponsorshipId,
+      ])
+    ).rejects.toThrow(/sponsorship decision|reserved for payment/i)
+    await expect(
+      db.query(
+        `update public.event_sponsorships set approved_at = now() where id = $1`,
+        [sponsorshipId]
+      )
+    ).rejects.toThrow(/reserved for payment|admin review/i)
+
+    const cancelled = await db.query(
+      `update public.event_sponsorships set status = 'cancelled' where id = $1 returning status`,
+      [sponsorshipId]
+    )
+    expect(cancelled.rows[0].status).toBe('cancelled')
+    const reopened = await db.query(
+      `insert into public.event_sponsorships (
+         event_id, sponsor_user_id, business_name, amount_cents, ticket_count
+       ) values ($1, $2, 'Host sponsor', 49900, 4)
+       returning id`,
+      [event.rows[0].id, HOST]
+    )
+    const activeSponsorshipId = reopened.rows[0].id
+
+    await asUser(MEMBER)
+    const memberOwn = await db.query(
+      `insert into public.event_sponsorships (
+         event_id, sponsor_user_id, business_name, amount_cents, ticket_count
+       ) values ($1, $2, 'Member sponsor', 49900, 4)
+       returning id`,
+      [event.rows[0].id, MEMBER]
+    )
+    await expect(
+      db.query(`update public.event_sponsorships set status = 'approved' where id = $1`, [
+        memberOwn.rows[0].id,
+      ])
+    ).rejects.toThrow(/sponsorship decision/i)
+    const memberCross = await db.query(
+      `update public.event_sponsorships set status = 'approved' where id = $1`,
+      [activeSponsorshipId]
+    )
+    expect(memberCross.rowCount).toBe(0)
+
+    await resetSession()
+    await db.query('alter role service_role bypassrls')
+    try {
+      await resetSession()
+      await db.query('set role service_role')
+      const paid = await db.query(
+        `update public.event_sponsorships
+         set status = 'paid',
+             stripe_payment_intent_id = 'pi_test',
+             paid_at = now(),
+             updated_at = now()
+         where id = $1
+         returning status, stripe_payment_intent_id`,
+        [activeSponsorshipId]
+      )
+      expect(paid.rows[0]).toMatchObject({
+        status: 'paid',
+        stripe_payment_intent_id: 'pi_test',
+      })
+      const linked = await db.query(
+        `update public.event_sponsorships
+         set sponsor_id = $2, updated_at = now()
+         where id = $1
+         returning sponsor_id, status`,
+        [activeSponsorshipId, HOST]
+      )
+      expect(linked.rows[0]).toMatchObject({ sponsor_id: HOST, status: 'paid' })
+      await expect(
+        db.query(`update public.event_sponsorships set status = 'approved' where id = $1`, [
+          activeSponsorshipId,
+        ])
+      ).rejects.toThrow(/only mark a reserved sponsorship paid/i)
+    } finally {
+      await resetSession()
+      await db.query('alter role service_role nobypassrls')
+    }
+
+    await resetSession()
+    await expect(
+      db.query(`update public.event_sponsorships set status = 'refunded' where id = $1`, [
+        activeSponsorshipId,
+      ])
+    ).rejects.toThrow(/sponsorship decision/i)
+
+    await asUser(ADMIN)
+    const approved = await db.query(
+      `update public.event_sponsorships
+       set status = 'approved', approved_at = now()
+       where id = $1
+       returning status`,
+      [activeSponsorshipId]
+    )
+    expect(approved.rows[0].status).toBe('approved')
+  })
+
+  it('limits service-role sponsor and checkout links to the paid writers', async () => {
+    await asUser(HOST)
+    const event = await db.query(
+      `insert into public.events (owner_id, title, status)
+       values ($1, 'Payment boundary event', 'published')
+       returning id`,
+      [HOST]
+    )
+    const eventId = event.rows[0].id
+    async function reserve(name: string) {
+      const row = await db.query(
+        `insert into public.event_sponsorships (
+           event_id, sponsor_user_id, business_name, contact_email,
+           amount_cents, ticket_count
+         ) values ($1, $2, $3, 'sponsor@example.test', 49900, 4)
+         returning id`,
+        [eventId, HOST, name]
+      )
+      return row.rows[0].id as string
+    }
+    const protectedColumns = `event_id, sponsor_user_id, sponsor_id, amount_cents,
+      ticket_count, sort_order, paid_at, approved_at, stripe_payment_intent_id,
+      created_at, status`
+
+    const activeId = await reserve('Active sponsor')
+    const beforeContent = await db.query(
+      `select ${protectedColumns} from public.event_sponsorships where id = $1`,
+      [activeId]
+    )
+    const revised = await db.query(
+      `update public.event_sponsorships
+       set business_name = 'Active sponsor revised',
+           contact_email = 'revised@example.test',
+           logo_url = 'https://example.test/logo.png',
+           notes = 'Table note'
+       where id = $1
+       returning business_name, contact_email, logo_url, notes, ${protectedColumns}`,
+      [activeId]
+    )
+    expect(revised.rows[0]).toMatchObject({
+      ...beforeContent.rows[0],
+      business_name: 'Active sponsor revised',
+      contact_email: 'revised@example.test',
+      logo_url: 'https://example.test/logo.png',
+      notes: 'Table note',
+    })
+    await expect(
+      db.query(`update public.event_sponsorships set amount_cents = 100 where id = $1`, [
+        activeId,
+      ])
+    ).rejects.toThrow(/reserved for payment processing or admin review/i)
+    await expect(
+      db.query(`update public.event_sponsorships set sponsor_id = $2 where id = $1`, [
+        activeId,
+        CREATOR,
+      ])
+    ).rejects.toThrow(/reserved for payment processing or admin review/i)
+
+    const cancelledId = await reserve('Cancelled sponsor')
+    await db.query(`update public.event_sponsorships set status = 'cancelled' where id = $1`, [
+      cancelledId,
+    ])
+    const claimedId = await reserve('Claimed sponsor')
+    const refundedId = await reserve('Refunded sponsor')
+    await asUser(ADMIN)
+    await db.query(`update public.event_sponsorships set status = 'claimed' where id = $1`, [
+      claimedId,
+    ])
+    await db.query(`update public.event_sponsorships set status = 'refunded' where id = $1`, [
+      refundedId,
+    ])
+
+    await resetSession()
+    await db.query('alter role service_role bypassrls')
+    try {
+      const asService = async () => {
+        await resetSession()
+        await db.query('set role service_role')
+      }
+      await asService()
+      await expect(
+        db.query(
+          `update public.event_sponsorships
+           set stripe_checkout_session_id = 'cs_pending'
+           where id = $1`,
+          [activeId]
+        )
+      ).rejects.toThrow(/checkout session/i)
+      await expect(
+        db.query(`update public.event_sponsorships set sponsor_id = $2 where id = $1`, [
+          activeId,
+          CREATOR,
+        ])
+      ).rejects.toThrow(/link a sponsor/i)
+      await expect(
+        db.query(
+          `update public.event_sponsorships
+           set status = 'paid', sponsor_id = $2, paid_at = now()
+           where id = $1`,
+          [activeId, CREATOR]
+        )
+      ).rejects.toThrow(/link a sponsor/i)
+
+      const paid = await db.query(
+        `update public.event_sponsorships
+         set status = 'paid',
+             stripe_checkout_session_id = 'cs_paid',
+             stripe_payment_intent_id = 'pi_paid',
+             paid_at = now(),
+             updated_at = now()
+         where id = $1 and status in ('pending_payment', 'paid')
+         returning status, stripe_checkout_session_id, sponsor_id`,
+        [activeId]
+      )
+      expect(paid.rows[0]).toMatchObject({
+        status: 'paid',
+        stripe_checkout_session_id: 'cs_paid',
+        sponsor_id: null,
+      })
+      const retried = await db.query(
+        `update public.event_sponsorships
+         set status = 'paid',
+             stripe_checkout_session_id = 'cs_paid',
+             stripe_payment_intent_id = 'pi_paid',
+             paid_at = now(),
+             updated_at = now()
+         where id = $1 and status in ('pending_payment', 'paid')
+         returning status, stripe_checkout_session_id, stripe_payment_intent_id`,
+        [activeId]
+      )
+      expect(retried.rows[0]).toMatchObject({
+        status: 'paid',
+        stripe_checkout_session_id: 'cs_paid',
+        stripe_payment_intent_id: 'pi_paid',
+      })
+      const relinkedSession = await db.query(
+        `update public.event_sponsorships
+         set stripe_checkout_session_id = 'cs_retry', updated_at = now()
+         where id = $1 and status = 'paid'
+         returning status, stripe_checkout_session_id`,
+        [activeId]
+      )
+      expect(relinkedSession.rows[0]).toMatchObject({
+        status: 'paid',
+        stripe_checkout_session_id: 'cs_retry',
+      })
+      const linked = await db.query(
+        `update public.event_sponsorships
+         set sponsor_id = $2, updated_at = now()
+         where id = $1
+         returning status, sponsor_id`,
+        [activeId, CREATOR]
+      )
+      expect(linked.rows[0]).toMatchObject({ status: 'paid', sponsor_id: CREATOR })
+
+      for (const closedId of [cancelledId, claimedId, refundedId]) {
+        const filtered = await db.query(
+          `update public.event_sponsorships
+           set status = 'paid',
+               stripe_checkout_session_id = 'cs_late',
+               stripe_payment_intent_id = 'pi_late',
+               paid_at = now(),
+               updated_at = now()
+           where id = $1 and status in ('pending_payment', 'paid')`,
+          [closedId]
+        )
+        expect(filtered.rowCount).toBe(0)
+        await expect(
+          db.query(
+            `update public.event_sponsorships
+             set stripe_checkout_session_id = 'cs_closed'
+             where id = $1`,
+            [closedId]
+          )
+        ).rejects.toThrow(/checkout session/i)
+        await expect(
+          db.query(`update public.event_sponsorships set sponsor_id = $2 where id = $1`, [
+            closedId,
+            MEMBER,
+          ])
+        ).rejects.toThrow(/link a sponsor/i)
+      }
+    } finally {
+      await resetSession()
+      await db.query('alter role service_role nobypassrls')
+    }
+
+    await asUser(ADMIN)
+    const approved = await db.query(
+      `update public.event_sponsorships
+       set status = 'approved', approved_at = now(), updated_at = now()
+       where id = $1 and status in ('paid', 'approved')
+       returning status, ticket_count, amount_cents, sponsor_id`,
+      [activeId]
+    )
+    expect(approved.rows[0]).toMatchObject({
+      status: 'approved',
+      ticket_count: 4,
+      amount_cents: 49900,
+      sponsor_id: CREATOR,
+    })
+    const adminLinked = await db.query(
+      `update public.event_sponsorships
+       set sponsor_id = $2, updated_at = now()
+       where id = $1
+       returning status, sponsor_id`,
+      [activeId, MEMBER]
+    )
+    expect(adminLinked.rows[0]).toMatchObject({ status: 'approved', sponsor_id: MEMBER })
+
+    await resetSession()
+    await db.query('alter role service_role bypassrls')
+    try {
+      await resetSession()
+      await db.query('set role service_role')
+      const filteredApproved = await db.query(
+        `update public.event_sponsorships
+         set status = 'paid',
+             stripe_checkout_session_id = 'cs_after_approval',
+             stripe_payment_intent_id = 'pi_after_approval',
+             paid_at = now(),
+             updated_at = now()
+         where id = $1 and status in ('pending_payment', 'paid')`,
+        [activeId]
+      )
+      expect(filteredApproved.rowCount).toBe(0)
+      await expect(
+        db.query(
+          `update public.event_sponsorships
+           set stripe_checkout_session_id = 'cs_after_approval'
+           where id = $1`,
+          [activeId]
+        )
+      ).rejects.toThrow(/checkout session/i)
+      await expect(
+        db.query(`update public.event_sponsorships set sponsor_id = $2 where id = $1`, [
+          activeId,
+          CREATOR,
+        ])
+      ).rejects.toThrow(/link a sponsor/i)
+    } finally {
+      await resetSession()
+      await db.query('alter role service_role nobypassrls')
+    }
+
+    await asUser(HOST)
+    const beforeApprovedEdit = await db.query(
+      `select ${protectedColumns} from public.event_sponsorships where id = $1`,
+      [activeId]
+    )
+    const approvedContent = await db.query(
+      `update public.event_sponsorships
+       set business_name = 'Approved sponsor revised',
+           notes = 'Revised after approval'
+       where id = $1
+       returning business_name, notes, ${protectedColumns}`,
+      [activeId]
+    )
+    expect(approvedContent.rows[0]).toMatchObject({
+      ...beforeApprovedEdit.rows[0],
+      business_name: 'Approved sponsor revised',
+      notes: 'Revised after approval',
+    })
+    const closed = await db.query(
+      `select id, status, sponsor_id, stripe_checkout_session_id
+       from public.event_sponsorships
+       where id = any($1::uuid[])
+       order by business_name`,
+      [[cancelledId, claimedId, refundedId]]
+    )
+    expect(closed.rows).toEqual([
+      {
+        id: cancelledId,
+        status: 'cancelled',
+        sponsor_id: null,
+        stripe_checkout_session_id: null,
+      },
+      {
+        id: claimedId,
+        status: 'claimed',
+        sponsor_id: null,
+        stripe_checkout_session_id: null,
+      },
+      {
+        id: refundedId,
+        status: 'refunded',
+        sponsor_id: null,
+        stripe_checkout_session_id: null,
+      },
+    ])
+  })
+
+  it('still lets a host publish an owned event and not a named host assignment', async () => {
+    await asUser(HOST)
+    const published = await db.query(
+      `insert into public.events (owner_id, title, status)
+       values ($1, 'Host still publishes', 'published')
+       returning status, owner_id`,
+      [HOST]
+    )
+    expect(published.rows[0]).toMatchObject({ status: 'published', owner_id: HOST })
+
+    await asUser(MEMBER)
+    const pending = await db.query(
+      `insert into public.events (owner_id, title, status)
+       values ($1, 'Named hosts cannot manage', 'pending_approval')
+       returning id`,
+      [MEMBER]
+    )
+    await resetSession()
+    await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [ADMIN])
+    await db.query(`update public.events set primary_host_id = $2 where id = $1`, [
+      pending.rows[0].id,
+      COHOST,
+    ])
+    await db.query(
+      `insert into public.event_additional_hosts (event_id, profile_id, sort_order)
+       values ($1, $2, 0)`,
+      [pending.rows[0].id, HOST]
+    )
+    await asUser(COHOST)
+    const primary = await db.query(
+      `update public.events set status = 'published' where id = $1`,
+      [pending.rows[0].id]
+    )
+    await asUser(HOST)
+    const additional = await db.query(
+      `update public.events set status = 'published' where id = $1`,
+      [pending.rows[0].id]
+    )
+    await resetSession()
+    const stored = await db.query(
+      `select status, owner_id, primary_host_id from public.events where id = $1`,
+      [pending.rows[0].id]
+    )
+    expect(primary.rowCount).toBe(0)
+    expect(additional.rowCount).toBe(0)
+    expect(stored.rows[0]).toMatchObject({
+      status: 'pending_approval',
+      owner_id: MEMBER,
+      primary_host_id: COHOST,
+    })
   })
 })
