@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  RSVP_ANSWER_PRIVACY_COPY,
   RSVP_ANSWER_MAX_CHARS,
   RSVP_ANSWER_REQUIRED_MESSAGE,
+  RSVP_QUESTION_HOST_GUIDANCE,
   RSVP_QUESTION_MAX_CHARS,
   RSVP_QUESTION_TOO_LONG_MESSAGE,
   canViewerAccessPendingRsvpAnswer,
@@ -238,7 +240,21 @@ describe('RSVP answer authorization', () => {
     ).toBe(false)
   })
 
-  it('lets the event host or a Club admin read answers only for the applicable event role', () => {
+  it('shares RSVP answers with the organizer who can manage the event and with administrators', () => {
+    expect(RSVP_ANSWER_PRIVACY_COPY).toContain('event organizer')
+    expect(RSVP_ANSWER_PRIVACY_COPY).toContain('management access')
+    expect(RSVP_ANSWER_PRIVACY_COPY).toContain('administrators')
+    expect(RSVP_ANSWER_PRIVACY_COPY).toContain(
+      'Being listed as a host does not itself grant access to your response.'
+    )
+    expect(RSVP_ANSWER_PRIVACY_COPY).not.toContain('Other named hosts cannot see it')
+    expect(RSVP_ANSWER_PRIVACY_COPY).not.toContain('event host')
+    expect(RSVP_QUESTION_HOST_GUIDANCE).toContain('event organizer')
+    expect(RSVP_QUESTION_HOST_GUIDANCE).toContain('management access')
+    expect(RSVP_QUESTION_HOST_GUIDANCE).not.toContain('event host')
+  })
+
+  it('lets the event organizer or a Club admin read answers, and not a named host without that access', () => {
     expect(
       canViewerReadRsvpAnswer({
         viewerUserId: 'host-1',
@@ -255,6 +271,14 @@ describe('RSVP answer authorization', () => {
         isAdmin: true,
       })
     ).toBe(true)
+    expect(
+      canViewerReadRsvpAnswer({
+        viewerUserId: 'named-host',
+        attendeeUserId: member,
+        isEventOwner: false,
+        isAdmin: false,
+      })
+    ).toBe(false)
     expect(
       canViewerWriteRsvpAnswer({
         viewerUserId: 'host-1',

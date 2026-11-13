@@ -22,6 +22,7 @@ export type EventBrowserItem = {
   attendance_max: number | null
   cover_image_url: string | null
   creatorLabel: string
+  additionalHostLabel: string
   counts: { going: number; maybe: number; not_going: number }
   currentUserStatus: string | null
   registrationPreview: EventRegistrationDecision | null
@@ -123,6 +124,7 @@ export default function EventsBrowser({ events }: { events: EventBrowserItem[] }
               <EventRichCard
                 event={event}
                 creatorLabel={event.creatorLabel}
+                additionalHostLabel={event.additionalHostLabel}
                 counts={event.counts}
                 currentUserStatus={event.currentUserStatus}
                 registrationPreview={event.registrationPreview}

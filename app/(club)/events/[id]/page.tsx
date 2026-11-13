@@ -42,6 +42,13 @@ import {
   withNullRsvpQuestion,
 } from '@/lib/event-rsvp-question'
 import { isMissingListedPubliclyColumnError } from '@/lib/event-public-listing'
+import { loadEventHostMap } from '@/lib/event-host-store'
+import {
+  additionalHostLabel,
+  primaryHostLabel,
+  profileHostName,
+  visibleAdditionalHostIds,
+} from '@/lib/event-host-assignment'
 import { loadPendingRsvpAnswer } from '@/lib/event-rsvp-pending-answer'
 import { isEventPast, memberGoingLabel, availabilityLabel } from '@/lib/event-display'
 import {
@@ -188,12 +195,44 @@ export default async function EventDetailPage({ params }: PageProps) {
 
   const userRole = viewer.role
   const profileNames = userRole === 'admin' ? MEMBER_PROFILES_VIEW : MEMBER_DIRECTORY_PROFILES
+  const hostMap = await loadEventHostMap(supabase, [
+    { id: event.id, owner_id: event.owner_id },
+  ])
+  const storedHosts = hostMap.loadError ? null : (hostMap.byEventId[event.id] ?? null)
+  const additionalHostIds = storedHosts
+    ? visibleAdditionalHostIds(storedHosts.primaryHostId, storedHosts.additionalHostIds)
+    : []
+  const hostIds = storedHosts
+    ? [storedHosts.primaryHostId, ...additionalHostIds]
+    : []
 
-  const { data: creator } = await supabase
-    .from(profileNames)
-    .select('id, full_name')
-    .eq('id', event.owner_id)
-    .single()
+  const { data: hostProfiles } =
+    hostIds.length > 0
+      ? await supabase.from(profileNames).select('id, full_name, role').in('id', hostIds)
+      : { data: [] }
+  const hostProfilesById: Record<
+    string,
+    { id: string; full_name: string | null; role: string | null }
+  > = {}
+  for (const profile of hostProfiles ?? []) {
+    hostProfilesById[profile.id] = profile
+  }
+  const primaryHostProfile = storedHosts
+    ? hostProfilesById[storedHosts.primaryHostId]
+    : undefined
+  const primaryLabel = storedHosts
+    ? primaryHostLabel({
+        hostId: storedHosts.primaryHostId,
+        viewerId: user.id,
+        profile: primaryHostProfile,
+        style: 'sentence',
+      })
+    : 'Host names could not be loaded'
+  const alsoHostingLabel = additionalHostLabel({
+    hostIds: additionalHostIds,
+    viewerId: user.id,
+    profilesById: hostProfilesById,
+  })
   const canExportAttendees = canViewEventAttendeeRoster({
     viewerId: user.id,
     eventOwnerId: event.owner_id,
@@ -494,8 +533,19 @@ export default async function EventDetailPage({ params }: PageProps) {
           isCancelled={isCancelled}
           currentUserStatus={currentUserStatus}
         />
+        {hostMap.loadError ? (
+          <p className="text-sm text-danger">
+            Could not load event hosts: {hostMap.loadError}
+          </p>
+        ) : null}
         <p className="text-sm text-muted-foreground">
-          Hosted by {isMine ? 'you' : memberLabel(creator ?? undefined)}
+          Hosted by {primaryLabel}
+          {alsoHostingLabel ? (
+            <>
+              <span className="mx-2 text-border">·</span>
+              Also hosting {alsoHostingLabel}
+            </>
+          ) : null}
           <span className="mx-2 text-border">·</span>
           {memberGoingLabel(rsvpCounts.going)}
           {spotsLabel ? (
@@ -713,6 +763,22 @@ export default async function EventDetailPage({ params }: PageProps) {
               availableSponsors={availableSponsors}
               isAdminEditor={userRole === 'admin'}
               canListPublicly={userRole === 'host' || userRole === 'admin'}
+              initialPrimaryHost={
+                userRole === 'admin' && storedHosts
+                  ? {
+                      id: storedHosts.primaryHostId,
+                      fullName: profileHostName(primaryHostProfile),
+                    }
+                  : undefined
+              }
+              initialAdditionalHosts={
+                userRole === 'admin' && storedHosts
+                  ? additionalHostIds.map((hostId) => ({
+                      id: hostId,
+                      fullName: profileHostName(hostProfilesById[hostId]),
+                    }))
+                  : undefined
+              }
             />
             <div className="mt-4 border-t border-border pt-4">
               <DeleteEventButton eventId={event.id} />

@@ -35,6 +35,7 @@ type RsvpCounts = {
 export default function EventRichCard({
   event,
   creatorLabel,
+  additionalHostLabel = '',
   counts,
   currentUserStatus,
   registrationPreview,
@@ -42,6 +43,7 @@ export default function EventRichCard({
 }: {
   event: EventRow
   creatorLabel: string
+  additionalHostLabel?: string
   counts: RsvpCounts
   currentUserStatus: string | null
   registrationPreview?: EventRegistrationDecision | null
@@ -87,6 +89,11 @@ export default function EventRichCard({
       <p className="text-sm text-foreground">
         Hosted by <span className="font-medium text-accent">{creatorLabel}</span>
       </p>
+      {additionalHostLabel ? (
+        <p className="text-sm text-muted-foreground">
+          Also hosting {additionalHostLabel}
+        </p>
+      ) : null}
 
       <p className="text-sm text-muted-foreground">
         {memberGoingLabel(counts.going)}

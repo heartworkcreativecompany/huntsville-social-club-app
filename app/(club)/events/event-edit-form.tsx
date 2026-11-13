@@ -3,6 +3,7 @@
 import { useState, useTransition, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import EventSponsorsField from '@/components/events/event-sponsors-field'
+import EventHostAssignmentFields from '@/components/events/event-host-assignment-fields'
 import {
   buttonPrimaryClassName,
   buttonSecondaryClassName,
@@ -16,6 +17,7 @@ import { updateEvent } from '@/app/(club)/events/actions'
 import { createSponsorForAdmin } from '@/app/(club)/events/sponsor-actions'
 import { uploadEventCoverImage } from '@/lib/event-image-storage'
 import type { SponsorOption } from '@/lib/event-sponsors'
+import type { AssignedHost } from '@/lib/event-host-assignment'
 import EventRsvpQuestionFields from '@/components/events/event-rsvp-question-fields'
 
 type EventEditFormProps = {
@@ -37,6 +39,8 @@ type EventEditFormProps = {
   initialListedPublicly?: boolean | null
   initialSponsorIds?: string[]
   availableSponsors?: SponsorOption[]
+  initialPrimaryHost?: AssignedHost
+  initialAdditionalHosts?: AssignedHost[]
   /** Admins can edit type, status, fee, RSVP windows, and sponsors. */
   isAdminEditor?: boolean
   /** Hosts and admins can show a published event on the public calendar. */
@@ -62,6 +66,8 @@ export default function EventEditForm({
   initialListedPublicly = false,
   initialSponsorIds = [],
   availableSponsors: initialAvailableSponsors = [],
+  initialPrimaryHost,
+  initialAdditionalHosts = [],
   isAdminEditor = false,
   canListPublicly = false,
 }: EventEditFormProps) {
@@ -102,6 +108,12 @@ export default function EventEditForm({
   )
   const [selectedSponsorIds, setSelectedSponsorIds] =
     useState<string[]>(initialSponsorIds)
+  const [primaryHost, setPrimaryHost] = useState<AssignedHost | null>(
+    initialPrimaryHost ?? null
+  )
+  const [additionalHosts, setAdditionalHosts] = useState<AssignedHost[]>(
+    initialAdditionalHosts
+  )
   const [message, setMessage] = useState('')
 
   const onCoverImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -151,6 +163,12 @@ export default function EventEditForm({
               priorityRsvpOpensAt,
               generalRsvpOpensAt,
               sponsorIds: selectedSponsorIds,
+              ...(primaryHost
+                ? {
+                    primaryHostId: primaryHost.id,
+                    additionalHostIds: additionalHosts.map((host) => host.id),
+                  }
+                : {}),
             }
           : {}),
       })
@@ -334,6 +352,16 @@ export default function EventEditForm({
               <option value="published">Published</option>
               <option value="cancelled">Cancelled</option>
             </select>
+
+            {primaryHost ? (
+              <EventHostAssignmentFields
+                primaryHost={primaryHost}
+                additionalHosts={additionalHosts}
+                onPrimaryHostChange={setPrimaryHost}
+                onAdditionalHostsChange={setAdditionalHosts}
+                disabled={isPending || isUploadingImage}
+              />
+            ) : null}
 
             <div className="grid gap-3 rounded-lg border border-border p-3">
               <p className="text-sm font-medium text-foreground">Admin event controls</p>
