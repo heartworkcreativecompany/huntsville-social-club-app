@@ -224,6 +224,25 @@ describe('event host assignment database', () => {
       grant select, delete on public.profiles to authenticated, service_role;
       grant select, insert, update, delete on public.event_additional_hosts to authenticated, service_role;
     `)
+
+    const listingRepair = readFileSync(
+      join(
+        process.cwd(),
+        'supabase/migrations/20261113050000_preserve_public_listing_on_maintenance.sql'
+      ),
+      'utf8'
+    )
+    expect(listingRepair).not.toMatch(/auth\.uid\(\)\s+is\s+null/i)
+    expect(listingRepair).not.toContain('events_enforce_approval_gates')
+    expect(listingRepair).not.toMatch(/revoke\s+select/i)
+    expect(listingRepair).not.toMatch(/grant\s+select/i)
+    expect(listingRepair).not.toMatch(
+      /(?:select|perform)\s+public\.restore_proven_public_event_listings\s*\(/i
+    )
+    expect(listingRepair).toContain(
+      'create or replace function public.restore_proven_public_event_listings()'
+    )
+    await db.query(listingRepair)
   })
 
   beforeEach(async () => {
@@ -1130,5 +1149,312 @@ describe('event host assignment database', () => {
       `select id from public.events where title in ('Forged title', 'Forged event')`
     )
     expect(forged.rowCount).toBe(0)
+  })
+
+  it('preserves public and private flags through the host backfill', async () => {
+    const publicEvent = '12121212-1212-4212-8212-121212121212'
+    const privateEvent = '13131313-1313-4313-8313-131313131313'
+    await resetSession()
+    await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [ADMIN])
+    await db.query(
+      `insert into public.events (id, owner_id, title, status, listed_publicly, starts_at)
+       values
+         ($1, $3, 'Synthetic public', 'published', true, now() + interval '2 days'),
+         ($2, $3, 'Synthetic private', 'published', false, now() + interval '3 days')`,
+      [publicEvent, privateEvent, CREATOR]
+    )
+    await resetSession()
+    await db.query(`alter table public.events disable trigger events_enforce_host_assignment`)
+    await db.query(
+      `update public.events set primary_host_id = null where id in ($1, $2)`,
+      [publicEvent, privateEvent]
+    )
+    await db.query(`alter table public.events enable trigger events_enforce_host_assignment`)
+    await db.query(
+      `update public.events set primary_host_id = owner_id where primary_host_id is null`
+    )
+
+    const rows = await db.query(
+      `select id, listed_publicly, status, owner_id, primary_host_id
+       from public.events where id in ($1, $2) order by title`,
+      [publicEvent, privateEvent]
+    )
+    expect(rows.rows).toEqual([
+      {
+        id: privateEvent,
+        listed_publicly: false,
+        status: 'published',
+        owner_id: CREATOR,
+        primary_host_id: CREATOR,
+      },
+      {
+        id: publicEvent,
+        listed_publicly: true,
+        status: 'published',
+        owner_id: CREATOR,
+        primary_host_id: CREATOR,
+      },
+    ])
+  })
+
+  it('keeps ordinary members from enabling public listing', async () => {
+    await asUser(MEMBER)
+    const created = await db.query(
+      `insert into public.events (owner_id, title, status, event_type, listed_publicly)
+       values ($1, 'Member listing attempt', 'pending_approval', 'standard_event', true)
+       returning id, listed_publicly`,
+      [MEMBER]
+    )
+    expect(created.rows[0].listed_publicly).toBe(false)
+    await db.query(`update public.events set listed_publicly = true where id = $1`, [
+      created.rows[0].id,
+    ])
+    await db.query(`update public.events set title = 'Member edited title' where id = $1`, [
+      created.rows[0].id,
+    ])
+    const after = await db.query(
+      `select listed_publicly, title, status from public.events where id = $1`,
+      [created.rows[0].id]
+    )
+    expect(after.rows[0]).toMatchObject({
+      listed_publicly: false,
+      title: 'Member edited title',
+      status: 'pending_approval',
+    })
+  })
+
+  it('keeps anonymous and service-role writes from enabling public listing', async () => {
+    const target = '14141414-1414-4414-8414-141414141414'
+    await resetSession()
+    await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [ADMIN])
+    await db.query(
+      `insert into public.events (id, owner_id, title, status, listed_publicly)
+       values ($1, $2, 'Untrusted target', 'published', false)`,
+      [target, CREATOR]
+    )
+    await resetSession()
+
+    await db.query(`grant select, update on public.events to anon`)
+    await db.query(
+      `grant execute on function public.event_host_release_owner_executing() to anon`
+    )
+    await db.query(`alter role anon bypassrls`)
+    await db.query(`alter role service_role bypassrls`)
+    try {
+      for (const role of ['anon', 'service_role']) {
+        await db.query('begin')
+        try {
+          await db.query(`set role ${role}`)
+          await db.query(`select set_config('hsc.restoring_proven_public_listing', '1', true)`)
+          await db.query(`update public.events set listed_publicly = true where id = $1`, [target])
+          await db.query('reset role')
+          const result = await db.query(
+            `select listed_publicly from public.events where id = $1`,
+            [target]
+          )
+          expect(result.rows[0].listed_publicly).toBe(false)
+        } finally {
+          await db.query('rollback')
+        }
+      }
+    } finally {
+      await resetSession()
+      await db.query(`alter role anon nobypassrls`)
+      await db.query(`alter role service_role nobypassrls`)
+      await db.query(`revoke select, update on public.events from anon`)
+      await db.query(
+        `revoke execute on function public.event_host_release_owner_executing() from anon`
+      )
+    }
+  })
+
+  it('still lets a host or admin set public listing', async () => {
+    await asUser(HOST)
+    const created = await db.query(
+      `insert into public.events (owner_id, title, status, listed_publicly)
+       values ($1, 'Host lists later', 'pending_approval', false)
+       returning id`,
+      [HOST]
+    )
+    await db.query(`update public.events set listed_publicly = true where id = $1`, [
+      created.rows[0].id,
+    ])
+    const listed = await db.query(
+      `select listed_publicly from public.events where id = $1`,
+      [created.rows[0].id]
+    )
+    expect(listed.rows[0].listed_publicly).toBe(true)
+    await db.query(`update public.events set listed_publicly = false where id = $1`, [
+      created.rows[0].id,
+    ])
+    const unlisted = await db.query(
+      `select listed_publicly from public.events where id = $1`,
+      [created.rows[0].id]
+    )
+    expect(unlisted.rows[0].listed_publicly).toBe(false)
+
+    await asUser(ADMIN)
+    await db.query(`update public.events set listed_publicly = true where id = $1`, [
+      created.rows[0].id,
+    ])
+    const byAdmin = await db.query(
+      `select listed_publicly, owner_id from public.events where id = $1`,
+      [created.rows[0].id]
+    )
+    expect(byAdmin.rows[0]).toMatchObject({ listed_publicly: true, owner_id: HOST })
+  })
+
+  it('leaves event approval restrictions unchanged', async () => {
+    await asUser(MEMBER)
+    await expect(
+      db.query(
+        `insert into public.events (owner_id, title, status, event_type)
+         values ($1, 'Member publishes directly', 'published', 'standard_event')`,
+        [MEMBER]
+      )
+    ).rejects.toThrow(/pending_approval/i)
+    const pending = await db.query(
+      `insert into public.events (owner_id, title, status, event_type)
+       values ($1, 'Member stays pending', 'pending_approval', 'standard_event')
+       returning id`,
+      [MEMBER]
+    )
+    await expect(
+      db.query(`update public.events set status = 'published' where id = $1`, [
+        pending.rows[0].id,
+      ])
+    ).rejects.toThrow(/only admins can publish/i)
+
+    await asUser(HOST)
+    const published = await db.query(
+      `insert into public.events (owner_id, title, status, event_type)
+       values ($1, 'Host still publishes own event', 'published', 'standard_event')
+       returning status, owner_id`,
+      [HOST]
+    )
+    expect(published.rows[0]).toMatchObject({ status: 'published', owner_id: HOST })
+  })
+
+  it('restores only the three cover-matched events', async () => {
+    const commonGrounds = 'c5304898-0304-4f78-83f3-5cf388f94d2f'
+    const beaverMoon = 'dd5606ef-25a9-4375-9c9b-71d2c9287fb4'
+    const tableHop = '4ddc1132-0177-49e0-a7be-5ab27483e73d'
+    const unrelated = '15151515-1515-4515-8515-151515151515'
+    const startsAt = '2026-12-01T18:00:00Z'
+    await resetSession()
+    await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [ADMIN])
+    await db.query(
+      `insert into public.events (
+         id, owner_id, title, status, listed_publicly, starts_at, ends_at,
+         primary_host_id, cover_image_url
+       ) values
+         ($1, $5, 'Common Grounds at Charlie Foster''s', 'published', false, $6, null, $5,
+          'https://example.test/event-images/8fc26522-fbca-45dd-8d33-be0a547de0c9.png'),
+         ($2, $5, 'Beaver Moon Gratitude Gathering', 'published', false, $6, null, $5,
+          'https://example.test/event-images/bb7b13a5-0ce4-4e60-939a-1fa1eea8266e.png'),
+         ($3, $5, 'Table Hop Game Night at Lipz Lounge', 'published', false, $6, null, $5,
+          'https://example.test/event-images/5dd06c47-e123-4b73-83b1-c2dfbaabae88.png'),
+         ($4, $5, 'Unrelated private event', 'published', false, $6, null, $5,
+          'https://example.test/event-images/not-a-homepage-cover.png')`,
+      [commonGrounds, beaverMoon, tableHop, unrelated, CREATOR, startsAt]
+    )
+    await db.query(
+      `insert into public.event_additional_hosts (event_id, profile_id, sort_order)
+       values ($1, $2, 0)`,
+      [commonGrounds, HOST]
+    )
+    await resetSession()
+
+    await db.query('begin')
+    await db.query(`select set_config('hsc.restoring_proven_public_listing', '1', true)`)
+    await db.query(`update public.events set listed_publicly = true where id = $1`, [unrelated])
+    await db.query(
+      `update public.events set listed_publicly = true, title = 'Changed title' where id = $1`,
+      [commonGrounds]
+    )
+    const blocked = await db.query(
+      `select id, listed_publicly, title from public.events where id in ($1, $2) order by id`,
+      [commonGrounds, unrelated]
+    )
+    expect(blocked.rows).toEqual([
+      {
+        id: unrelated,
+        listed_publicly: false,
+        title: 'Unrelated private event',
+      },
+      {
+        id: commonGrounds,
+        listed_publicly: false,
+        title: 'Changed title',
+      },
+    ])
+    await db.query('rollback')
+
+    await asUser(ADMIN)
+    await expect(
+      db.query(`select public.restore_proven_public_event_listings()`)
+    ).rejects.toThrow(/permission denied/i)
+    await resetSession()
+
+    const restored = await db.query(`select public.restore_proven_public_event_listings() as restored`)
+    expect(restored.rows[0].restored).toBe(3)
+    const again = await db.query(`select public.restore_proven_public_event_listings() as restored`)
+    expect(again.rows[0].restored).toBe(0)
+
+    const rows = await db.query(
+      `select id, title, status, owner_id, primary_host_id, listed_publicly,
+              starts_at, ends_at
+       from public.events
+       where id in ($1, $2, $3, $4)
+       order by title`,
+      [commonGrounds, beaverMoon, tableHop, unrelated]
+    )
+    expect(rows.rows.map((row) => ({ ...row, starts_at: row.starts_at.toISOString() }))).toEqual([
+      {
+        id: beaverMoon,
+        title: 'Beaver Moon Gratitude Gathering',
+        status: 'published',
+        owner_id: CREATOR,
+        primary_host_id: CREATOR,
+        listed_publicly: true,
+        starts_at: new Date(startsAt).toISOString(),
+        ends_at: null,
+      },
+      {
+        id: commonGrounds,
+        title: "Common Grounds at Charlie Foster's",
+        status: 'published',
+        owner_id: CREATOR,
+        primary_host_id: CREATOR,
+        listed_publicly: true,
+        starts_at: new Date(startsAt).toISOString(),
+        ends_at: null,
+      },
+      {
+        id: tableHop,
+        title: 'Table Hop Game Night at Lipz Lounge',
+        status: 'published',
+        owner_id: CREATOR,
+        primary_host_id: CREATOR,
+        listed_publicly: true,
+        starts_at: new Date(startsAt).toISOString(),
+        ends_at: null,
+      },
+      {
+        id: unrelated,
+        title: 'Unrelated private event',
+        status: 'published',
+        owner_id: CREATOR,
+        primary_host_id: CREATOR,
+        listed_publicly: false,
+        starts_at: new Date(startsAt).toISOString(),
+        ends_at: null,
+      },
+    ])
+    const hosts = await db.query(
+      `select profile_id from public.event_additional_hosts where event_id = $1`,
+      [commonGrounds]
+    )
+    expect(hosts.rows).toEqual([{ profile_id: HOST }])
   })
 })
