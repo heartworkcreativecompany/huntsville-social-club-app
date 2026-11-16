@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import LegalPageShell from '@/components/legal/legal-page-shell'
 import { SUPPORT_EMAIL } from '@/lib/site'
 
@@ -80,6 +81,15 @@ export default function SafetyPage() {
         </a>
         . The Block option stops that member from messaging you. We review
         reports within 2 business days. We review safety threats right away.
+        Read{' '}
+        <Link href="/reporting" className="text-accent underline">
+          Reporting and Content Removal
+        </Link>{' '}
+        and{' '}
+        <Link href="/law-enforcement" className="text-accent underline">
+          Law Enforcement and Legal Requests
+        </Link>
+        .
       </p>
 
       <h2 className="text-display text-lg font-semibold">
@@ -87,7 +97,7 @@ export default function SafetyPage() {
       </h2>
       <p>If you are in danger or need immediate help, call 911.</p>
 
-      <p className="text-xs">Last updated: November 11, 2026</p>
+      <p className="text-xs">Last updated: November 16, 2026</p>
     </LegalPageShell>
   )
 }

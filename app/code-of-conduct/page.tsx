@@ -52,14 +52,15 @@ export default function CodeOfConductPage() {
       <ul className="list-disc space-y-2 pl-5">
         <li>Sexually explicit profile content or photos</li>
         <li>Child sexual exploitation or abuse</li>
+        <li>Aiding, abetting, or encouraging abuse of any person</li>
         <li>Sexual violence</li>
         <li>
           Non-consensual content, including private photos or messages the
           other person did not agree to
         </li>
         <li>
-          Soliciting or facilitating commercial sex, human trafficking, or sex
-          trafficking
+          Human trafficking, including sexual exploitation, and soliciting or
+          facilitating commercial sex
         </li>
         <li>Scams, fraud, or requests for money from another member</li>
         <li>Impersonation or fake profiles</li>
@@ -91,7 +92,7 @@ export default function CodeOfConductPage() {
         right away.
       </p>
 
-      <p className="text-xs">Last updated: November 11, 2026</p>
+      <p className="text-xs">Last updated: November 16, 2026</p>
     </LegalPageShell>
   )
 }

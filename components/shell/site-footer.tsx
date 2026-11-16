@@ -2,6 +2,24 @@ import Link from 'next/link'
 import BrandLogo from '@/components/brand/brand-logo'
 import { SUPPORT_EMAIL } from '@/lib/site'
 
+function OperatorLine({ className = '' }: { className?: string }) {
+  return (
+    <p className={className}>
+      Huntsville Social Club is operated by Heartwork Creative Company LLC ·{' '}
+      <a
+        href={`mailto:${SUPPORT_EMAIL}`}
+        className="link-brand break-all hover:text-foreground"
+      >
+        {SUPPORT_EMAIL}
+      </a>
+      {' · '}
+      <a href="tel:+12564341563" className="link-brand hover:text-foreground">
+        (256) 434-1563
+      </a>
+    </p>
+  )
+}
+
 export default function SiteFooter({
   className = '',
   variant = 'minimal',
@@ -79,6 +97,19 @@ export default function SiteFooter({
                   Safety
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/law-enforcement"
+                  className="link-brand hover:text-foreground"
+                >
+                  Law Enforcement
+                </Link>
+              </li>
+              <li>
+                <Link href="/reporting" className="link-brand hover:text-foreground">
+                  Reporting
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -103,6 +134,7 @@ export default function SiteFooter({
             © {new Date().getFullYear()} Huntsville Social Club · By invitation
             &amp; application
           </p>
+          <OperatorLine className="mt-2" />
           <p className="mt-2">
             We accept Visa, Mastercard, American Express, and Discover
           </p>
@@ -158,8 +190,21 @@ export default function SiteFooter({
             >
               Safety
             </Link>
+            <Link
+              href="/law-enforcement"
+              className="link-brand underline hover:text-foreground"
+            >
+              Law Enforcement
+            </Link>
+            <Link
+              href="/reporting"
+              className="link-brand underline hover:text-foreground"
+            >
+              Reporting
+            </Link>
           </nav>
         </div>
+        <OperatorLine />
       </div>
     </footer>
   )
