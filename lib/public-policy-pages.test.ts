@@ -4,7 +4,9 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import CodeOfConductPage from '@/app/code-of-conduct/page'
+import LawEnforcementPage from '@/app/law-enforcement/page'
 import RefundPolicyPage from '@/app/refund-policy/page'
+import ReportingPage from '@/app/reporting/page'
 import SafetyPage from '@/app/safety/page'
 import TermsPage from '@/app/terms/page'
 import SiteFooter from '@/components/shell/site-footer'
@@ -16,14 +18,19 @@ import {
 import { SUPPORT_EMAIL } from '@/lib/site'
 
 const repoRoot = join(__dirname, '..')
-const LAST_UPDATED = 'Last updated: November 11, 2026'
+const LAST_UPDATED = 'Last updated: November 16, 2026'
+const REFUND_LAST_UPDATED = 'Last updated: November 11, 2026'
 const DASH_CHARACTERS = /[\u2013\u2014]/
+const AIDING_ABUSE = 'Aiding, abetting, or encouraging abuse of any person'
+const TRAFFICKING =
+  'Human trafficking, including sexual exploitation, and soliciting or facilitating commercial sex'
 const PROHIBITED = [
   'Sexually explicit profile content or photos',
   'Child sexual exploitation or abuse',
+  AIDING_ABUSE,
   'Sexual violence',
   'Non-consensual content',
-  'Soliciting or facilitating commercial sex, human trafficking, or sex trafficking',
+  TRAFFICKING,
   'Scams, fraud, or requests for money',
   'Impersonation or fake profiles',
   'Harassment',
@@ -38,18 +45,28 @@ describe('public dating policy pages', () => {
   const conduct = renderToStaticMarkup(createElement(CodeOfConductPage))
   const safety = renderToStaticMarkup(createElement(SafetyPage))
   const refunds = renderToStaticMarkup(createElement(RefundPolicyPage))
+  const lawEnforcement = renderToStaticMarkup(createElement(LawEnforcementPage))
+  const reporting = renderToStaticMarkup(createElement(ReportingPage))
   const pages = [
     ['terms', terms, 'app/terms/page.tsx'],
     ['code of conduct', conduct, 'app/code-of-conduct/page.tsx'],
     ['safety', safety, 'app/safety/page.tsx'],
     ['refund policy', refunds, 'app/refund-policy/page.tsx'],
+    ['law enforcement', lawEnforcement, 'app/law-enforcement/page.tsx'],
+    ['reporting', reporting, 'app/reporting/page.tsx'],
   ] as const
 
   it('keeps the new policy routes public on the marketing host', () => {
-    for (const path of ['/refund-policy', '/safety'] as const) {
+    for (const path of [
+      '/refund-policy',
+      '/safety',
+      '/law-enforcement',
+      '/reporting',
+    ] as const) {
       expect(MARKETING_BROWSER_ROUTES).toContain(path)
       expect(isMarketingPassthroughPath(path)).toBe(true)
       expect(proxyHostAction('marketing', path)).toEqual({ type: 'next' })
+      expect(proxyHostAction('members', path)).toEqual({ type: 'next' })
       expect(proxyHostAction('preview', path)).toEqual({ type: 'next' })
     }
   })
@@ -67,10 +84,12 @@ describe('public dating policy pages', () => {
 
   it('dates every policy page today and avoids dash characters in the copy', () => {
     expect(SUPPORT_EMAIL).toBe('hello@huntsvillesocialclub.com')
-    for (const [, html] of pages) {
+    for (const [name, html] of pages) {
       const main = pageMain(html)
       expect(main.match(/<h1[\s>]/g)).toHaveLength(1)
-      expect(main).toContain(LAST_UPDATED)
+      expect(main).toContain(
+        name === 'refund policy' ? REFUND_LAST_UPDATED : LAST_UPDATED
+      )
       expect(main).not.toMatch(DASH_CHARACTERS)
       expect(main).toContain(`mailto:${SUPPORT_EMAIL}`)
     }
@@ -93,6 +112,10 @@ describe('public dating policy pages', () => {
     expect(main).toContain('not a sexual or')
     expect(main).toContain('hook-up')
     expect(main).toContain('service')
+    expect(main).toContain(AIDING_ABUSE)
+    expect(main).toContain(TRAFFICKING)
+    expect(main).toContain('href="/reporting"')
+    expect(main).toContain('href="/law-enforcement"')
   })
 
   it('states the same rules and enforcement on the code of conduct', () => {
@@ -124,6 +147,48 @@ describe('public dating policy pages', () => {
     expect(main).toContain('Report option in any conversation')
     expect(main).toContain('Block option')
     expect(main).toContain('call 911')
+    expect(main).toContain('href="/reporting"')
+    expect(main).toContain('href="/law-enforcement"')
+  })
+
+  it('explains law enforcement reports and legal requests', () => {
+    const main = pageMain(lawEnforcement)
+    expect(main).toContain('Law Enforcement and Legal Requests')
+    expect(main).toContain(
+      'We cooperate with law enforcement and report suspected illegal activity.'
+    )
+    expect(main).toContain('NCMEC CyberTipline')
+    expect(main).toContain('National Human Trafficking Hotline')
+    expect(main).toContain('Huntsville Police Department')
+    expect(main).toContain('Internet Crime Complaint Center (IC3)')
+    expect(main).toContain(
+      'We preserve relevant account records when we find or receive a report of suspected illegal activity.'
+    )
+    expect(main).toContain('Law Enforcement Request')
+    expect(main).toContain(
+      'review emergency requests involving risk of death or serious injury right away'
+    )
+    expect(main).toContain('Members in danger should call 911.')
+  })
+
+  it('explains how to report, how reports are reviewed, and how to appeal', () => {
+    const main = pageMain(reporting)
+    expect(main).toContain('Reporting and Content Removal')
+    expect(main).toContain('Report option in any conversation')
+    expect(main).toContain('Block option')
+    expect(main).toContain(
+      'Anyone, including non-members, can report a profile or content by email, including content posted without their consent.'
+    )
+    expect(main).toContain('An administrator reviews every report.')
+    expect(main).toContain('within 2 business days')
+    expect(main).toContain('safety threats right away')
+    expect(main).toContain('removed promptly')
+    expect(main).toContain('permanently remove the member')
+    expect(main).toContain('href="/law-enforcement"')
+    expect(main).toContain('subject &quot;Appeal&quot;')
+    expect(main).toContain('within 14 days')
+    expect(main).toContain('within 5 business days')
+    expect(main).toContain('not eligible for reinstatement')
   })
 
   it('explains membership, ticket, and sponsorship refunds', () => {
@@ -159,8 +224,16 @@ describe('public dating policy pages', () => {
       expect(footer).toContain('href="/data-deletion"')
       expect(footer).toContain('href="/refund-policy"')
       expect(footer).toContain('href="/safety"')
+      expect(footer).toContain('href="/law-enforcement"')
+      expect(footer).toContain('href="/reporting"')
       expect(footer).toContain('Refund Policy')
       expect(footer).toContain('>Safety<')
+      expect(footer).toContain(
+        'Huntsville Social Club is operated by Heartwork Creative Company LLC'
+      )
+      expect(footer).toContain('hello@huntsvillesocialclub.com')
+      expect(footer).toContain('(256) 434-1563')
+      expect(footer).not.toMatch(DASH_CHARACTERS)
     }
 
     const marketing = renderToStaticMarkup(
@@ -173,6 +246,5 @@ describe('public dating policy pages', () => {
       'We accept Visa, Mastercard, American Express, and Discover'
     )
     expect(minimal).not.toContain('We accept Visa')
-    expect(marketing).not.toMatch(DASH_CHARACTERS)
   })
 })

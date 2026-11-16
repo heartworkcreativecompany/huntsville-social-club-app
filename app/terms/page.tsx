@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import LegalPageShell from '@/components/legal/legal-page-shell'
 import { SUPPORT_EMAIL } from '@/lib/site'
 
@@ -43,11 +44,12 @@ export default function TermsPage() {
       <ul className="list-disc space-y-2 pl-5">
         <li>Sexually explicit profile content or photos</li>
         <li>Child sexual exploitation or abuse</li>
+        <li>Aiding, abetting, or encouraging abuse of any person</li>
         <li>Sexual violence</li>
         <li>Non-consensual content</li>
         <li>
-          Soliciting or facilitating commercial sex, human trafficking, or sex
-          trafficking
+          Human trafficking, including sexual exploitation, and soliciting or
+          facilitating commercial sex
         </li>
         <li>Scams, fraud, or requests for money</li>
         <li>Impersonation or fake profiles</li>
@@ -65,6 +67,17 @@ export default function TermsPage() {
       <p>
         Huntsville Social Club is not a sexual or &quot;hook-up&quot; service.
       </p>
+      <p>
+        See{' '}
+        <Link href="/reporting" className="text-accent underline">
+          Reporting and Content Removal
+        </Link>{' '}
+        and{' '}
+        <Link href="/law-enforcement" className="text-accent underline">
+          Law Enforcement and Legal Requests
+        </Link>
+        .
+      </p>
 
       <h2 className="text-display text-lg font-semibold">
         Contact
@@ -76,7 +89,7 @@ export default function TermsPage() {
         </a>
       </p>
 
-      <p className="text-xs">Last updated: November 11, 2026</p>
+      <p className="text-xs">Last updated: November 16, 2026</p>
     </LegalPageShell>
   )
 }
